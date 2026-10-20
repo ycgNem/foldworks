@@ -70,3 +70,8 @@ skin changed); their hand-drawn portraits ship, recoloured.
 
 Balance after phase 2: **2,021.90** (2,178.90 − 157.00, matched by `get_balance`). USD credit
 untouched ($2.00).
+
+## Phase 3 (readability and the complete redraw)
+
+No PixelLab jobs: every phase-3 sprite is hand-drawn by code or redrawn from its own
+Milestone 1-5 recipe (recipes.py). Balance before and after phase 3: **2,021.90**.

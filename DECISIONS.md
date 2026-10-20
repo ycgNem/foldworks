@@ -1019,3 +1019,16 @@ Nothing here is derivative of a shipped game beyond what the UI redesign already
   2,178.90 → 2,021.90; the phase-1 style test used 81); no USD credit spent. Every job is in
   `pixel-art/revamp/prompts.md`. Unit 7's and Voltaire's img2img portraits lost their identity
   (the screen face, the skin tone) and were dropped for their recoloured hand-drawn ones.
+- 2026-10-20: **Phase 3: the whole revamp and a readability pass.** Every machine (Mk1, Mk2, the
+  crate and the slag heap) stands on a dark steel skid with a deck-dark shadow, because brown and
+  orange bodies vanished on the brown plank deck at 1x (DESIGN.md §17); the kiln became pale fired
+  clay so it is told from the smelter and the hand furnace by silhouette and value. The Dock and
+  Hopper were redrawn by hand as *destinations*, not machines: the Dock a slip of water with a
+  moored skiff and a coin pennant, the Hopper a research-teal funnel (it had read as a grey robot).
+  The splitter and merger ship four facings like every other machine; only belts and trunks still
+  turn by code. Everything that was only recoloured was redrawn: effects and Sparks by hand in a
+  stepped lantern light (the Inspector Spark became a frog inspector with a lantern), and the
+  Milestone 1-5 recipes (Unit 7, Voltaire, the town pieces, the pictures, the logo, the UI frames,
+  coins, grades, icon atlases) run again through `pixel-art/revamp/recipes.py` with B colours
+  chosen by role per piece. Phase 3 used **0 PixelLab generations** (balance 2,021.90 before and
+  after).

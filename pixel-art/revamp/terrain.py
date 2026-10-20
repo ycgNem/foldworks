@@ -136,12 +136,19 @@ def shore_north():
         draw(img, [(x, 2)], P["ink"])                          # the deck's shadow on the water
         if x % 3:
             draw(img, [(x, 3)], P["water0"])
-    for px in (3, 11):                                       # pilings into the water
-        rect(img, px, 2, px + 1, 6, P["wood1"])
-        draw(img, [(px, y) for y in range(2, 7)], P["wood2"])
-        draw(img, [(px - 1, 7), (px, 7), (px + 1, 7), (px + 2, 7)], P["water3"])
-        draw(img, [(px, 8), (px + 1, 8)], P["water2"])
-        draw(img, [(px + 1, 3), (px + 1, 4)], P["moss3"])
+    # pilings into the water (phase 3: 3 px stout posts, outlined, a moss band at the waterline,
+    # a ring of ripple and a broken reflection, so the deck clearly stands on legs)
+    for px in (3, 11):
+        rect(img, px - 1, 2, px + 3, 9, P["ink"])
+        draw(img, [(px, y) for y in range(2, 9)], P["wood3"])
+        draw(img, [(px + 1, y) for y in range(2, 9)], P["wood2"])
+        draw(img, [(px + 2, y) for y in range(2, 9)], P["wood1"])
+        draw(img, [(px, 7), (px + 1, 7), (px + 2, 8), (px + 1, 8)], P["moss3"])
+        draw(img, [(px, 8)], P["moss4"])
+        draw(img, [(px - 2, 10), (px - 1, 10), (px + 3, 10), (px + 4, 10)], P["water3"])
+        draw(img, [(px - 2, 9)], P["water4"])
+        draw(img, [(px, 10), (px + 1, 10), (px + 2, 10)], P["water1"])        # its shadow
+        draw(img, [(px, 11), (px + 2, 12)], P["water2"])                      # broken reflection
     return img
 
 
