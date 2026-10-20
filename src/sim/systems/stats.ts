@@ -5,6 +5,8 @@ import type { Game } from '../Game';
 import type { Ent } from '../world';
 import { RULES } from '../../data/rules';
 import { TICK_RATE } from '../../engine/time';
+import { TROPHIES, type TrophyDef } from '../../data/trophies';
+import { isMachine } from '../../data/machines';
 
 /** Count this tick's state for a machine (called by the systems that run it). */
 export function note(m: Ent) {
@@ -26,12 +28,13 @@ function dominant(m: Ent): string {
 export function runStats(g: Game) {
   if ((g.s.tick + 1) % TICK_RATE !== 0) return;
   const win = RULES.statWindow.value;
-  for (const list of [g.miners, g.machines]) {
+  for (const list of [g.miners, g.machines, g.power]) {
     for (const m of list) {
       m.hist = (m.hist + dominant(m)).slice(-win);
       m.sec[0] = m.sec[1] = m.sec[2] = m.sec[3] = 0;
     }
   }
+  checkTrophies(g);
   g.s.income.push(g.s.incomeSec);
   if (g.s.income.length > win) g.s.income.shift();
   g.s.incomeSec = 0;
@@ -49,4 +52,33 @@ export function shares(m: Ent): { work: number; starved: number; blocked: number
     else if (c === 'x') x++;
   }
   return { work: w / n, starved: s / n, blocked: (b + x) / n, byBlocked: x / n, n };
+}
+
+/** How far a trophy's stat has got (a plain number: counts and lifetime coin for display). */
+export function trophyValue(g: Game, t: TrophyDef): number {
+  const s = g.s;
+  switch (t.stat.k) {
+    case 'earned': return s.earned.toNumber();
+    case 'delivered': return s.delivered[t.stat.item]?.toNumber() ?? 0;
+    case 'counter': return s.counters[t.stat.name] ?? 0;
+    case 'built': { const k = t.stat.kind; return s.ents.filter((e) => e.kind === k).length; }
+    case 'machines': return s.ents.filter((e) => isMachine(e.kind) && e.kind !== 'furnace').length;
+    case 'research': return s.research.done.length;
+    case 'orders': return s.orders.done.length;
+    case 'rep': return s.orders.rep.bramble;
+    case 'land': return s.land.length;
+    case 'upgrades': return s.upgrades.length;
+  }
+}
+
+/** Award trophies whose stat has reached its mark (once a second). */
+export function checkTrophies(g: Game) {
+  for (const t of TROPHIES) {
+    const f = 'trophy:' + t.id;
+    if (g.s.flags.includes(f)) continue;
+    if (trophyValue(g, t) >= t.n) {
+      g.s.flags.push(f);
+      g.emit({ type: 'trophy', id: t.id });
+    }
+  }
 }

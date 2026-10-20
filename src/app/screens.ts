@@ -1,0 +1,418 @@
+// The full-screen overlays opened from the bottom bar: the research tree (glowing nodes on a
+// starfield), Mayor Bramble's orders, statistics, the Trophy Shelf and options. Each covers the
+// area between the ticker and the bottom bar; Esc or the same button closes it.
+import { C, rgba } from '../data/palette';
+import { RESEARCH, RESEARCH_LIST, type ResearchId } from '../data/research';
+import { ORDERS, CUSTOMERS } from '../data/orders';
+import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
+import { TROPHIES } from '../data/trophies';
+import { BUILD, BUILD_BAR } from '../data/machines';
+import { ICON, textWidth } from '../ui/font';
+import { ACTION_LABELS, SHOWN_ACTIONS, keyLabel } from '../engine/input';
+import { itemIcon, sheet, hasArt } from '../render/sprites';
+import { available, researchFrac } from '../sim/systems/research';
+import { orderFrac } from '../sim/systems/orders';
+import { trophyValue } from '../sim/systems/stats';
+import { Num } from '../engine/num';
+import { frame, card, button, bar, badge, portrait, uiIcon, type UIconName } from './chrome';
+import type { Layout } from './layout';
+import { modulesScreen, gradeCard, fgradeCard, offlineCard, sliceEndCard } from './fold';
+import { ordersScreen } from './orders';
+import { codexScreen, surveyScreen, megaScreen } from './act2screens';
+import type { App } from './app';
+import type { Rect } from '../ui/ui';
+
+export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options' | 'modules' | 'grade' | 'offline' | 'sliceEnd'
+  // Act II (Milestone 4): the Factory floor's grade card, the Codex, the Survey Office, the Megaproject
+  | 'fgrade' | 'codex' | 'survey' | 'mega';
+
+export function drawScreen(app: App, L: Layout) {
+  const r = L.overlay;
+  switch (app.panel) {
+    case 'research': return researchTree(app, r);
+    case 'orders': return ordersScreen(app, r);
+    case 'stats': return statsScreen(app, r);
+    case 'trophies': return trophyShelf(app, r);
+    case 'options': return optionsScreen(app, r);
+    case 'modules': return modulesScreen(app, r);
+    case 'grade': return gradeCard(app, L);
+    case 'offline': return offlineCard(app, L);
+    case 'sliceEnd': return sliceEndCard(app, L);
+    case 'fgrade': return fgradeCard(app, L);
+    case 'codex': return codexScreen(app, r);
+    case 'survey': return surveyScreen(app, r);
+    case 'mega': return megaScreen(app, r);
+  }
+}
+
+function header(app: App, r: Rect, title: string, accent: string, icon: UIconName) {
+  const ui = app.ui;
+  ui.fill(r.x + 3, r.y + 3, r.w - 6, 15, C.shadow);
+  ui.fill(r.x + 3, r.y + 17, r.w - 6, 1, accent);
+  uiIcon(ui, icon, r.x + 6, r.y + 2);
+  ui.text(title, r.x + 26, r.y + 7, accent, { shadow: C.ink });
+  if (button(ui, 'closeScreen', r.x + r.w - 46, r.y + 4, 40, 12, 'close', { tip: 'Close (Esc)' })) app.panel = null;
+}
+
+// ------------------------------------------------------------------ the research tree
+
+/** where each node sits: column, row, and 1 when its label goes under it (so neighbours' labels never meet) */
+const TREE: Record<ResearchId, [number, number, number?]> = {
+  pressing: [0, 1.5],
+  surveyEast: [1, 0], gearcutting: [1, 2], slagBricks: [1, 3.2],
+  copperSmelting: [2, 0, 1], splitters: [2.4, 2.2, 1], buffers: [2, 3.2, 1],
+  wireDrawing: [3, 0.4],
+  gizmoTheory: [4, 1.4],
+  folding: [5, 1.4, 1],
+  // Act II's page (columns 0-6)
+  coalSeams: [0, 1.6],
+  steelmaking: [1, 1.0], surveying: [1, 2.6, 1],
+  overdrive: [2, 0], steamPower: [2, 1.4], crushing: [2, 2.8, 1],
+  glassworks: [3, 0.5], refining: [3, 1.6, 1], machineKits: [3, 2.9, 1],
+  circuits: [4, 1.0], concrete: [4, 2.6, 1],
+  heavyMachines: [5, 0.2], motors: [5, 1.3, 1], nestedFolds: [5, 2.6],
+  tuning: [6, 0.2, 1], greatDrill: [6, 1.9],
+};
+
+const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
+  pressing: 'ironPlate', surveyEast: 'workshop', copperSmelting: 'copperIngot', wireDrawing: 'copperWire', gearcutting: 'gear',
+  splitters: 'flow', buffers: 'orders', gizmoTheory: 'gizmo', slagBricks: 'slagBrick', folding: 'fold',
+  coalSeams: 'coal', steelmaking: 'steel', overdrive: 'ff', steamPower: 'factory', surveying: 'workshop', glassworks: 'glass',
+  crushing: 'gravel', concrete: 'concrete', refining: 'plastic', machineKits: 'machineKit', circuits: 'circuit',
+  heavyMachines: 'build', tuning: 'options', motors: 'motor', nestedFolds: 'fold', greatDrill: 'drillBit',
+};
+
+function starfield(app: App, r: Rect) {
+  const ui = app.ui;
+  ui.fill(r.x, r.y, r.w, r.h, C.ink);
+  // nebulae: soft blots of teal and violet
+  const ctx = ui.ctx;
+  for (const [fx, fy, rad, col] of [[0.3, 0.45, 90, C.teal0], [0.72, 0.4, 110, C.violet], [0.55, 0.7, 70, C.iron0]] as [number, number, number, string][]) {
+    const cx = r.x + r.w * fx, cy = r.y + r.h * fy;
+    for (let k = 4; k > 0; k--) {
+      ctx.fillStyle = rgba(col, 0.05);
+      ctx.beginPath();
+      ctx.arc(cx, cy, (rad * k) / 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // stars that twinkle
+  for (let i = 0; i < 140; i++) {
+    const hx = (Math.sin(i * 127.1) * 43758.5453) % 1, hy = (Math.sin(i * 311.7) * 23421.631) % 1;
+    const x = r.x + Math.abs(hx) * r.w, y = r.y + Math.abs(hy) * r.h;
+    const tw = Math.sin(ui.time * (1 + (i % 5)) + i) > 0.6;
+    ctx.fillStyle = i % 7 === 0 ? C.hot : i % 5 === 0 ? C.teal1 : C.hull2;
+    ctx.globalAlpha = tw ? 1 : 0.4;
+    ctx.fillRect(Math.round(x), Math.round(y), i % 11 === 0 ? 2 : 1, i % 11 === 0 ? 2 : 1);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function researchTree(app: App, r: Rect) {
+  const ui = app.ui;
+  const g = app.game;
+  ui.region(r.x, r.y, r.w, r.h);
+  starfield(app, r);
+  frame(ui, r.x, r.y, r.w, 20, 'wood', false);
+  header(app, r, 'Research: the Hopper pays in items', C.teal1, 'research');
+  // two pages: the Workshop's tree, and Act II's once Folding is done
+  const act2 = g.done('folding');
+  const page = act2 ? app.hud.treePage : 1;
+  if (act2) {
+    const tw = 76;
+    const tx = r.x + r.w - 52 - tw * 2;
+    if (button(ui, 'tree1', tx, r.y + 4, tw - 2, 12, 'Workshop', { active: page === 1 })) app.hud.treePage = 1;
+    const ready2 = RESEARCH_LIST.some((d) => d.act === 2 && available(g, d.id));
+    if (button(ui, 'tree2', tx + tw, r.y + 4, tw - 2, 12, 'Act II', { active: page === 2, pulse: page === 1 && ready2 })) app.hud.treePage = 2;
+  }
+  const nodes = RESEARCH_LIST.filter((d) => (d.act ?? 1) === page);
+  const cols = page === 2 ? 6 : 5;
+  const info = Math.min(170, Math.floor(r.w * 0.32));
+  const mx = r.w >= 600 ? 56 : 40;
+  const area = { x: r.x + mx, y: r.y + 50, w: r.w - info - mx * 2 - 8, h: r.h - 92 };
+  const pos = (id: ResearchId) => {
+    const [c, row] = TREE[id];
+    return { x: Math.round(area.x + (c / cols) * area.w), y: Math.round(area.y + (row / 3.2) * area.h) };
+  };
+  // the dashed links
+  const ctx = ui.ctx;
+  for (const d of nodes)
+    for (const q of d.requires.filter((q2) => (RESEARCH[q2].act ?? 1) === page)) {
+      const a = pos(q), b = pos(d.id);
+      const done = g.done(d.id), open = g.done(q);
+      const n = Math.max(1, Math.round(Math.hypot(b.x - a.x, b.y - a.y) / 3));
+      const flow = Math.floor(ui.time * 8) % 2;
+      ctx.fillStyle = done ? C.brass1 : open ? C.teal1 : C.hull0;
+      for (let i = 0; i <= n; i++) if ((i + (open && !done ? flow : 0)) % 2 === 0) ctx.fillRect(Math.round(a.x + ((b.x - a.x) * i) / n), Math.round(a.y + ((b.y - a.y) * i) / n), 1, 1);
+    }
+  // the nodes
+  let hovered: ResearchId | null = null;
+  for (const d of nodes) {
+    const p = pos(d.id);
+    const done = g.done(d.id), can = available(g, d.id), sel = g.s.research.selected === d.id;
+    const state = done ? 3 : sel ? 2 : can ? 1 : 0;
+    // ui_node art is 32x32 with the icon at +8,+8; the code fallback is a 24 px ring in the same box
+    const x = p.x - 16, y = p.y - 16;
+    const hov = ui.hover(x, y, 32, 32);
+    if (hov) hovered = d.id;
+    ui.region(x, y, 32, 32, 'button');
+    if (can && !sel) {
+      // available nodes breathe
+      const k = 0.25 + 0.2 * Math.sin(ui.time * 4 + d.num);
+      ctx.fillStyle = rgba(C.hot, k);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 19, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (sel) {
+      ctx.fillStyle = rgba(C.teal1, 0.35 + 0.15 * Math.sin(ui.time * 6));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 20, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (hasArt('ui_node')) ctx.drawImage(sheet('ui_node').frames[state], x, y);
+    else {
+      const ring = [C.hull0, C.brass1, C.teal1, C.gold][state];
+      ctx.fillStyle = C.ink;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 12, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = ring;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = state ? C.shadow : C.ink;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 9, 0, Math.PI * 2); ctx.fill();
+    }
+    const ic = NODE_ICON[d.id];
+    // locked icons are drawn darkened (the art director's note)
+    ctx.globalAlpha = state === 0 ? 0.35 : 1;
+    if (ic in ITEMS) ctx.drawImage(itemIcon(ic), x + 8, y + 8, 16, 16);
+    else uiIcon(ui, ic as UIconName, x + 8, y + 8);
+    ctx.globalAlpha = 1;
+    if (!done && researchFrac(g, d.id) > 0) bar(ui, x + 4, y + 31, 24, 4, researchFrac(g, d.id), C.teal1);
+    const label = d.name;
+    ui.text(label, p.x, TREE[d.id][2] ? y + 36 : y - 9, done ? C.brass1 : can ? C.bone : C.hull1, { align: 'center', shadow: C.ink });
+    if (hov && ui.clicked && (can || sel)) {
+      ui.eat();
+      app.act({ k: 'research', id: sel ? null : d.id });
+    }
+  }
+  // the info card for the hovered (or selected) node
+  const show = hovered ?? g.s.research.selected ?? nodes.find((d) => available(g, d.id))?.id ?? null;
+  const ix = r.x + r.w - info - 8, iy = r.y + 26;
+  const inner = card(ui, ix, iy, info, r.h - 32, show ? RESEARCH[show].name : 'Research', C.teal1, 'research');
+  if (show) {
+    const d = RESEARCH[show];
+    let y = inner.y;
+    y += ui.para(`Unlocks ${d.unlocks}.`, inner.x, y, inner.w, C.bone) + 4;
+    ui.text('Costs, delivered to the Hopper:', inner.x, y, C.hull2);
+    y += 11;
+    const prog = g.s.research.progress[show] ?? {};
+    for (const [item, n] of Object.entries(d.cost) as [ItemId, number][]) {
+      ctx.drawImage(itemIcon(item), inner.x, y);
+      const have = Math.min(n, Math.floor(prog[item]?.toNumber() ?? 0));
+      ui.text(`${ITEMS[item].name}: ${g.done(show) ? n : have}/${n}`, inner.x + 11, y, C.bone);
+      y += 10;
+      bar(ui, inner.x + 11, y, inner.w - 11, 4, g.done(show) ? 1 : have / n, C.teal1);
+      y += 7;
+    }
+    if (d.requires.length) {
+      y += 2;
+      ui.para(`Needs: ${d.requires.map((q) => (g.done(q) ? ICON.check : '') + RESEARCH[q].name).join(', ')}`, inner.x, y, inner.w, C.hull2);
+      y += 20;
+    }
+    const sel = g.s.research.selected === show;
+    if (g.done(show)) ui.text(`${ICON.check} Researched`, inner.x, y + 4, C.leaf);
+    else if (available(g, show)) {
+      if (button(ui, 'selectNode', inner.x, y + 2, inner.w, 16, sel ? 'Selected (click to clear)' : 'Research this', { gold: !sel, active: sel })) app.act({ k: 'research', id: sel ? null : show });
+    } else ui.text(`${ICON.lock} Locked`, inner.x, y + 4, C.hull1);
+  }
+  // the bank
+  const banked = (Object.entries(g.s.research.bank) as [ItemId, Num][]).filter(([, v]) => v.gt(0));
+  if (banked.length) {
+    let bx = inner.x;
+    const by = inner.y + inner.h - 12;
+    ui.text('Banked:', bx, by - 11, C.hull2);
+    for (const [item, v] of banked.slice(0, 5)) {
+      ctx.drawImage(itemIcon(item), bx, by);
+      bx += 11 + ui.text(v.format(), bx + 10, by, C.hull3);
+    }
+  }
+}
+
+// ------------------------------------------------------------------ stats
+
+function statsScreen(app: App, r: Rect) {
+  const ui = app.ui;
+  const g = app.game;
+  const s = g.s;
+  frame(ui, r.x, r.y, r.w, r.h);
+  header(app, r, 'Statistics', C.hot, 'stats');
+  const colW = Math.floor((r.w - 24) / 2);
+  const a = card(ui, r.x + 8, r.y + 26, colW, r.h - 32, 'The run', C.hot, 'clock');
+  const secs = Math.floor(g.seconds);
+  const rows: [string, string][] = [
+    ['Time played', `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m ${secs % 60}s`],
+    ['Coin now', s.coin.format()],
+    ['Coin earned', s.earned.format()],
+    ['Coin per minute', Math.round(g.incomePerMin()).toLocaleString('en-US')],
+    ['Research done', `${s.research.done.length} / ${RESEARCH_LIST.length}`],
+    ['Orders filled', String(s.orders.done.length)],
+    ['Land owned', `${s.land.length} chunks`],
+    ['Clicks', (s.counters.clicks ?? 0).toLocaleString('en-US')],
+    ['Cranks', (s.counters.cranks ?? 0).toLocaleString('en-US')],
+    ['Slag shovelled', (s.counters.shovels ?? 0).toLocaleString('en-US')],
+    ['Sparks caught', String(s.counters.sparks ?? 0)],
+    ['Trophies', `${TROPHIES.filter((t) => g.flag('trophy:' + t.id)).length} / ${TROPHIES.length}`],
+  ];
+  let y = a.y;
+  for (const [k, v] of rows) {
+    if (y > a.y + a.h - 10) break;
+    ui.text(k, a.x, y, C.hull2);
+    ui.text(v, a.x + a.w, y, C.bone, { align: 'right' });
+    y += 10;
+  }
+  y += 4;
+  // the last minute's income, one bar a second
+  const ch = Math.min(40, a.y + a.h - y - 24);
+  if (ch >= 16) {
+    ui.text('Coin per second, last minute', a.x, y, C.hull2);
+    y += 10;
+    ui.fill(a.x, y, a.w, ch, C.ink);
+    const inc = s.income;
+    const mx = Math.max(1, ...inc);
+    const bw = Math.max(1, Math.floor(a.w / 60));
+    inc.slice(-60).forEach((v, i) => {
+      const hh = Math.round((v / mx) * (ch - 2));
+      ui.fill(a.x + i * bw, y + ch - 1 - hh, Math.max(1, bw - 1), hh, i === inc.slice(-60).length - 1 ? C.gold : C.brass1);
+    });
+    ui.text(`peak ${Math.round(mx)}/s`, a.x + a.w - 2, y + 2, C.hull2, { align: 'right' });
+    y += ch + 6;
+  }
+  let bx = a.x;
+  for (const kind of BUILD_BAR) {
+    const n = s.ents.filter((e) => e.kind === kind).length;
+    if (!n) continue;
+    if (bx + 30 > a.x + a.w) { bx = a.x; y += 18; }
+    if (y > a.y + a.h - 16) break;
+    ui.ctx.drawImage(sheet(kind).frames[0], bx, y);
+    ui.text(String(n), bx + 17, y + 5, C.bone);
+    bx += 32;
+  }
+  const b = card(ui, r.x + 16 + colW, r.y + 26, colW, r.h - 32, 'Delivered (Dock and Hopper)', C.hot, 'orders');
+  y = b.y;
+  for (const id of ITEM_IDS) {
+    if (y > b.y + b.h - 10) break;
+    const v = s.delivered[id];
+    ui.ctx.globalAlpha = v ? 1 : 0.3;
+    ui.ctx.drawImage(itemIcon(id), b.x, y);
+    ui.text(ITEMS[id].name, b.x + 11, y, v ? C.bone : C.hull1);
+    ui.ctx.globalAlpha = 1;
+    ui.text(v ? v.format() : '-', b.x + b.w, y, v ? C.gold : C.hull1, { align: 'right' });
+    y += 10;
+  }
+}
+
+// ------------------------------------------------------------------ trophies
+
+function trophyShelf(app: App, r: Rect) {
+  const ui = app.ui;
+  const g = app.game;
+  const got = (id: string) => g.flag('trophy:' + id);
+  frame(ui, r.x, r.y, r.w, r.h);
+  header(app, r, `The Trophy Shelf: ${TROPHIES.filter((t) => got(t.id)).length} of ${TROPHIES.length}`, C.gold, 'trophies');
+  // the closest unearned trophies, with progress, on the right
+  const sideW = Math.min(180, Math.floor(r.w * 0.34));
+  const shelfW = r.w - sideW - 22;
+  // the shelf shrinks its cells a little when there are many trophies, so every one shows
+  let cell = 38;
+  const rowsFor = (c: number) => Math.ceil(TROPHIES.length / Math.max(1, Math.floor((shelfW - 8) / c)));
+  while (cell > 28 && 26 + rowsFor(cell) * (cell + 4) > r.h - 4) cell -= 2;
+  const cols = Math.max(1, Math.floor((shelfW - 8) / cell));
+  const x0 = r.x + 8 + Math.floor((shelfW - 8 - cols * cell) / 2);
+  TROPHIES.forEach((t, i) => {
+    const x = x0 + (i % cols) * cell, y = r.y + 26 + Math.floor(i / cols) * (cell + 4);
+    if (y + cell > r.y + r.h - 4) return;
+    const have = got(t.id);
+    // a brass shelf plank under each row
+    if (i % cols === 0) {
+      ui.fill(x0 - 4, y + cell - 3, cols * cell + 8, 3, C.brass1);
+      ui.fill(x0 - 4, y + cell, cols * cell + 8, 1, C.brass0);
+    }
+    ui.fill(x + 3, y + 2, cell - 6, cell - 7, C.ink);
+    ui.fill(x + 4, y + 3, cell - 8, cell - 9, have ? C.ground1 : C.shadow);
+    const ix = x + Math.floor(cell / 2) - 8, iy = y + Math.floor((cell - 5) / 2) - 8;
+    if (have) {
+      // earned: a gentle glint sweeping across
+      if (t.icon) ui.ctx.drawImage(itemIcon(t.icon), ix, iy, 16, 16);
+      else uiIcon(ui, 'trophies', ix, iy);
+      const gl = (ui.time * 0.6 + i * 0.13) % 3;
+      if (gl < 1) ui.fill(x + 4 + Math.floor(gl * (cell - 10)), y + 3, 2, cell - 9, C.hot, 0.25);
+    } else {
+      ui.ctx.globalAlpha = 0.18;
+      if (t.icon) ui.ctx.drawImage(itemIcon(t.icon), ix, iy, 16, 16);
+      else uiIcon(ui, 'trophies', ix, iy);
+      ui.ctx.globalAlpha = 1;
+      ui.text('?', x + Math.floor(cell / 2) - 2, iy + 4, C.hull1);
+    }
+    if (ui.hover(x, y, cell, cell)) {
+      ui.fill(x + 3, y + 2, cell - 6, 1, C.gold);
+      const v = Math.min(t.n, trophyValue(g, t));
+      ui.tip([{ text: have ? t.name : '???', color: have ? C.gold : C.hull2 }, { text: t.desc }, { text: have ? 'Earned!' : `${Math.floor(v).toLocaleString('en-US')} / ${t.n.toLocaleString('en-US')}`, color: have ? C.leaf : C.hull2 }], 170);
+    }
+  });
+  const side = card(ui, r.x + r.w - sideW - 8, r.y + 26, sideW, r.h - 32, 'Almost there', C.gold, 'star');
+  const next = TROPHIES.filter((t) => !got(t.id))
+    .map((t) => ({ t, f: Math.min(1, trophyValue(g, t) / t.n) }))
+    .sort((p, q) => q.f - p.f)
+    .slice(0, Math.max(1, Math.floor((side.h - 14) / 30)));
+  let y = side.y;
+  for (const { t, f } of next) {
+    ui.text(t.name, side.x, y, C.bone);
+    ui.text(`${Math.floor(f * 100)}%`, side.x + side.w, y, C.gold, { align: 'right' });
+    y += 10;
+    ui.clip(side.x, y, side.w, 10);
+    ui.text(t.desc, side.x, y, C.hull2);
+    ui.unclip();
+    y += 10;
+    bar(ui, side.x, y, side.w, 4, f, C.gold);
+    y += 10;
+  }
+  if (!next.length) ui.para('Every trophy on the shelf. The swamp salutes you.', side.x, y, side.w, C.gold);
+  ui.text('Trophies are for glory in the slice; later each adds a small bonus.', r.x + 10, r.y + r.h - 13, C.hull2);
+}
+
+// ------------------------------------------------------------------ options
+
+function optionsScreen(app: App, r: Rect) {
+  const ui = app.ui;
+  frame(ui, r.x, r.y, r.w, r.h);
+  header(app, r, 'Options and keys', C.bone, 'options');
+  const colW = Math.floor((r.w - 24) / 2);
+  const a = card(ui, r.x + 8, r.y + 26, colW, r.h - 32, 'Settings', C.bone, 'options');
+  let y = a.y;
+  const row = (label: string, on: boolean, click: () => void) => {
+    ui.text(label, a.x, y + 3, C.bone);
+    if (button(ui, 'opt:' + label, a.x + a.w - 44, y, 44, 13, on ? 'on' : 'off', { active: on })) click();
+    y += 16;
+  };
+  row('Sound', !app.muted, () => { app.muted = !app.muted; app.audio.setMuted(app.muted); });
+  row('Scientific notation', app.notation === 'scientific', () => { app.notation = app.notation === 'scientific' ? 'standard' : 'scientific'; });
+  row('Reduced motion', app.renderer.fx.calm, () => { app.renderer.fx.calm = !app.renderer.fx.calm; });
+  y += 4;
+  if (button(ui, 'save', a.x, y, a.w, 14, 'Save now')) { app.save(); app.toast('Saved', 'Autosave runs every 30 s and when you leave.', C.leaf); }
+  y += 17;
+  if (button(ui, 'export', a.x, y, a.w, 14, 'Export save (copy)')) app.copyExport();
+  y += 17;
+  if (button(ui, 'import', a.x, y, a.w, 14, 'Import save (paste)')) app.promptImport();
+  y += 17;
+  if (button(ui, 'title', a.x, y, a.w, 14, 'Back to the title')) { app.save(); app.toTitle(); }
+  const b = card(ui, r.x + 16 + colW, r.y + 26, colW, r.h - 32, 'Keys', C.bone, 'build');
+  y = b.y;
+  ui.text('WASD, arrows, right-drag: pan', b.x, y, C.hull2); y += 10;
+  ui.text('Wheel or Q/E: zoom. 1-9: build.', b.x, y, C.hull2); y += 12;
+  for (const act of SHOWN_ACTIONS.filter((x) => !x.startsWith('slot') && !x.startsWith('pan') && !x.startsWith('zoom'))) {
+    if (y > b.y + b.h - 10) break;
+    ui.text(ACTION_LABELS[act], b.x, y, C.bone);
+    ui.text(app.input.binds[act].map(keyLabel).join('/'), b.x + b.w, y, C.gold, { align: 'right' });
+    y += 10;
+  }
+  void textWidth; void badge; void BUILD;
+}

@@ -3,7 +3,8 @@
 // earn by DESIGN.md §10's formula (the Inspector Spark and the fold audit's preview use it).
 // Pure: reads the Game, never writes it.
 import type { Game } from './Game';
-import { DX, DY, ccw, cw, opposite, type Dir, type Ent } from './world';
+import { DX, DY, ccw, cw, faceTiles, opposite, type Dir, type Ent } from './world';
+import { machineRecipes } from './transfer';
 import { BUILD, isMachine } from '../data/machines';
 import { RECIPE } from '../data/recipes';
 import { ITEMS, itemName, type ItemId } from '../data/items';
@@ -24,14 +25,18 @@ export function outLinks(e: Ent): { x: number; y: number; d: Dir }[] {
       return [front];
     case 'splitter':
       return [front, ...[ccw(e.rot), cw(e.rot)].map((d) => ({ x: e.x + DX[d], y: e.y + DY[d], d }))];
-    case 'smelter':
-    case 'press':
-    case 'assembler':
-    case 'furnace':
-      return [front, ...[ccw(e.rot), opposite(e.rot), cw(e.rot)].map((d) => ({ x: e.x + DX[d], y: e.y + DY[d], d }))];
     default:
-      return [];
+      if (!isMachine(e.kind)) return [];
+      if (e.w === 1 && e.h === 1) return [front, ...[ccw(e.rot), opposite(e.rot), cw(e.rot)].map((d) => ({ x: e.x + DX[d], y: e.y + DY[d], d }))];
+      // a 2x2: both tiles of each face
+      return [e.rot, ccw(e.rot), opposite(e.rot), cw(e.rot)].flatMap((d) => faceTiles(e, d).map(([x, y]) => ({ x, y, d })));
   }
+}
+
+/** Does machine m use this item (its recipe, or any recipe it could pick)? */
+function uses(g: Game, m: Ent, item: string): boolean {
+  if (m.recipe) return RECIPE[m.recipe].inputs.some((s) => s.item === item);
+  return machineRecipes(g, m).some((r) => r.inputs.some((s) => s.item === item));
 }
 
 /** Does `from` actually hand items to `to` (respecting belt directions and fronts)? */
@@ -85,7 +90,8 @@ export function lineOf(g: Game, e: Ent): Ent[] {
 export function nominal(m: Ent): { ins: { item: ItemId; perMin: number }[]; outs: { item: ItemId; perMin: number }[] } {
   const r = m.recipe ? RECIPE[m.recipe] : null;
   if (!r) return { ins: [], outs: [] };
-  const crafts = 60 / r.time;
+  // crafts a minute at the machine's own speed (a Mk2 makes 3x)
+  const crafts = (60 / r.time) * (BUILD[m.kind].speed ?? 1);
   return {
     ins: r.inputs.map((s) => ({ item: s.item, perMin: s.n * crafts })),
     outs: r.outputs.map((s) => ({ item: s.item, perMin: s.n * crafts })),
@@ -169,10 +175,18 @@ export function feeders(g: Game, m: Ent): { from: Ent[]; shared: Ent[] } {
       if (!n || seen.has(n.id) || isSink(n)) continue;
       // does n hand items into cur?
       const links = outLinks(n).filter((l) => l.x >= cur.x && l.x < cur.x + cur.w && l.y >= cur.y && l.y < cur.y + cur.h);
-      if (!links.some((l) => linked(g, n, cur, l.d))) continue;
-      seen.add(n.id);
-      if (isMachine(n.kind)) from.push(n);
-      else {
+      const link = links.find((l) => linked(g, n, cur, l.d));
+      if (!link) continue;
+      if (isMachine(n.kind)) {
+        // only if what it hands this way (its output out of the front, its byproduct out of a
+        // side) is something m uses: a press beside a press is not feeding it
+        const r = n.recipe ? RECIPE[n.recipe] : null;
+        const item = link.d === n.rot ? r?.outputs[0].item : r?.byproduct?.item;
+        if (!item || !uses(g, m, item)) continue;
+        seen.add(n.id);
+        from.push(n);
+      } else {
+        seen.add(n.id);
         if (n.kind === 'splitter') {
           for (const l of outLinks(n)) {
             const o = g.entAt(l.x, l.y);
@@ -255,5 +269,62 @@ export function report(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' |
     const front = g.entAt(m.x + DX[m.rot], m.y + DY[m.rot]);
     if (!front) out.push({ text: 'Nothing at its front: its output waits', tone: m.out > 0 ? 'bad' : 'dim' });
   }
+  return out;
+}
+
+/**
+ * The line report in plain English (DESIGN.md §15 diagnostics, ROADMAP.md Milestone 4): what the
+ * whole line around `m` makes, where it ends, and its worst imbalance, with the fix in one line.
+ * Ratios are from nominal rates (what each machine makes when busy), so the advice holds before
+ * the line has run long enough to measure.
+ */
+/** a rate per minute as a bare number (the line report writes 'a minute' itself) */
+const pm = (n: number) => (Math.round(n * 10) / 10).toString().replace(/\.0$/, '');
+
+export function lineReport(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' | 'bad' | 'dim' | 'plain' }[] {
+  const out: { text: string; tone: 'good' | 'warn' | 'bad' | 'dim' | 'plain' }[] = [];
+  const line = lineOf(g, m);
+  if (!line) return out;
+  const ms = line.filter((e) => isMachine(e.kind) && e.recipe);
+  if (ms.length < 2) return out;
+  const made = new Map<ItemId, number>(), used = new Map<ItemId, number>();
+  const makers = new Map<ItemId, Ent[]>(), users = new Map<ItemId, Ent[]>();
+  for (const e of ms) {
+    const n = nominal(e);
+    for (const o of n.outs) { made.set(o.item, (made.get(o.item) ?? 0) + o.perMin); makers.set(o.item, [...(makers.get(o.item) ?? []), e]); }
+    for (const i of n.ins) { used.set(i.item, (used.get(i.item) ?? 0) + i.perMin); users.set(i.item, [...(users.get(i.item) ?? []), e]); }
+  }
+  // the line's products: made but not used inside
+  const products = [...made.keys()].filter((k) => !used.has(k));
+  const sinks = new Set<string>();
+  for (const e of ms) if (endsAtSink(g, e)) sinks.add('the Dock or Hopper');
+  const machines = ms.length;
+  out.push({ text: `The line: ${machines} machines making ${products.map((p) => `${pm(made.get(p)!)} ${itemName(p).toLowerCase()}`).join(', ') || 'parts for each other'} a minute at full speed${sinks.size ? '' : ', but nothing reaches a Dock or Hopper yet'}`, tone: sinks.size ? 'plain' : 'warn' });
+  // the worst ratio between what is made and what is wanted inside the line
+  let worst: { item: ItemId; ratio: number } | null = null;
+  for (const [item, want] of used) {
+    const have = made.get(item) ?? 0;
+    if (have === 0) continue; // fed from outside the line
+    const ratio = have / want;
+    if (!worst || Math.abs(Math.log(ratio)) > Math.abs(Math.log(worst.ratio))) worst = { item, ratio };
+  }
+  if (worst && Math.abs(worst.ratio - 1) > 0.12) {
+    const it = itemName(worst.item).toLowerCase();
+    const have = made.get(worst.item)!, want = used.get(worst.item)!;
+    if (worst.ratio < 1) {
+      const maker = makers.get(worst.item)![0];
+      const each = nominal(maker).outs.find((o) => o.item === worst!.item)!.perMin;
+      const more = Math.ceil((want - have) / each);
+      out.push({ text: `Short of ${it}: makes ${pm(have)}, wants ${pm(want)} a minute. Add ${more} ${BUILD[maker.kind].name}${more > 1 ? 's' : ''} making ${it} (${pm(each)} each).`, tone: 'warn' });
+    } else {
+      const user = users.get(worst.item)![0];
+      const each = nominal(user).ins.find((i) => i.item === worst!.item)!.perMin;
+      const more = Math.floor((have - want) / each);
+      out.push({ text: `Too much ${it}: makes ${pm(have)}, uses ${pm(want)} a minute; the rest backs up.${more >= 1 ? ` ${more} more ${BUILD[user.kind].name}${more > 1 ? 's' : ''} would use it.` : ''}`, tone: 'warn' });
+    }
+  } else if (worst) out.push({ text: 'Its ratios are balanced.', tone: 'good' });
+  // slag
+  const slagJams = ms.filter((e) => e.state === 'blocked' && e.why && e.why === e.byItem);
+  if (slagJams.length) out.push({ text: `Slag has nowhere to go at ${slagJams.map((e) => entName(g, e)).join(', ')}: a heap, a belt leading away, or a brick press beside it.`, tone: 'bad' });
   return out;
 }

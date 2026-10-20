@@ -23,8 +23,13 @@ export class UI {
   /** the mouse is over UI drawn last frame (so world drags and clicks don't fall through) */
   captured = false;
   private blocks: Rect[] = [];
+  /** every button drawn last frame, by id (the e2e scripts click them by name) */
+  ids = new Map<string, Rect>();
+  private nextIds = new Map<string, Rect>();
   private prevBlocks: Rect[] = [];
   tooltip: TipLine[] | null = null;
+  /** paints a tooltip's box when set (the app hands over its 9-slice art); else the kit's own */
+  tipSkin: ((ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void) | null = null;
   tipWidth = 180;
   time = 0;
   clicked = false;
@@ -58,6 +63,8 @@ export class UI {
     this.dt = dt;
     this.tooltip = null;
     this.prevBlocks = this.blocks;
+    this.ids = this.nextIds;
+    this.nextIds = new Map();
     this.blocks = [];
     this.captured = this.prevBlocks.some((b) => this.inside(b));
     this.clicked = input.mouse.pressed[0];
@@ -185,6 +192,18 @@ export class UI {
     return false;
   }
 
+  /** Claim a region drawn by custom code: it blocks world clicks and is recorded for the audit as a
+   * panel (or a button) so text inside it is checked for overflow. */
+  region(x: number, y: number, w: number, h: number, kind: 'panel' | 'button' = 'panel', blocking = true) {
+    if (blocking) this.block(x, y, w, h);
+    if (this.audit) this.rec(kind, x, y, w, h);
+  }
+
+  /** remember where a button with this id was drawn (for e2e) */
+  mark(id: string, x: number, y: number, w: number, h: number) {
+    this.nextIds.set(id, { x, y, w, h });
+  }
+
   /** a tooltip shown while the mouse is over a rect (no click behaviour) */
   hint(x: number, y: number, w: number, h: number, lines: TipLine[] | string, width = 180) {
     if (this.hover(x, y, w, h)) this.tip(typeof lines === 'string' ? [{ text: lines }] : lines, width);
@@ -212,6 +231,15 @@ export class UI {
     if (this.audit) this.clips.pop();
   }
 
+  /** Draw something that floats above the layout on purpose (a refusal under the cursor, a
+   * celebration): the overlap audit treats it like a tooltip. */
+  floating(draw: () => void) {
+    const prev = this.auditLayer;
+    this.auditLayer = 'tip';
+    draw();
+    this.auditLayer = prev;
+  }
+
   end() {
     // the tooltip floats above the UI on purpose
     this.auditLayer = 'tip';
@@ -233,9 +261,12 @@ export class UI {
     x = Math.max(2, x);
     y = Math.max(2, y);
     this.fill(x + 2, y + 2, w, h, C.ink, 0.4);
-    this.fill(x, y, w, h, C.ink);
-    this.fill(x + 1, y + 1, w - 2, h - 2, C.night);
-    this.fill(x + 1, y + 1, w - 2, 1, C.amber);
+    if (this.tipSkin) this.tipSkin(this.ctx, x, y, w, h);
+    else {
+      this.fill(x, y, w, h, C.ink);
+      this.fill(x + 1, y + 1, w - 2, h - 2, C.night);
+      this.fill(x + 1, y + 1, w - 2, 1, C.amber);
+    }
     wrapped.forEach((l, i) => this.text(l.text, x + 5, y + 5 + i * LINE_H, l.color));
   }
 }

@@ -3,12 +3,16 @@
 // warm and plain, land you don't own is dark, cool and hatched. Imported tile art
 // (src/art/tile_*.png, a strip of variants) is used when present, else code draws it.
 // Re-baked when land is bought.
+import { PATCHES } from '../data/land';
 import { C, rgba } from '../data/palette';
 import { CHUNKS } from '../data/land';
 import type { Game } from '../sim/Game';
 import { sheet, hasArt } from './sprites';
 
 export const TILE = 16;
+
+/** each ore's deposit art (a 2x2 deposit in four quadrants) */
+const ORE_ART: Record<string, string> = { ironOre: 'tile_ore_iron', copperOre: 'tile_ore_copper', coal: 'tile_ore_coal', sand: 'tile_ore_sand' };
 
 /** Small deterministic hash in [0, 1). */
 export function hash2(x: number, y: number, s = 0): number {
@@ -54,10 +58,16 @@ export class Ground {
       for (let i = 0; i < n; i++) f(c, Math.floor(hash2(x, y, s + i * 2) * 16), Math.floor(hash2(x, y, s + i * 2 + 1) * 16), 1, 1);
     };
     const ore = g.oreAt(x, y);
-    const art = ore ? (ore === 'ironOre' ? 'tile_ore_iron' : 'tile_ore_copper') : 'tile_floor';
+    const art = ore ? ORE_ART[ore] ?? 'tile_ore_copper' : 'tile_floor';
     if (hasArt(art)) {
       const s = sheet(art);
-      ctx.drawImage(s.frames[Math.floor(hash2(x, y, 91) * s.frames.length)], px, py);
+      let fr = Math.floor(hash2(x, y, 91) * s.frames.length);
+      if (ore) {
+        // ore art is one 2x2 deposit in four quadrants (TL, TR, BL, BR): pick by place in the patch
+        const p = PATCHES[g.patchOf[y * g.W + x]];
+        if (p) fr = ((x - p.x) % 2) + 2 * ((y - p.y) % 2);
+      }
+      ctx.drawImage(s.frames[fr % s.frames.length], px, py);
     } else {
       // packed workshop floor: warm earth with flecks and a faint board line every other row
       f(C.umber, 0, 0, 16, 16);
@@ -65,7 +75,7 @@ export class Ground {
       specks(C.bark, 5, 23);
       if (y % 2 === 0) f(rgba(C.bark, 0.5) as string, 0, 15, 16, 1);
       if (ore) {
-        const [d, m, l, acc] = ore === 'ironOre' ? [C.deep, C.sky, C.ice, C.rust] : [C.rust, C.copper, C.tan, C.lime];
+        const [d, m, l, acc] = ore === 'ironOre' ? [C.deep, C.sky, C.ice, C.rust] : ore === 'coal' ? [C.ink, C.shadow, C.hull1, C.glow] : ore === 'sand' ? [C.ground1, C.copper2, C.hot, C.bone] : [C.rust, C.copper, C.tan, C.lime];
         // four or five lumps per tile, each with a highlight: reads as rock, not floor
         for (let i = 0; i < 5; i++) {
           const lx = 1 + Math.floor(hash2(x, y, 40 + i) * 11), ly = 1 + Math.floor(hash2(x, y, 50 + i) * 11);

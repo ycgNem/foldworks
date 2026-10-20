@@ -37,15 +37,49 @@ export const RULES = {
   compactFull: r(0.6, '§10 Grade: C = min(1, (machine tiles / box tiles) / 0.6)'),
   /** stamp cost growth per copy already made */
   stampGrowth: r(0.5, '§10 Stamp: bill x (1 + 0.5 n), linear'),
+  /** a module's input and output buffers hold this many seconds of its rates */
+  moduleBuffer: r(2, '§11 module buffers: 2 s of each rate, like a machine holding 2 crafts (§4)'),
   /** offline */
   offlineEff: r(0.5, '§12 offline efficiency 0.5'),
   offlineCapHours: r(24, '§12 elapsed time capped at 24 h in the slice'),
-  offlineReplayTicks: r(12000, '§12 replay up to 10 min of real ticks (12,000 ticks)'),
+  offlineReplayTicks: r(72000, '§12 replay up to 1 h of real ticks (72,000 ticks, about a second): heaps fill and lines jam in it as they would live'),
   /** Bramble rep 1: plates sell for this much more */
   repPlateBonus: r(0.2, '§7 Reputation: 1 rep -> plates sell for +20%'),
   /** Bramble rep 2: a free Buffer Crate every this many seconds, up to this many */
   repCrateSeconds: r(60, '§7 Reputation: 2 rep -> one free Buffer Crate a minute up to 5'),
   repCrateMax: r(5, '§7 Reputation: 2 rep -> one free Buffer Crate a minute up to 5'),
+  // ---- Act II (DESIGN.md §18)
+  /** Poles: reach (a square of side 2r+1) and the distance that joins two into one grid */
+  poleReach: r(2, '§18 Power: a Pole powers everything within 2 tiles (5x5)'),
+  poleLink: r(6, '§18 Power: Poles within 6 tiles join one grid'),
+  /** modes: speed and power multipliers, and Precision's extra main output */
+  modeEfficientSpeed: r(0.75, '§18 Modes: Efficient 0.75x speed at 0.5x power'),
+  modeEfficientPower: r(0.5, '§18 Modes: Efficient 0.75x speed at 0.5x power'),
+  modeOverclockSpeed: r(1.5, '§18 Modes: Overclocked 1.5x speed at 2.2x power'),
+  modeOverclockPower: r(2.2, '§18 Modes: Overclocked 1.5x speed at 2.2x power'),
+  modePrecisionSpeed: r(0.8, '§18 Modes: Precision 0.8x speed, +25% of the main output'),
+  modePrecisionYield: r(0.25, '§18 Modes: Precision 0.8x speed, +25% of the main output'),
+  /** a Boiler or Generator holds this much fuel */
+  fuelCap: r(4, '§18 Power: a burner holds 4 fuel, like a machine holding 2 crafts of a 2-item input (§4)'),
+  /** Overdrive: speed, seconds on, seconds cooling */
+  overdriveMult: r(3, '§18 Machines: Overdrive runs a machine 3x for 10 s, then it cools 30 s'),
+  overdriveSeconds: r(10, '§18 Machines: Overdrive runs a machine 3x for 10 s, then it cools 30 s'),
+  overdriveCool: r(30, '§18 Machines: Overdrive runs a machine 3x for 10 s, then it cools 30 s'),
+  /** Machine Kits per stamp of a design with Act II buildings: 1 + floor(bill / this) */
+  kitDivisor: r(1500, '§18 Machine Kits: 1 + floor(bill / 1,500)'),
+  /** deposit claims: the start, per Workshop deposit owned, per Survey Office block, block growth */
+  claimsBase: r(3, '§18 Land and deposits: 3 claims per ore plus 2 per Workshop deposit'),
+  claimsPerDeposit: r(2, '§18 Land and deposits: 3 claims per ore plus 2 per Workshop deposit'),
+  claimsPerBlock: r(4, '§18 Land and deposits: the Survey Office sells claims 4 at a time'),
+  claimGrowth: r(0.5, '§18 Land and deposits: each block costs price x (1 + 0.5 b), the stamp rule'),
+  /** the Great Drill's stage 1: Miners and source modules run this much faster */
+  drillBoost: r(0.5, '§18 Megaproject #1: stage 1 runs every Miner and source module +50%'),
+  /** reputation rewards (Act II customers) */
+  voltaireSteam: r(0.25, '§18 Customers: Dame Voltaire rep 2, Steam Engines +25%'),
+  unit7Precision: r(0.1, '§18 Customers: Unit 7 rep 3 adds +10% to Precision'),
+  codexMult: r(100, '§18 Customers: Unit 7 rep 1, the Codex pays 100x a first delivery'),
+  /** nested folds: the box limit on the Factory floor */
+  nestedMax: r(6, '§18 Nested folds: a box up to 6x6 of modules and trunks'),
 };
 
 export type RuleId = keyof typeof RULES;

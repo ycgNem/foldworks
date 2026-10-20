@@ -5,7 +5,7 @@
 // snapshot and the commands since it (src/sim/snapshot.ts).
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 3;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -20,8 +20,37 @@ export interface SaveData {
 
 export type Migration = (d: any) => any;
 
-/** Ordered migrations: MIGRATIONS[v] upgrades a v save to v + 1 and sets d.v. None yet (v1). */
-export const MIGRATIONS: Record<number, Migration> = {};
+/** Ordered migrations: MIGRATIONS[v] upgrades a v save to v + 1 and sets d.v. */
+export const MIGRATIONS: Record<number, Migration> = {
+  // v2 (Milestone 2): the state gains the fold audit, module designs and the Factory floor
+  1: (d) => {
+    const st = JSON.parse(d.snap);
+    st.audit ??= null;
+    st.designs ??= [];
+    st.nextDesign ??= 1;
+    st.factory ??= {
+      ents: [
+        { id: 1, kind: 'fdock', x: 10, y: 1, w: 2, h: 2, rot: 0, design: 0, inBuf: {}, outBuf: {}, f: 0, fAvg: 0, state: 'idle', why: null, rr: 0, flow: 0, hist: '', sec: [0, 0, 0, 0] },
+        { id: 2, kind: 'fhopper', x: 10, y: 5, w: 2, h: 2, rot: 0, design: 0, inBuf: {}, outBuf: {}, f: 0, fAvg: 0, state: 'idle', why: null, rr: 0, flow: 0, hist: '', sec: [0, 0, 0, 0] },
+      ],
+      nextId: 3,
+    };
+    return { ...d, snap: JSON.stringify(st), v: 2 };
+  },
+  // v3 (Milestone 4, Act II): parts bank, deposit claims, the Codex, the Megaproject, the Factory
+  // audit, and the two new customers' reputation
+  2: (d) => {
+    const st = JSON.parse(d.snap);
+    st.parts ??= 'N:0';
+    st.claimBlocks ??= {};
+    st.codex ??= [];
+    st.mega ??= { stage: 0, progress: {} };
+    st.faudit ??= null;
+    st.orders ??= {};
+    st.orders.rep = { bramble: 0, unit7: 0, voltaire: 0, ...(st.orders.rep ?? {}) };
+    return { ...d, snap: JSON.stringify(st), v: 3 };
+  },
+};
 
 /** Bring any older save up to SAVE_VERSION; throws on a gap in the chain or a newer save. */
 export function migrate(d: any, migrations: Record<number, Migration> = MIGRATIONS, target = SAVE_VERSION): SaveData {

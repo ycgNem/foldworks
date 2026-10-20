@@ -29,6 +29,12 @@ export function runBelts(g: Game) {
       }
     }
   }
+  // the heat map: how loaded and how stuck each belt has been lately (saves from before have none)
+  for (const b of g.belts) {
+    const full = b.item !== null ? 1 : 0, stuck = b.item !== null && !b.mv ? 1 : 0;
+    b.occ = (b.occ ?? 0) * 0.99 + full * 0.01;
+    b.jam = (b.jam ?? 0) * 0.99 + stuck * 0.01;
+  }
   for (const e of g.logistics) handOn(g, e);
 }
 

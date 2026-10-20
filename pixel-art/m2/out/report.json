@@ -1,0 +1,104 @@
+{
+ "tile_water": {
+  "frame": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "colours": 5,
+  "fps": 4
+ },
+ "tile_shore": {
+  "frame": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "colours": 12,
+  "fps": 0
+ },
+ "ui_toast": {
+  "frame": [
+   24,
+   24
+  ],
+  "frames": 1,
+  "colours": 10,
+  "fps": 0,
+  "slice": [
+   6,
+   6,
+   6,
+   6
+  ]
+ },
+ "ui_tip": {
+  "frame": [
+   12,
+   12
+  ],
+  "frames": 1,
+  "colours": 2,
+  "fps": 0,
+  "slice": [
+   3,
+   3,
+   3,
+   3
+  ]
+ },
+ "fold_corner": {
+  "frame": [
+   8,
+   8
+  ],
+  "frames": 4,
+  "colours": 5,
+  "fps": 0
+ },
+ "fx_confetti": {
+  "frame": [
+   4,
+   4
+  ],
+  "frames": 8,
+  "colours": 16,
+  "fps": 0
+ },
+ "fx_burst": {
+  "frame": [
+   32,
+   32
+  ],
+  "frames": 6,
+  "colours": 3,
+  "fps": 15
+ },
+ "portrait_bramble_cheer": {
+  "frame": [
+   48,
+   48
+  ],
+  "frames": 2,
+  "colours": 18,
+  "fps": 0
+ },
+ "ui_icons_small": {
+  "frame": [
+   8,
+   8
+  ],
+  "frames": 29,
+  "colours": 26,
+  "fps": 0
+ },
+ "module_glow": {
+  "frame": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "colours": 2,
+  "fps": 8
+ }
+}

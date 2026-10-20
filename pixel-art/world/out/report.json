@@ -1,0 +1,353 @@
+{
+ "tile_floor": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 0,
+  "colours": 3
+ },
+ "tile_ore_iron": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 0,
+  "colours": 8
+ },
+ "tile_ore_copper": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 0,
+  "colours": 9
+ },
+ "tile_ore_coal": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 0,
+  "colours": 7
+ },
+ "tile_ore_sand": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 0,
+  "colours": 7
+ },
+ "tile_factory": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 2,
+  "fps": 0,
+  "colours": 5
+ },
+ "belt": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 16,
+  "colours": 6
+ },
+ "belt_turn": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 16,
+  "colours": 6
+ },
+ "trunk": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 16,
+  "colours": 6
+ },
+ "trunk_turn": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 16,
+  "colours": 6
+ },
+ "items": {
+  "size": [
+   8,
+   8
+  ],
+  "frames": 10,
+  "fps": 0,
+  "colours": 19
+ },
+ "items2": {
+  "size": [
+   8,
+   8
+  ],
+  "frames": 12,
+  "fps": 0,
+  "colours": 23
+ },
+ "miner": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 12,
+  "colours": 9
+ },
+ "smelter": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 8,
+  "colours": 11
+ },
+ "press": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 8,
+  "colours": 10
+ },
+ "assembler": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 8,
+  "colours": 12
+ },
+ "furnace": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 8,
+  "colours": 12
+ },
+ "heap": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 5,
+  "fps": 0,
+  "colours": 8
+ },
+ "crate": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 1,
+  "fps": 0,
+  "colours": 10
+ },
+ "splitter": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 1,
+  "fps": 0,
+  "colours": 9
+ },
+ "merger": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 1,
+  "fps": 0,
+  "colours": 9
+ },
+ "module": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 1,
+  "fps": 0,
+  "colours": 6
+ },
+ "spark_vein": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 8,
+  "colours": 4
+ },
+ "spark_inspector": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 2,
+  "fps": 2,
+  "colours": 11
+ },
+ "dock": {
+  "size": [
+   32,
+   32
+  ],
+  "frames": 2,
+  "fps": 2,
+  "colours": 19
+ },
+ "dock_lily": {
+  "size": [
+   32,
+   32
+  ],
+  "frames": 2,
+  "fps": 2,
+  "colours": 16
+ },
+ "hopper": {
+  "size": [
+   32,
+   32
+  ],
+  "frames": 3,
+  "fps": 3,
+  "colours": 14
+ },
+ "factory_dock": {
+  "size": [
+   32,
+   32
+  ],
+  "frames": 2,
+  "fps": 2,
+  "colours": 12
+ },
+ "factory_hopper": {
+  "size": [
+   32,
+   32
+  ],
+  "frames": 3,
+  "fps": 3,
+  "colours": 12
+ },
+ "boiler": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 8,
+  "colours": 15
+ },
+ "steam_engine": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 10,
+  "colours": 9
+ },
+ "pole": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 1,
+  "fps": 0,
+  "colours": 8
+ },
+ "generator": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 12,
+  "colours": 10
+ },
+ "kiln": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 8,
+  "colours": 9
+ },
+ "mixer": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 8,
+  "colours": 8
+ },
+ "refinery": {
+  "size": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "fps": 6,
+  "colours": 10
+ },
+ "smelter_mk2": {
+  "size": [
+   32,
+   32
+  ],
+  "frames": 4,
+  "fps": 8,
+  "colours": 12
+ },
+ "press_mk2": {
+  "size": [
+   32,
+   32
+  ],
+  "frames": 4,
+  "fps": 8,
+  "colours": 12
+ },
+ "assembler_mk2": {
+  "size": [
+   32,
+   32
+  ],
+  "frames": 4,
+  "fps": 8,
+  "colours": 13
+ }
+}

@@ -1,15 +1,21 @@
 // Sparks (DESIGN.md §6): one every 3-6 minutes, visible for 20 s, paused while the tab is hidden.
 // A Lucky Vein glitters on a patch with a working miner (click: that patch's miners run 3x for
 // 60 s). An Inspector walks up to the busiest line (click: they grade it with §10's formula and
-// pay 60 s of its measured output value x the grade multiplier). Missing one costs nothing.
+// hand over 60 s of its measured output x the grade multiplier, in kind, to research; paid in
+// items, not coin, so it is not a bank-percentage windfall: DECISIONS.md). Missing one costs
+// nothing.
 import type { Game, ActResult } from '../Game';
 import { Num } from '../../engine/num';
 import { PATCHES } from '../../data/land';
+import { RECIPE } from '../../data/recipes';
+import type { ItemId } from '../../data/items';
+import { creditResearch } from './research';
 import { RULES } from '../../data/rules';
 import { TICK_RATE } from '../../engine/time';
 import { isMachine } from '../../data/machines';
 import { rand, type Spark } from '../world';
-import { lines, gradeLine } from '../analysis';
+import { lines, gradeLine, endsAtSink } from '../analysis';
+import { shares } from './stats';
 
 export function runSparks(g: Game) {
   const s = g.s;
@@ -74,6 +80,7 @@ function freeBeside(g: Game, ms: { x: number; y: number }[]): { x: number; y: nu
 
 export function catchSpark(g: Game, p: Spark): ActResult {
   g.s.sparks = g.s.sparks.filter((q) => q !== p);
+  g.bump('sparks');
   if (p.kind === 'vein') {
     const pi = g.patchOf[p.y * g.W + p.x];
     g.s.veins[pi] = RULES.veinSeconds.value * TICK_RATE;
@@ -82,9 +89,26 @@ export function catchSpark(g: Game, p: Spark): ActResult {
   }
   const line = (p.line ?? []).map((id) => g.byId.get(id)).filter((e) => !!e) as NonNullable<ReturnType<typeof g.byId.get>>[];
   const gr = gradeLine(g, line);
-  const pay = Math.max(1, Math.round(gr.valuePerSec * RULES.inspectorSeconds.value * gr.mult));
-  g.earn(Num.of(pay));
-  g.emit({ type: 'sparkGet', x: p.x, y: p.y, id: 'inspector', value: pay, d: gr.score });
-  g.emit({ type: 'inspected', x: p.x, y: p.y, id: gr.letter, value: pay, d: gr.score });
+  // 60 s of each final product the line makes, at its measured pace, x the grade
+  const items: Partial<Record<ItemId, number>> = {};
+  for (const m of gr.machines) {
+    if (!endsAtSink(g, m)) continue;
+    const r = m.recipe ? RECIPE[m.recipe] : null;
+    if (!r) continue;
+    const o = r.outputs[0];
+    items[o.item] = (items[o.item] ?? 0) + (shares(m).work * o.n * RULES.inspectorSeconds.value * gr.mult) / r.time;
+  }
+  let total = 0;
+  let main: ItemId | null = null;
+  for (const [k, v] of Object.entries(items) as [ItemId, number][]) {
+    const n = Math.max(1, Math.round(v));
+    creditResearch(g, k, Num.of(n));
+    if (!main || n > (items[main] ?? 0)) main = k;
+    total += n;
+  }
+  if (gr.letter === 'S') g.bump('inspectS');
+  g.emit({ type: 'sparkGet', x: p.x, y: p.y, id: 'inspector', value: total, d: gr.score });
+  g.emit({ type: 'inspected', x: p.x, y: p.y, id: gr.letter, value: total, d: gr.score });
+  if (main) g.emit({ type: 'inspectGift', x: p.x, y: p.y, id: main, value: total });
   return { ok: true };
 }

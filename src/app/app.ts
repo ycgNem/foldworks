@@ -12,22 +12,41 @@ import { UI } from '../ui/ui';
 import { C } from '../data/palette';
 import { Game, type Cmd, type ActResult } from '../sim/Game';
 import { savePayload, restore } from '../sim/snapshot';
-import { DX, DY, type Dir } from '../sim/world';
-import { BUILD, BUILD_BAR, type BuildKind } from '../data/machines';
+import { DX, DY, type Dir, type Floor } from '../sim/world';
+import { FACTORY } from '../data/land';
+import { runOffline, type OfflineReport } from '../sim/offline';
+import { foldRefusal } from '../sim/systems/audits';
+import { ffoldRefusal } from '../sim/systems/nested';
+import { factoryOpen } from '../sim/systems/modules';
+import { BUILD, STORE_TABS, type BuildKind } from '../data/machines';
+import { ITEMS, type ItemId } from '../data/items';
+import { MEGA } from '../data/megaprojects';
 import { CHUNKS } from '../data/land';
 import { RESEARCH } from '../data/research';
 import { ORDER, CUSTOMERS } from '../data/orders';
 import { TITLE } from '../game-info';
 import { Renderer, type Overlay } from '../render/renderer';
 import { TILE } from '../render/ground';
-import { drawHud, drawTitle, type HudState } from './hud';
+import { drawHud, drawTitle, newHudState, type HudState } from './hud';
+import { nine } from './chrome';
+import { sheet, hasArt } from '../render/sprites';
+import { layout, type Layout } from './layout';
+import { Gazette } from './gazette';
+import type { ScreenName } from './screens';
+import { TROPHY } from '../data/trophies';
+import { Bot, type Policy } from '../sim/bot';
 
 export type Mode =
   | { k: 'idle' }
   | { k: 'build'; kind: BuildKind }
-  | { k: 'remove' };
+  | { k: 'remove' }
+  /** dragging a box over a line to audit and fold it (on the Factory floor: a group of modules) */
+  | { k: 'fold' }
+  /** the Factory floor: laying trunk belts, or placing a module design */
+  | { k: 'ftrunk' }
+  | { k: 'fmodule'; design: number };
 
-export type Panel = 'research' | 'orders' | 'help' | null;
+export type Panel = ScreenName | null;
 
 export interface Toast { title: string; text: string; color: string; t: number; life: number; icon?: string }
 
@@ -58,9 +77,30 @@ export class App {
   drag: { x0: number; y0: number; path: { x: number; y: number; rot: Dir }[] } | null = null;
   /** right/middle-button pan in progress */
   panDrag: { sx: number; sy: number; cx: number; cy: number; moved: boolean } | null = null;
-  hud: HudState = { coinShown: 0, coinBump: 0, hoverTile: null };
+  hud: HudState = newHudState();
   flowOverlay = false;
   muted = false;
+  /** big-number notation for the HUD (options) */
+  notation: 'standard' | 'scientific' = 'standard';
+  /** where the HUD regions sit, in UI px */
+  layout: Layout = layout(480, 300);
+  gazette = new Gazette();
+  /** trophies just earned, shown as a medal sliding in */
+  trophyPops: { id: string; t: number }[] = [];
+  /** which floor is on screen */
+  floor: Floor = 'workshop';
+  /** the fold box being dragged (tiles, inclusive corners) */
+  foldDrag: { x0: number; y0: number; x1: number; y1: number } | null = null;
+  /** the Factory floor entity whose report is pinned */
+  fselected: number | null = null;
+  /** the grade card's name field while it is open */
+  nameDraft: string | null = null;
+  /** when the grade card opened (its stamp animation runs from here) */
+  gradeAt = 0;
+  /** what happened while the player was away, shown once on Continue */
+  offline: OfflineReport | null = null;
+  /** a bot playing this game (debug handle and the e2e scripts) */
+  bot: Bot | null = null;
   private sinceSave = 0;
   private hasSave = false;
   /** what the title screen offers */
@@ -73,6 +113,10 @@ export class App {
     this.loop = new GameLoop(() => this.tick(), (dt, alpha) => this.frame(dt, alpha));
     this.input.attach(canvas);
     this.ui.sfx = (id) => this.audio.sfx(id);
+    this.ui.tipSkin = (ctx, x, y, w, h) => {
+      if (!hasArt('ui_tip')) return void ((ctx.fillStyle = C.ink), ctx.fillRect(x, y, w, h));
+      nine(ctx, sheet('ui_tip'), 0, x, y, w, h);
+    };
     window.addEventListener('resize', () => this.resize());
     document.addEventListener('visibilitychange', () => this.visibility());
     window.addEventListener('pointerdown', () => this.audio.unlock(), { once: false });
@@ -105,9 +149,12 @@ export class App {
     this.selected = null;
     this.panel = null;
     this.toasts = [];
+    this.trophyPops = [];
     this.renderer.ground = null;
+    this.hud = newHudState();
+    this.offline = null;
+    this.setFloor('workshop', true);
     this.fitCamera(true);
-    this.hud.coinShown = 0;
   }
 
   continueGame() {
@@ -121,8 +168,63 @@ export class App {
     }
     this.screen = 'play';
     this.renderer.ground = null;
+    this.setFloor('workshop', true);
     this.fitCamera(true);
+    // offline progress (DESIGN.md §12): the clock is read here, in the app, never in the sim
+    const away = (Date.now() - (d.saved ?? Date.now())) / 1000;
+    if (away >= 60) {
+      this.offline = runOffline(this.game, away);
+      this.game.events.drain();
+      this.panel = 'offline';
+      this.save();
+    }
+    this.hud = newHudState();
     this.hud.coinShown = this.game.s.coin.toNumber();
+  }
+
+  /** Switch the floor on screen (the Factory opens with the first fold). */
+  setFloor(f: Floor, quiet = false) {
+    if (f === 'factory' && !factoryOpen(this.game)) {
+      if (!quiet) this.refuse('The Factory floor opens with your first fold');
+      return;
+    }
+    const first = f !== this.floor;
+    this.floor = f;
+    this.renderer.floor = f;
+    this.mode = { k: 'idle' };
+    // a report pinned on one floor never shows over the other (the Milestone 1-2 review)
+    if (f === 'factory') this.selected = null;
+    else this.fselected = null;
+    this.drag = null;
+    this.foldDrag = null;
+    if (first && !quiet) this.audio.sfx('open');
+    if (f === 'factory' && !this.game.flag('factorySeen')) {
+      this.game.first('factorySeen');
+      this.fitCamera(true);
+    }
+  }
+
+  toTitle() {
+    const d = readSave(SAVE_SLOT);
+    this.titleInfo = { hasSave: !!d, coin: this.game.s.coin.format() };
+    this.screen = 'title';
+    this.panel = null;
+  }
+
+  /** Copy an export string to the clipboard (falls back to a prompt to copy from). */
+  copyExport() {
+    const s = this.exportSave();
+    const done = () => this.toast('Save copied', 'Paste it into Import on any browser to carry on there.', C.leaf);
+    if (navigator.clipboard) navigator.clipboard.writeText(s).then(done, () => window.prompt('Copy your save string:', s));
+    else window.prompt('Copy your save string:', s);
+  }
+
+  promptImport() {
+    const s = window.prompt('Paste a Foldworks save string:');
+    if (!s) return;
+    const r = this.importSave(s.trim());
+    if (r.ok) this.toast('Save loaded', 'Welcome back.', C.leaf);
+    else this.refuse(r.why ?? 'that save did not load');
   }
 
   save(): boolean {
@@ -151,17 +253,35 @@ export class App {
     }
   }
 
+  /** when the tab was hidden (ms since epoch), for offline progress on its return */
+  private hiddenAt = 0;
+
   private visibility() {
     if (this.screen !== 'play') return;
     const hidden = document.hidden;
     this.game.act({ k: 'visible', v: !hidden });
-    if (hidden) this.save();
+    if (hidden) {
+      this.hiddenAt = Date.now();
+      this.save();
+      return;
+    }
+    // a background tab stops the frame loop: the time away is offline progress, like a reload
+    // (the critic's Milestone 1-2 review: it was lost)
+    const away = this.hiddenAt ? (Date.now() - this.hiddenAt) / 1000 : 0;
+    this.hiddenAt = 0;
+    if (away >= 60 && !this.bot) {
+      this.offline = runOffline(this.game, away);
+      this.game.events.drain();
+      this.panel = 'offline';
+      this.save();
+    }
   }
 
   // ------------------------------------------------------------------ the loop
 
   private tick() {
-    if (this.screen !== 'play' || this.frozen || this.panel === 'help') return;
+    if (this.screen !== 'play' || this.frozen) return;
+    this.bot?.update();
     this.game.tick();
     this.sinceSave += 1 / TICK_RATE;
     if (this.sinceSave >= AUTOSAVE_S && store()) this.save();
@@ -172,7 +292,6 @@ export class App {
     const g = this.game;
     this.events();
     if (this.screen === 'title') {
-      this.renderer.resize(this.canvas.width, this.canvas.height);
       this.ui.begin(ctx, this.input, this.uiScale, dt, true);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = C.ink;
@@ -247,12 +366,86 @@ export class App {
         }
         case 'spark': a.sfx('spark'); break;
         case 'sparkGet': a.sfx('sparkGet'); if (e.id === 'vein') this.toast('Lucky Vein!', "This patch's miners run 3x for 60 s.", C.gold); break;
-        case 'inspected': this.toast(`Inspector: grade ${e.id}`, `Score ${(e.d ?? 0).toFixed(2)}. Paid ${Num.of(e.value ?? 0).format()} coin for a minute of this line's output.`, C.gold); break;
+        case 'inspected': this.toast(`Inspector: grade ${e.id}`, `Score ${(e.d ?? 0).toFixed(2)}. Handed ${Num.of(e.value ?? 0).format()} items, a minute of this line's output, to research.`, C.gold); break;
         case 'firstSlagJam': a.sfx('jam'); this.toast('Blocked: slag!', 'Smelting leaves slag, and it has nowhere to go. Click the machine to shovel it, or build a Slag Heap beside it.', C.pipRed); break;
         case 'firstSale': this.toast('First sale!', 'The Dock buys what you make. Coin buys machines.', C.gold); break;
         case 'orderAccept': a.sfx('open'); break;
+        case 'trophy': {
+          a.sfx('milestone', 0.7);
+          if (e.id && TROPHY[e.id]) this.trophyPops.push({ id: e.id, t: 0 });
+          if (this.trophyPops.length > 3) this.trophyPops.shift();
+          break;
+        }
+        case 'jam': a.sfx('jam', 0.4); break;
+        case 'auditStart': a.sfx('foldStart'); break;
+        case 'auditCancel': a.sfx('close'); break;
+        case 'auditDone':
+          // the grade card opens with its stamp (the stamp's sound plays when it lands)
+          this.panel = e.floor === 'factory' ? 'fgrade' : 'grade';
+          this.gradeAt = this.ui.time;
+          this.nameDraft = null;
+          this.audio.sfx('auditTick');
+          break;
+        // ---- Act II (Milestone 4)
+        case 'overdrive': break; // the renderer plays its burst, sound and kick
+        case 'mode': a.sfx('click'); break;
+        case 'powerOn':
+          a.sfx('powerOn');
+          this.renderer.fx.kick(2);
+          this.toast('Power on!', 'The grid hums. Powered machines run while supply meets demand; past it, everything on the grid slows together.', C.teal1, 'power');
+          break;
+        case 'codex': {
+          a.sfx('sparkGet');
+          const it = ITEMS[e.id as ItemId];
+          this.toast('Codex entry!', `Unit 7 catalogues ${it ? it.name.toLowerCase() : 'it'}: ${Num.of(e.value ?? 0).format()} coin for the first one.`, C.gold, 'codex');
+          break;
+        }
+        case 'claim': a.sfx('upgrade'); this.toast('Claims staked', `${e.value ?? 4} more ${ITEMS[e.id as ItemId]?.name.toLowerCase() ?? ''} claims: stamp more copies of modules that dig it.`, C.leaf, 'claim'); break;
+        case 'parts': a.sfx('hopper', 0.5); break;
+        case 'bayOpen': a.sfx('milestone', 0.7); this.toast('The Megaproject Bay', 'Trunk Drill Bits, concrete and steel into it to build the Great Drill.', C.gold, 'mega'); break;
+        case 'megaGive': break;
+        case 'megaDone': {
+          a.sfx('milestone');
+          this.renderer.fx.kick(6);
+          this.panel = 'mega';
+          this.gradeAt = this.ui.time;
+          const st = MEGA.find((m) => m.stage === e.value);
+          this.toast(`${st?.name ?? 'Megaproject'}: done!`, st?.reward ?? '', C.gold, 'mega');
+          break;
+        }
+        case 'firstNested': this.toast('A module of modules', 'A depth-2 module: the group\'s rates in one tile, times its own grade.', C.gold, 'fold'); break;
+        case 'inspectGift': break;
+        case 'fold':
+          a.sfx('fold');
+          this.renderer.fx.kick(4);
+          this.toast('Folded!', 'The line is a module now: one tile with its rates. Open Modules (I) or the Factory floor (Tab) to place it.', C.gold, 'module');
+          break;
+        case 'firstFold':
+          this.toast('The Factory floor is open', 'Press Tab or the Factory tab to go there. Modules run as rates; trunk belts carry 480 a minute.', C.gold, 'factory');
+          break;
+        case 'stamp': a.sfx('stamp'); break;
+        case 'unfold': a.sfx('place'); break;
+        case 'sliceEnd':
+          a.sfx('milestone');
+          this.renderer.fx.kick(5);
+          this.panel = 'sliceEnd';
+          this.gradeAt = this.ui.time;
+          break;
       }
     }
+  }
+
+  /** Say no, under the cursor, with a buzz. */
+  refuse(text: string) {
+    this.refusal = { text, t: 2 };
+    this.audio.sfx('error');
+  }
+
+  /** Centre the camera on a tile point (from the HUD's find button, land buys, goals). */
+  lookAt(tx: number, ty: number) {
+    this.renderer.cam.x = tx * TILE;
+    this.renderer.cam.y = ty * TILE;
+    this.renderer.clampCam(this.game.W, this.game.H);
   }
 
   toast(title: string, text: string, color: string, icon?: string) {
@@ -285,27 +478,45 @@ export class App {
     if (inp.wasPressed('zoomOut')) this.zoom(-1);
     if (inp.mouse.wheel && !this.ui.captured) this.zoom(-inp.mouse.wheel);
     if (inp.wasPressed('rotate')) {
-      if (this.mode.k === 'build') { this.rot = ((this.rot + 1) % 4) as Dir; this.audio.sfx('rotate'); }
-      else if (this.hud.hoverTile) this.act({ k: 'rotate', x: this.hud.hoverTile.x, y: this.hud.hoverTile.y });
+      if (this.mode.k === 'build' || this.mode.k === 'ftrunk' || this.mode.k === 'fmodule') { this.rot = ((this.rot + 1) % 4) as Dir; this.audio.sfx('rotate'); }
+      else if (this.hud.hoverTile) {
+        const h = this.hud.hoverTile;
+        this.act(this.floor === 'factory' ? { k: 'frotate', x: h.x, y: h.y } : { k: 'rotate', x: h.x, y: h.y });
+      }
     }
     if (inp.wasPressed('remove')) this.setMode(this.mode.k === 'remove' ? { k: 'idle' } : { k: 'remove' });
+    if (inp.wasPressed('floor')) this.setFloor(this.floor === 'workshop' ? 'factory' : 'workshop');
+    if (inp.wasPressed('fold')) this.toggleFold();
+    if (inp.wasPressed('modules')) this.togglePanel('modules');
     if (inp.wasPressed('research')) this.togglePanel('research');
     if (inp.wasPressed('orders')) this.togglePanel('orders');
-    if (inp.wasPressed('help')) this.togglePanel('help');
+    if (inp.wasPressed('help')) this.togglePanel('options');
     if (inp.wasPressed('flow')) this.flowOverlay = !this.flowOverlay;
     if (inp.wasPressed('mute')) { this.muted = !this.muted; this.audio.setMuted(this.muted); }
     if (inp.wasPressed('cancel')) {
       if (this.panel) this.panel = null;
       else if (this.mode.k !== 'idle') this.setMode({ k: 'idle' });
-      else this.selected = null;
+      else { this.selected = null; this.fselected = null; }
     }
     for (let i = 0; i < 9; i++) {
       if (inp.wasPressed(('slot' + (i + 1)) as 'slot1')) {
-        const kind = BUILD_BAR[i];
+        if (this.floor === 'factory') {
+          // 1: trunk belts; 2-9: the module designs in inventory order
+          if (i === 0) this.setMode(this.mode.k === 'ftrunk' ? { k: 'idle' } : { k: 'ftrunk' });
+          else {
+            const d = this.game.s.designs[i - 1];
+            if (d) this.pickModule(d.id);
+          }
+          continue;
+        }
+        // keys 1-9 pick from the store tab that is open (Build, Power, Heavy)
+        const tab = STORE_TABS.find((q) => q.id === this.hud.buildTab) ?? STORE_TABS[0];
+        const kind = tab.kinds[i];
         if (kind) this.pickBuild(kind);
       }
     }
-    this.renderer.clampCam(this.game.W, this.game.H);
+    if (this.floor === 'factory') this.renderer.clampCam(FACTORY.w, FACTORY.h);
+    else this.renderer.clampCam(this.game.W, this.game.H);
   }
 
   pickBuild(kind: BuildKind) {
@@ -318,9 +529,42 @@ export class App {
     else this.setMode({ k: 'build', kind });
   }
 
+  /** The Fold tool (F): drag a box over a working line (on the Factory floor, with Nested Folds:
+   * over a group of modules). */
+  toggleFold() {
+    if (!this.game.done('folding')) return this.refuse('Research Folding first');
+    if (this.floor === 'factory' && this.game.done('nestedFolds')) {
+      const fa = this.game.s.faudit;
+      if (fa) {
+        this.panel = fa.result ? 'fgrade' : null;
+        return this.refuse(fa.result ? 'Fold or cancel the graded group first' : 'An audit is running on this floor: one at a time');
+      }
+      this.setMode(this.mode.k === 'fold' ? { k: 'idle' } : { k: 'fold' });
+      return;
+    }
+    if (this.floor !== 'workshop') this.setFloor('workshop', true);
+    if (this.game.s.audit) {
+      this.panel = this.game.s.audit.result ? 'grade' : null;
+      return this.refuse(this.game.s.audit.result ? 'Fold or cancel the graded line first' : 'An audit is running: one at a time');
+    }
+    this.setMode(this.mode.k === 'fold' ? { k: 'idle' } : { k: 'fold' });
+  }
+
+  /** Place a module design on the Factory floor. */
+  pickModule(id: number) {
+    const d = this.game.design(id);
+    if (!d) return;
+    if (d.spare < 1) return this.refuse(`No spare ${d.name}: stamp a copy`);
+    if (this.floor !== 'factory') this.setFloor('factory');
+    if (this.floor !== 'factory') return;
+    this.panel = null;
+    this.setMode(this.mode.k === 'fmodule' && this.mode.design === id ? { k: 'idle' } : { k: 'fmodule', design: id });
+  }
+
   setMode(m: Mode) {
     this.mode = m;
     this.drag = null;
+    this.foldDrag = null;
     this.audio.sfx('click');
   }
 
@@ -344,6 +588,16 @@ export class App {
   /** Zoom to fit the land you own, and centre it. */
   fitCamera(reset = false) {
     const g = this.game;
+    if (this.floor === 'factory') {
+      const v = this.renderer.view;
+      const w = (FACTORY.w + 1) * TILE, h = (FACTORY.h + 1) * TILE;
+      const z = Math.max(1, Math.min(this.maxZoom(), Math.floor(Math.min((v.w - 8 * this.uiScale) / w, (v.h - 8 * this.uiScale) / h))));
+      const cam = this.renderer.cam;
+      if (reset || cam.zoom > z) cam.zoom = z;
+      cam.x = (FACTORY.w / 2) * TILE;
+      cam.y = (FACTORY.h / 2) * TILE;
+      return;
+    }
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const c of CHUNKS) {
       if (!g.s.land.includes(c.id)) continue;
@@ -351,7 +605,8 @@ export class App {
     }
     // show a little of the land around what you own
     const w = (x1 - x0 + 2) * TILE, h = (y1 - y0 + 2) * TILE;
-    const availH = this.canvas.height - 64 * this.uiScale, availW = this.canvas.width - 20 * this.uiScale;
+    const v = this.renderer.view;
+    const availH = v.h - 8 * this.uiScale, availW = v.w - 8 * this.uiScale;
     const z = Math.max(1, Math.min(this.maxZoom(), Math.floor(Math.min(availW / w, availH / h))));
     const cam = this.renderer.cam;
     if (reset || cam.zoom > z) cam.zoom = z;
@@ -362,15 +617,32 @@ export class App {
   private overlay(): Overlay {
     const h = this.hud.hoverTile;
     return {
-      hover: h,
+      hover: this.floor === 'workshop' ? h : null,
       build: this.mode.k === 'build' ? this.mode.kind : null,
       rot: this.rot,
-      drag: this.drag ? this.drag.path : null,
+      drag: this.floor === 'workshop' && this.drag ? this.drag.path : null,
       remove: this.mode.k === 'remove',
       selected: this.selected,
-      box: null,
+      box: this.foldDrag && this.floor === 'workshop' ? { ...this.foldDrag, ok: !foldRefusal(this.game, this.dragBox()!) } : null,
       flow: this.flowOverlay,
+      floor: this.floor,
+      factory: {
+        hover: this.floor === 'factory' ? h : null,
+        place: this.mode.k === 'ftrunk' ? { kind: 'trunk' } : this.mode.k === 'fmodule' ? { kind: 'module', design: this.mode.design } : null,
+        rot: this.rot,
+        drag: this.floor === 'factory' && this.drag ? this.drag.path : null,
+        remove: this.mode.k === 'remove',
+        selected: this.fselected,
+        box: this.foldDrag && this.floor === 'factory' ? { ...this.foldDrag, ok: !ffoldRefusal(this.game, this.dragBox()!) } : null,
+      },
     };
+  }
+
+  /** The dragged fold box as x, y, w, h. */
+  dragBox() {
+    const d = this.foldDrag;
+    if (!d) return null;
+    return { x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w: Math.abs(d.x1 - d.x0) + 1, h: Math.abs(d.y1 - d.y0) + 1 };
   }
 
   /** Mouse on the world, after the HUD has had its chance to take the click. */
@@ -381,7 +653,10 @@ export class App {
     const sx = inp.mouse.x * k, sy = inp.mouse.y * k;
     const overUI = this.ui.overUI;
     const t = this.renderer.screenToTile(sx, sy);
-    this.hud.hoverTile = !overUI && g.inb(t.x, t.y) ? t : null;
+    // the tile the button went down on (drags start there even if the mouse has moved on)
+    const pt = this.renderer.screenToTile(inp.mouse.px * k, inp.mouse.py * k);
+    const inFloor = this.floor === 'factory' ? t.x >= 0 && t.y >= 0 && t.x < FACTORY.w && t.y < FACTORY.h : g.inb(t.x, t.y);
+    this.hud.hoverTile = !overUI && inFloor ? t : null;
 
     // pan with the right or middle button held and moved
     const panBtn = inp.mouse.down[2] || inp.mouse.down[1];
@@ -403,7 +678,9 @@ export class App {
       this.panDrag = null;
     }
 
-    if (this.mode.k === 'build' && this.mode.kind === 'belt') return this.beltDrag(t, overUI);
+    if (this.floor === 'factory') return this.factoryInput(t, overUI, pt);
+    if (this.mode.k === 'fold') return this.foldInput(t, overUI, pt);
+    if (this.mode.k === 'build' && this.mode.kind === 'belt') return this.beltDrag(t, overUI, pt);
     if (!inp.mouse.pressed[0] || overUI) return;
     if (!g.inb(t.x, t.y)) {
       this.selected = null;
@@ -434,10 +711,98 @@ export class App {
     } else this.selected = null;
   }
 
-  /** Lay belts by dragging: an L from where the drag started, each tile facing along the path. */
-  private beltDrag(t: { x: number; y: number }, overUI: boolean) {
+  /** The Fold tool: drag a box; on release, start the audit (or say why not). */
+  private foldInput(t: { x: number; y: number }, overUI: boolean, pt: { x: number; y: number }) {
     const inp = this.input;
-    if (inp.mouse.pressed[0] && !overUI && this.game.inb(t.x, t.y)) this.drag = { x0: t.x, y0: t.y, path: [{ x: t.x, y: t.y, rot: this.rot }] };
+    const g = this.game;
+    const cx = Math.max(0, Math.min(g.W - 1, t.x)), cy = Math.max(0, Math.min(g.H - 1, t.y));
+    if (inp.mouse.pressed[0] && !overUI && g.inb(pt.x, pt.y)) this.foldDrag = { x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
+    if (this.foldDrag && inp.mouse.down[0]) {
+      this.foldDrag.x1 = cx;
+      this.foldDrag.y1 = cy;
+    }
+    if (this.foldDrag && !inp.mouse.down[0]) {
+      const b = this.dragBox()!;
+      this.foldDrag = null;
+      const r = this.act({ k: 'audit', ...b });
+      if (r.ok) this.setMode({ k: 'idle' });
+    }
+  }
+
+  /** The Factory floor: lay trunks by dragging, place modules, remove, or open a report. */
+  private factoryInput(t: { x: number; y: number }, overUI: boolean, pt: { x: number; y: number }) {
+    const inp = this.input;
+    const g = this.game;
+    const inFloor = t.x >= 0 && t.y >= 0 && t.x < FACTORY.w && t.y < FACTORY.h;
+    if (this.mode.k === 'fold') {
+      // a nested fold: drag a box over a group of modules (DESIGN.md §18)
+      const pIn = pt.x >= 0 && pt.y >= 0 && pt.x < FACTORY.w && pt.y < FACTORY.h;
+      const cx = Math.max(0, Math.min(FACTORY.w - 1, t.x)), cy = Math.max(0, Math.min(FACTORY.h - 1, t.y));
+      if (inp.mouse.pressed[0] && !overUI && pIn) this.foldDrag = { x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
+      if (this.foldDrag && inp.mouse.down[0]) { this.foldDrag.x1 = cx; this.foldDrag.y1 = cy; }
+      if (this.foldDrag && !inp.mouse.down[0]) {
+        const b = this.dragBox()!;
+        this.foldDrag = null;
+        if (this.act({ k: 'faudit', ...b }).ok) this.setMode({ k: 'idle' });
+      }
+      return;
+    }
+    if (this.mode.k === 'ftrunk') {
+      const pIn = pt.x >= 0 && pt.y >= 0 && pt.x < FACTORY.w && pt.y < FACTORY.h;
+      if (inp.mouse.pressed[0] && !overUI && pIn) this.drag = { x0: pt.x, y0: pt.y, path: [{ x: pt.x, y: pt.y, rot: this.rot }] };
+      if (this.drag && inp.mouse.down[0]) this.drag.path = this.lPath(this.drag.x0, this.drag.y0, t.x, t.y);
+      if (this.drag && !inp.mouse.down[0]) {
+        let placed = 0, why: string | undefined;
+        for (const p of this.drag.path) {
+          const r = g.act({ k: 'ftrunk', x: p.x, y: p.y, rot: p.rot });
+          if (r.ok) placed++;
+          else if (r.why !== 'already a trunk facing that way') why = r.why;
+        }
+        if (!placed && why) this.refuse(why);
+        this.drag = null;
+      }
+      return;
+    }
+    if (!inp.mouse.pressed[0] || overUI) return;
+    if (!inFloor) { this.fselected = null; return; }
+    if (this.mode.k === 'fmodule') {
+      const r = this.act({ k: 'fplace', design: this.mode.design, x: t.x, y: t.y, rot: this.rot });
+      if (r.ok && (g.design(this.mode.design)?.spare ?? 0) < 1) this.setMode({ k: 'idle' });
+      return;
+    }
+    if (this.mode.k === 'remove') { this.act({ k: 'fremove', x: t.x, y: t.y }); return; }
+    const e = g.fentAt(t.x, t.y);
+    if (e?.kind === 'fdock') this.togglePanel('orders');
+    else if (e?.kind === 'fhopper') this.togglePanel('research');
+    else if (e?.kind === 'fbay') this.togglePanel('mega');
+    else this.fselected = e && this.fselected !== e.id ? e.id : null;
+  }
+
+  /** An L-shaped path of tiles from (x0, y0) to (x1, y1), each facing along it. */
+  private lPath(x0: number, y0: number, x1: number, y1: number): { x: number; y: number; rot: Dir }[] {
+    const dx = x1 - x0, dy = y1 - y0;
+    const path: { x: number; y: number; rot: Dir }[] = [];
+    if (dx === 0 && dy === 0) return [{ x: x0, y: y0, rot: this.rot }];
+    const horizFirst = Math.abs(dx) >= Math.abs(dy);
+    const hRot: Dir = dx > 0 ? 0 : 2, vRot: Dir = dy > 0 ? 1 : 3;
+    let x = x0, y = y0;
+    if (horizFirst) {
+      for (; x !== x1; x += Math.sign(dx)) path.push({ x, y, rot: hRot });
+      for (; y !== y1; y += Math.sign(dy)) path.push({ x, y, rot: vRot });
+      path.push({ x, y, rot: dy ? vRot : hRot });
+    } else {
+      for (; y !== y1; y += Math.sign(dy)) path.push({ x, y, rot: vRot });
+      for (; x !== x1; x += Math.sign(dx)) path.push({ x, y, rot: hRot });
+      path.push({ x, y, rot: dx ? hRot : vRot });
+    }
+    this.rot = path[path.length - 1].rot;
+    return path;
+  }
+
+  /** Lay belts by dragging: an L from where the drag started, each tile facing along the path. */
+  private beltDrag(t: { x: number; y: number }, overUI: boolean, pt: { x: number; y: number }) {
+    const inp = this.input;
+    if (inp.mouse.pressed[0] && !overUI && this.game.inb(pt.x, pt.y)) this.drag = { x0: pt.x, y0: pt.y, path: [{ x: pt.x, y: pt.y, rot: this.rot }] };
     if (this.drag && inp.mouse.down[0]) {
       const { x0, y0 } = this.drag;
       const dx = t.x - x0, dy = t.y - y0;
@@ -483,7 +848,9 @@ export class App {
     this.canvas.height = Math.floor(window.innerHeight * dpr);
     this.ctx.imageSmoothingEnabled = false;
     this.uiScale = Math.max(1, Math.floor(Math.min(this.canvas.width / 480, this.canvas.height / 300)));
-    this.renderer.resize(this.canvas.width, this.canvas.height);
+    this.layout = layout(Math.floor(this.canvas.width / this.uiScale), Math.floor(this.canvas.height / this.uiScale));
+    const c = this.layout.center, k = this.uiScale;
+    this.renderer.resize(this.canvas.width, this.canvas.height, { x: c.x * k, y: c.y * k, w: c.w * k, h: c.h * k });
     if (this.screen === 'play') this.fitCamera();
   }
 
@@ -496,6 +863,19 @@ export class App {
   /** Fast-forward x10, x100 or x1000 (1 = normal). */
   ff(mult: number) { this.loop.speed = mult; }
   grant(coin: number) { this.game.s.coin = this.game.s.coin.add(coin); }
+  /** Let a bot play (null stops it). */
+  attachBot(policy: Policy | null) { this.bot = policy ? new Bot(this.game, policy) : null; }
+  /** Run up to n ticks now with the bot (if any) playing, stopping early when until(game) holds
+   *  (checked once a game second). Returns the ticks run. Events wait for the next frame. */
+  botTicks(n: number, until?: (g: Game) => boolean): number {
+    let i = 0;
+    for (; i < n; i++) {
+      this.bot?.update();
+      this.game.tick();
+      if (i % TICK_RATE === 0 && until && until(this.game)) { i++; break; }
+    }
+    return i;
+  }
   /** CSS pixel of a tile's centre (for e2e clicks). */
   tileToCss(x: number, y: number) {
     const k = (window.devicePixelRatio || 1);

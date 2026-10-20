@@ -1,0 +1,156 @@
+[
+ {
+  "what": "map viewport (world draws here)",
+  "x": 160,
+  "y": 22,
+  "w": 320,
+  "h": 298
+ },
+ {
+  "what": "floor plate (ui_panel_light)",
+  "x": 166,
+  "y": 26,
+  "w": 92,
+  "h": 22
+ },
+ {
+  "what": "ticker (ui_ticker, native height 16)",
+  "x": 160,
+  "y": 2,
+  "w": 320,
+  "h": 16
+ },
+ {
+  "what": "left: coin panel (ui_panel)",
+  "x": 2,
+  "y": 2,
+  "w": 154,
+  "h": 74
+ },
+ {
+  "what": "coin counter well (ui_inset)",
+  "x": 10,
+  "y": 10,
+  "w": 138,
+  "h": 30
+ },
+ {
+  "what": "reputation bar (ui_inset)",
+  "x": 22,
+  "y": 56,
+  "w": 124,
+  "h": 10
+ },
+ {
+  "what": "left: orders panel (ui_panel)",
+  "x": 2,
+  "y": 78,
+  "w": 154,
+  "h": 156
+ },
+ {
+  "what": "order card (ui_panel_light)",
+  "x": 9,
+  "y": 106,
+  "w": 140,
+  "h": 120
+ },
+ {
+  "what": "portrait well (ui_inset)",
+  "x": 14,
+  "y": 111,
+  "w": 52,
+  "h": 52
+ },
+ {
+  "what": "portrait 48x48",
+  "x": 16,
+  "y": 113,
+  "w": 48,
+  "h": 48
+ },
+ {
+  "what": "order progress (ui_inset, 13 tall, count drawn on it)",
+  "x": 14,
+  "y": 167,
+  "w": 130,
+  "h": 13
+ },
+ {
+  "what": "Deliver (ui_button_gold)",
+  "x": 14,
+  "y": 204,
+  "w": 130,
+  "h": 18
+ },
+ {
+  "what": "left: goals panel (ui_panel)",
+  "x": 2,
+  "y": 236,
+  "w": 154,
+  "h": 122
+ },
+ {
+  "what": "right: store panel (ui_panel)",
+  "x": 484,
+  "y": 14,
+  "w": 154,
+  "h": 344
+ },
+ {
+  "what": "active tab (ui_tab frame 2, overlaps panel top by 4)",
+  "x": 490,
+  "y": 2,
+  "w": 34,
+  "h": 16
+ },
+ {
+  "what": "store row 0 (ui_row frame 1)",
+  "x": 492,
+  "y": 60,
+  "w": 138,
+  "h": 30
+ },
+ {
+  "what": "store row 1 (ui_row frame 2)",
+  "x": 492,
+  "y": 92,
+  "w": 138,
+  "h": 30
+ },
+ {
+  "what": "store row 4 (ui_row frame 3)",
+  "x": 492,
+  "y": 188,
+  "w": 138,
+  "h": 30
+ },
+ {
+  "what": "store row 5 (ui_row frame 3)",
+  "x": 492,
+  "y": 220,
+  "w": 138,
+  "h": 30
+ },
+ {
+  "what": "Buy land (ui_button_gold, hover frame)",
+  "x": 494,
+  "y": 298,
+  "w": 134,
+  "h": 22
+ },
+ {
+  "what": "bottom: tool bar (ui_panel)",
+  "x": 160,
+  "y": 322,
+  "w": 320,
+  "h": 36
+ },
+ {
+  "what": "Fold (ui_button_gold)",
+  "x": 269,
+  "y": 330,
+  "w": 62,
+  "h": 22
+ }
+]

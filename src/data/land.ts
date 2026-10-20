@@ -21,8 +21,10 @@ export interface ChunkDef {
 export const CHUNKS: ChunkDef[] = [
   { id: 'A', name: 'Chunk A', x: 0, y: 0, w: 8, h: 8, cost: 0, requires: null, derivation: '§9 chunk A: the starting land' },
   { id: 'B', name: 'Chunk B (copper)', x: 8, y: 0, w: 8, h: 8, cost: 1000, requires: 'surveyEast', derivation: '§9 chunk B costs 1,000 after Survey East' },
-  { id: 'C', name: 'Chunk C (iron)', x: 0, y: 8, w: 8, h: 8, cost: 4000, requires: 'folding', derivation: '§9 chunk C costs 4,000 after Folding' },
+  { id: 'C', name: 'Chunk C (iron)', x: 0, y: 8, w: 8, h: 8, cost: 1000, requires: 'gizmoTheory', derivation: '§9 chunk C costs 1,000 after Gizmo Theory: the spending is its ~3,000 of gear lines, bought one by one, not a long save (§13 checks 10, 11)' },
   { id: 'D', name: 'Chunk D', x: 8, y: 8, w: 8, h: 8, cost: 12000, requires: 'folding', derivation: '§9 chunk D costs 12,000 after Folding' },
+  { id: 'E', name: 'Chunk E (coal, sand)', x: 16, y: 0, w: 8, h: 8, cost: 15000, requires: 'coalSeams', derivation: '§18 Land: chunk E, 15,000 after Coal Seams' },
+  { id: 'F', name: 'Chunk F (coal, iron)', x: 16, y: 8, w: 8, h: 8, cost: 40000, requires: 'steamPower', derivation: '§18 Land: chunk F, 40,000 after Steam Power' },
 ];
 
 export interface PatchDef { item: ItemId; x: number; y: number; w: number; h: number; derivation: string }
@@ -31,10 +33,23 @@ export const PATCHES: PatchDef[] = [
   { item: 'ironOre', x: 1, y: 2, w: 2, h: 2, derivation: '§5 iron in chunk A, beside the Hand Furnace' },
   { item: 'copperOre', x: 11, y: 2, w: 2, h: 2, derivation: '§5 copper in chunk B' },
   { item: 'ironOre', x: 2, y: 11, w: 2, h: 2, derivation: '§5 a second iron patch in chunk C' },
+  { item: 'coal', x: 17, y: 2, w: 2, h: 2, derivation: '§18 Land: coal in chunk E' },
+  { item: 'sand', x: 20, y: 5, w: 2, h: 2, derivation: '§18 Land: sand in chunk E' },
+  { item: 'coal', x: 18, y: 11, w: 2, h: 2, derivation: '§18 Land: coal in chunk F' },
+  { item: 'ironOre', x: 21, y: 13, w: 2, h: 2, derivation: '§18 Land: iron in chunk F' },
 ];
 
-/** The Workshop's size in tiles (the four slice chunks). */
-export const WORKSHOP = { w: 16, h: 16, derivation: '§9 the full slice Workshop is 16x16' };
+/** Deposit claims at the Survey Office (DESIGN.md §18 Land and deposits): the first block of 4
+ * for each ore; each later block costs price x (1 + 0.5 b). */
+export const CLAIM_PRICE: { item: ItemId; price: number; derivation: string }[] = [
+  { item: 'ironOre', price: 5000, derivation: '§18 Land and deposits: iron claims 5,000 a block of 4' },
+  { item: 'copperOre', price: 5000, derivation: '§18 Land and deposits: copper claims 5,000 a block of 4' },
+  { item: 'sand', price: 8000, derivation: '§18 Land and deposits: sand claims 8,000 a block of 4' },
+  { item: 'coal', price: 12000, derivation: '§18 Land and deposits: coal claims 12,000 a block of 4 (it is fuel too)' },
+];
+
+/** The Workshop's size in tiles: the four slice chunks, then Act II's two to the east. */
+export const WORKSHOP = { w: 24, h: 16, derivation: '§9 the slice Workshop is 16x16; §18 Land: chunks E and F widen it to 24x16' };
 
 /** What chunk A starts with (§9): the Hand Furnace beside the patch, a 3-tile belt from it whose
  * last tile turns into the Dock (rotate it to feed the Hopper instead), the Dock and the Hopper. */
@@ -52,6 +67,8 @@ export const FACTORY = {
   w: 12, h: 8,
   dock: { x: 10, y: 1 },
   hopper: { x: 10, y: 5 },
+  /** the Megaproject Bay (§18), placed when The Great Drill is researched */
+  bay: { x: 0, y: 6 },
   /** trunk belts: 8 items/s, 2 coin a tile */
   trunkSpeed: 8,
   trunkCost: 2,

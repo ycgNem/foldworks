@@ -34,6 +34,8 @@ export class GameLoop {
       // a background tab that wakes up must not try to catch up in one frame (offline progress
       // handles long gaps; see App.resume)
       if (realDt > 0.25) realDt = 0.25;
+      // the first rAF timestamp can be earlier than start()'s performance.now()
+      if (!(realDt > 0)) realDt = 0;
       this.fps = this.fps * 0.95 + (1 / Math.max(realDt, 0.001)) * 0.05;
       const t0 = performance.now();
       if (this.fastForward) {

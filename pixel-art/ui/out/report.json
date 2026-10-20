@@ -1,0 +1,29 @@
+{
+ "ui_icons": {
+  "frame": [
+   16,
+   16
+  ],
+  "frames": 29,
+  "colours": 27,
+  "fps": 0
+ },
+ "ui_coin": {
+  "frame": [
+   16,
+   16
+  ],
+  "frames": 6,
+  "colours": 6,
+  "fps": 10
+ },
+ "ui_coin_small": {
+  "frame": [
+   8,
+   8
+  ],
+  "frames": 6,
+  "colours": 6,
+  "fps": 10
+ }
+}

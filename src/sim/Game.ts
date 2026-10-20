@@ -6,23 +6,29 @@
 import { EventQueue, type GameEvent } from '../engine/events';
 import { Num } from '../engine/num';
 import { TICK_RATE } from '../engine/time';
-import { BUILD, UPGRADES, isMachine, type BuildKind, type EntKind, type UpgradeId } from '../data/machines';
+import { BUILD, UPGRADES, isMachine, isPower, type BuildKind, type EntKind, type UpgradeId } from '../data/machines';
 import { CHUNKS, PATCHES, START_LAYOUT, WORKSHOP } from '../data/land';
 import { RESEARCH, type ResearchId } from '../data/research';
-import { ORDER } from '../data/orders';
+import { ORDER, CUSTOMERS } from '../data/orders';
+import { recipeKnown } from './transfer';
 import { RECIPE } from '../data/recipes';
 import type { ItemId } from '../data/items';
 import { RULES } from '../data/rules';
-import { DX, DY, newEnt, newState, opposite, type Dir, type Ent, type State } from './world';
+import { DX, DY, MODES, newEnt, newState, opposite, type Box, type Dir, type Ent, type FEnt, type Mode, type ModuleDesign, type State } from './world';
+import { FACTORY } from '../data/land';
 import { runMiners } from './systems/miners';
 import { runBelts } from './systems/belts';
-import { runMachines, crankFurnace, shovel } from './systems/machines';
-import { runModules } from './systems/modules';
+import { runMachines, crankFurnace, shovel, overdrive } from './systems/machines';
+import { runPower, buildGrids, type Grid } from './systems/power';
+import { buyClaims } from './systems/claims';
+import { startFAudit, cancelFAudit, foldFAudited, runFAudits } from './systems/nested';
+import { runModules, buildRoutes, foldAudited, stamp, unfold, renameDesign, fplace, fremove, frotate, type Route } from './systems/modules';
 import { runDocks } from './systems/docks';
 import { runOrders } from './systems/orders';
 import { runResearch, selectResearch } from './systems/research';
 import { runSparks, catchSpark } from './systems/sparks';
-import { runAudits } from './systems/audits';
+import type { Tally } from './offline';
+import { runAudits, startAudit, cancelAudit, auditLock, auditTransfer } from './systems/audits';
 import { runStats } from './systems/stats';
 
 export interface Intake {
@@ -31,6 +37,9 @@ export interface Intake {
   /** where, for the coin pop */
   x: number;
   y: number;
+  /** how many (1 when absent: the Workshop hands over one item at a time) */
+  n?: Num;
+  floor?: 'factory';
 }
 
 /** Everything a player (or a bot) can do. Each is validated and logged with the tick it applied at. */
@@ -44,7 +53,25 @@ export type Cmd =
   | { k: 'research'; id: ResearchId | null }
   | { k: 'order'; id: string | null }
   | { k: 'recipe'; x: number; y: number; recipe: string | null }
-  | { k: 'visible'; v: boolean };
+  | { k: 'visible'; v: boolean }
+  // folding (DESIGN.md §10)
+  | { k: 'audit'; x: number; y: number; w: number; h: number }
+  | { k: 'auditCancel' }
+  | { k: 'fold'; name: string | null }
+  | { k: 'stamp'; id: number }
+  | { k: 'unfold'; id: number }
+  | { k: 'rename'; id: number; name: string }
+  // the Factory floor (DESIGN.md §11)
+  | { k: 'fplace'; design: number; x: number; y: number; rot: Dir }
+  | { k: 'ftrunk'; x: number; y: number; rot: Dir }
+  | { k: 'fremove'; x: number; y: number }
+  | { k: 'frotate'; x: number; y: number }
+  // Act II (DESIGN.md §18)
+  | { k: 'mode'; x: number; y: number; mode: Mode }
+  | { k: 'claim'; item: ItemId }
+  | { k: 'faudit'; x: number; y: number; w: number; h: number }
+  | { k: 'fauditCancel' }
+  | { k: 'ffold'; name: string | null };
 
 export interface Logged { t: number; c: Cmd }
 
@@ -80,12 +107,27 @@ export class Game {
   machines: Ent[] = [];
   /** splitters, mergers and crates (heaps only take) */
   logistics: Ent[] = [];
+  /** boilers, steam engines, generators and poles */
+  power: Ent[] = [];
+  /** power grids (DESIGN.md §18), which grid each powered building is on, each engine's boiler */
+  grids: Grid[] = [];
+  gridOf = new Map<number, number>();
+  boilerOf = new Map<number, Ent>();
   /** the layout changed: caches are rebuilt before the next tick */
   layoutDirty = true;
   /** layout version, bumped on every change (the renderer re-bakes what depends on it) */
   version = 0;
-  /** called for every transfer between tiles (the fold audit counts port crossings with it) */
+  /** called for every transfer between tiles (debugging and tests; the fold audit is built in) */
   watchers: ((x: number, y: number, dir: Dir, item: string) => void)[] = [];
+  // ---- the Factory floor's caches (rebuilt from s.factory)
+  fgrid = new Int32Array(FACTORY.w * FACTORY.h);
+  fById = new Map<number, FEnt>();
+  routes: Route[] = [];
+  factoryDirty = true;
+  /** bumped on every Factory layout change */
+  fversion = 0;
+  /** deliveries by destination, counted while open (offline progress measures rates with it) */
+  tally: Tally | null = null;
 
   constructor(seed: number, opts: { keepHistory?: boolean; empty?: boolean } = {}) {
     this.s = newState(seed);
@@ -147,6 +189,11 @@ export class Game {
     return this.s.flags.includes(f);
   }
 
+  /** Count an event (statistics, trophies). */
+  bump(name: string, n = 1) {
+    this.s.counters[name] = (this.s.counters[name] ?? 0) + n;
+  }
+
   /** Set a one-time flag; true the first time. */
   first(f: string) {
     if (this.s.flags.includes(f)) return false;
@@ -163,15 +210,40 @@ export class Game {
     return this.s.tick / TICK_RATE;
   }
 
+  /** a module design by id */
+  design(id: number): ModuleDesign | undefined {
+    return this.s.designs.find((d) => d.id === id);
+  }
+
+  fentAt(x: number, y: number): FEnt | null {
+    if (x < 0 || y < 0 || x >= FACTORY.w || y >= FACTORY.h) return null;
+    const id = this.fgrid[y * FACTORY.w + x];
+    return id ? this.fById.get(id) ?? null : null;
+  }
+
   // ------------------------------------------------------------------ layout
+
+  /** Put a building down with no cost or checks (Unfold, which has checked and charged already). */
+  addPart(kind: EntKind, x: number, y: number, rot: Dir): Ent {
+    return this.addEnt(kind, x, y, rot);
+  }
+
+  rebuildFactory() {
+    this.fgrid.fill(0);
+    this.fById.clear();
+    for (const e of this.s.factory.ents) {
+      this.fById.set(e.id, e);
+      for (let y = e.y; y < e.y + e.h; y++) for (let x = e.x; x < e.x + e.w; x++) this.fgrid[y * FACTORY.w + x] = e.id;
+    }
+    this.routes = buildRoutes(this);
+    this.factoryDirty = false;
+    this.fversion++;
+  }
 
   private addEnt(kind: EntKind, x: number, y: number, rot: Dir): Ent {
     const d = BUILD[kind];
     const e = newEnt(this.s.nextId++, kind, x, y, d.w, d.h, rot);
-    if (kind === 'miner') {
-      const o = this.oreAt(x, y);
-      e.recipe = o === 'copperOre' ? 'mineCopper' : 'mineIron';
-    }
+    if (kind === 'miner') e.recipe = MINE[this.oreAt(x, y) ?? 'ironOre'] ?? 'mineIron';
     if (kind === 'furnace') e.recipe = 'smeltIron';
     this.s.ents.push(e);
     this.layoutDirty = true;
@@ -185,6 +257,7 @@ export class Game {
     this.miners = [];
     this.machines = [];
     this.logistics = [];
+    this.power = [];
     const belts: Ent[] = [];
     for (const e of this.s.ents) {
       this.byId.set(e.id, e);
@@ -193,10 +266,13 @@ export class Game {
       else if (e.kind === 'miner') this.miners.push(e);
       else if (isMachine(e.kind)) this.machines.push(e);
       else if (e.kind === 'splitter' || e.kind === 'merger' || e.kind === 'crate' || e.kind === 'heap') this.logistics.push(e);
+      else if (isPower(e.kind)) this.power.push(e);
     }
     this.belts = this.orderBelts(belts);
+    buildGrids(this);
     this.layoutDirty = false;
     this.version++;
+    this.rebuildFactory();
   }
 
   /** Downstream first: a depth-first post-order along each belt's "next" tile (cycles broken). */
@@ -222,6 +298,7 @@ export class Game {
   act(c: Cmd): ActResult {
     const r = this.apply(c);
     if (this.layoutDirty) this.rebuild();
+    else if (this.factoryDirty) this.rebuildFactory();
     if (r.ok) {
       const l = { t: this.s.tick, c };
       this.log.push(l);
@@ -247,7 +324,36 @@ export class Game {
       case 'order': return this.setOrder(c.id);
       case 'recipe': return this.setRecipe(c.x, c.y, c.recipe);
       case 'visible': this.s.visible = c.v; return OK;
+      case 'audit': return startAudit(this, { x: c.x, y: c.y, w: c.w, h: c.h } as Box);
+      case 'auditCancel': return cancelAudit(this);
+      case 'fold': return foldAudited(this, c.name);
+      case 'stamp': return stamp(this, c.id);
+      case 'unfold': return unfold(this, c.id);
+      case 'rename': return renameDesign(this, c.id, c.name);
+      case 'fplace': return fplace(this, 'module', c.x, c.y, c.rot, c.design);
+      case 'ftrunk': return fplace(this, 'trunk', c.x, c.y, c.rot);
+      case 'fremove': return fremove(this, c.x, c.y);
+      case 'frotate': return frotate(this, c.x, c.y);
+      case 'mode': return this.setMode(c.x, c.y, c.mode);
+      case 'claim': return buyClaims(this, c.item);
+      case 'faudit': return startFAudit(this, { x: c.x, y: c.y, w: c.w, h: c.h });
+      case 'fauditCancel': return cancelFAudit(this);
+      case 'ffold': return foldFAudited(this, c.name);
     }
+  }
+
+  /** Set a powered machine's mode (DESIGN.md §18 Modes, research Tuning). */
+  private setMode(x: number, y: number, mode: Mode): ActResult {
+    if (!this.done('tuning')) return no('Research Tuning first');
+    if (!MODES.includes(mode)) return no('no such mode');
+    const e = this.entAt(x, y);
+    if (!e || !isMachine(e.kind) || !(BUILD[e.kind].kw ?? 0)) return no('Modes are for powered machines');
+    const lock = auditLock(this, x, y);
+    if (lock) return no(lock);
+    if ((e.mode ?? 'normal') === mode) return OK;
+    e.mode = mode;
+    this.emit({ type: 'mode', x: e.x, y: e.y, id: mode });
+    return OK;
   }
 
   /** Why a build here would be refused, or null if it can go. */
@@ -261,6 +367,8 @@ export class Game {
           const ch = this.chunkAt(xx, yy)!;
           return ch.requires && !this.done(ch.requires) ? `Land not yet surveyed (research ${RESEARCH[ch.requires].name})` : `Buy this chunk: ${Num.of(ch.cost).format()} coin`;
         }
+        const lock = auditLock(this, xx, yy);
+        if (lock) return lock;
         const e = this.entAt(xx, yy);
         if (e && !(kind === 'belt' && e.kind === 'belt')) return `${BUILD[e.kind].name} is in the way`;
       }
@@ -272,6 +380,8 @@ export class Game {
 
   private place(kind: BuildKind, x: number, y: number, rot: Dir): ActResult {
     const existing = this.entAt(x, y);
+    const lock = auditLock(this, x, y);
+    if (lock) return no(lock);
     if (kind === 'belt' && existing?.kind === 'belt') {
       if (existing.rot === rot) return no('already a belt facing that way');
       existing.rot = rot;
@@ -285,6 +395,7 @@ export class Game {
     if (kind === 'crate' && this.s.freeCrates > 0) this.s.freeCrates--;
     else this.s.coin = this.s.coin.sub(d.cost);
     this.addEnt(kind, x, y, rot);
+    if ((d.speed ?? 1) > 1) this.bump('mk2Built');
     this.emit({ type: 'place', x, y, id: kind });
     return OK;
   }
@@ -293,6 +404,10 @@ export class Game {
     const e = this.entAt(x, y);
     if (!e) return no('nothing here');
     if (e.kind === 'dock' || e.kind === 'hopper' || e.kind === 'furnace') return no(`The ${BUILD[e.kind].name} stays`);
+    const lock = auditLock(this, x, y);
+    if (lock) return no(lock);
+    // a heap with slag in it can't be lifted (removing it would empty it for free)
+    if (e.kind === 'heap' && e.count > 0) return no(`The heap holds ${e.count} slag: let it drain out its front first`);
     // full refund in the slice (ROADMAP.md Milestone 1 step 2)
     this.s.coin = this.s.coin.add(BUILD[e.kind].cost);
     this.s.ents = this.s.ents.filter((q) => q !== e);
@@ -305,6 +420,8 @@ export class Game {
     const e = this.entAt(x, y);
     if (!e) return no('nothing here');
     if (e.kind === 'dock' || e.kind === 'hopper') return no('The Dock and Hopper take from every side');
+    const lock = auditLock(this, x, y);
+    if (lock) return no(lock);
     e.rot = ((e.rot + 1) % 4) as Dir;
     this.layoutDirty = true;
     this.emit({ type: 'rotate', x, y });
@@ -320,6 +437,7 @@ export class Game {
       s.clicks = 0;
     }
     if (s.clicks >= RULES.clickCap.value) return no('too fast');
+    this.bump('clicks');
     const spark = s.sparks.find((p) => p.x === x && p.y === y);
     if (spark) {
       s.clicks++;
@@ -333,6 +451,14 @@ export class Game {
     if (e && e.kind === 'furnace' && !this.has('bellows')) {
       s.clicks++;
       return crankFurnace(this, e);
+    }
+    // Overdrive (DESIGN.md §18): any machine, once researched; a cooling Miner falls through to
+    // hand-mining its patch
+    if (e && isMachine(e.kind) && this.done('overdrive') && !((e.cool ?? 0) > 0 && e.kind === 'miner')) {
+      s.clicks++;
+      // an audited machine can't be overdriven: the boost would be folded in for good
+      if (auditLock(this, e.x, e.y)) return no('Auditing: Overdrive would spoil the measurement');
+      return overdrive(this, e);
     }
     if (!e || e.kind === 'miner') {
       const ore = this.oreAt(x, y);
@@ -348,6 +474,7 @@ export class Game {
   private handMine(x: number, y: number, ore: ItemId): ActResult {
     const pi = this.patchOf[y * this.W + x];
     const p = PATCHES[pi];
+    let jammed: Ent | null = null;
     for (let yy = p.y - 1; yy <= p.y + p.h; yy++)
       for (let xx = p.x - 1; xx <= p.x + p.w; xx++) {
         const inside = xx >= p.x && yy >= p.y && xx < p.x + p.w && yy < p.y + p.h;
@@ -362,7 +489,11 @@ export class Game {
         const r = m.recipe ? RECIPE[m.recipe] : null;
         if (r && !r.inputs.some((st) => st.item === ore)) continue;
         const cap = m.kind === 'furnace' ? RULES.handOreCap.value : (r?.inputs.find((st) => st.item === ore)?.n ?? 1) * RULES.inputCrafts.value;
-        if ((m.inBuf[ore] ?? 0) >= cap) continue;
+        if ((m.inBuf[ore] ?? 0) >= cap) {
+          // full of ore because it is jammed with slag: say so (the critic clicked ore for 107 s)
+          if (m.by >= RULES.outputCap.value) jammed = m;
+          continue;
+        }
         if (!r) {
           const fam = BUILD[m.kind].machine;
           if (fam !== 'smelter') continue;
@@ -373,6 +504,10 @@ export class Game {
         this.emit({ type: 'mine', x, y, x2: m.x, y2: m.y, id: ore });
         return OK;
       }
+    if (jammed) {
+      this.emit({ type: 'jamHint', x: jammed.x, y: jammed.y, id: jammed.byItem ?? 'slag' });
+      return no(`The ${BUILD[jammed.kind].name} is jammed with slag: click it to shovel`);
+    }
     const beside = this.machines.some((m) => m.kind !== 'miner' && Math.abs(m.x - x) + Math.abs(m.y - y) <= 3);
     return no(beside ? 'The furnace is full of ore' : 'Nothing beside this patch takes ore');
   }
@@ -420,10 +555,13 @@ export class Game {
   private setRecipe(x: number, y: number, recipe: string | null): ActResult {
     const e = this.entAt(x, y);
     if (!e || !isMachine(e.kind) || e.kind === 'miner' || e.kind === 'furnace') return no('not a machine with recipes');
+    const lock = auditLock(this, x, y);
+    if (lock) return no(lock);
     if (recipe !== null) {
       const r = RECIPE[recipe];
       if (!r || r.machine !== BUILD[e.kind].machine) return no('that machine cannot make it');
       if (r.unlock && !this.done(r.unlock)) return no(`Needs research: ${RESEARCH[r.unlock].name}`);
+      if (!recipeKnown(this, r)) return no(`${CUSTOMERS[r.rep!.customer].name} teaches it at reputation ${r.rep!.level}`);
     }
     if (e.recipe === recipe) return OK;
     e.recipe = recipe;
@@ -446,6 +584,7 @@ export class Game {
     if (this.layoutDirty) this.rebuild();
     runMiners(this);
     runBelts(this);
+    runPower(this);
     runMachines(this);
     runModules(this);
     runDocks(this);
@@ -453,6 +592,7 @@ export class Game {
     runResearch(this);
     runSparks(this);
     runAudits(this);
+    runFAudits(this);
     runStats(this);
     this.s.tick++;
   }
@@ -465,6 +605,7 @@ export class Game {
 
   /** Called by `offer` for every item that changes tile. */
   onTransfer(x: number, y: number, dir: Dir, item: string) {
+    if (this.s.audit) auditTransfer(this, x, y, dir, item);
     for (const w of this.watchers) w(x, y, dir, item);
   }
 
@@ -493,5 +634,8 @@ export class Game {
     return (sum / h.length) * 60;
   }
 }
+
+/** The recipe a Miner runs on each ore. */
+const MINE: Partial<Record<ItemId, string>> = { ironOre: 'mineIron', copperOre: 'mineCopper', coal: 'mineCoal', sand: 'mineSand' };
 
 export { OK, no };

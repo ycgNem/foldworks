@@ -187,7 +187,45 @@ export class Audio {
       case 'gradeD': for (const [i, f] of [330, 262].entries()) this.tone(f, 'triangle', { a: 0.004, d: 0.35 }, 0.05 * v, B, i * 0.14); break;
       case 'stamp': this.tone(120, 'square', { a: 0.002, d: 0.1 }, 0.08 * v, B, 0, 0.5); this.noise(0.1, 0.1 * v, 'bandpass', 1600, 2); break;
       case 'milestone': for (const [i, f] of [392, 494, 587, 784, 988, 1175].entries()) this.tone(f, 'triangle', { a: 0.01, d: 0.6 }, 0.06 * v, B, i * 0.12); break;
-      case 'overdrive': this.tone(200, 'sawtooth', { a: 0.01, d: 0.4 }, 0.05 * v, B, 0, 3); this.noise(0.3, 0.08 * v, 'bandpass', 1200, 1, 0, 3); break;
+      // Overdrive: a rising turbine whine, a spark crackle and a bright top note
+      case 'overdrive':
+        this.tone(160, 'sawtooth', { a: 0.01, d: 0.45 }, 0.05 * v, B, 0, 4);
+        this.tone(320, 'square', { a: 0.01, d: 0.3 }, 0.025 * v, B, 0.05, 3);
+        this.noise(0.35, 0.09 * v, 'bandpass', 1200, 1, 0, 4);
+        this.noise(0.12, 0.06 * v, 'highpass', 5000, 1, 0.3);
+        this.tone(1568, 'square', { a: 0.002, d: 0.12 }, 0.025 * v, B, 0.38);
+        break;
+      // a mode change: a two-click dial turn
+      case 'mode': this.tone(1100, 'square', { a: 0.001, d: 0.025 }, 0.03 * v, B); this.tone(1400, 'square', { a: 0.001, d: 0.03 }, 0.03 * v, B, 0.06); break;
+      // the Codex pays: a cascade of coins down a scale, then a chime
+      case 'codex':
+        for (let i = 0; i < 8; i++) this.tone(990 * Math.pow(2, PENTA[i] / 12), 'square', { a: 0.002, d: 0.06 }, 0.025 * v, B, i * 0.045);
+        this.tone(2093, 'triangle', { a: 0.004, d: 0.4 }, 0.04 * v, B, 0.38);
+        break;
+      // a Machine Kit lands in the parts bank: a wooden crate clunk and a latch
+      case 'kit': this.tone(110, 'triangle', { a: 0.002, d: 0.12 }, 0.12 * v, B, 0, 0.7); this.noise(0.06, 0.1 * v, 'bandpass', 800, 2); this.tone(1800, 'square', { a: 0.001, d: 0.02 }, 0.03 * v, B, 0.09); break;
+      // claims staked: a mallet on a stake, twice, then a little flourish
+      case 'claim':
+        for (const t of [0, 0.16]) { this.tone(150, 'triangle', { a: 0.002, d: 0.1 }, 0.12 * v, B, t, 0.6); this.noise(0.05, 0.1 * v, 'bandpass', 2000, 2, t); }
+        for (const [i, f] of [659, 784, 988].entries()) this.tone(f, 'square', { a: 0.003, d: 0.12 }, 0.03 * v, B, 0.36 + i * 0.07);
+        break;
+      // the Megaproject's stage: a drum roll and a big brass chord
+      case 'fanfare':
+        for (let i = 0; i < 10; i++) this.noise(0.05, (0.05 + i * 0.008) * v, 'lowpass', 600, 1, i * 0.045);
+        for (const f of [262, 330, 392, 523]) this.tone(f, 'sawtooth', { a: 0.02, d: 0.9 }, 0.022 * v, B, 0.48, 1, 6);
+        for (const [i, f] of [784, 1047, 1319, 1568].entries()) this.tone(f, 'square', { a: 0.004, d: 0.3 }, 0.025 * v, B, 0.5 + i * 0.1);
+        this.noise(1, 0.05 * v, 'highpass', 6000, 1, 0.6);
+        break;
+      // a grid browns out: a sagging electric fizz
+      case 'brownout': this.tone(120, 'sawtooth', { a: 0.01, d: 0.35 }, 0.035 * v, B, 0, 0.6); this.noise(0.3, 0.05 * v, 'bandpass', 3000, 4, 0, 0.3); break;
+      // a Pole goes up: a rising hum and a click of contact
+      case 'powerOn': this.tone(60, 'sawtooth', { a: 0.05, d: 0.25 }, 0.04 * v, B, 0, 2); this.tone(2400, 'square', { a: 0.001, d: 0.02 }, 0.02 * v, B, 0.22); break;
+      // the fold animation: paper swishing inward
+      case 'whoosh': this.noise(0.45, 0.12 * v, 'bandpass', 500, 1.2, 0, 6); break;
+      // the folded module lands: a thump and a ding
+      case 'stampLand': this.tone(80, 'sine', { a: 0.003, d: 0.25 }, 0.18 * v, B, 0, 0.6); this.tone(1319, 'triangle', { a: 0.003, d: 0.3 }, 0.04 * v, B, 0.05); break;
+      // a store tab with something new
+      case 'tab': this.tone(1320, 'triangle', { a: 0.002, d: 0.08 }, 0.03 * v, B); this.tone(1760, 'triangle', { a: 0.002, d: 0.1 }, 0.03 * v, B, 0.06); break;
       default: this.tone(600, 'sine', { a: 0.002, d: 0.05 }, 0.03 * v, B);
     }
     this.pm = 1;

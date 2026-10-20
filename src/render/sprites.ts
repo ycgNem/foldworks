@@ -16,9 +16,11 @@ export interface SpriteSheet {
   fps: number;
   /** drawn by code, not imported */
   placeholder: boolean;
+  /** 9-slice insets [left, top, right, bottom] for UI frames */
+  slice?: [number, number, number, number];
 }
 
-interface Meta { frame: [number, number]; frames: number; anchor: [number, number]; fps?: number }
+interface Meta { frame: [number, number]; frames: number; anchor: [number, number]; fps?: number; slice?: [number, number, number, number] }
 
 const PNG = import.meta.glob('../art/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const JSON_META = import.meta.glob('../art/*.json', { eager: true, import: 'default' }) as Record<string, Meta>;
@@ -50,7 +52,7 @@ export function loadArt(): Promise<void> {
           c.getContext('2d')!.drawImage(img, (i % perRow) * w, Math.floor(i / perRow) * h, w, h, 0, 0, w, h);
           frames.push(c);
         }
-        sheets.set(name, { frames, w, h, ax: meta.anchor[0], ay: meta.anchor[1], fps: meta.fps ?? 4, placeholder: false });
+        sheets.set(name, { frames, w, h, ax: meta.anchor[0], ay: meta.anchor[1], fps: meta.fps ?? 4, placeholder: false, slice: meta.slice });
         res();
       };
       img.onerror = () => { console.error('sprite failed to load', url); res(); };
@@ -72,6 +74,12 @@ export function sheet(name: string): SpriteSheet {
 export function hasArt(name: string) {
   const s = sheets.get(name);
   return !!s && !s.placeholder;
+}
+
+/** The sprite sheet name for a building kind: art files are snake_case (steamEngine ->
+ *  steam_engine, smelterMk2 -> smelter_mk2). */
+export function spriteName(kind: string): string {
+  return kind.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
 }
 
 /** Draw frame `f` (wrapped) with its anchor at world pixel (x, y). */
@@ -113,13 +121,17 @@ export function frameAt(s: SpriteSheet, t: number) {
 
 let itemCells: Map<string, HTMLCanvasElement> | null = null;
 
-/** The 8x8 icon for an item: from src/art/items.png (one cell per item, ITEM_IDS order) or code. */
+/** The 8x8 icon for an item: from src/art/items.png (the slice's items, ITEM_IDS order) and
+ *  src/art/items2.png (Act II's, continuing the same order), or code. */
 export function itemIcon(id: string): HTMLCanvasElement {
   if (!itemCells) {
     itemCells = new Map();
     const art = sheets.get('items');
+    const art2 = sheets.get('items2');
+    const n1 = art && !art.placeholder ? art.frames.length : 10;
     ITEM_IDS.forEach((it, i) => {
-      if (art && !art.placeholder && art.frames[i]) itemCells!.set(it, art.frames[i]);
+      if (i < n1 && art && !art.placeholder && art.frames[i]) itemCells!.set(it, art.frames[i]);
+      else if (i >= n1 && art2 && !art2.placeholder && art2.frames[i - n1]) itemCells!.set(it, art2.frames[i - n1]);
       else itemCells!.set(it, drawItem(it));
     });
   }
@@ -168,6 +180,11 @@ function drawItem(id: ItemId): HTMLCanvasElement {
       R(C.mist, 3, 1, 2, 6); R(C.mist, 1, 3, 6, 2); R(C.mist, 2, 2, 4, 4); R(C.bone, 2, 2, 2, 1);
       R(C.ink, 3, 3, 2, 2);
       break;
+    default: {
+      // Act II items without art: a dot in the item's colour family
+      R(C.ink, 1, 1, 6, 6); R(C.fog, 2, 2, 4, 4); R(C.bone, 2, 2, 2, 1);
+      break;
+    }
     case 'slagBrick':
       R(C.ink, 0, 2, 8, 5); R(C.plum, 1, 3, 6, 3); R(C.violet, 1, 3, 6, 1); R(C.ink, 4, 3, 1, 3);
       break;

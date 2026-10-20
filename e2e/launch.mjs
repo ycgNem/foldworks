@@ -22,7 +22,7 @@ export async function openGame(browser, { w = 1280, h = 720, query = '', fresh =
   const page = await browser.newPage({ viewport: { width: w, height: h } });
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
-  page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}`));
+  page.on('pageerror', (e) => errors.push(`[pageerror] ${e.stack ?? e.message}`));
   if (fresh) await page.addInitScript(() => { try { if (!sessionStorage.getItem('__kept')) { localStorage.clear(); sessionStorage.setItem('__kept', '1'); } } catch {} });
   await page.goto(BASE + (query ? '?' + query : ''));
   await page.waitForFunction(() => window.__app && window.__app.ready, null, { timeout: 30000 });

@@ -3,6 +3,7 @@
 // belt order), rebuilt after a load or a change of layout. Pure: no DOM, timers or clocks.
 import { Num } from '../engine/num';
 import type { EntKind } from '../data/machines';
+import { FACTORY } from '../data/land';
 import type { ResearchId } from '../data/research';
 import type { ItemId } from '../data/items';
 import type { CustomerId } from '../data/orders';
@@ -18,8 +19,23 @@ export const ccw = (d: Dir): Dir => ((d + 3) % 4) as Dir;
 
 export type Floor = 'workshop' | 'factory';
 
-/** What a machine is doing this tick (DESIGN.md §4 status pips). */
+/** What a machine is doing this tick (DESIGN.md §4 status pips). A powered machine with no power
+ * is 'starved' with why = 'power' (the blue pip, §18). */
 export type MState = 'work' | 'starved' | 'blocked' | 'idle';
+
+/** A powered machine's mode (DESIGN.md §18 Modes, research Tuning). */
+export type Mode = 'normal' | 'efficient' | 'overclock' | 'precision';
+export const MODES: Mode[] = ['normal', 'efficient', 'overclock', 'precision'];
+
+/** The tiles just outside a footprint's face in direction d: one for a 1x1, two for a 2x2. */
+export function faceTiles(e: { x: number; y: number; w: number; h: number }, d: Dir): [number, number][] {
+  const out: [number, number][] = [];
+  if (d === 0) for (let y = e.y; y < e.y + e.h; y++) out.push([e.x + e.w, y]);
+  else if (d === 2) for (let y = e.y; y < e.y + e.h; y++) out.push([e.x - 1, y]);
+  else if (d === 1) for (let x = e.x; x < e.x + e.w; x++) out.push([x, e.y + e.h]);
+  else for (let x = e.x; x < e.x + e.w; x++) out.push([x, e.y - 1]);
+  return out;
+}
 
 /** One building on the Workshop floor. A flat record: fields a kind doesn't use stay at defaults. */
 export interface Ent {
@@ -56,6 +72,9 @@ export interface Ent {
   p: number;
   /** the item moved this tick (for render interpolation) */
   mv: boolean;
+  /** a belt's recent load and jam, smoothed over about 5 s (0..1): the flow overlay's heat map */
+  occ: number;
+  jam: number;
   // ---- crate (FIFO), heap (count), splitter/merger (one-item buffer)
   store: string[];
   count: number;
@@ -65,6 +84,137 @@ export interface Ent {
   hist: string;
   /** ticks in each state this second: work, starved, blocked on output, blocked on byproduct */
   sec: [number, number, number, number];
+  // ---- Act II (DESIGN.md §18); absent on older saves, read with ?? defaults
+  /** a powered machine's mode */
+  mode?: Mode;
+  /** Overdrive: ticks left at 3x, then ticks left cooling */
+  od?: number;
+  cool?: number;
+  /** Precision's extra output, a fraction of an item carried between crafts */
+  bonus?: number;
+}
+
+/** A box on the Workshop, in tiles. */
+export interface Box { x: number; y: number; w: number; h: number }
+
+/** One measured port of a boxed line: a belt crossing the box edge (DESIGN.md §10). */
+export interface Port {
+  /** the tile inside the box the belt crosses at */
+  x: number;
+  y: number;
+  /** the direction items travel across the edge */
+  dir: Dir;
+  io: 'in' | 'out';
+}
+
+/** The grade a fold audit gave (DESIGN.md §10 Grade). */
+export interface GradeCard {
+  letter: string;
+  score: number;
+  u: number;
+  w: number;
+  c: number;
+  mult: number;
+}
+
+/** A fold audit under way, then its result until the player folds or cancels. */
+export interface AuditState {
+  box: Box;
+  /** ticks since it began (warm-up, then the window) */
+  t: number;
+  /** machines (miners included) in the box when it began */
+  ids: number[];
+  /** items through the ports during the window, by item: plain counts of a measurement */
+  ins: Record<string, number>;
+  outs: Record<string, number>;
+  /** ticks each machine worked during the window */
+  busy: Record<string, number>;
+  /** each machine's finished crafts at the window's start (byproducts made = crafts / every) */
+  crafts0: Record<string, number>;
+  ports: Port[];
+  /** set when the window closes */
+  result: AuditResult | null;
+  /** ticks each machine spent not working, by "state:why" (absent on older saves) */
+  stall?: Record<string, Record<string, number>>;
+}
+
+export interface AuditResult {
+  grade: GradeCard;
+  /** items per second through the ports, measured (before the grade multiplier) */
+  ins: Partial<Record<ItemId, number>>;
+  outs: Partial<Record<ItemId, number>>;
+  /** byproducts made inside, and how many left by a port or were used inside */
+  byMade: number;
+  byHandled: number;
+  /** machine tiles and box tiles (compactness) */
+  machineTiles: number;
+  boxTiles: number;
+  /** each machine's busy fraction, by id, and what held the slowest back */
+  busy: Record<string, number>;
+  /** plain-English lines on what would raise the grade, weakest part first */
+  advice: string[];
+}
+
+/** A module design: a folded line, kept in the inventory and placed on the Factory floor. */
+export interface ModuleDesign {
+  id: number;
+  name: string;
+  /** where it was folded, and everything that was in the box (for Unfold) */
+  box: Box;
+  parts: { kind: EntKind; dx: number; dy: number; rot: Dir; recipe: string | null }[];
+  /** items per second at full speed, grade multiplier applied (rates: plain numbers) */
+  ins: Partial<Record<ItemId, number>>;
+  outs: Partial<Record<ItemId, number>>;
+  grade: GradeCard;
+  /** the price of the machines (and power buildings) inside, in coin (the stamp bill) */
+  bill: number;
+  /** 2 for a design folded on the Factory floor out of modules (DESIGN.md §18 Nested folds) */
+  depth?: 1 | 2;
+  /** a depth-2 design: the modules and trunks it was folded from, relative to its box */
+  fparts?: { kind: 'module' | 'trunk'; design: number; dx: number; dy: number; rot: Dir }[];
+  /** copies made by stamping so far (n in bill x (1 + 0.5 n)) */
+  stamped: number;
+  /** copies in the inventory, not placed (a count of modules) */
+  spare: number;
+}
+
+export type FKind = 'module' | 'trunk' | 'fdock' | 'fhopper' | 'fbay';
+
+/** One thing on the Factory floor (DESIGN.md §11): modules run as rate functions. */
+export interface FEnt {
+  id: number;
+  kind: FKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** a module's output side faces rot; its input side is the back */
+  rot: Dir;
+  /** the design a module is a copy of */
+  design: number;
+  /** buffers in items (fractional), bounded by RULES.moduleBuffer seconds of the rates */
+  inBuf: Record<string, number>;
+  outBuf: Record<string, number>;
+  /** the run fraction this tick, smoothed for the report */
+  f: number;
+  fAvg: number;
+  state: MState;
+  why: string | null;
+  /** round-robin over output items */
+  rr: number;
+  /** a trunk tile's flow last tick, items/s (for drawing items along it) */
+  flow: number;
+  /** 'w' 's' 'b' 'i' per second over the last minute */
+  hist: string;
+  sec: [number, number, number, number];
+  /** this second's summed run fraction, and seconds in a row at half speed or better */
+  fsum?: number;
+  ok?: number;
+}
+
+export interface FactoryState {
+  ents: FEnt[];
+  nextId: number;
 }
 
 export interface Spark {
@@ -129,15 +279,68 @@ export interface State {
   incomeSec: number;
   /** items delivered to the Dock and Hopper, by item, all run */
   delivered: Partial<Record<ItemId, Num>>;
-  /** firsts the presentation reacts to once (first jam, first sale...) */
+  /** firsts the presentation reacts to once (first jam, first sale...) and trophies ('trophy:<id>') */
   flags: string[];
+  /** event counts for statistics and trophies (clicks, cranks, shovels, sparks...), not amounts */
+  counters: Record<string, number>;
+  /** the fold audit under way or awaiting a decision (DESIGN.md §10) */
+  audit: AuditState | null;
+  /** module designs (the inventory) */
+  designs: ModuleDesign[];
+  nextDesign: number;
+  factory: FactoryState;
+  // ---- Act II (DESIGN.md §18)
+  /** Machine Kits in the parts bank (a Hopper takes them there) */
+  parts: Num;
+  /** deposit claim blocks bought at the Survey Office, by ore */
+  claimBlocks: Partial<Record<ItemId, number>>;
+  /** items whose first delivery the Codex has paid for */
+  codex: ItemId[];
+  /** the Megaproject: stages done and what the current stage has been given. Survives every
+   * reset (Milestone 5 keeps it apart from the run's state). */
+  mega: { stage: number; progress: Partial<Record<ItemId, Num>> };
+  /** the Factory-floor fold audit (nested folds), like `audit` on the Workshop */
+  faudit: FAuditState | null;
+}
+
+/** A nested-fold audit on the Factory floor (DESIGN.md §18 Nested folds). */
+export interface FAuditState {
+  box: Box;
+  t: number;
+  /** modules in the box */
+  ids: number[];
+  /** items in and out through the box edge during the window (fractional: modules run as rates) */
+  ins: Record<string, number>;
+  outs: Record<string, number>;
+  /** the modules' summed run fraction over the window */
+  run: Record<string, number>;
+  /** byproducts made inside, lost to modules blocked by them, and handed between modules inside */
+  made: number;
+  missed: number;
+  inside: number;
+  result: AuditResult | null;
+}
+
+export function newFEnt(id: number, kind: FKind, x: number, y: number, rot: Dir, design = 0): FEnt {
+  const big = kind === 'fdock' || kind === 'fhopper' || kind === 'fbay';
+  return {
+    id, kind, x, y, w: big ? 2 : 1, h: big ? 2 : 1, rot, design,
+    inBuf: {}, outBuf: {}, f: 0, fAvg: 0, state: 'idle', why: null, rr: 0, flow: 0, hist: '', sec: [0, 0, 0, 0],
+  };
+}
+
+export function newFactory(): FactoryState {
+  return {
+    ents: [newFEnt(1, 'fdock', FACTORY.dock.x, FACTORY.dock.y, 0), newFEnt(2, 'fhopper', FACTORY.hopper.x, FACTORY.hopper.y, 0)],
+    nextId: 3,
+  };
 }
 
 export function newEnt(id: number, kind: EntKind, x: number, y: number, w: number, h: number, rot: Dir): Ent {
   return {
     id, kind, x, y, w, h, rot,
     recipe: null, inBuf: {}, out: 0, outItem: null, by: 0, byItem: null, prog: 0, active: false, crafts: 0, state: 'idle', why: null,
-    item: null, p: 0, mv: false,
+    item: null, p: 0, mv: false, occ: 0, jam: 0,
     store: [], count: 0, rr: 0,
     hist: '', sec: [0, 0, 0, 0],
   };
@@ -155,7 +358,7 @@ export function newState(seed: number): State {
     ents: [],
     nextId: 1,
     research: { done: [], selected: null, progress: {}, bank: {} },
-    orders: { active: null, progress: {}, done: [], rep: { bramble: 0 } },
+    orders: { active: null, progress: {}, done: [], rep: { bramble: 0, unit7: 0, voltaire: 0 } },
     sparks: [],
     nextSpark: 0,
     visible: true,
@@ -168,6 +371,16 @@ export function newState(seed: number): State {
     incomeSec: 0,
     delivered: {},
     flags: [],
+    counters: {},
+    audit: null,
+    designs: [],
+    nextDesign: 1,
+    factory: newFactory(),
+    parts: Num.ZERO,
+    claimBlocks: {},
+    codex: [],
+    mega: { stage: 0, progress: {} },
+    faudit: null,
   };
 }
 

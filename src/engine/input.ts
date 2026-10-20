@@ -48,7 +48,7 @@ export class Input {
   released = new Set<string>();
   binds: Record<Action, string[]> = structuredClone(DEFAULT_BINDS);
   /** Mouse position in CSS pixels relative to the element; dx/dy are this frame's movement. */
-  mouse = { x: 0, y: 0, dx: 0, dy: 0, down: [false, false, false], pressed: [false, false, false], released: [false, false, false], wheel: 0, moved: false };
+  mouse = { x: 0, y: 0, dx: 0, dy: 0, down: [false, false, false], pressed: [false, false, false], released: [false, false, false], wheel: 0, moved: false, px: 0, py: 0 };
   /** Set by UI to capture the next key for rebinding. */
   captureKey: ((code: string) => void) | null = null;
   /** Set by UI while a text field has focus: printable keys go here instead of the binds. */
@@ -100,6 +100,9 @@ export class Input {
       this.mouse.y = e.offsetY;
       this.mouse.down[e.button] = true;
       this.mouse.pressed[e.button] = true;
+      // where the press happened (a fast drag may have moved on by the next frame)
+      this.mouse.px = e.offsetX;
+      this.mouse.py = e.offsetY;
       this.shift = e.shiftKey;
       this.ctrl = e.ctrlKey || e.metaKey;
       e.preventDefault();

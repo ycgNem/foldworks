@@ -1,6 +1,8 @@
 // The Dock and the Hopper (DESIGN.md §7, §8): what belts handed them this tick. The Dock fills
 // the active special order first, then sells at the item's value (Bramble's rep 1: plates +20%);
-// the Hopper counts toward the selected research, or banks it by type.
+// the Hopper counts toward the selected research, or banks it by type. Act II (§18): Machine Kits
+// at a Hopper go to the parts bank; with Unit 7's rep 1 the Codex pays 100x an item's value for
+// its first delivery to a Dock.
 import type { Game } from '../Game';
 import { Num } from '../../engine/num';
 import { ITEMS, type ItemId } from '../../data/items';
@@ -34,22 +36,43 @@ export function fillOrder(g: Game, item: ItemId, n: Num): Num {
 export function runDocks(g: Game) {
   if (!g.intake.length) return;
   for (const it of g.intake) {
-    const one = Num.ONE;
-    g.s.delivered[it.item] = (g.s.delivered[it.item] ?? Num.ZERO).add(one);
+    const n = it.n ?? Num.ONE;
+    const floor = it.floor;
+    g.s.delivered[it.item] = (g.s.delivered[it.item] ?? Num.ZERO).add(n);
+    if (g.tally) {
+      const t = g.tally[it.to];
+      t[it.item] = (t[it.item] ?? 0) + n.toNumber();
+    }
     if (it.to === 'dock') {
-      const left = fillOrder(g, it.item, one);
-      if (left.isZero()) {
-        g.emit({ type: 'orderFill', x: it.x, y: it.y, id: it.item });
-        continue;
-      }
+      const left = fillOrder(g, it.item, n);
+      if (left.lt(n)) g.emit({ type: 'orderFill', x: it.x, y: it.y, id: it.item, floor });
+      if (left.isZero()) continue;
+      codex(g, it.item, it.x, it.y, floor);
+      // slag reaching the Factory Dock is scrapped for nothing (the Workshop Dock refuses it)
       const v = saleValue(g, it.item);
-      g.earn(Num.of(v));
-      g.emit({ type: 'sell', x: it.x, y: it.y, id: it.item, value: v });
-      if (g.first('firstSale')) g.emit({ type: 'firstSale', x: it.x, y: it.y });
+      const pay = left.mul(v);
+      if (v > 0) g.earn(pay);
+      g.emit({ type: 'sell', x: it.x, y: it.y, id: it.item, value: pay.toNumber(), floor });
+      if (v > 0 && g.first('firstSale')) g.emit({ type: 'firstSale', x: it.x, y: it.y });
+    } else if (ITEMS[it.item].parts) {
+      g.s.parts = g.s.parts.add(n);
+      g.emit({ type: 'parts', x: it.x, y: it.y, id: it.item, value: n.toNumber(), floor });
     } else {
-      creditResearch(g, it.item, one);
-      g.emit({ type: 'hopper', x: it.x, y: it.y, id: it.item });
+      creditResearch(g, it.item, n);
+      g.emit({ type: 'hopper', x: it.x, y: it.y, id: it.item, floor });
     }
   }
   g.intake.length = 0;
+}
+
+/** The Codex (Unit 7's rep 1): the first delivery of each item pays 100x its value, once. */
+function codex(g: Game, item: ItemId, x: number, y: number, floor?: 'factory') {
+  if (g.s.orders.rep.unit7 < 1 || g.s.codex.includes(item)) return;
+  const v = ITEMS[item].value;
+  if (v <= 0) return;
+  g.s.codex.push(item);
+  g.bump('codex');
+  const pay = Num.of(v * RULES.codexMult.value);
+  g.earn(pay);
+  g.emit({ type: 'codex', x, y, id: item, value: pay.toNumber(), floor });
 }

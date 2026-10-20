@@ -64,6 +64,23 @@ that roll and bump, pops and flying coins on every sale. Never a bare map with a
 - Every clickable thing reacts on hover (lighter fill, a 1 px lift) and on click (a sound, a
   1 px press).
 
+## Act II (Milestone 4) additions
+
+- **The Megaproject Bay** (`mega_bay`, 32×32, named frames `empty`, `stage1`–`stage3`, `run1`,
+  `run2`) is the only floor object with a tall structure: a blue-steel crane gantry framing a
+  lighter concrete pad with a hazard-striped front. It must out-shout the 16×16 brass modules
+  by size and silhouette, not by gold alone. Construction stages grow the drill upward; only
+  the run frames light up (vents, beacon, pit glow, sparks).
+- **Overdrive** (`fx_overdrive` 16×16, `fx_overdrive_big` 32×32, 4 frames at 12 fps) is a ring
+  overlay: a rounded hot rim with marching hot/gold dashes, a flicker of copper one pixel in,
+  and sparks rising up the sides. The middle stays clear, so the machine under it still reads.
+- **Cheer portraits** keep the base portrait's body and costume. The face turns to joy,
+  the arms go up, and one comic prop moves (Unit 7's blazing antenna, Voltaire's popped
+  monocle and handkerchief). Frame 2 is the top of a bounce: head and props 1 px up.
+- **UI icon atlases are append-only.** Code finds icons by the JSON `names` list, so new icons
+  go on the end and the first 20 never move. 16×16 drawings live in
+  `pixel-art/ui/icons_m4.py`, 8×8 ones in `pixel-art/m2/sprites.py`.
+
 ## Tools
 
 pixel-art-studio for everything (`pixel-art/<slug>/build.py`, every pixel placed on purpose).

@@ -69,7 +69,7 @@ describe('event queue', () => {
 describe('font', () => {
   // every literal the HUD can draw must be in the glyph table (an unknown char draws as '?')
   it('covers the HUD strings and every name and line in the data', () => {
-    const files = ['src/app/hud.ts', 'src/app/app.ts', 'src/app/panels.ts', 'src/app/goals.ts', ...fs.readdirSync('src/data').map((f) => 'src/data/' + f)];
+    const files = ['src/app/hud.ts', 'src/app/app.ts', 'src/app/screens.ts', 'src/app/goals.ts', 'src/app/gazette.ts', 'src/app/chrome.ts', 'src/app/fold.ts', 'src/app/orders.ts', 'src/app/act2screens.ts', 'src/app/widgets.ts', ...fs.readdirSync('src/data').map((f) => 'src/data/' + f)];
     // derivation strings are for DESIGN.md, never drawn
     const src = files.map((f) => fs.readFileSync(f, 'utf8')).join('\n')
       .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '')

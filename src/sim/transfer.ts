@@ -4,10 +4,11 @@
 // splitters and crates all follow the same rules.
 import type { Game } from './Game';
 import { DX, DY, opposite, type Dir, type Ent } from './world';
-import { BUILD } from '../data/machines';
+import { BUILD, isMachine } from '../data/machines';
 import { ITEMS, type ItemId } from '../data/items';
 import { RECIPE, recipesFor, type RecipeDef } from '../data/recipes';
 import { RULES } from '../data/rules';
+import { RESEARCH } from '../data/research';
 
 /** Can `to` take `item`, arriving while travelling in direction `dir`? (No side effects.) */
 export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
@@ -19,7 +20,9 @@ export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
     case 'dock':
       return !(ITEMS as Record<string, { refused?: boolean }>)[item]?.refused;
     case 'hopper':
-      return true;
+      // slag only while the selected research still wants it (else a heap draining into the
+      // Hopper would never fill, and banked slag would pay for Slag Bricks: DECISIONS.md)
+      return item !== 'slag' || hopperWantsSlag(g);
     case 'heap':
       return item === 'slag' && to.count < (BUILD.heap.capacity ?? 100);
     case 'crate':
@@ -28,15 +31,30 @@ export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
       return enterSide === opposite(to.rot) && to.store.length === 0;
     case 'merger':
       return enterSide !== to.rot && to.store.length === 0 && mergerTurn(g, to, enterSide);
-    case 'smelter':
-    case 'press':
-    case 'assembler':
-    case 'furnace':
+    case 'boiler':
+    case 'generator': {
+      // fuel, from any side but a boiler's front (its Steam Engine is there)
+      if (to.kind === 'boiler' && enterSide === to.rot) return false;
+      const f = BUILD[to.kind].fuel!;
+      if (!f.items.includes(item as ItemId)) return false;
+      let held = 0;
+      for (const k of f.items) held += to.inBuf[k] ?? 0;
+      return held < RULES.fuelCap.value;
+    }
+    default:
+      // crafting machines (Mk1, Act II, Mk2); miners, engines and poles take nothing
+      if (!isMachine(to.kind) || to.kind === 'miner') return false;
       if (enterSide === to.rot) return false; // the front is the output
       return machineTakes(g, to, item);
-    default:
-      return false; // miners take nothing
   }
+}
+
+export function hopperWantsSlag(g: Game): boolean {
+  const sel = g.s.research.selected;
+  if (!sel) return false;
+  const need = RESEARCH[sel].cost.slag;
+  if (!need) return false;
+  return (g.s.research.progress[sel]?.slag?.toNumber() ?? 0) < need;
 }
 
 /** Offer an item to the tile (x, y), travelling in `dir`. Returns true if it was taken. */
@@ -82,7 +100,13 @@ export function offer(g: Game, x: number, y: number, dir: Dir, item: string, car
 export function machineRecipes(g: Game, m: Ent): RecipeDef[] {
   const fam = BUILD[m.kind].machine;
   if (!fam) return [];
-  return recipesFor(fam).filter((r) => (r.unlock === null || g.s.research.done.includes(r.unlock)) && (m.kind !== 'furnace' || r.id === 'smeltIron'));
+  return recipesFor(fam).filter((r) => recipeKnown(g, r) && (m.kind !== 'furnace' || r.id === 'smeltIron'));
+}
+
+/** Researched, and taught (an alternate recipe needs its customer's reputation, §18). */
+export function recipeKnown(g: Game, r: RecipeDef): boolean {
+  if (r.unlock !== null && !g.s.research.done.includes(r.unlock)) return false;
+  return !r.rep || (g.s.orders.rep[r.rep.customer] ?? 0) >= r.rep.level;
 }
 
 function pickRecipe(g: Game, m: Ent, item: string): RecipeDef | null {

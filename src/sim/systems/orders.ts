@@ -36,6 +36,8 @@ export function runOrders(g: Game) {
       g.earn(Num.of(d.pays));
       o.rep[d.customer] = (o.rep[d.customer] ?? 0) + d.rep;
       g.emit({ type: 'order', id: d.id, value: d.pays });
+      // reputation can change the rules the layout runs by (Voltaire's rep 3 extends pole reach)
+      g.layoutDirty = true;
     }
   }
   if (o.rep.bramble >= 2) {

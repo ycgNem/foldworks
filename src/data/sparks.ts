@@ -16,5 +16,5 @@ export interface SparkDef {
 
 export const SPARKS: Record<SparkKind, SparkDef> = {
   vein: { kind: 'vein', name: 'Lucky Vein', blurb: "Click: this patch's miners run 3x for 60 s.", weight: 1, derivation: '§6 Lucky Vein: 3x for 60 s on a patch with a working miner' },
-  inspector: { kind: 'inspector', name: 'Inspector', blurb: 'Click: they grade this line and pay 60 s of its output value x the grade.', weight: 1, derivation: '§6 Inspector: 60 s of measured output x grade multiplier' },
+  inspector: { kind: 'inspector', name: 'Inspector', blurb: 'Click: they grade this line and hand 60 s of its output to research, x the grade.', weight: 1, derivation: '§6 Inspector: 60 s of measured output x grade multiplier, in kind' },
 };

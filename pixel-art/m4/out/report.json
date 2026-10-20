@@ -1,0 +1,55 @@
+{
+ "mega_bay": {
+  "frame": [
+   32,
+   32
+  ],
+  "frames": 6,
+  "colours": 22,
+  "fps": 6,
+  "names": [
+   "empty",
+   "stage1",
+   "stage2",
+   "stage3",
+   "run1",
+   "run2"
+  ]
+ },
+ "fx_overdrive": {
+  "frame": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "colours": 4,
+  "fps": 12
+ },
+ "fx_overdrive_big": {
+  "frame": [
+   32,
+   32
+  ],
+  "frames": 4,
+  "colours": 5,
+  "fps": 12
+ },
+ "portrait_unit7_cheer": {
+  "frame": [
+   48,
+   48
+  ],
+  "frames": 2,
+  "colours": 18,
+  "fps": 4
+ },
+ "portrait_voltaire_cheer": {
+  "frame": [
+   48,
+   48
+  ],
+  "frames": 2,
+  "colours": 15,
+  "fps": 4
+ }
+}
