@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { MIGRATIONS, SAVE_VERSION, migrate, readSave, writeSave, listSlots, deleteSave, exportString, importString } from '../src/engine/save';
 import { EventQueue } from '../src/engine/events';
-import { hasGlyph, textWidth } from '../src/ui/font';
+import { hasGlyph, textWidth, hasSmallGlyph, smallWidth } from '../src/ui/font';
 import { findIssues, AuditRec } from '../src/ui/audit';
 import fs from 'node:fs';
 
@@ -81,6 +81,12 @@ describe('font', () => {
       expect(hasGlyph(ch), `glyph for ${JSON.stringify(ch)}`).toBe(true);
     }
     expect(textWidth('Coin 20/20')).toBeGreaterThan(0);
+  });
+  // the small font (labels, keys, prices: the UI redesign's third size) covers capitals, figures
+  // and the punctuation prices and labels use; lowercase draws as capitals
+  it('has a small glyph for every capital, figure and price mark', () => {
+    for (const ch of 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:/+-%()!?\'#=&<>') expect(hasSmallGlyph(ch), `small glyph for ${ch}`).toBe(true);
+    expect(smallWidth('1.2K')).toBeLessThan(textWidth('1.2K'));
   });
 });
 

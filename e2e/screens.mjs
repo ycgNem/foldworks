@@ -293,6 +293,30 @@ const STATES = {
   // the redesign's floating cards: a build slot's hover card, and the coin counter's drop-down
   slotHover: () => { const a = window.__app; const g = a.game; g.s.coin = g.s.coin.constructor.of(1234); a.panel = null; return { hoverId: 'store_smelter' }; },
   coinHover: () => { const a = window.__app; a.panel = null; return { hoverId: '@coin' }; },
+  // the first slag jam: a Miner feeding the Hand Furnace, no Slag Heap; the furnace hovered
+  jam: () => {
+    const a = window.__app;
+    a.newGame(7);
+    a.freeze();
+    const g = a.game;
+    a.grant(70);
+    a.act({ k: 'upgrade', id: 'bellows' });
+    const f = g.machines.find((m) => m.kind === 'furnace');
+    a.act({ k: 'place', kind: 'miner', x: f.x - 1, y: f.y, rot: 0 });
+    a.step(20 * 60);
+    // the jam itself, held for the shot (the frozen game keeps it): slag backed up in the furnace
+    f.state = 'blocked';
+    f.why = 'slag';
+    f.hist = 'w'.repeat(20) + 'b'.repeat(40);
+    a.game.events.drain();
+    a.renderer.fx.flyers = [];
+    a.renderer.fx.pops = [];
+    a.toasts = [];
+    a.trophyPops = [];
+    a.selected = null;
+    a.toast('Blocked: slag!', 'Smelting leaves slag, and it has nowhere to go. Click the machine to shovel it, or build a Slag Heap beside it.', '#c8362e');
+    return { hover: [f.x, f.y] };
+  },
   // a busy Act II Workshop: a boiler and engine, Poles, five kilns and a mixer browning the grid
   // out, a research node and an order under way, a kiln's report pinned
   act2power: () => {

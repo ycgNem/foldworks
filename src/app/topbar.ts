@@ -44,6 +44,17 @@ function fmtKw(v: number) {
 
 interface Menu { id: string; icon: UIconName; name: string; key: string; panel: Parameters<App['togglePanel']>[0]; tip: string; dot: boolean }
 
+/** A menu another file adds to the top bar (Milestones 5 and 6: Patents, Blueprints...). */
+export interface MenuDef { id: string; icon: UIconName; name: string; key?: string; panel: Parameters<App['togglePanel']>[0]; tip: string; show: (app: App) => boolean; dot?: (app: App) => boolean; group?: 'game' | 'book' }
+const MENUS: MenuDef[] = [];
+/** Add an icon menu to the top bar: registerMenu({ id: 'patents', icon: 'star', name: 'Patents', panel: 'patents', tip: '...', show: (app) => app.game.done('x') }). */
+export function registerMenu(m: MenuDef) { if (!MENUS.some((q) => q.id === m.id)) MENUS.push(m); }
+
+/** A counter another file adds beside Machine Kits and power (Patents): it draws at (x, 7) and returns its width. */
+export interface CounterDef { id: string; show: (app: App) => boolean; draw: (app: App, x: number, y: number) => number }
+const COUNTERS: CounterDef[] = [];
+export function registerCounter(c: CounterDef) { if (!COUNTERS.some((q) => q.id === c.id)) COUNTERS.push(c); }
+
 export function topBar(app: App, L: Layout, dt: number) {
   const ui = app.ui;
   const g = app.game;
@@ -64,10 +75,12 @@ export function topBar(app: App, L: Layout, dt: number) {
     m('survey', 'survey', 'Survey', '', 'survey', 'The Survey Office: buy deposit claims, 4 at a time', !h.opened.has('survey') || g.s.coin.gte(cheapest));
   }
   if (g.done('greatDrill')) m('mega', 'mega', 'Megaproject', '', 'mega', `The Megaproject: ${MEGA.find((q) => q.stage === g.s.mega.stage + 1)?.name ?? 'the Great Drill'}`, !h.opened.has('mega'));
+  for (const q of MENUS) if (q.group !== 'book' && q.show(app)) m(q.id, q.icon, q.name, q.key ?? '', q.panel, q.tip, q.dot?.(app) ?? false);
   const trophyCount = TROPHIES.filter((t) => g.flag('trophy:' + t.id)).length;
   const book: Menu[] = [];
   book.push({ id: 'stats', icon: 'stats', name: 'Statistics', key: '', panel: 'stats', tip: 'The run in numbers, and everything delivered', dot: false });
   book.push({ id: 'trophies', icon: 'trophies', name: `Trophies ${trophyCount}/${TROPHIES.length}`, key: '', panel: 'trophies', tip: 'The Trophy Shelf', dot: false });
+  for (const q of MENUS) if (q.group === 'book' && q.show(app)) book.push({ id: q.id, icon: q.icon, name: q.name, key: q.key ?? '', panel: q.panel, tip: q.tip, dot: q.dot?.(app) ?? false });
   book.push({ id: 'options', icon: 'options', name: 'Options', key: '/', panel: 'options', tip: 'Sound, saves, keys', dot: false });
   const BW = 18, BG = 2;
   const menusW = (menus.length + book.length) * (BW + BG) + 6;
@@ -124,7 +137,7 @@ export function topBar(app: App, L: Layout, dt: number) {
   x += ui.text(rs, x, 7, rate > 0 ? C.leaf : C.hull1) + 4;
   const coinEnd = x;
   app.renderer.coinTarget = { x: (x0 + 8) * ui.scale, y: 10 * ui.scale };
-  if (ui.hover(0, 0, coinEnd, T.h)) coinCard(app, coinEnd);
+  if (app.mouseIn && ui.hover(0, 0, coinEnd, T.h)) coinCard(app, coinEnd);
 
   // ---- Machine Kits and power, once they exist
   const sep = () => { ui.fill(x, 4, 1, 12, C.hull0); x += 5; };
@@ -137,6 +150,11 @@ export function topBar(app: App, L: Layout, dt: number) {
     const w = 10 + ui.text(s, x + 10, 7, g.s.parts.gt(0) ? C.bone : C.hull1);
     ui.hint(x - 2, 0, w + 4, T.h, [{ text: 'Machine Kits', color: C.gold }, { text: 'Stamping a module made of Act II machines takes Machine Kits as well as coin. A Hopper banks the kits that reach it.' }], 190);
     x += w + 5;
+  }
+  for (const c of COUNTERS) {
+    if (!c.show(app)) continue;
+    sep();
+    x += c.draw(app, x, 7) + 5;
   }
   if (g.grids.length > 0) {
     sep();

@@ -36,7 +36,8 @@ function railCard(app: App, id: string, x: number, y: number, w: number, title: 
   const folded = hs.collapsed.has(id);
   const h = folded ? TITLE_H + 1 : TITLE_H + bodyH + 5;
   const hovTitle = ui.hover(x, y, w, TITLE_H);
-  plate(ui, x, y, w, h, { accent, hover: hovTitle });
+  const hovBody = !!open && !folded && ui.hover(x, y + TITLE_H, w, h - TITLE_H);
+  plate(ui, x, y, w, h, { accent, hover: hovTitle || hovBody });
   if (flash > 0) ui.fill(x + 1, y + 1, w - 2, h - 2, accent, flash * 0.5);
   uiIcon(ui, ic, x + 4, y + 3, 1);
   label(ui, title, x + 15, y + 5, accent);
@@ -108,6 +109,8 @@ export function rail(app: App, L: Layout) {
   const lines = wrapText(text, w - 12);
   const noteLines = goal?.note ? wrapText(goal.note, w - 12) : [];
   const bellows = !g.has('bellows');
+  // a goal that names a screen or a tool opens it from its card (and its pill below gives way)
+  const goalOpen = goalAction(app, goal?.ui ?? null);
   const goalH = lines.length * 10 + (bellows ? 18 : 0) + (noteLines.length ? 5 + noteLines.length * 10 : 0) - 2;
   y = railCard(app, 'goal', x + slide, y, w, 'Goal', C.gold, 'star', goalH, (bx, by, bw) => {
     lines.forEach((l, i) => ui.text(l, bx, by + i * 10, C.bone));
@@ -118,7 +121,7 @@ export function rail(app: App, L: Layout) {
       ui.fill(bx, yy + 1, bw, 1, C.hull0);
       noteLines.forEach((l, i) => ui.text(l, bx, yy + 4 + i * 10, C.pipYellow));
     }
-  }, undefined, flash);
+  }, goalOpen?.go, flash, goalOpen ? [{ text: 'Goal', color: C.gold }, { text: `Click: ${goalOpen.what}.`, color: C.hull2 }] : undefined);
 
   // ---- the order
   const o = g.s.orders;
@@ -143,7 +146,7 @@ export function rail(app: App, L: Layout) {
     }, () => app.togglePanel('orders'), 0, [{ text: `${d.name}, for ${CUSTOMERS[who].name}`, color: col }, { text: factoryOnly ? 'This order counts only what reaches the Factory Dock: trunk the modules that make it into the Factory Dock. The Workshop Dock just sells.' : 'Items sent to the Dock fill the active order first, then sell. Orders never expire.' }, { text: `${Math.round(orderFrac(g, d.id) * 100)}% done. Click for the Orders screen (O).`, color: C.hull2 }]);
   } else {
     const offered = offeredOrders(g);
-    if (offered.length) {
+    if (offered.length && goal?.ui !== 'orders') {
       const s = offered.length === 1 ? 'An order is offered' : `${offered.length} orders offered`;
       if (pill(app, 'openOrders', x, y, w, s, C.leaf, 'orders', [{ text: 'Orders', color: C.leaf }, { text: 'A customer has an order for you. Take one; it fills before anything sells. (O)' }])) app.togglePanel('orders');
       y += 18;
@@ -163,7 +166,7 @@ export function rail(app: App, L: Layout) {
       const pw = ui.small(ps, bx + bw, by + 11, C.teal1, { align: 'right' });
       bar(ui, bx, by + 11, bw - pw - 3, 5, f, C.teal1);
     }, () => app.togglePanel('research'), 0, [{ text: RESEARCH[sel].name, color: C.teal1 }, { text: `Unlocks ${RESEARCH[sel].unlocks}. Items delivered to the Hopper pay for it.` }, { text: 'Click for the research tree (T).', color: C.hull2 }]);
-  } else if (!allDone && (g.has('bellows') || g.s.research.done.length > 0) && Object.keys(RESEARCH).some((id) => available(g, id as ResearchId))) {
+  } else if (goal?.ui !== 'research' && !allDone && (g.has('bellows') || g.s.research.done.length > 0) && Object.keys(RESEARCH).some((id) => available(g, id as ResearchId))) {
     if (pill(app, 'openTree', x, y, w, 'Pick research (T)', C.teal1, 'research', [{ text: 'Research', color: C.teal1 }, { text: 'Nothing is selected: items in the Hopper go to waste. Pick a node in the tree.' }])) app.togglePanel('research');
     y += 18;
   }
@@ -181,6 +184,19 @@ export function rail(app: App, L: Layout) {
     }, () => app.togglePanel('mega'), 0, [{ text: st.name, color: C.glow }, { text: `Trunk these into the Megaproject Bay on the Factory floor. Built, it gives: ${st.reward}.` }, { text: 'Click for the Megaproject.', color: C.hull2 }]);
   }
   void ITEMS; void textWidth;
+}
+
+/** What a click on the goal card does when the goal names a screen, a floor or a tool. */
+function goalAction(app: App, ui: string | null): { go: () => void; what: string } | null {
+  switch (ui) {
+    case 'research': return { go: () => app.togglePanel('research'), what: 'open the research tree (T)' };
+    case 'orders': return { go: () => app.togglePanel('orders'), what: 'open the Orders screen (O)' };
+    case 'mega': return { go: () => app.togglePanel('mega'), what: 'open the Megaproject' };
+    case 'survey': return { go: () => app.togglePanel('survey'), what: 'open the Survey Office' };
+    case 'factory': return app.floor === 'factory' ? null : { go: () => app.setFloor('factory'), what: 'go to the Factory floor (Tab)' };
+    case 'fold': return app.mode.k === 'fold' ? null : { go: () => app.toggleFold(), what: 'pick the Fold tool (F)' };
+    default: return null;
+  }
 }
 
 /** A pill: a one-line plate in its accent colour that opens a screen (orders offered, research to

@@ -113,8 +113,8 @@ export class App {
   townTip: string | null = null;
   /** the slice-end card waits for the Gizmo parade (UI time it opens at) */
   sliceAt: number | null = null;
-  /** the mouse is over the canvas (edge-scrolling stops when it leaves) */
-  private mouseIn = false;
+  /** the mouse is over the canvas (edge-scrolling and the coin drop-down stop when it leaves) */
+  mouseIn = false;
   /** seconds the mouse has rested at an edge of the floor view */
   private edgeT = 0;
 

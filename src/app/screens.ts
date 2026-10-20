@@ -28,8 +28,20 @@ export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options
   // Act II (Milestone 4): the Factory floor's grade card, the Codex, the Survey Office, the Megaproject
   | 'fgrade' | 'codex' | 'survey' | 'mega';
 
+/** Screens added from other files (Milestones 5 and 6): drawn in the overlay rect like the rest. */
+const EXTRA = new Map<string, (app: App, r: Rect, L: Layout) => void>();
+
+/** Register a full-screen menu drawn by another file; open it with app.togglePanel(name).
+ *    registerScreen('patents', (app, r) => { const { body } = menuTemplate(app, r, { ... }); ... });
+ */
+export function registerScreen(name: ScreenName, draw: (app: App, r: Rect, L: Layout) => void) {
+  EXTRA.set(name, draw);
+}
+
 export function drawScreen(app: App, L: Layout) {
   const r = L.overlay;
+  const extra = app.panel ? EXTRA.get(app.panel) : undefined;
+  if (extra) return extra(app, r, L);
   switch (app.panel) {
     case 'research': return researchTree(app, r);
     case 'orders': return ordersScreen(app, r);

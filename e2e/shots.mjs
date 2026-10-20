@@ -12,6 +12,8 @@ fs.mkdirSync(OUT, { recursive: true });
 const { browser } = await launch();
 const { page, errors } = await openGame(browser, { w, h });
 await page.evaluate(() => { const a = window.__app; a.newGame(1); a.freeze(); a.attachBot('planner'); });
+// the mouse rests over the floor, as a player's would (not on the coin counter at 0,0)
+await page.mouse.move(Math.floor(w * 0.6), Math.floor(h * 0.45));
 
 const log = [];
 /** Run the bot until `until` (a JS expression over g, the Game) holds, at most `max` game seconds. */

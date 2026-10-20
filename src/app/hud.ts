@@ -424,8 +424,8 @@ function sideStack(app: App, L: Layout, dt: number) {
     const icon = t.icon ? (TOAST_ICON[t.icon] ?? (t.icon in UICON ? (t.icon as UIconName) : null)) : null;
     const tx = icon ? 24 : 8;
     const title = wrap(t.title, w - tx - 6);
-    const lines = wrap(t.text, w - 12);
-    const h = 9 + title.length * 10 + lines.length * 10 + (icon && title.length < 2 && !lines.length ? 6 : 0);
+    const lines = wrap(t.text, w - tx - 6);
+    const h = Math.max(icon ? 24 : 0, 9 + title.length * 10 + lines.length * 10);
     if (y + h > bottom) break;
     const k = Math.min(1, t.t * 5);
     const x = S.x + Math.round((1 - k * k * (3 - 2 * k)) * (w + 8));
@@ -436,7 +436,7 @@ function sideStack(app: App, L: Layout, dt: number) {
       if (t.t < 0.3) ui.fill(x + 1, y + 2, w - 2, h - 3, t.color, (0.3 - t.t) * 1.2);
       if (icon) uiIcon(ui, icon, x + 5, y + 4);
       title.forEach((l, i) => ui.text(l, x + tx, y + 5 + i * 10, t.color, { shadow: C.ink }));
-      lines.forEach((l, i) => ui.text(l, x + 6, y + 5 + title.length * 10 + i * 10 + (icon && title.length < 2 ? 0 : 0), C.bone));
+      lines.forEach((l, i) => ui.text(l, x + tx, y + 5 + title.length * 10 + i * 10, C.bone));
     });
     ui.ctx.globalAlpha = 1;
     y += h + 3;
@@ -600,12 +600,14 @@ function celebrations(app: App, L: Layout, dt: number) {
       if (i > 2) continue;
       const title = c.title ?? '', sub = c.sub ?? '';
       const col = c.color ?? C.gold;
-      const sc = textWidth(title) * 2 + 40 <= L.center.w ? 2 : 1;
-      const bw = Math.min(ui.w - 8, Math.max(textWidth(title) * sc, textWidth(sub)) + 28), bh = 9 * sc + (sub ? 16 : 8);
-      const cx = app.panel ? ui.w / 2 : L.center.x + L.center.w / 2;
+      // between the cards on the left and the toasts on the right (or the whole width over a menu)
+      const room = app.panel ? ui.w - 8 : L.side.x - (L.rail.x + L.rail.w) - 8;
+      const sc = textWidth(title) * 2 + 40 <= room ? 2 : 1;
+      const bw = Math.min(ui.w - 20, Math.max(textWidth(title) * sc, textWidth(sub)) + 28), bh = 9 * sc + (sub ? 16 : 8);
+      const cx = app.panel || bw > room - 12 ? ui.w / 2 : Math.round((L.rail.x + L.rail.w + L.side.x) / 2);
       const k = Math.min(1, c.t * 5);
       const lift = c.t < 0.2 ? Math.round((1 - k) * -20) : c.t > BANNER_S - 0.4 ? Math.round((c.t - (BANNER_S - 0.4)) * -60) : 0;
-      const bx = Math.floor(cx - bw / 2), by = (app.panel ? L.overlay.y + 4 : L.center.y + 20) + i * (bh + 4) + lift;
+      const bx = Math.floor(cx - bw / 2), by = (app.panel ? L.overlay.y + 4 : L.center.y + 8) + i * (bh + 4) + lift;
       ctx.globalAlpha = c.t > BANNER_S - 0.4 ? Math.max(0, (BANNER_S - c.t) / 0.4) : 1;
       ctx.fillStyle = rgba(C.ink, 0.5);
       ctx.fillRect(bx + 2, by + 2, bw, bh);
