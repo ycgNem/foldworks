@@ -79,7 +79,7 @@ r = await until("g.done('folding')", 3600);
 await shot('07-folding', `Folding researched (${r.ok ? 'ok' : 'NOT REACHED'})`);
 
 // 4 (its own game): the first slag jam. The planner builds a Slag Heap before slag can jam, so
-// this plays the opening a new player would: Bellows, one Miner into the furnace, no heap.
+// this plays an opening with no heap: Bellows, one Miner into the furnace, the starting heap removed.
 await page.evaluate(() => {
   const a = window.__app;
   a.attachBot(null);
@@ -87,6 +87,8 @@ await page.evaluate(() => {
   a.freeze();
   a.grant(70);
   a.act({ k: 'upgrade', id: 'bellows' });
+  // the starting Slag Heap holds 53 min of slag (DESIGN §4): take it away to show the jam
+  a.act({ k: 'remove', x: 3, y: 4 });
   a.act({ k: 'place', kind: 'miner', x: 1, y: 2, rot: 0 });
   a.act({ k: 'place', kind: 'belt', x: 2, y: 2, rot: 1 });
   a.act({ k: 'place', kind: 'belt', x: 2, y: 3, rot: 0 });

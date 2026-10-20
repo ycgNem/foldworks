@@ -13,10 +13,11 @@ const st = () => page.evaluate(() => window.__app.stats());
 // the title: click Start where the UI draws it
 await frames(page, 4);
 check((await st()).screen === 'title', 'boots to the title');
+// the button by its id (the title scene places it on the water, not at a fixed spot)
 const start = await page.evaluate(() => {
   const a = window.__app;
-  const bw = 130, bx = Math.floor(a.ui.w / 2 - bw / 2), by = Math.floor(a.ui.h / 2) + 10 + 30;
-  return a.uiToCss(bx + bw / 2, by + 10);
+  const r = a.ui.ids.get('new');
+  return a.uiToCss(r.x + r.w / 2, r.y + r.h / 2);
 });
 await page.mouse.click(start.x, start.y);
 await frames(page, 4);
