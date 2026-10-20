@@ -241,19 +241,22 @@ describe('the Night Shift and offline efficiency (DESIGN.md §20)', () => {
     expect(offlineEfficiency(g)).toBeLessThanOrEqual(IDLE.offlineEffMax.value);
   });
 
-  it('refuses a Night Shift upgrade that would add nothing at the 0.75 ceiling, saying why', () => {
+  it('the Patents\' offline nodes and the Night Shift reach the 0.75 ceiling together, and no further', () => {
     const g = new Game(1);
     g.s.coin = N(1e7);
     g.s.research.done.push('steamPower', 'circuits');
-    // the Patent tree's offline nodes alone reach the ceiling
+    // the Patent tree's three offline nodes (+0.05 each since the reset-layer review round) and
+    // the Night Foreman reach 0.70; the Rota then tops it up to the ceiling
     g.s.meta.nodes.push('nightShift', 'nightWatch', 'lightsOn');
+    expect(offlineEfficiency(g)).toBeCloseTo(0.65, 9);
+    must(g, { k: 'idleUpgrade', id: 'nightForeman' });
+    must(g, { k: 'idleUpgrade', id: 'nightRota' });
     expect(offlineEfficiency(g)).toBeCloseTo(IDLE.offlineEffMax.value, 9);
-    expect(idleUpgradeGain(g, 'nightForeman')).toBe(0);
-    const r = g.act({ k: 'idleUpgrade', id: 'nightForeman' });
-    expect(r.ok).toBe(false);
-    expect(r.why).toMatch(/ceiling/);
-    expect(g.s.coin.toNumber()).toBe(1e7);
-    // one node short of it: the upgrade adds only what is left under the ceiling, and is sold
+    // (0.5 + 0.15 + 0.1 is the ceiling exactly, so with everything bought nothing is left to refuse;
+    // the refusals in idleUpgradeRefusal and patentRefusal guard a ceiling reached early, which
+    // these numbers no longer allow)
+    // one step short of it: the upgrade adds only what is left under the ceiling, and is sold
+    g.s.upgrades = g.s.upgrades.filter((u) => u !== 'nightForeman' && u !== 'nightRota');
     g.s.meta.nodes = ['nightShift'];
     const gain = idleUpgradeGain(g, 'nightForeman');
     expect(gain).toBeGreaterThan(0);
@@ -303,7 +306,8 @@ describe('the offline model (DESIGN.md §12)', () => {
     must(g, { k: 'place', kind: 'belt', x: 3, y: 2, rot: 3 });
     for (const x of [3, 4, 5]) must(g, { k: 'place', kind: 'belt', x, y: 1, rot: 0 });
     g.s.orders.active = 'thePile';
-    g.s.orders.progress.thePile = { slag: N(800) };
+    // The Pile wants 800 since the reset-layer review round: 100 in, 700 to go
+    g.s.orders.progress.thePile = { slag: N(100) };
     const live = copyGame(g);
     // 700 slag at 0.125/s: 450 in the replayed hour, the rest in the first extrapolated segment
     const rep = runOffline(g, 8 * 3600, { eff: 1 });

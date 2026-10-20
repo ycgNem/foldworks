@@ -64,10 +64,22 @@ export const share = (off: number, r: { idle1h: number; idle8h: number }) => (of
 /** Stages where rule 4's band does not hold, measured, with the reason (DESIGN.md §20, open for
  * the lead: the bot's own build and the economy decide them, not the offline model). The offline
  * bounds are still checked there. Keys are seed:run:hour. */
+// Re-read after the reset layer's annex and campaign changes (the Milestone 5-6 review round):
+// run 1 at 3 h (was 4.01x) and seed 1000's run 2 at 2 h (was 0.54x) now pass (1.59 and 1.52: the
+// annex keeps a Gizmo chain selling past the Bay floor, so open idle no longer collapses there).
+// What is left is Overdrive's own arithmetic and the Bay rebuild, now earlier in run 3:
+// - 3x for 10 s, then 30 s cooling, is (30 + 30) / 40 = 1.5x for a line kept in Overdrive, which
+//   is exactly the band's floor. A stage where the bot only clicks (its plan done, or waiting on
+//   research) reads 1.47-1.52, and a line whose inputs can't keep up at 3x reads below 1.5.
+//   A 20 s cooldown was tried (1.67x): every one of these passed, but the faster factory moved
+//   seed 8919's first reset to 3:52, before the 4-6 h window, and left its Drill at stage 2.
+//   The lever is the lead's.
 export const RULE4_OPEN: Record<string, string> = {
-  '8919:1:3': 'active 4.01x idle (seed 1000: 3.97): the bot has cleared its Gizmo chains for the Bay floor, so the idle factory earns a fifth of what it did and the active bot\'s Overdrive is most of the difference',
-  '1000:2:2': 'active 0.54x idle: in this half hour the campaign bot clears 19 Workshop pieces and places 13 modules (its coin goes into the floor, not sales), so the untouched factory earns more than the player',
-  '8919:2:2': 'active 0.69x idle: the same rebuild as seed 1000 at 2 h of run 2',
+  '8919:2:2': 'active 1.49x idle: the bot waits on Nested Boxes\' research and clicks Overdrive (1.5x at most, 3x for 10 s in every 40); seed 1000 reads 1.52',
+  '8919:2:3': 'active 1.49x idle: the plan is done and the bot waits for its reset, clicking Overdrive (1.5x at most); seed 1000 reads 1.52',
+  '8919:3:3': 'active 1.47x idle: the plan is done (run 3 is the last, so it never resets), Overdrive alone (1.5x at most); seed 1000 reads 1.51',
+  '1000:3:1': 'active 0.77x idle: the Bay floor is laid in this half hour (67-69 min into run 3, the head starts bring it forward from run 2\'s 1:32): the campaign clears the Gizmo chains for it, so income falls from about 16K to 6K a minute while the untouched factory keeps them',
+  '8919:3:1': 'active 0.72x idle: the same Bay floor rebuild as seed 1000 at 1 h of run 3',
 };
 
 /** Everything measured from one saved state. */
