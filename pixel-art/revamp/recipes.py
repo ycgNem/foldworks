@@ -106,19 +106,35 @@ def shim(P):
     m.hex2rgba, m.ART_PAL = hex2rgba, ART
     m.export = m.sheet = m.frame_of = m.check_palette = m.checker = m.text = m.text_w = m.nine = _unused
     m.OUT = HERE / "out"
-    for name in ("common", "common_m4"):
+    for name in ("common", "common_m4", "common_m5", "common_m2"):
         sys.modules[name] = m
     return m
 
 
-def load(path, name=None):
-    """Execute a recipe file as module `name` (default: its stem) and register it."""
+def load(path, name=None, replace=(), inject=None):
+    """Execute a recipe file as module `name` (default: its stem) and register it. `replace` is a
+    list of (old, new) source edits (each must match), `inject` names put in before it runs."""
     path = Path(path)
     m = types.ModuleType(name or path.stem)
     m.__file__ = str(path)
+    m.__dict__.update(inject or {})
     sys.modules[m.__name__] = m
-    exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), m.__dict__)
+    src = path.read_text(encoding="utf-8")
+    for old, new_ in replace:
+        assert old in src, (path.name, old)
+        src = src.replace(old, new_)
+    exec(compile(src, str(path), "exec"), m.__dict__)
     return m
+
+
+def load_fw(P):
+    """pixel-art/world/fw.py (the world art's helpers: bevelled boxes, ASCII blits, lumps) with its
+    palette read from `P` (A slot names -> B) instead of the old palette.ts, any B colour allowed."""
+    return load(ROOT / "pixel-art" / "world" / "fw.py", "fw", replace=[
+        ("P = _read_palette()", "P = {k: v.lower() for k, v in __ROLE__.items()}"),
+        ("assert len(P) == 32, len(P)", "pass"),
+        ("HEXES = [P[k] for k in P]", "HEXES = [h.lower() for h in __ART__]"),
+    ], inject={"__ROLE__": P, "__ART__": ART})
 
 
 def frames(s):
