@@ -564,7 +564,9 @@ function lockedStage(app: App, stage: NonNullable<ReturnType<typeof megaStage>>,
     }
     yy += 12;
   }
-  if (yy + 10 <= end) ui.para(`Reward: ${stage.reward}`, inner.x, yy, inner.w, C.gold);
+  // the reward whole or not at all (it must not run under the Committee's key)
+  const reward = `Reward: ${stage.reward}`;
+  if (yy + wrapText(reward, inner.w).length * 10 <= end) ui.para(reward, inner.x, yy, inner.w, C.gold);
   if (button(ui, 'megaCommittee', inner.x, inner.y + inner.h - 15, inner.w, 15, "The Committee's orders", { gold: true, icon: 'orders', tip: 'The Orders screen, on the Committee\'s tab' })) openOrders(app, 'committee');
 }
 

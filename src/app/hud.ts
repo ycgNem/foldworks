@@ -763,7 +763,9 @@ function compactEnt(app: App, e: Ent): { text: string; color: string }[] {
   const p = entParts(app, e);
   if (!p) return [];
   const pool = [...p.rest, ...p.a2.filter((l) => l.tone !== 'hot')];
-  const cause = pool.find((l) => l.tone === 'bad') ?? pool.find((l) => l.tone === 'blue') ?? pool.find((l) => l.tone === 'warn');
+  // blocked by its own byproduct: the fix is where the byproduct goes, whatever that line's tone
+  const byFix = e.state === 'blocked' && e.why && e.why === e.byItem ? p.rest.find((l) => l.text.includes('leaves by a side')) : undefined;
+  const cause = pool.find((l) => l.tone === 'bad') ?? byFix ?? pool.find((l) => l.tone === 'blue') ?? pool.find((l) => l.tone === 'warn');
   const rate = p.rest.find((l) => l.text.startsWith('Makes ')) ?? p.rest.find((l) => l.text.startsWith('Grid '));
   const hot = p.a2.find((l) => l.text.startsWith('Overdriven'));
   const ready = p.a2.find((l) => l.text.startsWith('Overdrive: click'));
