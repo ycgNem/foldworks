@@ -4,24 +4,27 @@
 //     Workshop lines item by item, modules as rates), so heaps fill and lines jam as they would.
 //  2. Extrapolate the rest in segments. Rates come from what reached each Dock, Hopper and the
 //     Megaproject Bay over the last minutes of live ticks, and each rising Slag Heap's fill rate.
-//     The segment runs until the next thing that would change those rates: a heap filling, or the
-//     Bay getting all it wants of an item. Then the heap is set full (or the Bay's want met), a
-//     few minutes are replayed live so the jam spreads as it would, and the new rates are
-//     measured. Lines run at the same physical speed as live (heaps fill and lines jam at the
-//     same times); what they deliver while extrapolated counts at the offline efficiency, paid
-//     through the same functions as live (orders first, then sales; research credit; Machine Kits
-//     to the parts bank; the Bay's stage).
-// The report is a timeline: every jam (machine or module blocked 10 s straight) with its time and
-// place, each heap filling, orders filled, research finished and the Megaproject's stages, plus
-// the totals. Nothing about the time away is hidden, and every number is one the player can check
-// against the live factory. The same run, on a copy of the game, is the overnight forecast.
+//     The segment runs until the next thing that would change those rates: a heap filling, the
+//     Bay getting all it wants of an item, the active order filling (the Dock stops taking what it
+//     took only for that order: the Committee's slag) or the selected research finishing (the
+//     Hopper stops taking slag for it). Then the heap is set full (or the want met), a few minutes
+//     are replayed live so the jam spreads as it would, and the new rates are measured. Lines run
+//     at the same physical speed as live (heaps fill and lines jam at the same times); what they
+//     deliver while extrapolated counts at the offline efficiency, paid through the same functions
+//     as live (orders first, then sales; research credit; Machine Kits to the parts bank; the
+//     Bay's stage).
+// The report is a timeline: one row per line that stopped (a cascade of jams is one line, named by
+// the first machine to block and why, with a fix the player can build and how many machines it
+// stopped), each heap filling on its own, orders filled, research finished and the Megaproject's
+// stages, plus the totals. Nothing about the time away is hidden, and every number is one the
+// player can check against the live factory. The same run, on a copy of the game, is the forecast.
 // Sparks pause: the run hides the tab for the sim (`visible` false), so no Spark appears unseen.
 import type { Game } from './Game';
 import { Num } from '../engine/num';
 import { TICK_RATE } from '../engine/time';
+import { duration } from '../engine/fmt';
 import { RULES } from '../data/rules';
 import { IDLE, IDLE_UPGRADES } from '../data/idle';
-import { BUILD } from '../data/machines';
 import { ITEMS, itemName, type ItemId } from '../data/items';
 import { RESEARCH, type ResearchId } from '../data/research';
 import { ORDER } from '../data/orders';
@@ -30,18 +33,23 @@ import { fillOrder, saleValue } from './systems/docks';
 import { creditResearch, runResearch } from './systems/research';
 import { runOrders } from './systems/orders';
 import { megaGive, fname } from './systems/modules';
-import { entName } from './analysis';
+import { entName, lines as workshopLines } from './analysis';
 import { restore } from './snapshot';
 import { prules } from './patents';
 import type { Ent, FEnt } from './world';
 
-/** The offline efficiency now (DESIGN.md §12, §20): the base 0.5, plus the Night Shift bought with
- * coin, capped at 0.75. Milestone 5's Patent nodes plug in here. */
+/** The offline efficiency now (DESIGN.md §12, §20): the base 0.5 plus the Patent tree's offline
+ * nodes (§19) plus the Night Shift bought with coin, capped at 0.75. The one function every
+ * caller reads (the run, the forecast, the overnight screen, the Night Shift's refusal). */
 export function offlineEfficiency(g: Game): number {
-  // the base 0.5 plus the Patent tree's offline nodes (DESIGN.md §19), then the Night Shift
+  return Math.min(IDLE.offlineEffMax.value, offlineEfficiencyUncapped(g));
+}
+
+/** The sources summed before the cap (what a purchase would add is judged against the cap). */
+export function offlineEfficiencyUncapped(g: Game): number {
   let e = prules(g).offline;
   for (const u of IDLE_UPGRADES) if (g.has(u.id)) e += u.eff;
-  return Math.min(IDLE.offlineEffMax.value, e);
+  return Math.round(e * 1e6) / 1e6;
 }
 
 export type TimelineKind = 'jam' | 'heap' | 'order' | 'research' | 'mega' | 'bay';
@@ -50,23 +58,46 @@ export type TimelineKind = 'jam' | 'heap' | 'order' | 'research' | 'mega' | 'bay
 export interface TimelineEntry {
   t: number;
   kind: TimelineKind;
-  /** plain words, e.g. "Smelter 3 blocked by slag" */
+  /** plain words, e.g. "Smelter 3's line stopped: its Slag Heap filled (4 machines)" */
   text: string;
-  /** where (jams and heaps), for the jump-to button */
+  /** where (a line's first machine to block, a heap), for the jump-to button */
   x?: number;
   y?: number;
   floor?: 'workshop' | 'factory';
-  /** a jam: the item it is blocked by */
+  /** a jam: the item its first machine is blocked by */
   why?: string | null;
   /** worked out from the measured rates rather than replayed tick by tick */
   est?: boolean;
+  /** a jam row: its line in `OfflineReport.lines` */
+  line?: number;
+}
+
+/** A line that stopped while away: every machine of a cascade in one row (DESIGN.md §12). */
+export interface JamLine {
+  /** when the line stopped: its heap filling, or its first machine blocking (s into the time away) */
+  t: number;
+  floor: 'workshop' | 'factory';
+  /** the first machine (module) to block, and the item it is blocked by: the root cause */
+  root: { name: string; x: number; y: number; why: string | null; t: number };
+  /** machines (modules) it stopped, the root included */
+  count: number;
+  /** the Slag Heap whose filling stopped it, with its average fill rate (slag a second) */
+  heap: { x: number; y: number; t: number; rate: number; room: number } | null;
+  /** why, in plain words ("its Slag Heap filled") */
+  cause: string;
+  /** a fix the player can build, in lower case after "Fix:" ("2 more Slag Heaps keep it running 8h") */
+  fix: string;
+  /** what stopping the line before leaving keeps, or null when it keeps nothing */
+  stopKeeps: string | null;
+  est: boolean;
 }
 
 export interface OfflineReport {
   /** seconds away, and the part counted (capped at 7 days) */
   away: number;
   counted: number;
-  /** seconds simulated tick by tick (the replay and the re-measures), and seconds extrapolated */
+  /** seconds simulated tick by tick (the replay and the re-measures, paid in full as if open),
+   * and seconds extrapolated (paid at `eff`) */
   replayed: number;
   extrapolated: number;
   /** the offline efficiency the extrapolated part was paid at */
@@ -82,13 +113,16 @@ export interface OfflineReport {
   orders: string[];
   /** the Megaproject: stages before and after, and what the Bay was given */
   mega: { from: number; to: number; given: Partial<Record<ItemId, Num>> };
-  /** what happened, in time order (the first IDLE.timelineMax) */
+  /** what happened, in time order (the first IDLE.timelineMax); a stopped line is one row */
   timeline: TimelineEntry[];
+  /** the lines that stopped, in time order, each with its root cause and a fix */
+  lines: JamLine[];
   /** machines and modules already jammed when you left (not on the timeline) */
   jammedAtStart: number;
-  /** how many jams happened while away */
+  /** how many machines and modules jammed while away (every machine of every line) */
   jams: number;
-  /** segments re-measured after a heap filled or the Bay was satisfied */
+  /** segments re-measured after a heap filled, the Bay was satisfied, an order filled or a
+   * research node finished */
   segments: number;
   /** the first machine or module to jam (kept for the slice's card and older callers) */
   firstJam: { t: number; x: number; y: number; floor: 'workshop' | 'factory'; name: string; why: string | null } | null;
@@ -96,18 +130,28 @@ export interface OfflineReport {
   nextHeap: { x: number; y: number; inSeconds: number } | null;
 }
 
-/** Deliveries by destination while a tally is open (runDocks and the Bay add to it). */
+/** Deliveries by destination while a tally is open (runDocks and the Bay add to it), as Num:
+ * they are item amounts (CLAUDE.md). */
 export interface Tally {
-  dock: Partial<Record<ItemId, number>>;
+  dock: Partial<Record<ItemId, Num>>;
   /** the Factory Dock, apart: Factory-only orders fill from it */
+  fdock: Partial<Record<ItemId, Num>>;
+  hopper: Partial<Record<ItemId, Num>>;
+  bay: Partial<Record<ItemId, Num>>;
+}
+
+/** Delivery rates, items a second, by destination (rates may be plain numbers). */
+interface Rates {
+  dock: Partial<Record<ItemId, number>>;
   fdock: Partial<Record<ItemId, number>>;
   hopper: Partial<Record<ItemId, number>>;
   bay: Partial<Record<ItemId, number>>;
 }
 
+const KINDS = ['dock', 'fdock', 'hopper', 'bay'] as const;
 const newTally = (): Tally => ({ dock: {}, fdock: {}, hopper: {}, bay: {} });
 const copyTally = (t: Tally): Tally => ({ dock: { ...t.dock }, fdock: { ...t.fdock }, hopper: { ...t.hopper }, bay: { ...t.bay } });
-const KINDS = ['dock', 'fdock', 'hopper', 'bay'] as const;
+const addTo = (rec: Partial<Record<ItemId, Num>>, item: ItemId, n: Num | number) => { rec[item] = (rec[item] ?? Num.ZERO).add(n); };
 
 /** Blocked `n` seconds straight, by the per-second history ('b' output, 'x' byproduct). */
 function jammedHist(hist: string, n: number): boolean {
@@ -117,6 +161,20 @@ function jammedHist(hist: string, n: number): boolean {
 }
 
 const heapCap = (g: Game) => prules(g).heapCap; // Deep Heaps (§19)
+
+/** "copper ingots", "gears"; slag, oil, sand and the other stuffs stay as they are. */
+const COUNTED = ['ingot', 'plate', 'gear', 'gizmo', 'circuit', 'motor', 'kit', 'bit', 'brick'];
+const plural = (name: string) => (COUNTED.includes(name.split(' ').pop()!) ? name + 's' : name);
+
+type Cause = { heap: Ent } | { bay: ItemId } | { order: string } | { research: ResearchId };
+
+interface LineAcc {
+  key: string;
+  floor: 'workshop' | 'factory';
+  root: JamLine['root'] | null;
+  count: number;
+  heap: (NonNullable<JamLine['heap']> & { est: boolean }) | null;
+}
 
 /**
  * An offline run that can be spread over frames: `step(maxTicks)` does at most that many live
@@ -142,6 +200,8 @@ export class OfflineRun {
   private mark: Tally | null = null;
   private heaps0 = new Map<number, number>();
   private heapRate = new Map<number, number>();
+  /** each heap's room when the player left (for a full line's fill rate and its fix) */
+  private heapRoom0 = new Map<number, number>();
   private get replayed() { return this.liveTicks / TICK_RATE; }
   private extrapolated = 0;
   private visible0: boolean;
@@ -157,10 +217,24 @@ export class OfflineRun {
   private jammedAtStart = 0;
   private heapsFull = new Set<number>();
   private timeline: TimelineEntry[] = [];
-  /** extrapolated deliveries (live ones are in the tally) and the fractional carry per item */
+  /** heap rows and the line each belongs to (merged into the line's row if it stops) */
+  private heapRows: { e: TimelineEntry; key: string | undefined }[] = [];
+  /** every machine jam, for firstJam */
+  private machineJams: NonNullable<OfflineReport['firstJam']>[] = [];
+  /** which line each Workshop entity and Factory module is in (lines do not change while away:
+   * nobody builds) */
+  private lineKey = new Map<string, string>();
+  private lineAcc = new Map<string, LineAcc>();
+  /** items the Dock refuses that it stopped taking when an order wanting them filled */
+  private orderOnly = new Map<string, string>();
+  /** extrapolated deliveries (live ones are in the tally), Num like the tally */
   private extra = newTally();
+  /** the fraction of one item carried between credit slices, per destination and item: always
+   * below 1, a remainder of a rate times a time, not a stock (DECISIONS.md, the review round) */
   private carry: Record<string, number> = {};
   private segments = 0;
+  /** times the measuring window was opened again in this live stretch (a jam inside it) */
+  private reopened = 0;
 
   constructor(g: Game, awaySeconds: number, opts: { eff?: number } = {}) {
     this.g = g;
@@ -179,14 +253,40 @@ export class OfflineRun {
     this.seenOrders = new Set(s.orders.done);
     this.stage0 = this.stageSeen = s.mega.stage;
     g.tally = this.tally;
+    // the lines, once: a cascade of jams is reported as the line it stopped
+    for (const l of workshopLines(g)) {
+      const key = 'w' + Math.min(...l.map((e) => e.id));
+      for (const e of l) this.lineKey.set('w' + e.id, key);
+    }
+    this.factoryGroups();
     // what is already jammed or full when the player leaves is not news
     const J = IDLE.jamSeconds.value;
     for (const m of [...g.miners, ...g.machines]) if (jammedHist(m.hist, J)) { this.jammed.add('w' + m.id); this.jammedAtStart++; }
     for (const m of s.factory.ents) if (m.kind === 'module' && jammedHist(m.hist, J)) { this.jammed.add('f' + m.id); this.jammedAtStart++; }
-    for (const h of g.logistics) if (h.kind === 'heap' && h.count >= heapCap(g)) this.heapsFull.add(h.id);
+    for (const h of g.logistics) {
+      if (h.kind !== 'heap') continue;
+      if (h.count >= heapCap(g)) this.heapsFull.add(h.id);
+      else this.heapRoom0.set(h.id, heapCap(g) - h.count);
+    }
     const ticks = Math.min(Math.floor(this.counted * TICK_RATE), RULES.offlineReplayTicks.value);
     // rates come from the replay's last 5 minutes, after lines have settled
     this.startLive(ticks, Math.min(ticks, 5 * 60 * TICK_RATE));
+  }
+
+  /** Modules joined by trunks are one line on the Factory floor (as `line: true` stops them). */
+  private factoryGroups() {
+    const g = this.g;
+    const parent = new Map<number, number>();
+    const find = (a: number): number => {
+      let r = a;
+      while (parent.get(r) !== r) r = parent.get(r)!;
+      parent.set(a, r);
+      return r;
+    };
+    for (const m of g.s.factory.ents) if (m.kind === 'module') parent.set(m.id, m.id);
+    for (const r of g.routes)
+      if (r.to && r.to.kind === 'module' && parent.has(r.from.id) && parent.has(r.to.id)) parent.set(find(r.from.id), find(r.to.id));
+    for (const id of parent.keys()) this.lineKey.set('f' + id, 'f' + find(id));
   }
 
   /** 0..1, for a progress bar */
@@ -219,6 +319,7 @@ export class OfflineRun {
   }
 
   private startLive(ticks: number, measureTicks: number) {
+    this.reopened = 0;
     this.liveLeft = this.liveTotal = ticks;
     this.measureAt = Math.min(ticks, measureTicks);
     this.measureSecs = this.measureAt / TICK_RATE;
@@ -235,6 +336,21 @@ export class OfflineRun {
     for (const h of this.g.logistics) if (h.kind === 'heap') this.heaps0.set(h.id, h.count);
   }
 
+  /** A jam inside the measuring window: what the window counted before it is a line that has
+   * stopped since, so measure again from now, for the full window (extending the live stretch,
+   * at most IDLE.remeasureMax times; never past the time away). */
+  private reopenMeasure() {
+    if (!this.mark || this.reopened >= IDLE.remeasureMax.value) return;
+    this.reopened++;
+    this.mark = null;
+    const left = Math.max(0, Math.floor((this.counted - this.t) * TICK_RATE));
+    this.liveLeft = Math.min(Math.max(this.liveLeft, IDLE.measureSeconds.value * TICK_RATE), left);
+    this.liveTotal = Math.max(this.liveTotal, this.liveLeft);
+    this.measureAt = this.liveLeft;
+    this.measureSecs = this.liveLeft / TICK_RATE;
+    this.openMeasure();
+  }
+
   private closeLive() {
     this.g.events.drain();
     // heap fill rates over the measuring window
@@ -249,40 +365,67 @@ export class OfflineRun {
   }
 
   /** Delivery rates per second over the last measuring window. */
-  private rates(): Tally {
-    const out = newTally();
+  private rates(): Rates {
+    const out: Rates = { dock: {}, fdock: {}, hopper: {}, bay: {} };
     if (!this.mark || this.measureSecs <= 0) return out;
     for (const k of KINDS)
-      for (const [item, n] of Object.entries(this.tally[k]) as [ItemId, number][]) {
-        const r = (n - (this.mark[k][item] ?? 0)) / this.measureSecs;
+      for (const [item, n] of Object.entries(this.tally[k]) as [ItemId, Num][]) {
+        const r = n.sub(this.mark[k][item] ?? Num.ZERO).toNumber() / this.measureSecs;
         if (r > 1e-9) out[k][item] = r;
       }
     return out;
   }
 
+  /** Seconds until every remaining item of `wants` arrives at `rate(item)` x the efficiency
+   * (Infinity if one never does; null if nothing is left to want). */
+  private timeToFill(wants: Partial<Record<ItemId, number>>, have: Partial<Record<ItemId, Num>>, rate: (item: ItemId) => number): number | null {
+    let t: number | null = null;
+    for (const [item, n] of Object.entries(wants) as [ItemId, number][]) {
+      const rem = n - (have[item]?.toNumber() ?? 0);
+      if (rem <= 1e-9) continue;
+      const r = rate(item) * this.eff;
+      t = Math.max(t ?? 0, r > 0 ? rem / r : Infinity);
+    }
+    return t;
+  }
+
   private extrapolate() {
     const g = this.g;
+    const s = g.s;
     const left = this.counted - this.t;
     if (left <= 1e-6) { this.phase = 'done'; return; }
     const rates = this.rates();
-    // the next thing that changes the rates: a heap filling, or the Bay getting all it wants of an item
+    // the next thing that changes the rates: a heap filling, the Bay getting all it wants of an
+    // item, the active order filling, or the selected research finishing
     let dt = left;
-    let cause: { heap: Ent } | { bay: ItemId } | null = null;
+    let cause: Cause | null = null;
     for (const [id, rate] of this.heapRate) {
       const h = g.byId.get(id);
       if (!h || h.count >= heapCap(g)) continue;
       const tf = (heapCap(g) - h.count) / rate;
       if (tf < dt) { dt = tf; cause = { heap: h }; }
     }
-    const st = megaStage(g.s.mega.stage);
+    const st = megaStage(s.mega.stage);
     if (st && this.eff > 0)
       for (const [item, want] of Object.entries(st.wants) as [ItemId, number][]) {
         const r = rates.bay[item] ?? 0;
-        const rem = want - (g.s.mega.progress[item]?.toNumber() ?? 0);
+        const rem = want - (s.mega.progress[item]?.toNumber() ?? 0);
         if (r <= 0 || rem <= 0) continue;
         const tb = rem / (r * this.eff);
         if (tb < dt) { dt = tb; cause = { bay: item }; }
       }
+    const act = s.orders.active;
+    if (act && this.eff > 0) {
+      const d = ORDER[act];
+      // an order for the Factory Dock counts only what reaches it; any other counts both Docks
+      const to = this.timeToFill(d.wants, s.orders.progress[act] ?? {}, (i) => (d.at === 'factory' ? 0 : rates.dock[i] ?? 0) + (rates.fdock[i] ?? 0));
+      if (to !== null && to < dt) { dt = to; cause = { order: act }; }
+    }
+    const sel = s.research.selected;
+    if (sel && this.eff > 0) {
+      const tr = this.timeToFill(RESEARCH[sel].cost, s.research.progress[sel] ?? {}, (i) => (ITEMS[i].parts ? 0 : rates.hopper[i] ?? 0));
+      if (tr !== null && tr < dt) { dt = tr; cause = { research: sel }; }
+    }
     dt = Math.max(0, dt);
     // pay the segment in slices, so orders and research land on the timeline near their time
     g.tally = null;
@@ -305,11 +448,33 @@ export class OfflineRun {
       this.heapFull(cause.heap, this.t, true);
     } else if (cause && 'bay' in cause) {
       // top up the last fraction so the want is met exactly, then say so
-      const st2 = megaStage(g.s.mega.stage);
+      const st2 = megaStage(s.mega.stage);
       const want = st2?.wants[cause.bay] ?? 0;
-      const rem = Math.ceil(want - (g.s.mega.progress[cause.bay]?.toNumber() ?? 0));
+      const rem = Math.ceil(want - (s.mega.progress[cause.bay]?.toNumber() ?? 0));
       if (rem > 0) this.giveBay(cause.bay, rem);
       this.push({ t: this.t, kind: 'bay', text: `The Megaproject Bay has all the ${itemName(cause.bay).toLowerCase()} it wants`, est: true });
+      this.watch(this.t, true);
+    } else if (cause && 'order' in cause) {
+      // the slices paid whole items; top up the last fraction of one so the order fills now
+      if (s.orders.active === cause.order) {
+        const d = ORDER[cause.order];
+        const p = s.orders.progress[cause.order] ?? {};
+        for (const [item, n] of Object.entries(d.wants) as [ItemId, number][]) {
+          const rem = n - (p[item]?.toNumber() ?? 0);
+          if (rem > 0 && rem <= 1 + 1e-9) fillOrder(g, item, Num.of(rem), d.at === 'factory' ? 'factory' : undefined);
+        }
+        runOrders(g);
+      }
+      this.watch(this.t, true);
+    } else if (cause && 'research' in cause) {
+      if (s.research.selected === cause.research) {
+        const p = s.research.progress[cause.research] ?? {};
+        for (const [item, n] of Object.entries(RESEARCH[cause.research].cost) as [ItemId, number][]) {
+          const rem = n - (p[item]?.toNumber() ?? 0);
+          if (rem > 0 && rem <= 1 + 1e-9) creditResearch(g, item, Num.of(rem));
+        }
+        runResearch(g);
+      }
       this.watch(this.t, true);
     }
     g.events.drain();
@@ -324,14 +489,14 @@ export class OfflineRun {
   }
 
   /** Credit `secs` of the measured rates at the offline efficiency, through the live functions. */
-  private pay(rates: Tally, secs: number) {
+  private pay(rates: Rates, secs: number) {
     const g = this.g;
     const s = g.s;
     const k = secs * this.eff;
     const whole = (key: string, x: number): number => {
       const v = x + (this.carry[key] ?? 0);
       const n = Math.floor(v + 1e-9);
-      this.carry[key] = v - n;
+      this.carry[key] = Math.max(0, v - n);
       return n;
     };
     for (const kind of ['dock', 'fdock'] as const)
@@ -339,8 +504,8 @@ export class OfflineRun {
         const n = whole(kind + item, r * k);
         if (n <= 0) continue;
         const amt = Num.of(n);
-        s.delivered[item] = (s.delivered[item] ?? Num.ZERO).add(amt);
-        this.extra[kind][item] = (this.extra[kind][item] ?? 0) + n;
+        addTo(s.delivered, item, amt);
+        addTo(this.extra[kind], item, amt);
         const left = fillOrder(g, item, amt, kind === 'fdock' ? 'factory' : undefined);
         const v = saleValue(g, item);
         // a one-off for the coin/min statistic: the HUD's rate stays the live one
@@ -351,8 +516,8 @@ export class OfflineRun {
       const n = whole('hopper' + item, r * k);
       if (n <= 0) continue;
       const amt = Num.of(n);
-      s.delivered[item] = (s.delivered[item] ?? Num.ZERO).add(amt);
-      this.extra.hopper[item] = (this.extra.hopper[item] ?? 0) + n;
+      addTo(s.delivered, item, amt);
+      addTo(this.extra.hopper, item, amt);
       if (ITEMS[item].parts) s.parts = s.parts.add(amt);
       else {
         creditResearch(g, item, amt);
@@ -374,7 +539,7 @@ export class OfflineRun {
     const rem = Math.ceil((st.wants[item] ?? 0) - (g.s.mega.progress[item]?.toNumber() ?? 0));
     const give = Math.min(n, rem);
     if (give <= 0) return;
-    this.extra.bay[item] = (this.extra.bay[item] ?? 0) + give;
+    addTo(this.extra.bay, item, give);
     megaGive(g, bay, item, give);
   }
 
@@ -382,10 +547,40 @@ export class OfflineRun {
     this.timeline.push(e);
   }
 
+  private acc(key: string, floor: 'workshop' | 'factory'): LineAcc {
+    let a = this.lineAcc.get(key);
+    if (!a) this.lineAcc.set(key, (a = { key, floor, root: null, count: 0, heap: null }));
+    return a;
+  }
+
   private heapFull(h: Ent, t: number, est: boolean) {
     if (this.heapsFull.has(h.id)) return;
     this.heapsFull.add(h.id);
-    this.push({ t, kind: 'heap', text: 'A Slag Heap is full: the smelters feeding it stop', x: h.x, y: h.y, floor: 'workshop', est });
+    const e: TimelineEntry = { t, kind: 'heap', text: 'A Slag Heap is full', x: h.x, y: h.y, floor: 'workshop', est };
+    this.push(e);
+    const key = this.lineKey.get('w' + h.id);
+    this.heapRows.push({ e, key });
+    const room = this.heapRoom0.get(h.id) ?? 0;
+    if (key && t > 0 && room > 0) {
+      // the line's heaps fill one after another (or side by side) until the last one stops it:
+      // the room they had together over the time they took is the line's slag rate
+      const a = this.acc(key, 'workshop');
+      if (!a.root) {
+        const sum = (a.heap?.room ?? 0) + room;
+        a.heap = { x: h.x, y: h.y, t, rate: sum / t, room: sum, est };
+      }
+    }
+  }
+
+  /** A machine or module jammed (blocked 10 s straight) at `t`: count it into its line. */
+  private jam(m: Ent | FEnt, floor: 'workshop' | 'factory', t: number) {
+    const g = this.g;
+    const name = floor === 'workshop' ? entName(g, m as Ent) : fname(g, m as FEnt);
+    const id = (floor === 'workshop' ? 'w' : 'f') + m.id;
+    this.machineJams.push({ t, x: m.x, y: m.y, floor, name, why: m.why });
+    const a = this.acc(this.lineKey.get(id) ?? id, floor);
+    a.count++;
+    if (!a.root) a.root = { name, x: m.x, y: m.y, why: m.why, t };
   }
 
   /** Once a second of live ticks (and after each credited slice): what changed. */
@@ -396,25 +591,67 @@ export class OfflineRun {
     for (const id of s.research.done)
       if (!this.seenResearch.has(id)) { this.seenResearch.add(id); this.push({ t, kind: 'research', text: `Research finished: ${RESEARCH[id].name}`, est }); }
     for (const id of s.orders.done)
-      if (!this.seenOrders.has(id)) { this.seenOrders.add(id); this.push({ t, kind: 'order', text: `Order filled: ${ORDER[id]?.name ?? id}`, est }); }
+      if (!this.seenOrders.has(id)) {
+        this.seenOrders.add(id);
+        const d = ORDER[id];
+        this.push({ t, kind: 'order', text: `Order filled: ${d?.name ?? id}`, est });
+        // what the Dock took only for this order it refuses from now on
+        if (d) for (const item of Object.keys(d.wants) as ItemId[]) if (ITEMS[item].refused) this.orderOnly.set(item, d.name);
+      }
     if (s.mega.stage > this.stageSeen) {
       for (let k = this.stageSeen + 1; k <= s.mega.stage; k++) this.push({ t, kind: 'mega', text: `${MEGA.find((m) => m.stage === k)?.name ?? 'A Megaproject stage'}: done!`, est });
       this.stageSeen = s.mega.stage;
     }
     if (est) return;
     const J = IDLE.jamSeconds.value;
+    const n0 = this.machineJams.length;
     for (const list of [g.miners, g.machines])
       for (const m of list) {
         if (m.paused || this.jammed.has('w' + m.id) || !jammedHist(m.hist, J)) continue;
         this.jammed.add('w' + m.id);
-        this.push({ t: Math.max(0, t - J), kind: 'jam', text: `${entName(g, m)} blocked${m.why ? ' by ' + itemName(m.why).toLowerCase() : ''}`, x: m.x, y: m.y, floor: 'workshop', why: m.why });
+        this.jam(m, 'workshop', Math.max(0, t - J));
       }
     for (const m of s.factory.ents) {
       if (m.kind !== 'module' || m.paused || this.jammed.has('f' + m.id) || !jammedHist(m.hist, J)) continue;
       this.jammed.add('f' + m.id);
-      this.push({ t: Math.max(0, t - J), kind: 'jam', text: `${fname(g, m as FEnt)} blocked${m.why ? ' by ' + itemName(m.why).toLowerCase() : ''}`, x: m.x, y: m.y, floor: 'factory', why: m.why });
+      this.jam(m, 'factory', Math.max(0, t - J));
     }
     for (const h of g.logistics) if (h.kind === 'heap' && h.count >= heapCap(g)) this.heapFull(h, t, false);
+    if (this.machineJams.length > n0) this.reopenMeasure();
+  }
+
+  /** A stopped line's row: the root cause in plain words, a fix to build, what a stop keeps. */
+  private jamLine(a: LineAcc): JamLine {
+    const g = this.g;
+    const root = a.root!;
+    const why = root.why as ItemId | null;
+    const wn = why && ITEMS[why] ? plural(itemName(why).toLowerCase()) : null;
+    const span = this.counted % 3600 === 0 && this.counted < 86400 ? `${this.counted / 3600}h` : duration(this.counted);
+    let cause: string, fix: string, stopKeeps: string | null = null;
+    const heap = a.heap && (why === 'slag' || a.heap.t <= root.t + IDLE.settleSeconds.value) ? a.heap : null;
+    if (heap) {
+      cause = 'its Slag Heap filled';
+      // the slag it makes in the whole time away, less the room the heap had: more heaps take it
+      const more = Math.max(1, Math.ceil((heap.rate * this.counted - heap.room) / heapCap(g)));
+      const press = g.done('crushing') ? ' or a gravel Press' : '';
+      fix = `${more > 1 ? more + ' more Slag Heaps' : 'one more Slag Heap'}${press} ${more > 1 && !press ? 'keep' : 'keeps'} it running ${span}`;
+      stopKeeps = `Stopped now, its heap${heap.room > heapCap(g) ? 's keep their' : ' keeps its'} room: ${duration(heap.room / heap.rate)} of running when you are back (it earns nothing while stopped)`;
+    } else if (a.floor === 'factory') {
+      cause = wn ? `its ${wn} backed up` : 'its output backed up';
+      fix = `a trunk taking ${wn ?? 'it'} to the Dock`;
+    } else if (why && this.orderOnly.has(why)) {
+      cause = `the Dock stopped taking ${wn} (${this.orderOnly.get(why)} filled)`;
+      fix = `a Crate, or a machine that uses ${wn}`;
+    } else if (why === 'slag') {
+      cause = 'its slag had nowhere to go';
+      fix = 'a Slag Heap beside it';
+    } else {
+      cause = wn ? `its ${wn} had nowhere to go` : 'its output had nowhere to go';
+      const to = why && ITEMS[why]?.parts ? 'a Hopper' : why && ITEMS[why]?.refused ? 'a Crate' : 'the Dock';
+      fix = `a belt taking ${wn ?? 'it'} to ${to}`;
+    }
+    const t = heap ? Math.min(heap.t, root.t) : root.t;
+    return { t, floor: a.floor, root, count: a.count, heap: heap ? { x: heap.x, y: heap.y, t: heap.t, rate: heap.rate, room: heap.room } : null, cause, fix, stopKeeps, est: !!heap?.est };
   }
 
   private finish() {
@@ -431,23 +668,33 @@ export class OfflineRun {
       const inSeconds = (heapCap(g) - h.count) / rate;
       if (!nextHeap || inSeconds < nextHeap.inSeconds) nextHeap = { x: h.x, y: h.y, inSeconds };
     }
-    const sum = (k: 'dock' | 'fdock' | 'hopper' | 'bay', item: ItemId) => (this.tally[k][item] ?? 0) + (this.extra[k][item] ?? 0);
+    const sum = (k: 'dock' | 'fdock' | 'hopper' | 'bay', item: ItemId) => (this.tally[k][item] ?? Num.ZERO).add(this.extra[k][item] ?? Num.ZERO);
     const sold: Partial<Record<ItemId, Num>> = {};
     let hopper = Num.ZERO;
     const given: Partial<Record<ItemId, Num>> = {};
+    const items = (k: 'dock' | 'fdock' | 'hopper' | 'bay') => new Set([...Object.keys(this.tally[k]), ...Object.keys(this.extra[k])]) as Set<ItemId>;
     for (const kind of ['dock', 'fdock'] as const)
-      for (const item of new Set([...Object.keys(this.tally[kind]), ...Object.keys(this.extra[kind])]) as Set<ItemId>) {
-        const n = sum(kind, item);
-        if (n > 0) sold[item] = (sold[item] ?? Num.ZERO).add(Math.round(n));
+      for (const item of items(kind)) {
+        const n = sum(kind, item).round();
+        if (n.gt(0)) addTo(sold, item, n);
       }
-    for (const item of new Set([...Object.keys(this.tally.hopper), ...Object.keys(this.extra.hopper)]) as Set<ItemId>) hopper = hopper.add(Math.round(sum('hopper', item)));
-    for (const item of new Set([...Object.keys(this.tally.bay), ...Object.keys(this.extra.bay)]) as Set<ItemId>) {
-      const n = sum('bay', item);
-      if (n > 0) given[item] = Num.of(Math.round(n));
+    for (const item of items('hopper')) hopper = hopper.add(sum('hopper', item).round());
+    for (const item of items('bay')) {
+      const n = sum('bay', item).round();
+      if (n.gt(0)) given[item] = n;
     }
-    const timeline = this.timeline.sort((a, b) => a.t - b.t);
-    const jams = timeline.filter((e) => e.kind === 'jam');
-    const j = jams[0];
+    // one row per stopped line, in place of its machines' jams and its heap's row
+    const pairs = [...this.lineAcc.values()].filter((a) => a.root).map((a) => ({ key: a.key, l: this.jamLine(a) })).sort((a, b) => a.l.t - b.l.t);
+    const lines = pairs.map((p) => p.l);
+    const merged = new Set(pairs.filter((p) => p.l.heap).map((p) => p.key));
+    const heapRowsGone = new Set(this.heapRows.filter((h) => h.key && merged.has(h.key)).map((h) => h.e));
+    const rows = this.timeline.filter((e) => !heapRowsGone.has(e));
+    lines.forEach((l, i) => {
+      const n = l.count;
+      rows.push({ t: l.t, kind: 'jam', text: `${l.root.name}'s line stopped: ${l.cause} (${n} machine${n > 1 ? 's' : ''})`, x: l.root.x, y: l.root.y, floor: l.floor, why: l.root.why, est: l.est, line: i });
+    });
+    const timeline = rows.sort((a, b) => a.t - b.t);
+    const j = this.machineJams.sort((a, b) => a.t - b.t)[0];
     this.report = {
       away: this.away,
       counted: this.counted,
@@ -462,13 +709,21 @@ export class OfflineRun {
       orders: s.orders.done.filter((o) => !this.orders0.has(o)),
       mega: { from: this.stage0, to: s.mega.stage, given },
       timeline: timeline.slice(0, IDLE.timelineMax.value),
+      lines,
       jammedAtStart: this.jammedAtStart,
-      jams: jams.length,
+      jams: this.machineJams.length,
       segments: this.segments,
-      firstJam: j ? { t: j.t, x: j.x!, y: j.y!, floor: j.floor!, name: j.text.replace(/ blocked.*$/, ''), why: j.why ?? null } : null,
+      firstJam: j ? { ...j } : null,
       nextHeap,
     };
   }
+}
+
+/** How the report's number was made, in words the player can check (DESIGN.md §12, pillar 4):
+ * "the first 1h 04m at 100% (as if open), the other 6h 56m at 50%". */
+export function paidHow(rep: Pick<OfflineReport, 'replayed' | 'extrapolated' | 'eff'>): string {
+  if (rep.extrapolated <= 0) return `all ${duration(rep.replayed)} at 100%, as if open`;
+  return `the first ${duration(rep.replayed)} at 100% (as if open), the other ${duration(rep.extrapolated)} at ${Math.round(rep.eff * 100)}%`;
 }
 
 /** Run the whole offline model now (tests, bots and short gaps). */
