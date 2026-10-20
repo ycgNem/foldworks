@@ -1,4 +1,4 @@
-// The Swamp Gazette ticker: flavour headlines (src/data/gazette.ts) mixed with headlines about the
+// The Swamp Gazette (the crawl along the bottom edge): flavour headlines (src/data/gazette.ts) mixed with headlines about the
 // player's own factory, its jams, records, orders and research (DECISIONS.md: the ticker reports
 // the game, it is not only a joke reel). Presentation only.
 import type { Game } from '../sim/Game';
@@ -26,24 +26,26 @@ export class Gazette {
     if (this.breaking.length > 4) this.breaking.shift();
   }
 
-  /** Pick the next headline. Every third one is about the player's factory when there is news. */
-  next(g: Game) {
+  /** Pick the next headline. Every third one is about the player's factory when there is news.
+   *  Returns true for breaking news (the crawl runs it bright). */
+  next(g: Game): boolean {
     this.n++;
     const b = this.breaking.shift();
     if (b) {
       this.text = b;
-      return;
+      return true;
     }
     const own = this.n % 3 === 0 ? this.factoryNews(g) : null;
     if (own) {
       this.text = own;
-      return;
+      return false;
     }
     const pool = HEADLINES.filter((h) => (!h.after || g.done(h.after)) && !this.recent.includes(h.text));
     const pick = pool.length ? pool[Math.floor(Math.random() * pool.length)].text : HEADLINES[0].text;
     this.recent.push(pick);
     if (this.recent.length > 8) this.recent.shift();
     this.text = pick;
+    return false;
   }
 
   private factoryNews(g: Game): string | null {

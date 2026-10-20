@@ -31,8 +31,7 @@ import { TILE } from '../render/ground';
 import { drawHud, drawTitle, newHudState, banner, type HudState } from './hud';
 import { TOWN_ROWS } from '../render/town';
 import { ICON } from '../ui/font';
-import { nine } from './chrome';
-import { sheet, hasArt } from '../render/sprites';
+import { plateRaw } from './chrome';
 import { layout, type Layout } from './layout';
 import { Gazette } from './gazette';
 import type { ScreenName } from './screens';
@@ -130,10 +129,8 @@ export class App {
     canvas.addEventListener('pointerleave', () => { this.mouseIn = false; });
     window.addEventListener('blur', () => { this.mouseIn = false; });
     this.ui.sfx = (id) => this.audio.sfx(id);
-    this.ui.tipSkin = (ctx, x, y, w, h) => {
-      if (!hasArt('ui_tip')) return void ((ctx.fillStyle = C.ink), ctx.fillRect(x, y, w, h));
-      nine(ctx, sheet('ui_tip'), 0, x, y, w, h);
-    };
+    // tooltips wear the HUD's plate (the UI redesign: one calm panel language)
+    this.ui.tipSkin = (ctx, x, y, w, h) => plateRaw(ctx, x, y, w, h);
     window.addEventListener('resize', () => this.resize());
     document.addEventListener('visibilitychange', () => this.visibility());
     window.addEventListener('pointerdown', () => this.audio.unlock(), { once: false });
@@ -406,6 +403,7 @@ export class App {
           const c = CUSTOMERS[d.customer];
           const n = this.game.s.orders.done.length;
           this.toast(`${d.name}: filled!`, `+${Num.of(d.pays).format()} coin, +${d.rep} reputation. "${c.thanks[(n - 1) % c.thanks.length]}"`, C.lime, 'crate');
+          this.gazette.push(`EXTRA! ${d.name} delivered to ${c.name}. ${Num.of(d.pays).format()} coin changes hands.`);
           // a reputation level: a fanfare and a banner naming what it gives
           const rep = this.game.s.orders.rep[d.customer];
           const reward = c.rewards.find((q) => q.rep === rep);
@@ -578,7 +576,9 @@ export class App {
           }
           continue;
         }
-        // keys 1-9 pick from the store tab that is open (Build, Power, Heavy)
+        // keys 1-9 pick from the build bar's open tab (Build, Power, Heavy); from Upgrades they
+        // go back to the last building tab
+        if (this.hud.storeTab === 'upgrades') this.hud.storeTab = 'build';
         const tab = STORE_TABS.find((q) => q.id === this.hud.buildTab) ?? STORE_TABS[0];
         const kind = tab.kinds[i];
         if (kind) this.pickBuild(kind);

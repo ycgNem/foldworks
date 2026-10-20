@@ -408,7 +408,8 @@ export class Renderer {
     if (!hasArt('tile_water')) return;
     const s = sheet('tile_water');
     const t = frameAt(s, this.time);
-    const v = this.view;
+    // the whole canvas, not just the framed view: the HUD floats over the floor (the UI redesign)
+    const v = { x: 0, y: 0, w: this.W, h: this.H };
     const tx0 = Math.floor((v.x - ox) / z / TILE) - 1, ty0 = Math.floor((v.y - oy) / z / TILE) - 1;
     const tx1 = Math.ceil((v.x + v.w - ox) / z / TILE) + 1, ty1 = Math.ceil((v.y + v.h - oy) / z / TILE) + 1;
     const land = (x: number, y: number) => x >= 0 && y >= 0 && x < fw && y < fh;

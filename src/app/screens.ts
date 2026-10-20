@@ -1,6 +1,7 @@
-// The full-screen overlays opened from the bottom bar: the research tree (glowing nodes on a
-// starfield), Mayor Bramble's orders, statistics, the Trophy Shelf and options. Each covers the
-// area between the ticker and the bottom bar; Esc or the same button closes it.
+// The full-screen menus opened from the top bar: the research tree (glowing nodes on a
+// starfield), statistics, the Trophy Shelf and options, all in the one menu template
+// (widgets.ts menuTemplate: header bar with icon, title, tabs and close; content; a detail panel).
+// Each covers the floor between the top bar and the crawl; Esc or the same button closes it.
 import { C, rgba } from '../data/palette';
 import { RESEARCH, RESEARCH_LIST, type ResearchId } from '../data/research';
 import { ORDERS, CUSTOMERS } from '../data/orders';
@@ -15,7 +16,7 @@ import { orderFrac } from '../sim/systems/orders';
 import { trophyValue } from '../sim/systems/stats';
 import { Num } from '../engine/num';
 import { frame, card, button, bar, badge, portrait, uiIcon, type UIconName } from './chrome';
-import { fmt } from './widgets';
+import { fmt, menuTemplate, type MenuTab } from './widgets';
 import type { Layout } from './layout';
 import { modulesScreen, gradeCard, fgradeCard, offlineCard, sliceEndCard } from './fold';
 import { ordersScreen } from './orders';
@@ -44,15 +45,6 @@ export function drawScreen(app: App, L: Layout) {
     case 'survey': return surveyScreen(app, r);
     case 'mega': return megaScreen(app, r);
   }
-}
-
-function header(app: App, r: Rect, title: string, accent: string, icon: UIconName) {
-  const ui = app.ui;
-  ui.fill(r.x + 3, r.y + 3, r.w - 6, 15, C.shadow);
-  ui.fill(r.x + 3, r.y + 17, r.w - 6, 1, accent);
-  uiIcon(ui, icon, r.x + 6, r.y + 2);
-  ui.text(title, r.x + 26, r.y + 7, accent, { shadow: C.ink });
-  if (button(ui, 'closeScreen', r.x + r.w - 46, r.y + 4, 40, 12, 'close', { tip: 'Close (Esc)' })) app.panel = null;
 }
 
 // ------------------------------------------------------------------ the research tree
@@ -87,7 +79,7 @@ const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
 const NODE_ART: Partial<Record<ResearchId, number>> = { surveyEast: 0, splitters: 1, buffers: 2, nestedFolds: 3 };
 
 /** A research node's icon at 16 px (or 8 px when small). */
-function nodeIcon(ui: App['ui'], id: ResearchId, x: number, y: number, small = false) {
+export function nodeIcon(ui: App['ui'], id: ResearchId, x: number, y: number, small = false) {
   const art = NODE_ART[id];
   const sz = small ? 8 : 16;
   if (art !== undefined && hasArt('ui_research')) { ui.ctx.drawImage(sheet('ui_research').frames[art], x, y, sz, sz); return; }
@@ -125,25 +117,21 @@ function starfield(app: App, r: Rect) {
 function researchTree(app: App, r: Rect) {
   const ui = app.ui;
   const g = app.game;
-  ui.region(r.x, r.y, r.w, r.h);
-  starfield(app, r);
-  frame(ui, r.x, r.y, r.w, 20, 'wood', false);
-  header(app, r, 'Research: the Hopper pays in items', C.teal1, 'research');
-  // two pages: the Workshop's tree, and Act II's once Folding is done
+  // two pages: the Workshop's tree, and Act II's once Folding is done (the template's tabs)
   const act2 = g.done('folding');
   const page = act2 ? app.hud.treePage : 1;
-  if (act2) {
-    const tw = 76;
-    const tx = r.x + r.w - 52 - tw * 2;
-    if (button(ui, 'tree1', tx, r.y + 4, tw - 2, 12, 'Workshop', { active: page === 1 })) app.hud.treePage = 1;
-    const ready2 = RESEARCH_LIST.some((d) => d.act === 2 && available(g, d.id));
-    if (button(ui, 'tree2', tx + tw, r.y + 4, tw - 2, 12, 'Act II', { active: page === 2, pulse: page === 1 && ready2 })) app.hud.treePage = 2;
-  }
+  const ready2 = RESEARCH_LIST.some((d) => d.act === 2 && available(g, d.id));
+  const tabs: MenuTab[] = act2 ? [
+    { id: 'tree1', label: 'Workshop', icon: 'workshop', active: page === 1, onClick: () => { app.hud.treePage = 1; } },
+    { id: 'tree2', label: 'Act II', icon: 'mega', active: page === 2, onClick: () => { app.hud.treePage = 2; }, badge: page === 1 && ready2 ? '!' : undefined },
+  ] : [];
+  const info = Math.min(170, Math.floor(r.w * 0.32));
+  const { body, detail } = menuTemplate(app, r, { title: 'Research: the Hopper pays in items', accent: C.teal1, icon: 'research', tabs, detail: info });
+  starfield(app, { x: r.x + 3, y: body.y - 2, w: r.w - 6, h: r.y + r.h - 3 - (body.y - 2) });
   const nodes = RESEARCH_LIST.filter((d) => (d.act ?? 1) === page);
   const cols = page === 2 ? 6 : 5;
-  const info = Math.min(170, Math.floor(r.w * 0.32));
-  const mx = r.w >= 600 ? 56 : 40;
-  const area = { x: r.x + mx, y: r.y + 50, w: r.w - info - mx * 2 - 8, h: r.h - 92 };
+  const mx = r.w >= 600 ? 48 : 34;
+  const area = { x: body.x + mx - 8, y: body.y + 26, w: body.w - mx * 2 + 8, h: body.h - 66 };
   const pos = (id: ResearchId) => {
     const [c, row] = TREE[id];
     return { x: Math.round(area.x + (c / cols) * area.w), y: Math.round(area.y + (row / 3.2) * area.h) };
@@ -205,7 +193,7 @@ function researchTree(app: App, r: Rect) {
     const others = nodes.filter((q) => q.id !== d.id).map((q) => pos(q.id));
     const place = (label: string, below: boolean) => {
       const lw = textWidth(label);
-      const lx = Math.round(Math.min(p.x - lw / 2, r.x + r.w - info - 14 - lw));
+      const lx = Math.round(Math.min(p.x - lw / 2, detail!.x - 6 - lw));
       const ly = below ? y + 36 : y - 9;
       const free = others.every((o) => lx + lw < o.x - 13 || lx > o.x + 13 || ly + 9 < o.y - 13 || ly > o.y + 13)
         && placed.every((q) => lx + lw < q.x || lx > q.x + q.w || ly + 9 < q.y || ly > q.y + 9);
@@ -223,8 +211,7 @@ function researchTree(app: App, r: Rect) {
   }
   // the info card for the hovered (or selected) node
   const show = hovered ?? g.s.research.selected ?? nodes.find((d) => available(g, d.id))?.id ?? null;
-  const ix = r.x + r.w - info - 8, iy = r.y + 26;
-  const inner = card(ui, ix, iy, info, r.h - 32, show ? RESEARCH[show].name : 'Research', C.teal1, 'research');
+  const inner = card(ui, detail!.x, detail!.y, detail!.w, detail!.h, show ? RESEARCH[show].name : 'Research', C.teal1, 'research');
   const banked = (Object.entries(g.s.research.bank) as [ItemId, Num][]).filter(([, v]) => v.gt(0));
   const end = inner.y + inner.h - (banked.length ? 24 : 0);
   /** what is still owed on a node, in items */
@@ -340,10 +327,9 @@ function statsScreen(app: App, r: Rect) {
   const ui = app.ui;
   const g = app.game;
   const s = g.s;
-  frame(ui, r.x, r.y, r.w, r.h);
-  header(app, r, 'Statistics', C.hot, 'stats');
-  const colW = Math.floor((r.w - 24) / 2);
-  const a = card(ui, r.x + 8, r.y + 26, colW, r.h - 32, 'The run', C.hot, 'clock');
+  const { body } = menuTemplate(app, r, { title: 'Statistics', accent: C.hot, icon: 'stats' });
+  const colW = Math.floor((body.w - 6) / 2);
+  const a = card(ui, body.x, body.y, colW, body.h, 'The run', C.hot, 'clock');
   const secs = Math.floor(g.seconds);
   const rows: [string, string][] = [
     ['Time played', `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m ${secs % 60}s`],
@@ -393,7 +379,7 @@ function statsScreen(app: App, r: Rect) {
     ui.text(String(n), bx + 17, y + 5, C.bone);
     bx += 32;
   }
-  const b = card(ui, r.x + 16 + colW, r.y + 26, colW, r.h - 32, 'Delivered (Dock and Hopper)', C.hot, 'orders');
+  const b = card(ui, body.x + colW + 6, body.y, body.w - colW - 6, body.h, 'Delivered (Dock and Hopper)', C.hot, 'orders');
   y = b.y;
   for (const id of ITEM_IDS) {
     if (y > b.y + b.h - 10) break;
@@ -413,20 +399,19 @@ function trophyShelf(app: App, r: Rect) {
   const ui = app.ui;
   const g = app.game;
   const got = (id: string) => g.flag('trophy:' + id);
-  frame(ui, r.x, r.y, r.w, r.h);
-  header(app, r, `The Trophy Shelf: ${TROPHIES.filter((t) => got(t.id)).length} of ${TROPHIES.length}`, C.gold, 'trophies');
-  // the closest unearned trophies, with progress, on the right
   const sideW = Math.min(180, Math.floor(r.w * 0.34));
-  const shelfW = r.w - sideW - 22;
+  const { body, detail } = menuTemplate(app, r, { title: `The Trophy Shelf: ${TROPHIES.filter((t) => got(t.id)).length} of ${TROPHIES.length}`, accent: C.gold, icon: 'trophies', detail: sideW });
+  // the closest unearned trophies, with progress, on the right
+  const shelfW = body.w;
   // the shelf shrinks its cells a little when there are many trophies, so every one shows
   let cell = 38;
   const rowsFor = (c: number) => Math.ceil(TROPHIES.length / Math.max(1, Math.floor((shelfW - 8) / c)));
-  while (cell > 28 && 26 + rowsFor(cell) * (cell + 4) > r.h - 4) cell -= 2;
+  while (cell > 28 && rowsFor(cell) * (cell + 4) > body.h - 14) cell -= 2;
   const cols = Math.max(1, Math.floor((shelfW - 8) / cell));
-  const x0 = r.x + 8 + Math.floor((shelfW - 8 - cols * cell) / 2);
+  const x0 = body.x + Math.floor((shelfW - cols * cell) / 2);
   TROPHIES.forEach((t, i) => {
-    const x = x0 + (i % cols) * cell, y = r.y + 26 + Math.floor(i / cols) * (cell + 4);
-    if (y + cell > r.y + r.h - 4) return;
+    const x = x0 + (i % cols) * cell, y = body.y + Math.floor(i / cols) * (cell + 4);
+    if (y + cell > body.y + body.h - 12) return;
     const have = got(t.id);
     // a brass shelf plank under each row
     if (i % cols === 0) {
@@ -455,7 +440,7 @@ function trophyShelf(app: App, r: Rect) {
       ui.tip([{ text: have ? t.name : '???', color: have ? C.gold : C.hull2 }, { text: t.desc }, { text: have ? 'Earned!' : `${Math.floor(v).toLocaleString('en-US')} / ${t.n.toLocaleString('en-US')}`, color: have ? C.leaf : C.hull2 }], 170);
     }
   });
-  const side = card(ui, r.x + r.w - sideW - 8, r.y + 26, sideW, r.h - 32, 'Almost there', C.gold, 'star');
+  const side = card(ui, detail!.x, detail!.y, detail!.w, detail!.h, 'Almost there', C.gold, 'star');
   const next = TROPHIES.filter((t) => !got(t.id))
     .map((t) => ({ t, f: Math.min(1, trophyValue(g, t) / t.n) }))
     .sort((p, q) => q.f - p.f)
@@ -473,17 +458,16 @@ function trophyShelf(app: App, r: Rect) {
     y += 10;
   }
   if (!next.length) ui.para('Every trophy on the shelf. The swamp salutes you.', side.x, y, side.w, C.gold);
-  ui.text('Trophies are for glory in the slice; later each adds a small bonus.', r.x + 10, r.y + r.h - 13, C.hull2);
+  ui.text('Trophies are for glory in the slice; later each adds a small bonus.', body.x + 2, body.y + body.h - 9, C.hull2);
 }
 
 // ------------------------------------------------------------------ options
 
 function optionsScreen(app: App, r: Rect) {
   const ui = app.ui;
-  frame(ui, r.x, r.y, r.w, r.h);
-  header(app, r, 'Options and keys', C.bone, 'options');
-  const colW = Math.floor((r.w - 24) / 2);
-  const a = card(ui, r.x + 8, r.y + 26, colW, r.h - 32, 'Settings', C.bone, 'options');
+  const { body } = menuTemplate(app, r, { title: 'Options and keys', accent: C.bone, icon: 'options' });
+  const colW = Math.floor((body.w - 6) / 2);
+  const a = card(ui, body.x, body.y, colW, body.h, 'Settings', C.bone, 'options');
   let y = a.y;
   const row = (label: string, on: boolean, click: () => void) => {
     ui.text(label, a.x, y + 3, C.bone);
@@ -501,7 +485,7 @@ function optionsScreen(app: App, r: Rect) {
   if (button(ui, 'import', a.x, y, a.w, 14, 'Import save (paste)')) app.promptImport();
   y += 17;
   if (button(ui, 'title', a.x, y, a.w, 14, 'Back to the title')) { app.save(); app.toTitle(); }
-  const b = card(ui, r.x + 16 + colW, r.y + 26, colW, r.h - 32, 'Keys', C.bone, 'build');
+  const b = card(ui, body.x + colW + 6, body.y, body.w - colW - 6, body.h, 'Keys', C.bone, 'build');
   y = b.y;
   ui.text('WASD, arrows, right-drag: pan', b.x, y, C.hull2); y += 10;
   ui.text('Wheel or Q/E: zoom. 1-9: build.', b.x, y, C.hull2); y += 12;
