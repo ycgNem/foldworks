@@ -18,6 +18,7 @@ import { creditResearch, runResearch } from './systems/research';
 import { runOrders } from './systems/orders';
 import { entName } from './analysis';
 import { fname } from './systems/modules';
+import { offlineEfficiency } from './patents';
 
 export interface OfflineReport {
   /** seconds away, and the part counted (capped) */
@@ -89,7 +90,7 @@ export function runOffline(g: Game, awaySeconds: number): OfflineReport {
   const rest = Math.max(0, counted - replayed);
   if (rest > 0 && tally && measure > 0) {
     const secs = measure / TICK_RATE;
-    const k = (rest / secs) * RULES.offlineEff.value;
+    const k = (rest / secs) * offlineEfficiency(g);
     for (const [item, n] of Object.entries(tally.dock) as [ItemId, number][]) {
       const amt = Num.of(Math.floor(n * k));
       if (amt.isZero()) continue;

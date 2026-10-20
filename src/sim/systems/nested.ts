@@ -7,6 +7,7 @@
 import type { Game, ActResult } from '../Game';
 import { OK, no } from '../Game';
 import { TICK_RATE } from '../../engine/time';
+import { prules } from '../patents';
 import { FACTORY } from '../../data/land';
 import { RULES, SCORE_WEIGHTS, gradeFor } from '../../data/rules';
 import { itemName, type ItemId } from '../../data/items';
@@ -15,8 +16,9 @@ import { inBox, splusGate } from './audits';
 import { BYPRODUCTS, defaultName, fname } from './modules';
 
 const DT = 1 / TICK_RATE;
-const warmTicks = () => RULES.auditWarmup.value * TICK_RATE;
-const windowTicks = () => RULES.auditWindow.value * TICK_RATE;
+/** warm-up and window in ticks: Quick Audits (a Patent, §19) shortens them */
+const warmTicks = (g?: Game) => (g ? prules(g).auditWarmup : RULES.auditWarmup.value) * TICK_RATE;
+const windowTicks = (g?: Game) => (g ? prules(g).auditWindow : RULES.auditWindow.value) * TICK_RATE;
 
 /** Everything on the Factory floor with a tile in the box. */
 export function fentsIn(g: Game, b: Box): FEnt[] {
@@ -37,7 +39,7 @@ export function fentsIn(g: Game, b: Box): FEnt[] {
 export function ffoldRefusal(g: Game, b: Box): string | null {
   if (!g.done('nestedFolds')) return 'Research Nested Folds first';
   if (g.s.faudit) return g.s.faudit.result ? 'Fold or cancel the audited group first' : 'An audit is already running on this floor';
-  const max = RULES.nestedMax.value;
+  const max = prules(g).nestedMax;
   if (b.w > max || b.h > max) return `Too big: a nested fold is at most ${max}x${max}`;
   if (b.w < 1 || b.h < 1) return 'Drag a box over a group of modules';
   if (b.x < 0 || b.y < 0 || b.x + b.w > FACTORY.w || b.y + b.h > FACTORY.h) return 'The box is off the floor';
@@ -100,7 +102,7 @@ const inside = (b: Box, e: FEnt) => inBox(b, e.x, e.y);
 /** Count an amount moved along a trunk route (modules.ts calls it for every share it moves). */
 export function fauditFlow(g: Game, from: FEnt, to: FEnt, item: string, amt: number) {
   const a = g.s.faudit;
-  if (!a || a.result || a.t < warmTicks()) return;
+  if (!a || a.result || a.t < warmTicks(g)) return;
   const fi = inside(a.box, from), ti = inside(a.box, to);
   if (fi && !ti) a.outs[item] = (a.outs[item] ?? 0) + amt;
   else if (!fi && ti) a.ins[item] = (a.ins[item] ?? 0) + amt;
@@ -111,7 +113,7 @@ export function runFAudits(g: Game) {
   const a = g.s.faudit;
   if (!a || a.result) return;
   a.t++;
-  const warm = warmTicks();
+  const warm = warmTicks(g);
   if (a.t <= warm) return;
   for (const id of a.ids) {
     const m = g.fById.get(id);
@@ -127,7 +129,7 @@ export function runFAudits(g: Game) {
       if (m.state === 'blocked' && m.why === o) a.missed += r * k * DT * (1 - m.f);
     }
   }
-  if (a.t >= warm + windowTicks()) {
+  if (a.t >= warm + windowTicks(g)) {
     a.result = gradeFAudit(g);
     g.emit({ type: 'auditDone', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, id: a.result.grade.letter, d: a.result.grade.score, floor: 'factory' });
   }
@@ -136,7 +138,7 @@ export function runFAudits(g: Game) {
 /** Grade the Factory audit's window so far (or the whole of it). */
 export function gradeFAudit(g: Game): AuditResult {
   const a = g.s.faudit!;
-  const n = Math.max(1, a.t - warmTicks());
+  const n = Math.max(1, a.t - warmTicks(g));
   const secs = n / TICK_RATE;
   const mods = a.ids.map((id) => g.fById.get(id)).filter((m): m is FEnt => !!m);
   const busy: Record<string, number> = {};

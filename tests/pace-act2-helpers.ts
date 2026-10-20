@@ -7,7 +7,7 @@ import { Bot } from '../src/sim/bot';
 import { playAct2, type Act2Bot } from '../src/sim/bot2';
 import { TICK_RATE } from '../src/engine/time';
 import { restore, takeSnapshot } from '../src/sim/snapshot';
-import { RULES } from '../src/data/rules';
+import { previewPatents } from '../src/sim/reorganize';
 
 /** Seeds for the Act II runs (Spark timing is the only random part). Two keep the file inside
  * its ~60 s budget; the spread between them is logged. */
@@ -16,9 +16,6 @@ export const SEEDS2 = [1000, 8919];
 /** How long a run plays (seconds): the Reorganize point is measured at 4 and 5 h. */
 export const HOURS = 5;
 
-/** §15's Reorganize, with the divisor from src/data/rules.ts (its derivation holds the arithmetic). */
-export const PATENT_DIVISOR = RULES.patentDivisor.value;
-export const patents = (lifetime: number) => Math.floor(Math.pow(lifetime / PATENT_DIVISOR, 0.4));
 
 /** The window §16 rule 4 compares: from this time, for this long (seconds). */
 export const RULE4_AT = 2 * 3600;
@@ -34,6 +31,8 @@ export interface Act2Record {
   what: string[];
   /** lifetime coin at the end of each minute */
   earnedByMin: number[];
+  /** the Reorganize preview (DESIGN.md §19) at the end of each minute: Patents now */
+  patentsByMin: number[];
   /** the game state at RULE4_AT, for the idle branch */
   snap: { snap: string; snapTick: number } | null;
   overdrives: number;
@@ -50,9 +49,13 @@ export function act2Run(seed: number): Act2Record {
   const g = new Game(seed);
   const planner = new Bot(g, 'planner');
   const earnedByMin: number[] = [];
+  const patentsByMin: number[] = [];
   let snap: Act2Record['snap'] = null;
   const run = playAct2(g, planner, HOURS * 3600, {}, undefined, (gg) => {
-    if (gg.s.tick % (60 * TICK_RATE) === 0) earnedByMin.push(gg.s.earned.toNumber());
+    if (gg.s.tick % (60 * TICK_RATE) === 0) {
+      earnedByMin.push(gg.s.earned.toNumber());
+      patentsByMin.push(previewPatents(gg).now);
+    }
     if (gg.s.tick === RULE4_AT * TICK_RATE) snap = takeSnapshot(gg);
   });
   const pd = planner.log.decisions.filter((t) => t <= run.handover);
@@ -71,6 +74,7 @@ export function act2Run(seed: number): Act2Record {
     decisions: [...pd, ...run.bot.log.decisions],
     what: [...pw, ...run.bot.log.what],
     earnedByMin,
+    patentsByMin,
     snap,
     overdrives: run.bot.log.overdrives.length,
     clicksPerSecMax: maxRate,
@@ -79,6 +83,11 @@ export function act2Run(seed: number): Act2Record {
   };
   cache.set(seed, rec);
   return rec;
+}
+
+/** The Reorganize preview's Patents at `sec` (the minute mark at or before it). */
+export function patentsAt(r: Act2Record, sec: number): number {
+  return r.patentsByMin[Math.max(0, Math.floor(sec / 60) - 1)] ?? 0;
 }
 
 /** Lifetime coin at `sec` (the minute mark at or before it). */

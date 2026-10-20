@@ -1,13 +1,14 @@
 // The game: state, the command log, and the fixed system order (CLAUDE.md):
-// input commands -> miners -> belts -> machines -> modules -> docks and hoppers -> orders ->
-// research -> sparks -> audits -> stats.
+// input commands -> automation (blueprint dragonflies and the Patent tree's helpers, §19) ->
+// miners -> belts -> machines -> modules -> docks and hoppers -> orders -> research -> sparks ->
+// audits -> stats.
 // Pure (tests/purity.test.ts): time comes in as ticks; presentation effects go out as events on
 // `events`, drained by the renderer and audio.
 import { EventQueue, type GameEvent } from '../engine/events';
 import { Num } from '../engine/num';
 import { TICK_RATE } from '../engine/time';
 import { BUILD, UPGRADES, isMachine, isPower, type BuildKind, type EntKind, type UpgradeId } from '../data/machines';
-import { CHUNKS, PATCHES, START_LAYOUT, WORKSHOP } from '../data/land';
+import { CHUNKS, PATCHES, START_LAYOUT, WORKSHOP, patchOpen } from '../data/land';
 import { RESEARCH, type ResearchId } from '../data/research';
 import { ORDER, CUSTOMERS } from '../data/orders';
 import { recipeKnown } from './transfer';
@@ -30,6 +31,12 @@ import { runSparks, catchSpark } from './systems/sparks';
 import type { Tally } from './offline';
 import { runAudits, startAudit, cancelAudit, auditLock, auditTransfer } from './systems/audits';
 import { runStats } from './systems/stats';
+// Reorganize, layer 1 (DESIGN.md §19, Milestone 5)
+import type { PatentId } from '../data/patents';
+import { buyPatent } from './patents';
+import { reorganize, customerMet } from './reorganize';
+import { bpSave, bpDelete, bpRename, bpImport, bpPlace, ghostBuild, ghostBuildAll, ghostClear, clearGhosts } from './blueprints';
+import { runAutomation, autoStamp } from './systems/automation';
 
 export interface Intake {
   to: 'dock' | 'hopper';
@@ -72,7 +79,19 @@ export type Cmd =
   | { k: 'claim'; item: ItemId }
   | { k: 'faudit'; x: number; y: number; w: number; h: number }
   | { k: 'fauditCancel' }
-  | { k: 'ffold'; name: string | null };
+  | { k: 'ffold'; name: string | null }
+  // Reorganize, layer 1 (DESIGN.md §19)
+  | { k: 'reorganize' }
+  | { k: 'patent'; id: PatentId }
+  | { k: 'bpSave'; x: number; y: number; w: number; h: number; name: string }
+  | { k: 'bpDelete'; id: number }
+  | { k: 'bpRename'; id: number; name: string }
+  | { k: 'bpImport'; code: string }
+  | { k: 'bpPlace'; id: number; x: number; y: number }
+  | { k: 'ghostBuild'; x: number; y: number }
+  | { k: 'ghostBuildAll' }
+  | { k: 'ghostClear'; x?: number; y?: number }
+  | { k: 'autoStamp'; id: number };
 
 export interface Logged { t: number; c: Cmd }
 
@@ -133,14 +152,7 @@ export class Game {
   constructor(seed: number, opts: { keepHistory?: boolean; empty?: boolean } = {}) {
     this.s = newState(seed);
     if (opts.keepHistory) this.history = [];
-    for (let i = 0; i < PATCHES.length; i++) {
-      const p = PATCHES[i];
-      for (let y = p.y; y < p.y + p.h; y++)
-        for (let x = p.x; x < p.x + p.w; x++) {
-          this.ore[y * this.W + x] = p.item;
-          this.patchOf[y * this.W + x] = i;
-        }
-    }
+    this.layOre();
     if (!opts.empty) {
       for (const b of START_LAYOUT) this.addEnt(b.kind, b.x, b.y, b.rot);
       this.s.nextSpark = this.sparkDelay();
@@ -162,6 +174,33 @@ export class Game {
 
   oreAt(x: number, y: number): ItemId | null {
     return this.inb(x, y) ? this.ore[y * this.W + x] : null;
+  }
+
+  /** The ore a Miner at (x, y) would dig: the patch under it, or once the Great Drill's stage 2
+   * stands (DESIGN.md §19), a patch beside it (east, south, west, north first). */
+  minerOre(x: number, y: number): ItemId | null {
+    const o = this.oreAt(x, y);
+    if (o || this.s.mega.stage < 2) return o;
+    for (let d = 0; d < 4; d++) {
+      const n = this.oreAt(x + DX[d], y + DY[d]);
+      if (n) return n;
+    }
+    return null;
+  }
+
+  /** The ore grid from the deposits there now (the deep ones arrive with the Great Drill). */
+  private layOre() {
+    this.ore.fill(null);
+    this.patchOf.fill(-1);
+    for (let i = 0; i < PATCHES.length; i++) {
+      const p = PATCHES[i];
+      if (!patchOpen(p, this.s.mega?.stage ?? 0)) continue;
+      for (let y = p.y; y < p.y + p.h; y++)
+        for (let x = p.x; x < p.x + p.w; x++) {
+          this.ore[y * this.W + x] = p.item;
+          this.patchOf[y * this.W + x] = i;
+        }
+    }
   }
 
   chunkAt(x: number, y: number) {
@@ -244,7 +283,7 @@ export class Game {
   private addEnt(kind: EntKind, x: number, y: number, rot: Dir): Ent {
     const d = BUILD[kind];
     const e = newEnt(this.s.nextId++, kind, x, y, d.w, d.h, rot);
-    if (kind === 'miner') e.recipe = MINE[this.oreAt(x, y) ?? 'ironOre'] ?? 'mineIron';
+    if (kind === 'miner') e.recipe = MINE[this.minerOre(x, y) ?? 'ironOre'] ?? 'mineIron';
     if (kind === 'furnace') e.recipe = 'smeltIron';
     this.s.ents.push(e);
     this.layoutDirty = true;
@@ -253,6 +292,7 @@ export class Game {
 
   /** Rebuild the caches from s.ents (after a load or a layout change). */
   rebuild() {
+    this.layOre();
     this.grid.fill(0);
     this.byId.clear();
     this.miners = [];
@@ -341,6 +381,17 @@ export class Game {
       case 'faudit': return startFAudit(this, { x: c.x, y: c.y, w: c.w, h: c.h });
       case 'fauditCancel': return cancelFAudit(this);
       case 'ffold': return foldFAudited(this, c.name);
+      case 'reorganize': return reorganize(this);
+      case 'patent': return buyPatent(this, c.id);
+      case 'bpSave': return bpSave(this, { x: c.x, y: c.y, w: c.w, h: c.h }, c.name);
+      case 'bpDelete': return bpDelete(this, c.id);
+      case 'bpRename': return bpRename(this, c.id, c.name);
+      case 'bpImport': return bpImport(this, c.code);
+      case 'bpPlace': return bpPlace(this, c.id, c.x, c.y);
+      case 'ghostBuild': return ghostBuild(this, c.x, c.y);
+      case 'ghostBuildAll': return ghostBuildAll(this);
+      case 'ghostClear': return ghostClear(this, c.x, c.y);
+      case 'autoStamp': return autoStamp(this, c.id);
     }
   }
 
@@ -374,10 +425,16 @@ export class Game {
         const e = this.entAt(xx, yy);
         if (e && !(kind === 'belt' && e.kind === 'belt')) return `${BUILD[e.kind].name} is in the way`;
       }
-    if (kind === 'miner' && !this.oreAt(x, y)) return 'A Miner goes on an ore patch';
+    if (kind === 'miner' && !this.minerOre(x, y)) return this.s.mega.stage >= 2 ? 'A Miner goes on an ore patch or beside one' : 'A Miner goes on an ore patch';
     const free = kind === 'crate' && this.s.freeCrates > 0;
     if (!free && this.s.coin.lt(d.cost)) return `Needs ${d.cost} coin`;
     return null;
+  }
+
+  /** Place a building now with the player's rules and price, unlogged (blueprint ghosts are built
+   * through it: by a logged command, or by the dragonflies inside the tick). */
+  placeNow(kind: BuildKind, x: number, y: number, rot: Dir): ActResult {
+    return this.place(kind, x, y, rot);
   }
 
   private place(kind: BuildKind, x: number, y: number, rot: Dir): ActResult {
@@ -388,6 +445,7 @@ export class Game {
       if (existing.rot === rot) return no('already a belt facing that way');
       existing.rot = rot;
       this.layoutDirty = true;
+      clearGhosts(this, x, y);
       this.emit({ type: 'rotate', x, y });
       return OK;
     }
@@ -396,6 +454,8 @@ export class Game {
     const d = BUILD[kind];
     if (kind === 'crate' && this.s.freeCrates > 0) this.s.freeCrates--;
     else this.s.coin = this.s.coin.sub(d.cost);
+    // a blueprint ghost under it gives way
+    clearGhosts(this, x, y, d.w, d.h);
     this.addEnt(kind, x, y, rot);
     if ((d.speed ?? 1) > 1) this.bump('mk2Built');
     this.emit({ type: 'place', x, y, id: kind });
@@ -547,7 +607,7 @@ export class Game {
     const d = ORDER[id];
     if (!d) return no('no such order');
     if (o.done.includes(id)) return no('already filled');
-    if (!d.requires.every((r) => this.done(r))) return no('not offered yet');
+    if (!d.requires.every((r) => this.done(r)) || !customerMet(this, d.customer)) return no('not offered yet');
     o.active = id;
     o.progress[id] ??= {};
     this.emit({ type: 'orderAccept', id });
@@ -583,6 +643,8 @@ export class Game {
       this.pending = [];
       for (const c of p) this.act(c);
     }
+    if (this.layoutDirty) this.rebuild();
+    runAutomation(this);
     if (this.layoutDirty) this.rebuild();
     runMiners(this);
     runBelts(this);

@@ -19,12 +19,13 @@ import { FACTORY } from '../../data/land';
 import { RULES } from '../../data/rules';
 import { RECIPES } from '../../data/recipes';
 import { ITEMS, itemName, type ItemId } from '../../data/items';
-import { megaStage } from '../../data/megaprojects';
+import { megaStage, type MegaStage } from '../../data/megaprojects';
 import { DX, DY, ccw, cw, newFEnt, opposite, type Dir, type FEnt, type ModuleDesign } from '../world';
 import { entsIn, inBox, gradedAudit } from './audits';
 import { claimRefusal, oresOf, placeClaimRefusal } from './claims';
 import { hopperWantsSlag } from '../transfer';
 import { fauditFlow, fauditLock } from './nested';
+import { prules } from '../patents';
 
 const DT = 1 / TICK_RATE;
 
@@ -118,7 +119,8 @@ export function productCopies(g: Game, d: ModuleDesign): number {
 /** What the next copy of a design costs: bill x (1 + 0.5 n), linear (DESIGN.md §10 Stamp), n
  * counted over every design of the same product. */
 export function stampCost(g: Game, d: ModuleDesign): Num {
-  return Num.of(Math.round(d.bill * (1 + RULES.stampGrowth.value * productCopies(g, d))));
+  // Stamping Dies (a Patent, §19) lowers the growth; it stays linear
+  return Num.of(Math.round(d.bill * (1 + prules(g).stampGrowth * productCopies(g, d))));
 }
 
 /** Does the design hold an Act II building (directly, or in a module it was folded from)? */
@@ -131,7 +133,8 @@ export function holdsAct2(g: Game, d: ModuleDesign, depth = 0): boolean {
 /** Machine Kits a copy of this design takes (DESIGN.md §18): 1 + floor(bill / 1,500), or none for
  * a design of slice-era machines only. */
 export function kitsFor(g: Game, d: ModuleDesign): number {
-  return holdsAct2(g, d) ? 1 + Math.floor(d.bill / RULES.kitDivisor.value) : 0;
+  // the Committee's Pocketed Kits (reputation 3, §19) takes one off, never below none
+  return holdsAct2(g, d) ? Math.max(0, 1 + Math.floor(d.bill / RULES.kitDivisor.value) - prules(g).kitsOff) : 0;
 }
 
 /** Why the next copy can't be stamped, or null. */
@@ -328,6 +331,7 @@ export interface Route {
 }
 
 function follow(g: Game, m: FEnt, dir: Dir, by: boolean): Route {
+  const sideIn = prules(g).sideIntake;
   let x = m.x + DX[dir], y = m.y + DY[dir];
   const tiles: FEnt[] = [];
   const seen = new Set<number>();
@@ -345,7 +349,8 @@ function follow(g: Game, m: FEnt, dir: Dir, by: boolean): Route {
       continue;
     }
     // a module takes in at its back: the item must travel the way it faces
-    if (e.kind === 'module') to = dir === e.rot && e !== m ? e : null;
+    // Side Intakes (a Patent, §19): also from a trunk pointing into its left side
+    if (e.kind === 'module') to = (dir === e.rot || (sideIn && dir === cw(e.rot))) && e !== m ? e : null;
     else to = e;
     break;
   }
@@ -412,7 +417,9 @@ export function runModules(g: Game) {
   const f = g.s.factory;
   if (!f.ents.length || !factoryOpen(g)) return;
   if (g.factoryDirty) g.rebuildFactory();
-  const buf = RULES.moduleBuffer.value;
+  const pr = prules(g);
+  // the Committee's Coat Pockets (reputation 1, §19) hold 6 s instead of 2
+  const buf = pr.moduleBuffer;
   // the Great Drill's stage 1 runs modules with miners inside +50% (§18)
   const drill = g.s.mega.stage >= 1 ? 1 + RULES.drillBoost.value : 1;
   // 1. each module runs at the fraction its inputs and output room allow
@@ -424,7 +431,7 @@ export function runModules(g: Game) {
     // being measured, and a depth-2 module folded from it gets the boost again (Milestone 4 review)
     const audited = !!g.s.faudit && !g.s.faudit.result && g.s.faudit.ids.includes(m.id);
     const k = (drill > 1 && !audited && Object.keys(oresOf(g, d)).length ? drill : 1) * ((m.od ?? 0) > 0 ? RULES.overdriveMult.value : 1);
-    if (m.od) { m.od--; if (!m.od) m.cool = Math.round(RULES.overdriveCool.value * TICK_RATE); } else if (m.cool) m.cool--;
+    if (m.od) { m.od--; if (!m.od) m.cool = Math.round(pr.overdriveCool * TICK_RATE); } else if (m.cool) m.cool--;
     let frac = 1;
     let why: string | null = null;
     let kind: 'starved' | 'blocked' | null = null;
@@ -535,6 +542,8 @@ export function runModules(g: Game) {
     }
     sliceEndCheck(g);
     if (g.done('greatDrill') && !f.ents.some((e) => e.kind === 'fbay')) placeBay(g);
+    const bay = f.ents.find((e) => e.kind === 'fbay');
+    if (bay) megaBearings(g, bay);
   }
 }
 
@@ -567,18 +576,53 @@ function placeBay(g: Game) {
   g.emit({ type: 'bayOpen', x: b.x + 1, y: b.y + 1, floor: 'factory' });
 }
 
-/** Count whole items into the Megaproject's current stage; complete it when everything is in. */
+/** Count whole items into the Megaproject's current stage; complete it when everything is in.
+ * Each delivery earns its share of the stage's Patents for this run's Reorganize (DESIGN.md §19). */
 function megaGive(g: Game, bay: FEnt, item: ItemId, n: number) {
   const st = megaStage(g.s.mega.stage);
   if (!st) return;
   const p = g.s.mega.progress;
+  const want = st.wants[item] ?? 0;
+  const have = p[item]?.toNumber() ?? 0;
+  const counted = Math.max(0, Math.min(n, want - have));
   p[item] = (p[item] ?? Num.ZERO).add(n);
+  if (counted > 0) g.s.megaPatents += (st.patents * counted) / want / megaParts(st);
   g.emit({ type: 'megaGive', x: bay.x + 1, y: bay.y + 1, id: item, value: n, floor: 'factory' });
-  const done = (Object.entries(st.wants) as [ItemId, number][]).every(([k, want]) => (p[k] ?? Num.ZERO).gte(want));
+  megaCheck(g, bay);
+}
+
+/** How many things a stage wants (its items, and the bearings as one more): each is an equal share
+ * of its Patents. */
+export function megaParts(st: MegaStage): number {
+  return Object.keys(st.wants).length + (st.bearings ? 1 : 0);
+}
+
+/** Bearings handed from the stash to the Bay (stages 2 and 3), once a second. */
+function megaBearings(g: Game, bay: FEnt) {
+  const st = megaStage(g.s.mega.stage);
+  if (!st?.bearings) return;
+  const have = g.s.mega.bearings ?? 0;
+  const take = Math.min(st.bearings - have, Math.floor(g.s.meta.bearings.toNumber()));
+  if (take <= 0) return;
+  g.s.meta.bearings = g.s.meta.bearings.sub(take);
+  g.s.mega.bearings = have + take;
+  g.s.megaPatents += (st.patents * take) / st.bearings / megaParts(st);
+  g.emit({ type: 'megaGive', x: bay.x + 1, y: bay.y + 1, id: 'bearing', value: take, floor: 'factory' });
+  megaCheck(g, bay);
+}
+
+function megaCheck(g: Game, bay: FEnt) {
+  const st = megaStage(g.s.mega.stage);
+  if (!st) return;
+  const p = g.s.mega.progress;
+  const done = (Object.entries(st.wants) as [ItemId, number][]).every(([k, want]) => (p[k] ?? Num.ZERO).gte(want)) && (g.s.mega.bearings ?? 0) >= (st.bearings ?? 0);
   if (done) {
     g.s.mega.stage = st.stage;
     g.s.mega.progress = {};
+    g.s.mega.bearings = 0;
     g.bump('megaStages');
+    // stages 2 and 3 change the Workshop's ground (miners beside patches, deep deposits)
+    g.layoutDirty = true;
     g.emit({ type: 'megaDone', x: bay.x + 1, y: bay.y + 1, value: st.stage, floor: 'factory' });
   }
 }
@@ -593,13 +637,15 @@ export function acceptRoom(g: Game, to: FEnt, item: string): number {
     const st = megaStage(g.s.mega.stage);
     const want = st?.wants[item as ItemId];
     if (!want) return 0;
+    // stages 2 and 3 start once their Raccoon Bearings are in: the bore head is the Committee's
+    if (st && st.bearings && (g.s.mega.bearings ?? 0) < st.bearings) return 0;
     return Math.max(0, want - (g.s.mega.progress[item as ItemId]?.toNumber() ?? 0) - (to.inBuf[item] ?? 0));
   }
   if (to.kind !== 'module') return 0;
   const d = g.design(to.design);
   const r = d?.ins[item as ItemId];
   if (!r) return 0;
-  return Math.max(0, r * RULES.moduleBuffer.value - (to.inBuf[item] ?? 0));
+  return Math.max(0, r * prules(g).moduleBuffer - (to.inBuf[item] ?? 0));
 }
 
 function give(_g: Game, to: FEnt, item: string, amt: number) {

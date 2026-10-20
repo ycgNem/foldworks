@@ -27,7 +27,12 @@ export const CHUNKS: ChunkDef[] = [
   { id: 'F', name: 'Chunk F (coal, iron)', x: 16, y: 8, w: 8, h: 8, cost: 120000, requires: 'steamPower', derivation: '§18 Land: chunk F, 120,000 after Steam Power: about 10 min of the early Act II factory (12,000/min)' },
 ];
 
-export interface PatchDef { item: ItemId; x: number; y: number; w: number; h: number; derivation: string }
+export interface PatchDef {
+  item: ItemId; x: number; y: number; w: number; h: number;
+  /** a deep deposit: there only once the Great Drill has reached this stage (DESIGN.md §19) */
+  stage?: number;
+  derivation: string;
+}
 
 export const PATCHES: PatchDef[] = [
   { item: 'ironOre', x: 1, y: 2, w: 2, h: 2, derivation: '§5 iron in chunk A, beside the Hand Furnace' },
@@ -37,7 +42,16 @@ export const PATCHES: PatchDef[] = [
   { item: 'sand', x: 20, y: 5, w: 2, h: 2, derivation: '§18 Land: sand in chunk E' },
   { item: 'coal', x: 18, y: 11, w: 2, h: 2, derivation: '§18 Land: coal in chunk F' },
   { item: 'ironOre', x: 21, y: 13, w: 2, h: 2, derivation: '§18 Land: iron in chunk F' },
+  // the Great Drill's stage 3 (Milestone 5) breaks into deep seams under chunk D: last in the list,
+  // so every earlier patch keeps its index
+  { item: 'ironOre', x: 9, y: 10, w: 2, h: 2, stage: 3, derivation: '§19 Great Drill stage 3: an iron deposit in chunk D, beside chunk C' },
+  { item: 'copperOre', x: 13, y: 13, w: 2, h: 2, stage: 3, derivation: '§19 Great Drill stage 3: a copper deposit in chunk D, the second copper patch (copper claims gate the Gizmo chains)' },
 ];
+
+/** The deposits there now: the deep ones once the Great Drill's stage has reached them. */
+export function patchOpen(p: PatchDef, megaStage: number): boolean {
+  return !p.stage || megaStage >= p.stage;
+}
 
 /** Deposit claims at the Survey Office (DESIGN.md §18 Land and deposits): the first block of 4
  * for each ore; each later block costs price x (1 + 0.5 b). */

@@ -13,6 +13,7 @@ import { MEGA } from '../src/data/megaprojects';
 import { RULES, GRADES, SCORE_WEIGHTS } from '../src/data/rules';
 import { SPARKS } from '../src/data/sparks';
 import { TROPHIES } from '../src/data/trophies';
+import { PATENT_LIST, PATENTS, PATENT_IDS } from '../src/data/patents';
 
 const DESIGN = fs.readFileSync('DESIGN.md', 'utf8');
 const SECTIONS = new Set([...DESIGN.matchAll(/^## (\d+)\./gm)].map((m) => m[1]));
@@ -38,6 +39,7 @@ function records(): [string, { derivation?: string } & Record<string, unknown>][
     ...TROPHIES.map((d) => ['trophy ' + d.id, d] as [string, any]),
     ...CLAIM_PRICE.map((d) => ['claim price ' + d.item, d] as [string, any]),
     ...MEGA.map((d) => ['megaproject stage ' + d.stage, d] as [string, any]),
+    ...PATENT_LIST.map((d) => ['patent ' + d.id, d] as [string, any]),
   ];
 }
 
@@ -81,6 +83,28 @@ describe('cross-references', () => {
     for (const p of PATCHES) expect(items.has(p.item)).toBe(true);
     for (const c of CLAIM_PRICE) expect(PATCHES.some((p) => p.item === c.item), `claims for ${c.item} but no deposit`).toBe(true);
     for (const m of MEGA) for (const it of Object.keys(m.wants)) expect(items.has(it), `mega ${m.stage}: ${it}`).toBe(true);
+  });
+  it('the Patent tree points at real things, has flat prices and no cycles (DESIGN.md §19)', () => {
+    const ids = new Set<string>(PATENT_IDS);
+    for (const d of PATENT_LIST) {
+      expect(Number.isInteger(d.cost) && d.cost >= 1, d.id).toBe(true);
+      for (const q of d.requires) expect(ids.has(q), `${d.id}: ${q}`).toBe(true);
+      const e = d.effect;
+      if (e.k === 'head') {
+        for (const r of e.research ?? []) expect(research.has(r), `${d.id}: ${r}`).toBe(true);
+        for (const l of e.land ?? []) expect(CHUNKS.some((c) => c.id === l), `${d.id}: ${l}`).toBe(true);
+      }
+      expect(d.text.length).toBeGreaterThan(10);
+      expect(d.flavor.length).toBeGreaterThan(10);
+    }
+    const done = new Set<string>();
+    for (let pass = 0; pass < 20; pass++) for (const d of PATENT_LIST) if (d.requires.every((r) => done.has(r))) done.add(d.id);
+    expect(done.size).toBe(PATENT_LIST.length);
+    expect(PATENT_LIST.length).toBeGreaterThanOrEqual(28);
+    // offline efficiency tops out at 0.75 (ROADMAP Milestone 5)
+    const off = PATENT_LIST.reduce((t, d) => t + (d.effect.k === 'offline' ? d.effect.add : 0), RULES.offlineEff.value);
+    expect(off).toBeCloseTo(0.75, 5);
+    expect(PATENTS.bellows.cost).toBe(1);
   });
   it('the research tree has no cycles and every node can be reached', () => {
     const done = new Set<string>();
