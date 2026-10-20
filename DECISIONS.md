@@ -846,3 +846,85 @@ at `offlineEfficiency(g)` and the save version, which the lead renumbers at the 
 - **The Patents formula was checked and is not derivative**: CC's heavenly chips and AD's infinity
   points are a root or log of currency earned; ours counts distinct folded products by recipe
   depth and audit grade, with coin as a minor log term.
+
+## The Milestone 5–6 review round: offline (2026-10-20)
+
+The idle-critic and the pacing auditor found Milestone 6's exit unmet: only run 1 at 1–5 h on one
+seed was measured, rule 4 was read against a closed game, the offline efficiency's sources
+overlapped, a segment ran on past an order filling, and the report listed a cascade as separate
+jams. What changed, and why:
+
+- 2026-10-20: **Rule 4 is active against open idle; offline is bounded apart** (the lead's
+  decision, DESIGN.md §16 rule 4). Offline never pays more than open idle for the same time and at
+  efficiency e pays at least about e of it. Why: at e = 0.5 a closed game is inherently ~2× below
+  open idle, so "active ÷ closed ≤ 4" fails whenever active ÷ open idle passes 2, the band's own
+  middle; the 4× ceiling protects idlers who keep the game open, and the closed game has its own,
+  stricter bound.
+- 2026-10-20: **Check 12 restated for any e** (DESIGN.md §13): 8 h away pays the first hour as open
+  idle pays it and the other 7 at e − 0.03 to e + 0.05 of what open idle pays in them, checked at
+  0.5 and 0.75. Why: the old (b), "≤ 4.5 h of the planner's active rate", was the slice's bound at
+  e = 0.5 and read 5.52 h at the 0.75 ceiling, a number with no meaning. "≤ (1 + 7e) h of the first
+  idle hour" was tried first and rejected with numbers: open idle can earn more in later hours than
+  in the first (60K, then 67K an hour at run 1's 3 h stage), so it failed by up to 13% where the
+  model paid exactly what it says. The new form tests the model itself: the replayed hour is the
+  open-idle hour tick for tick, and the rest is e of it.
+- 2026-10-20: **The stage measurements cover runs 1–3 on both seeds and the slice end**
+  (`tests/pace-idle-*.test.ts`, eight files that run side by side; DESIGN.md §20's table). Run 1 is
+  the Act II bot (every hour 1–5 on seed 1000; 1, 3, 5 h on 8919); runs 2 and 3 are the campaign
+  bot after a Reorganize with its Patents spent (pace-reorganize's options), at 1–3 h of run 2 and
+  1 and 3 h of run 3, about 5–12 h of play in all. A run-2 file stops the campaign after run 2, so
+  that run plays to its cap instead of resetting: its first hours are the same as the three-run
+  campaign's and each stage keeps a half hour of play after it.
+- 2026-10-20: **Three stages miss rule 4's band and are listed as open, not hidden**
+  (`RULE4_OPEN` in tests/pace-idle-helpers.ts; the offline bounds are still checked there): seed
+  8919 run 1 at 3 h (active 4.01× open idle; seed 1000 3.97) and run 2 at 2 h on both seeds (0.54×
+  and 0.69×: in that half hour the campaign bot clears 19 Workshop pieces and places 13 modules,
+  so its coin goes into the floor and the untouched factory out-earns it). At the slice end rule 4
+  reads 0.98–1.09 (the planner builds nothing in its ten minutes after the Festival); logged, not
+  tested. Why open: the bot's build and the reset layer's
+  economy decide them, both outside this change (the reset agent's Factory annex keeps coin chains
+  running past the Bay floor, which is exactly the 3 h dip); the lead re-reads them on the merged
+  build. A ratio is read to two decimals, as the table writes it (run 2 at 1 h is 1.4996).
+- 2026-10-20: **A segment also ends when the active order would fill or the selected research
+  would finish**, and the last fraction of an item is topped up so it fills then. Why: the Dock
+  takes a refused item (the Committee's slag or oil) only while an order wants it, and the Hopper
+  takes slag only while the node wants it; a segment that ran on past either paid the line behind
+  it for the rest of the time away (`tests/idle.test.ts` guards it with a furnace whose slag goes
+  to the Dock for The Pile: offline at e = 1 now pays 1.005 of open idle).
+- 2026-10-20: **A jam inside a measuring window opens the window again** (at most 8 times in one
+  live stretch, `IDLE.remeasureMax`). Why: a line that stopped 4 s into the window left those
+  seconds' deliveries in the measured rate, and the next segment paid them for hours (14% over
+  open idle in the same test). The replay hour can run a few minutes past the hour for it; the
+  footer counts those minutes as paid in full.
+- 2026-10-20: **One row per stopped line in the report and the forecast**: the first machine to
+  block and why, how many it stopped, and a fix to build ("9 more Slag Heaps keep it running 8h",
+  "a belt taking copper ingots to the Dock", "a Crate, or a machine that uses slag"). Lines are the
+  Workshop's item-flow lines (`analysis.lines`) and the Factory's trunk-joined modules, fixed for
+  the run (nobody builds while away). The heap row merges into its line's row. Why: one copper line
+  was four rows at 0:03 with no cause named (the critic's finding); the root cause and the fix are
+  what the player acts on.
+- 2026-10-20: **"Stop line" is offered only where stopping keeps something**: a line stopped by its
+  Slag Heap filling, with the tip saying what it keeps ("its heap keeps its room: 53m 22s of
+  running when you are back; it earns nothing while stopped"). Any other stop (nowhere for its
+  output, the Dock refusing an item after an order) keeps nothing, so the row offers the fix
+  instead. Why: once heaps drain or never fill (a heap-eating rule, a gravel Press), stopping earned
+  0 and saved nothing. A stop or a start re-runs the forecast at once.
+- 2026-10-20: **Every screen says the effective rate in words**: "the first 1h 04m at 100% (as if
+  open), the other 6h 56m at 50%" (`paidHow`). Why: "at 50%" alone was wrong for any absence, and
+  for one under an hour the whole time pays 100%.
+- 2026-10-20: **`offlineEfficiency(g)` stays the one function (cap 0.75); a Night Shift purchase
+  that would add nothing at the cap is refused, saying why**, and the screen shows what each would
+  add now (`idleUpgradeGain`). Why: the reset agent's Patent offline nodes (+0.05 ×3) and the coin
+  Night Shift (kept through Reorganize) overlap; no coin should buy nothing. The Patent screen's
+  own refusal for an offline node at the cap is the reset agent's (src/sim/patents.ts).
+- 2026-10-20: **The Night Shift Rota costs 250,000 (was 400,000)**, the Foreman stays 150,000.
+  Why: both prices were derived from 7,200–12,500 coin/min, the *active* rate; the factory idles
+  6,600–8,000/min before the Bay floor and 1,100–1,400 after it. A night pays +0.05 × the 7 h of
+  open idle after the first, measured at the stage each is offered: 139K at 1 h (Steam Power) and
+  at 2 h (Circuits), so the Foreman pays back in 1.1 nights and the Rota in 1.8 (it took 2.9). A
+  pace test checks ≤ 2 nights. Derived from the pre-Bay idle of this build; the merged build with
+  the Factory annex should be re-measured (the test does it).
+- 2026-10-20: **The offline tally is Num** (`Tally` in src/sim/offline.ts, the Docks' and the Bay's
+  writes): item amounts, per CLAUDE.md. Kept as plain numbers, with the reason: the delivery rates
+  (items a second, rates may be numbers) and the carry between credit slices, a fraction of one
+  item always below 1 (a remainder of a rate times a time, not a stock).

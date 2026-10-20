@@ -1,6 +1,7 @@
 // The offline report (DESIGN.md §12, §20; Milestone 6): what happened while the player was away, as
-// a timeline (jams with their time and machine, heaps filling, orders filled, research finished,
-// the Megaproject's stages) with a jump-to button per jam, and the totals. While the run is still
+// a timeline (each line that stopped as one row: its first machine to block and why, how many
+// machines it stopped and a fix to build; heaps filling, orders filled, research finished, the
+// Megaproject's stages) with a jump-to button per line, and the totals. While the run is still
 // going (it is spread over frames, so the page never freezes) the card shows its progress. The
 // footer says exactly how the number was made: what ran tick by tick, what was extrapolated and
 // at what efficiency, so the report is a number the player can check (pillar 4).
@@ -9,9 +10,9 @@ import { C } from '../data/palette';
 import { ITEMS, type ItemId } from '../data/items';
 import { ICON, textWidth } from '../ui/font';
 import { frame, button, bar, coinIcon, uiIcon } from './chrome';
-import { duration, clock, pct } from '../engine/fmt';
+import { duration, clock } from '../engine/fmt';
 import { Num } from '../engine/num';
-import type { TimelineEntry, OfflineReport, OfflineRun } from '../sim/offline';
+import { paidHow, type TimelineEntry, type OfflineReport, type OfflineRun } from '../sim/offline';
 import { IDLE } from '../data/idle';
 import type { Layout } from './layout';
 import type { App } from './app';
@@ -80,7 +81,7 @@ export function offlineReportCard(app: App, L: Layout) {
     ui.text(`While you were away: ${duration(job.away)}`, x + 26, y + 7, C.hot, { shadow: C.ink });
     ui.text('Running your factory through the time away...', x + 12, y + 34, C.bone);
     bar(ui, x + 12, y + 48, w - 24, 8, job.progress(), C.gold);
-    ui.para('The first hour runs tick by tick through the same machines as live play; the rest follows from the rates measured, in segments that end whenever a Slag Heap fills.', x + 12, y + 66, w - 24, C.hull2);
+    ui.para('The first hour runs tick by tick through the same machines as live play and pays in full; the rest follows from the rates measured, in segments that end whenever a Slag Heap fills, an order fills or research finishes.', x + 12, y + 66, w - 24, C.hull2);
     return;
   }
   if (pageFor !== rep) { page = 0; pageFor = rep; }
@@ -100,31 +101,42 @@ export function offlineReportCard(app: App, L: Layout) {
   const sold = soldLine(rep);
   if (sold) right(`Sold: ${sold}`, C.bone);
   yy = Math.max(yy + 30, ry + 2);
-  // ---- the timeline
+  // ---- the timeline: a stopped line is one row (its first machine to block, why, how many it
+  // stopped) with the fix under it; heaps, orders, research and the Megaproject one line each
   ui.fill(x + 8, yy, w - 16, 1, C.brass0);
   yy += 4;
-  const head = rep.jams
-    ? `${rep.jams} jam${rep.jams > 1 ? 's' : ''}, ${rep.orders.length} order${rep.orders.length === 1 ? '' : 's'} filled, ${rep.research.length} research done`
+  const nl = rep.lines.length;
+  const head = nl
+    ? `${nl} line${nl > 1 ? 's' : ''} stopped (${rep.jams} machine${rep.jams > 1 ? 's' : ''}), ${rep.orders.length} order${rep.orders.length === 1 ? '' : 's'} filled, ${rep.research.length} research done`
     : `${ICON.check} Nothing jammed in ${duration(rep.counted)}.`;
-  ui.text(fit(head, w - 24), x + 12, yy, rep.jams ? C.pipYellow : C.leaf);
+  ui.text(fit(head, w - 24), x + 12, yy, nl ? C.pipYellow : C.leaf);
   yy += 12;
   const footH = 56;
-  const rowsH = y + h - footH - yy;
-  const per = Math.max(1, Math.floor(rowsH / 12));
+  const rowsH = y + h - footH - yy - 12;
   const tl = rep.timeline;
-  const pages = Math.max(1, Math.ceil(tl.length / per));
+  const rowH = (e: TimelineEntry) => (e.line !== undefined ? 21 : 12);
+  // pages by height: a line's row is two lines tall
+  const starts: number[] = [0];
+  for (let i = 0, used = 0; i < tl.length; i++) {
+    if (used + rowH(tl[i]) > rowsH && used > 0) { starts.push(i); used = 0; }
+    used += rowH(tl[i]);
+  }
+  const pages = starts.length;
   if (page >= pages) page = pages - 1;
   if (!tl.length) ui.text(rep.jammedAtStart ? `${rep.jammedAtStart} machine${rep.jammedAtStart > 1 ? 's were' : ' was'} already jammed when you left.` : 'A quiet stretch: every line ran the whole time.', x + 12, yy, C.hull2);
-  for (let i = page * per; i < Math.min(tl.length, (page + 1) * per); i++) {
+  for (let i = starts[page]; i < (starts[page + 1] ?? tl.length); i++) {
     const e = tl[i];
     const col = KIND_COL[e.kind];
+    const line = e.line !== undefined ? rep.lines[e.line] : null;
     ui.text(clock(e.t), x + 12, yy, C.hull3);
     ui.text(KIND_MARK[e.kind], x + 42, yy, col);
     const go = e.x !== undefined && (e.kind === 'jam' || e.kind === 'heap');
     const tw = w - 24 - 40 - (go ? 40 : 0);
-    ui.text(fit((e.est ? '~' : '') + e.text, tw), x + 52, yy, e.kind === 'jam' ? C.bone : col);
-    if (go && button(ui, 'offGo' + i, x + w - 48, yy - 2, 36, 11, 'Go', { tip: e.est ? 'Worked out from the measured rates (~): this is where it will be' : 'Show me where' })) goTo(app, e);
-    yy += 12;
+    const text = line ? `${line.root.name}'s line: ${line.cause}` : e.text;
+    ui.text(fit((e.est ? '~' : '') + text, tw), x + 52, yy, e.kind === 'jam' ? C.bone : col);
+    if (go && button(ui, 'offGo' + i, x + w - 48, yy - 2, 36, 11, 'Go', { tip: line ? `Show ${line.root.name}, the first of its line to block` : e.est ? 'Worked out from the measured rates (~): this is where it will be' : 'Show me where' })) goTo(app, e);
+    if (line) ui.text(fit(`${line.count} machine${line.count > 1 ? 's' : ''} stopped. Fix: ${line.fix}`, w - 24 - 40), x + 52, yy + 9, C.leaf);
+    yy += rowH(e);
   }
   if (pages > 1) {
     const py = y + h - footH - 2;
@@ -135,9 +147,7 @@ export function offlineReportCard(app: App, L: Layout) {
   // ---- how the number was made (pillar 4: a number you can check)
   const fy = y + h - footH + 2;
   ui.fill(x + 8, fy - 2, w - 16, 1, C.brass0);
-  const how = rep.extrapolated > 0
-    ? `${duration(rep.replayed)} ran tick by tick; the other ${duration(rep.extrapolated)} from measured rates at ${pct(rep.eff)} (offline efficiency).${tl.some((e) => e.est) ? ' ~ marks a time worked out from rates.' : ''} Time away counts up to 7 days.`
-    : `All ${duration(rep.replayed)} ran tick by tick, exactly as if the game had been open.`;
+  const how = `Paid: ${paidHow(rep)} (offline efficiency).${tl.some((e) => e.est) ? ' ~ marks a time worked out from rates.' : ''} Time away counts up to 7 days.`;
   ui.para(how, x + 12, fy + 1, w - 24, C.hull2);
   if (button(ui, 'offOvernight', x + 12, y + h - 18, 110, 13, 'Overnight check', { tip: 'Before you go next time: see which lines would jam, and stop them' })) {
     app.offline = null;
