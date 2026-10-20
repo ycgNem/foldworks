@@ -11,7 +11,10 @@ import { RECIPE } from '../data/recipes';
 import { ITEMS, itemName, type ItemId } from '../data/items';
 import { RULES, SCORE_WEIGHTS, gradeFor } from '../data/rules';
 import { shares } from './systems/stats';
-import { plain, pct as fmtPct } from '../engine/fmt';
+import { plain, pct as fmtPct, duration } from '../engine/fmt';
+import { TICK_RATE } from '../engine/time';
+import { baseSpeed, veinBoost } from './systems/machines';
+import type { RecipeDef } from '../data/recipes';
 
 const isSink = (e: Ent) => e.kind === 'dock' || e.kind === 'hopper';
 
@@ -251,15 +254,26 @@ export function report(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' |
     return out;
   }
   const nom = nominal(m);
+  // what feeds it and what takes its output: read first, so the status line and the lines under it
+  // agree (the UI legibility round: a kiln on its buffer read "Working 100%" over "Nothing feeds it")
+  const f = nom.ins.length ? feeders(g, m) : null;
+  const unfed = !!f && !f.from.length && !f.stores.length && m.kind !== 'furnace';
+  const frontless = m.kind !== 'miner' && !g.entAt(m.x + DX[m.rot], m.y + DY[m.rot]);
+  const left = m.state === 'work' && (unfed || frontless) ? runLeft(g, m, r, unfed, frontless) : null;
+  const share = (v: number) => (sh.n && Math.round(v * 100) > 0 ? pct(v) + ' of the last minute' : 'just now');
   // what it is doing now
   if (m.paused) out.push({ text: 'Stopped by you: it takes nothing and makes nothing until you start it again', tone: 'dim' });
-  else if (m.state === 'work') out.push({ text: `Working${sh.n ? ': busy ' + pct(sh.work) + ' of the last minute' : ''}`, tone: 'good' });
+  else if (m.state === 'work' && left) {
+    const t = left.sec >= 1 ? `about ${duration(left.sec)}` : 'a moment';
+    if (left.why === 'in') out.push({ text: `Running on its buffer: ${t} of ${itemName(left.item).toLowerCase()} left, then it starves`, tone: 'warn' });
+    else out.push({ text: `Working, but its ${itemName(left.item).toLowerCase()} piles up inside: full in ${t}, then it blocks`, tone: 'warn' });
+  } else if (m.state === 'work') out.push({ text: `Working${sh.n ? ': busy ' + pct(sh.work) + ' of the last minute' : ''}`, tone: 'good' });
   else if (m.state === 'starved') {
     if (m.why === 'crank') out.push({ text: 'Waiting for a crank: click it', tone: 'warn' });
-    else out.push({ text: `Starved of ${m.why ? itemName(m.why).toLowerCase() : 'input'}${sh.n ? ' ' + pct(sh.starved) + ' of the last minute' : ''}`, tone: 'warn' });
+    else out.push({ text: `Starved of ${m.why ? itemName(m.why).toLowerCase() : 'input'} (${share(sh.starved)})`, tone: 'warn' });
   } else if (m.state === 'blocked') {
-    if (m.why === m.byItem && m.why) out.push({ text: `Blocked: its ${itemName(m.why).toLowerCase()} has nowhere to go${sh.n ? ' (' + pct(sh.byBlocked) + ' of the last minute)' : ''}`, tone: 'bad' });
-    else out.push({ text: `Blocked: its ${m.why ? itemName(m.why).toLowerCase() : 'output'} has nowhere to go${sh.n ? ' (' + pct(sh.blocked) + ' of the last minute)' : ''}`, tone: 'bad' });
+    if (m.why === m.byItem && m.why) out.push({ text: `Blocked: its ${itemName(m.why).toLowerCase()} has nowhere to go (${share(sh.byBlocked)})`, tone: 'bad' });
+    else out.push({ text: `Blocked: its ${m.why ? itemName(m.why).toLowerCase() : 'output'} has nowhere to go (${share(sh.blocked)})`, tone: 'bad' });
   } else out.push({ text: 'Idle', tone: 'dim' });
   // rates
   // in a brownout a busy machine runs at the speed power allows (Milestone 4 review: a kiln at 67%
@@ -267,8 +281,7 @@ export function report(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' |
   const pf = Math.min(1, powerFactor(g, m));
   if (pf < 0.999) out.push({ text: `Short of power: running at ${pct(pf)} speed`, tone: 'warn' });
   if (nom.outs.length) out.push({ text: `Makes ${nom.outs.map((o) => perMin(o.perMin) + ' ' + itemName(o.item).toLowerCase()).join(', ')} when busy; ${perMin(nom.outs[0].perMin * sh.work * pf)} now`, tone: 'plain' });
-  if (nom.ins.length) {
-    const f = feeders(g, m);
+  if (f) {
     out.push({ text: `Wants ${nom.ins.map((i) => perMin(i.perMin) + ' ' + itemName(i.item).toLowerCase()).join(' + ')}`, tone: 'plain' });
     if (f.from.length) {
       const supply = f.from.map((s) => {
@@ -277,7 +290,10 @@ export function report(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' |
       });
       out.push({ text: `Fed by ${supply.join(', ')}`, tone: 'plain' });
     } else if (f.stores.length) out.push({ text: `Fed from ${f.stores.length > 1 ? f.stores.length + ' crates' : 'a crate'} (${f.stores.reduce((n, c) => n + c.store.length, 0)} held)`, tone: 'plain' });
-    else out.push({ text: m.kind === 'furnace' ? 'Fed by hand (the ore patch)' : 'Nothing feeds it: point a belt or a machine\'s front into it', tone: m.kind === 'furnace' ? 'dim' : 'bad' });
+    else if (m.kind === 'furnace') out.push({ text: 'Fed by hand (the ore patch)', tone: 'dim' });
+    // still working from what it holds: a warning of what comes, not a fault yet
+    else if (m.state === 'work') out.push({ text: 'Nothing feeds it: it starves when its buffer runs out. Point a belt or a machine\'s front into it', tone: 'warn' });
+    else out.push({ text: 'Nothing feeds it: point a belt or a machine\'s front into it', tone: 'bad' });
     if (f.shared.length) out.push({ text: `Its supply is shared with ${f.shared.map((s) => entName(g, s)).join(', ')}`, tone: 'warn' });
   }
   if (r.byproduct) {
@@ -286,11 +302,34 @@ export function report(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' |
     if (m.by >= RULES.outputCap.value) out.push({ text: 'Click it to shovel the slag out by hand', tone: 'warn' });
   }
   // the front
-  if (m.kind !== 'miner') {
-    const front = g.entAt(m.x + DX[m.rot], m.y + DY[m.rot]);
-    if (!front) out.push({ text: 'Nothing at its front: its output waits', tone: m.out > 0 ? 'bad' : 'dim' });
+  if (frontless) {
+    const cap = RULES.outputCap.value;
+    if (m.state === 'blocked') out.push({ text: 'Nothing at its front: its output waits, so it has stopped', tone: 'bad' });
+    else if (m.out > 0) out.push({ text: `Nothing at its front: ${m.out} of ${cap} made wait inside; it blocks when full`, tone: 'warn' });
+    else out.push({ text: 'Nothing at its front: its output will wait inside', tone: 'dim' });
   }
   return out;
+}
+
+/** How long a working machine runs on what it holds, with no input arriving (`inputs`) and/or
+ * nothing taking its output (`output`): the crafts its buffer allows, at its speed now. */
+function runLeft(g: Game, m: Ent, r: RecipeDef, inputs: boolean, output: boolean): { sec: number; why: 'in' | 'out'; item: ItemId } | null {
+  const sp = baseSpeed(m) * veinBoost(g, m) * Math.min(1, powerFactor(g, m));
+  if (sp <= 0) return null;
+  const craft = (r.time * TICK_RATE) / sp;
+  let inN = Infinity, inItem: ItemId | null = null;
+  if (inputs)
+    for (const s of r.inputs) {
+      const c = (m.active ? 1 : 0) + Math.floor((m.inBuf[s.item] ?? 0) / s.n);
+      if (c < inN) { inN = c; inItem = s.item; }
+    }
+  const o = r.outputs[0];
+  const outN = output ? Math.max(0, Math.floor((RULES.outputCap.value - m.out) / o.n)) : Infinity;
+  const n = Math.min(inN, outN);
+  if (!isFinite(n)) return null;
+  const first = m.active ? Math.max(0, r.time * TICK_RATE - m.prog) / sp : craft;
+  const ticks = n <= 0 ? 0 : first + (n - 1) * craft;
+  return inN <= outN && inItem ? { sec: ticks / TICK_RATE, why: 'in', item: inItem } : { sec: ticks / TICK_RATE, why: 'out', item: o.item };
 }
 
 /**

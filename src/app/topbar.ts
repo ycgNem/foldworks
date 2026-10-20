@@ -48,8 +48,10 @@ const MENUS: MenuDef[] = [];
 /** Add an icon menu to the top bar: registerMenu({ id: 'patents', icon: 'star', name: 'Patents', panel: 'patents', tip: '...', show: (app) => app.game.done('x') }). */
 export function registerMenu(m: MenuDef) { if (!MENUS.some((q) => q.id === m.id)) MENUS.push(m); }
 
-/** A counter another file adds beside Machine Kits and power (Patents): it draws at (x, 7) and returns its width. */
-export interface CounterDef { id: string; show: (app: App) => boolean; draw: (app: App, x: number, y: number) => number }
+/** A counter another file adds beside Machine Kits and power (Patents): it draws at (x, 7) and returns its width.
+ * `room` is the width it may take before the line-health chip and the floor tabs are squeezed out:
+ * a counter with a long label draws a short form past it (the UI legibility round, 2026-10-20). */
+export interface CounterDef { id: string; show: (app: App) => boolean; draw: (app: App, x: number, y: number, room: number) => number }
 const COUNTERS: CounterDef[] = [];
 export function registerCounter(c: CounterDef) { if (!COUNTERS.some((q) => q.id === c.id)) COUNTERS.push(c); }
 
@@ -63,7 +65,15 @@ export function topBar(app: App, L: Layout, dt: number) {
 
   // ---- the menus, right to left, so the rest knows the room it has
   const menus: Menu[] = [];
-  const m = (id: string, ic: UIconName, name: string, key: string, panel: Menu['panel'], tip: string, d = false) => menus.push({ id, icon: ic, name, key, panel, tip, dot: d });
+  // a narrow bar (1024x640) folds the Orders group's keys into the Orders key: its screen's header
+  // has a tab for each (the UI legibility round: twelve keys squeezed the floor tabs off the bar)
+  const narrow = !L.wide;
+  const GROUPED = new Set(['modules', 'codex', 'survey', 'mega']);
+  const folded: { name: string; key: string; dot: boolean }[] = [];
+  const m = (id: string, ic: UIconName, name: string, key: string, panel: Menu['panel'], tip: string, d = false) => {
+    if (narrow && GROUPED.has(id)) folded.push({ name, key, dot: d });
+    else menus.push({ id, icon: ic, name, key, panel, tip, dot: d });
+  };
   m('research', 'research', 'Research', 'T', 'research', 'The research tree: the Hopper pays in items', !g.s.research.selected && g.s.research.done.length < Object.keys(RESEARCH).length && g.has('bellows'));
   m('orders', 'orders', 'Orders', 'O', 'orders', 'Customers and their orders', !g.s.orders.active && offeredOrders(g).length > 0);
   if (g.done('folding')) m('modules', 'fold', 'Modules', 'I', 'modules', 'Your folded modules: stamp, unfold, place', g.s.designs.some((d) => d.spare > 0) && app.floor === 'factory' && !g.s.factory.ents.some((e) => e.kind === 'module'));
@@ -74,6 +84,11 @@ export function topBar(app: App, L: Layout, dt: number) {
   }
   if (g.done('greatDrill')) m('mega', 'mega', 'Megaproject', '', 'mega', `The Megaproject: ${MEGA.find((q) => q.stage === g.s.mega.stage + 1)?.name ?? 'the Great Drill'}`, !h.opened.has('mega'));
   for (const q of MENUS) if (q.group !== 'book' && q.show(app)) m(q.id, q.icon, q.name, q.key ?? '', q.panel, q.tip, q.dot?.(app) ?? false);
+  const ord = menus.find((q) => q.id === 'orders');
+  if (ord && folded.length) {
+    ord.tip += `. Its tabs: ${folded.map((f) => f.name + (f.key ? ` (${f.key})` : '')).join(', ')}`;
+    ord.dot = ord.dot || folded.some((f) => f.dot);
+  }
   const trophyCount = TROPHIES.filter((t) => g.flag('trophy:' + t.id)).length;
   const book: Menu[] = [];
   book.push({ id: 'stats', icon: 'stats', name: 'Statistics', key: '', panel: 'stats', tip: 'The run in numbers, and everything delivered', dot: false });
@@ -149,10 +164,12 @@ export function topBar(app: App, L: Layout, dt: number) {
     ui.hint(x - 2, 0, w + 4, T.h, [{ text: 'Machine Kits', color: C.gold }, { text: 'Stamping a module made of Act II machines takes Machine Kits as well as coin. A Hopper banks the kits that reach it.' }], 190);
     x += w + 5;
   }
+  // what the rest of the bar needs after the counters: power, the chip, the floor tabs at their smallest
+  const after = (g.grids.length > 0 ? (narrow ? 58 : 72) : 0) + 70 + (g.done('folding') || g.flag('factoryOpen') ? 54 : 0);
   for (const c of COUNTERS) {
     if (!c.show(app)) continue;
     sep();
-    x += c.draw(app, x, 7) + 5;
+    x += c.draw(app, x, 7, room() - after) + 5;
   }
   if (g.grids.length > 0) {
     sep();
@@ -163,8 +180,10 @@ export function topBar(app: App, L: Layout, dt: number) {
     ui.text(ICON.bolt, x, 7, flick ? C.hull1 : col, { shadow: C.ink });
     x += 7;
     x += ui.text(`${fmtKw(t.demand)}/${fmtKw(t.supply)}`, x, 7, col) + 2;
-    x += ui.small('KW', x, 9, C.hull2) + 3;
-    if (room() > 190) {
+    // the unit and the bar give way on a narrow bar (the tooltip says kW)
+    if (!narrow) x += ui.small('KW', x, 9, C.hull2) + 3;
+    else x += 1;
+    if (!narrow && room() > 190) {
       bar(ui, x, 8, 22, 5, t.supply > 0 ? Math.min(1, t.demand / t.supply) : t.demand > 0 ? 1 : 0, t.worst < 1 ? C.pipYellow : C.teal1);
       x += 26;
     }
@@ -177,7 +196,7 @@ export function topBar(app: App, L: Layout, dt: number) {
   // the line-health chip, once there is a line to be healthy (the first minute shows one goal)
   if (g.miners.length || g.s.research.done.length || g.s.factory.ents.some((e) => e.kind === 'module')) {
     sep();
-    x = healthChip(app, x, 3) + 6;
+    x = healthChip(app, x, 3, narrow) + 6;
   }
 
   // ---- the floor tabs, in the middle of what is left
@@ -226,7 +245,7 @@ function menuButton(app: App, it: Menu, x: number, y: number, w: number) {
 
 /** The line-health chip: how many machines and modules work, starve, block, or want power; a
  *  click jumps to the next problem (the worst share of the last minute first) and opens it. */
-function healthChip(app: App, x0: number, y: number): number {
+function healthChip(app: App, x0: number, y: number, compact = false): number {
   const ui = app.ui;
   const g = app.game;
   const h = app.hud;
@@ -257,6 +276,8 @@ function healthChip(app: App, x0: number, y: number): number {
   problems.sort((a, b) => b.share - a.share || a.id - b.id);
   const pips: [string, number][] = [[C.pipGreen, work], [C.pipYellow, starved], [C.pipRed, blocked]];
   if (unpowered || g.machines.some((m) => powered(m.kind))) pips.push([C.pipBlue, unpowered]);
+  // compact (a narrow bar): the green count, and only the problem colours that have any
+  if (compact) for (let i = pips.length - 1; i > 0; i--) if (!pips[i][1]) pips.splice(i, 1);
   const w = pips.reduce((s, [, n]) => s + 9 + textWidth(String(n)) + 4, 0) + 4;
   const hov = ui.hover(x0, y, w, 14);
   ui.mark('nextProblem', x0, y, w, 14);

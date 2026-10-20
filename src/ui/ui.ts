@@ -240,11 +240,13 @@ export class UI {
     if (this.audit) this.clips.pop();
   }
 
-  /** Draw something that floats above the layout on purpose (a refusal under the cursor, a
-   * celebration): the overlap audit treats it like a tooltip. */
-  floating(draw: () => void) {
+  /** Draw something that floats above the layout on purpose. 'tip' (a refusal under the cursor,
+   * something sliding in): the overlap audit treats it like a tooltip and checks nothing. 'float'
+   * (a toast at rest): it may lie over the floor, but the audit checks it stays on screen, fits its
+   * own plate and covers no other HUD text (the UI legibility round). */
+  floating(draw: () => void, layer: 'tip' | 'float' = 'tip') {
     const prev = this.auditLayer;
-    this.auditLayer = 'tip';
+    this.auditLayer = layer;
     draw();
     this.auditLayer = prev;
   }
