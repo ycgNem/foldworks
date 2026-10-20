@@ -24,7 +24,7 @@ import { nodeIcon } from './screens';
 import type { App } from './app';
 
 /** each customer's colour (their orders' cards, flags and tabs) */
-export const CUSTOMER_COL: Record<CustomerId, string> = { bramble: C.leaf, unit7: C.teal1, voltaire: C.hot };
+export const CUSTOMER_COL: Record<CustomerId, string> = { bramble: C.leaf, unit7: C.teal1, voltaire: C.hot, committee: C.violet };
 
 const TITLE_H = 13;
 

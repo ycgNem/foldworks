@@ -32,7 +32,7 @@ import { ORDER, ORDERS } from '../data/orders';
 import type { ItemId } from '../data/items';
 import { TICK_RATE } from '../engine/time';
 import { available } from './systems/research';
-import { offeredOrders } from './systems/orders';
+import { offeredOrders, orderFrac } from './systems/orders';
 import { auditLock, foldRefusal } from './systems/audits';
 import { BYPRODUCTS, buildRoutes, kitsFor, mainItem, stampCost, stampRefusal } from './systems/modules';
 import { fauditLock, ffoldRefusal } from './systems/nested';
@@ -111,7 +111,12 @@ export const PARTS: Record<string, Pl[]> = {
   // the corridor (found by search) to the Workshop Hopper
   spine: belts([[16, 1, S], [16, 2, S], [16, 3, S], [16, 4, S], [16, 5, S], [16, 6, W], [16, 7, N]]),
   // research coal: two miners on E's coal patch, straight into the spine
-  coalFeed: gated(draw(17, 2, ['m<', 'm<']), ['coal'], N),
+  // (the second miner rests once the Great Drill's stage 1 runs miners +50%: one digs three
+  // quarters of what two did, and two flood the corridor in a later run: Milestone 5)
+  coalFeed: [
+    ...gated(draw(17, 2, ['m<']), ['coal'], N),
+    { kind: 'miner', x: 17, y: 3, rot: W, on: (b) => b.needOf('coal') > 0 && b.g.s.mega.stage < 1, off: N },
+  ],
   // research sand: a miner on E's sand patch, west along row 6 into the spine's turn
   sandFeed: [...draw(17, 6, ['b<b<b<']), ...gated(draw(20, 6, ['m<']), ['sand'], N)],
   // F's steel line (box 19,11 3x3): iron miner (21,13) north into the ingot smelter (21,12)? no:
@@ -174,7 +179,9 @@ export const PARTS: Record<string, Pl[]> = {
     { kind: 'belt', x: 23, y: 9, rot: N, on: (b) => b.valveOpen(), off: E },
     ...belts([[23, 8, W]]),
     ...draw(22, 8, ['p<'], { '22,8': 'crushGravel' }),
-    ...draw(21, 6, ['mv']), ...belts([[21, 7, S]]),
+    // the gravel line's sand miner: turned away while nothing wants its sand (once the Great Drill's
+    // stage 1 runs miners +50%, an ungated miner floods the corridor in a later run: Milestone 5)
+    { kind: 'miner', x: 21, y: 6, rot: S, on: (b) => b.sandWanted(), off: E }, ...belts([[21, 7, S]]),
     { kind: 'belt', x: 17, y: 8, rot: W, on: (b) => b.concreteOut(), off: N },
     ...belts([[19, 8, W], [20, 8, W]]),
   ],
@@ -614,16 +621,42 @@ export class Act2Bot {
 
   // ---------------------------------------------------------------- orders
 
-  /** Orders the plan has reached are accepted when nothing else is active; the slice's own orders
-   * (Mayor Bramble's) whenever they are offered. */
+  /** Orders the plan has reached are accepted when nothing else is active; Mayor Bramble's
+   * Factory-floor order (the Festival) whenever it is offered, and the Committee's orders the floor
+   * fills on its own (Milestone 5); the slice's Workshop orders are the Act I planner's. */
   private wantOrders: string[] = [];
+
+  /** the active order's progress when last looked at, and since when it has not moved */
+  private orderWatch: { id: string; frac: number; since: number } | null = null;
 
   private orders() {
     const g = this.g;
-    if (!this.handReady || g.s.orders.active) return;
+    if (!this.handReady) return;
+    const active = g.s.orders.active;
+    if (active) {
+      // an order nothing on the floor feeds any more (the slice's Lamp Posts after the hand-over)
+      // gives way, after 10 minutes without progress, to a Committee order the floor fills itself
+      const f = orderFrac(g, active);
+      if (!this.orderWatch || this.orderWatch.id !== active || Math.abs(this.orderWatch.frac - f) > 1e-9) this.orderWatch = { id: active, frac: f, since: g.seconds };
+      else if (g.seconds - this.orderWatch.since >= 600 && ORDER[active].customer !== 'committee') {
+        const c = this.committeeOrder(offeredOrders(g).map((o) => o.id));
+        if (c) this.act({ k: 'order', id: c });
+      }
+      return;
+    }
     const offered = offeredOrders(g);
-    const id = offered.find((o) => o.customer === 'bramble')?.id ?? this.wantOrders.find((p) => offered.some((q) => q.id === p));
+    const id = offered.find((o) => o.customer === 'bramble' && o.at === 'factory')?.id ?? this.wantOrders.find((p) => offered.some((q) => q.id === p)) ?? this.committeeOrder(offered.map((o) => o.id));
     if (id) this.act({ k: 'order', id });
+  }
+
+  /** The Committee's orders (DESIGN.md §19) this floor already fills on its own: The Pile while
+   * modules send slag to the Factory Dock, Midnight Oil once a Plastic module sends its oil there. */
+  private committeeOrder(offered: string[]): string | undefined {
+    const g = this.g;
+    const mods = g.s.factory.ents.filter((e) => e.kind === 'module').map((e) => g.design(e.design));
+    if (offered.includes('thePile') && mods.some((d) => d && (d.outs.slag ?? 0) > 0)) return 'thePile';
+    if (offered.includes('midnightOil') && mods.some((d) => d && (d.outs.oil ?? 0) > 0)) return 'midnightOil';
+    return undefined;
   }
 
   // ---------------------------------------------------------------- the plan
@@ -760,6 +793,11 @@ export class Act2Bot {
 
   /** The concrete gate (17,8): open while research needs gravel, sand or concrete, and in the
    * loop phases (the drill-bit assembler takes concrete off the loop). */
+  /** The gravel line's sand: while research needs sand, or a mixer is built to take it. */
+  sandWanted(): boolean {
+    return this.needOf('sand') > 0 || this.layout.includes('concrete');
+  }
+
   concreteOut(): boolean {
     return this.looping() || (['gravel', 'sand', 'concrete'] as ItemId[]).some((i) => this.needOf(i) > 0);
   }
@@ -876,6 +914,12 @@ export class Act2Bot {
       return 'auditing';
     }
     if (!a.result) return 'auditing';
+    // a line that made nothing in the window is not folded (it would be a module of nothing): a
+    // player cancels and audits it again once it runs
+    if (!Object.keys(a.result.outs).length) {
+      if (this.act({ k: 'auditCancel', id: a.id })) this.warmSince.set(s.name, g.seconds);
+      return 'audit made nothing: again';
+    }
     const r = this.act({ k: 'fold', name: s.name, id: a.id });
     if (r) {
       this.decide('fold:' + a.result.grade.letter);

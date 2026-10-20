@@ -677,6 +677,186 @@ to S, then the Act II bot in `src/sim/bot2.ts`, seeds 1000 and 8919, 5 h):
 - Lifetime coin: 1.8M at 4 h, 2.0–2.05M at 5 h. Income about 12,500/min from S to the Bay floor,
   4,300/min after (the Gizmo chains are cleared for it).
 
+## 19. Reorganize (Milestone 5, 5-15 h)
+
+Reset layer 1. The player ends a run on purpose and banks **Patents** for what the run built; the
+Patent tree spends them on a faster, different next run. Pillar 4: it is always a choice, made
+from a card that says exactly what it gives, keeps and loses (`src/app/reorganize.ts`), and a
+player who never resets keeps progressing (§16 rule 6).
+
+### The Patents formula
+
+    Patents = floor( 0.5 x SUM over distinct products folded this run (chain steps x best grade mult)
+                   + Great Drill Patents delivered this run
+                   + log2(1 + invested / 100,000) )
+
+- **Main term: what you folded.** Each distinct product a module design of this run makes (its
+  main output; byproducts never count) is worth half a Patent per **chain step** from raw ore,
+  derived from the recipes (`chainSteps`, the shallowest recipe): an ingot 1, plate, wire and steel
+  2, gear, concrete and circuit 3, Gizmo and motor 4, Drill Bit 5, slag brick 1, glass 1 (from
+  sand). It is multiplied by the best grade it was folded at (§10's multipliers, C 0.9 to S+ 1.35),
+  and each product counts once: twelve copies of an Iron ingots module are worth what one is. The
+  term rewards the breadth and depth of the chains the run understood well enough to fold, and the
+  audit's grade matters at the reset as it does on the floor.
+- **Megaproject term.** Each Great Drill stage is worth Patents (stage 1: 5, stage 2: 6, stage 3:
+  8), earned in proportion as its parts are delivered in this run (each item, and the bearings, an
+  equal share). Progress already in the Bay from an earlier run is not paid twice.
+- **Works term (minor).** log2(1 + invested / 100,000), invested = coin earned + head-start coin
+  granted - coin on hand: coin put into the factory, not hoarded. The Act II bot puts about 280K in
+  by 4 h (about 2 Patents); 1.8M would be about 4.2. Coin alone never dominates.
+- A reset needs at least 1 Patent (`patentMin`) and no audit running.
+
+**Not derivative of a shipped prestige formula** (checked; DECISIONS.md, Milestone 5): Cookie
+Clicker's heavenly chips and Antimatter Dimensions' infinity points are functions of the currency
+earned (a root or a log of it). Here currency is the minor, logarithmic term; the main term counts
+distinct folded products by recipe depth and audit grade, which only this game has.
+
+**Calibration.** The weight 0.5 was set so the Act II bot's run gives 12-20 at a sensible 4-6 h
+reset: its nine folded products are 21.5 chain steps, about 10.9 Patents at its grades; the Great
+Drill's stage 1 adds up to 5 (2.4-5 by the reset), works about 2. Measured
+(`tests/pace-act2-run.test.ts`, the preview at fixed times, seeds 1000 and 8919): 10 at 2 h, 14 at 3 h,
+19 at 4 h and at 5 h. The idle slice factory (the planner to the Gizmo Festival, then left
+alone) is worth 4.35 at 4 h: clearly fewer (`tests/pace-reorganize.test.ts`).
+
+**The preview** (`previewPatents`, pure): the Patents now, each term, and the goals that raise it,
+biggest first: fold a product not folded yet (+0.5 x its steps), refold one at S+ (+ the grade
+gap), finish the Drill stage (+ what is left of it), and the coin that, invested, adds the next
+whole Patent. "Next step" is the total with the best new fold added. The Reorganize card shows it
+all, with the runs so far.
+
+### What is kept, what is lost
+
+Kept (`meta`, plus four fields that already lived in the run's state): Patents and the tree,
+blueprints, Great Drill progress (`mega`), reputation, the Codex, Raccoon Bearings, trophies and
+lifetime statistics (coin earned, items delivered, folds), the run history. Lost: both floors,
+coin and items, land (back to chunk A), claims, research, module designs, orders filled this run.
+The tick and the seeded RNG run on: the command log stays one ordered history and replays across
+resets (a test checks it); `meta.runStart` marks a run's first tick.
+
+### The Patent tree (`src/data/patents.ts`, 31 nodes, 82 Patents in all)
+
+Flat prices with prerequisites, never a growing price; no "+X% everything" node. Four branches:
+
+- **Head starts (13 nodes, 33 Patents).** Bellows on the Bench 1; A Miner on the Patch 1 (a Miner
+  at 2,3 feeding the Hand Furnace); Old Notebooks 1 (Pressing, Surveying East); Copper Deeds 2
+  (chunk B, Copper Smelting, Wire Drawing); Gear Patterns 2 (Gearcutting, Splitters, Buffers); The
+  Gizmo Patent 2; Folding, Remembered 3; Founders' Grant 2 (2,000 coin); Overdrive by Habit 2; Coal
+  Rights 4 (Coal Seams, chunk E); Steel Charter 4 (Steelmaking, Steam Power, chunk F); Glass and
+  Gravel Notes 4; Circuit Patent 5. A head start applies at once in the run it is bought in, and
+  at the start of every later run. It gives only the research it names, not the tree before it:
+  Overdrive by Habit gives Overdrive, and the steel research before it stays to be done. Each
+  price is roughly the minutes of the first run it saves, a Patent per 5-8 min.
+- **Rules (9 nodes, 23).** Surveyor's Charter 3 (+2 claims on every ore: two more copies of each
+  source module); Wider Fold Box 2 (10x10, was 8x8); Quick Audits 2 (5 s warm-up + 40 s, was 70 s);
+  More Auditors 3 (5 at once, was 3); Side Intakes 3 (a module also takes from a trunk pointing
+  into its left side); Deep Heaps 1 (800 slag); Nested Boxes 3 (8x8 nested folds); Cool Hands 2
+  (Overdrive cools in 20 s); Stamping Dies 4 (a stamp costs bill x (1 + 0.3 n), still linear).
+- **Automation (6 nodes, 17).** The Shovel Frog 1 (shovels one jammed machine a second); Lab
+  Assistant 2 (picks research when none is selected); Order Clerk 2 (accepts the first offered
+  order); Stamp Press 4 (stamps the designs marked "keep one spare", every 5 s); Builder Dragonfly 3
+  and A Swarm of Dragonflies 5 (1, then 3, ghosts built every 2 s).
+- **Offline (3 nodes, 9).** Night Shift 2 (+0.1), Night Watch 3 (+0.08), Lights Left On 4 (+0.07):
+  offline efficiency 0.5 up to 0.75 at most. `offlineEfficiency(g)` is the one place
+  `src/sim/offline.ts` reads it.
+
+The campaign bot buys in a fixed priority (`PATENT_PRIORITY`): Surveyor's Charter and the Bellows
+first (two more source copies and a hands-free furnace raise income at once), Overdrive by Habit,
+the Act I head starts in order, quality of life, then Act II's head starts.
+
+### Blueprints and ghosts
+
+A blueprint is a Workshop layout saved from a box (at most 16x16, two chunks: a slice line set;
+24 in the book). The Dock, Hopper and Hand Furnace stay out. Placed by its top-left corner, it
+becomes **ghosts**: outlines that do nothing until built, by a click on one, by "Build ghosts"
+(everything affordable, in placement order), or by a Builder Dragonfly (one every 2 s, the
+cheapest ready ghost first, so a dear one waiting for coin never holds the belts up). A ghost may
+wait on coin, research or land; it may not sit on another building, off the map, or (a Miner) off
+ore. A belt ghost over a belt facing another way turns it when built. Ghosts draw as a faded
+sprite in a dashed outline, teal when ready and slow-blinking violet when waiting (§17: a ghost
+never reads as a machine).
+
+**Share strings** `FWB1.<data>.<checksum>`: the layout as a w x h grid of cell bytes (kind code + 1
++ 32 x turn; 127 for the rest of a 2x2), then a recipe byte for each crafting machine; squeezed by
+a small LZSS coder (12-bit distance, 4-bit length), written in base64url, with an FNV-1a checksum.
+Pure TypeScript (no CompressionStream). The kind and recipe tables are append-only, so old strings
+keep decoding. A 7-part 5x3 line is 45 characters; four 12-tile rows (48 parts) are 53. Import
+refuses with the reason in words: not an FWB1 string, a damaged checksum, a newer version, too
+big, an unknown building or recipe, a part sticking out of its box, overlapping parts, a recipe on
+a machine that cannot make it, extra or missing data.
+
+### The Committee (three raccoons in a trench coat)
+
+The fourth customer, met with the Great Drill research in the first run (its bearings go to the
+Bay, and its orders are goals while the Bay fills: §16 rule 1), or after the first Reorganize once
+Folding is done in that run. Its orders want what nobody else does and pay no coin but **Raccoon
+Bearings**, kept through every reset (a new currency: DECISIONS.md, Milestone 5). The Dock takes an
+item it normally refuses (slag, oil) while the active order wants it.
+
+| Order | Wants | Bearings | Needs |
+|---|---|---|---|
+| The Pile | 1,500 slag | 3 | Folding (about 30 min of a slice Factory floor's slag) |
+| Midnight Oil | 600 oil | 3 | Refining (about an hour of two Plastic modules' oil) |
+| The Brick Throne | 200 slag bricks | 3 | Slag Bricks |
+| Gravel Garden | 600 gravel | 3 | Crushing |
+| Shiny Things | 300 glass + 600 wire | 4 | Glassworks |
+| The Lining | 200 plastic + 10 motors | 4 | Motors |
+
+Its reputation rewards are rules: Coat Pockets (rep 1: module buffers hold 6 s of each rate, was 2,
+so a hiccup in a feed is ridden out), The Night Crew (rep 2: every Slag Heap loses a slag every
+10 s to the coat), Pocketed Kits (rep 3: every stamp needs 1 Machine Kit fewer).
+
+### The Great Drill, stages 2 and 3
+
+| Stage | Wants | Bearings | Patents | Reward, for good |
+|---|---|---|---|---|
+| 1 | 450 bits, 2,000 steel | - | 5 | Miners and modules with miners +50% (§18) |
+| 2, the Bore | 250 bits, 1,000 steel | 4 | 6 | Miners dig from any tile beside an ore patch: a patch feeds three times the miners |
+| 3, Breakthrough | 400 bits, 1,600 steel | 8 | 8 | Chunk D gains a deep iron and a deep copper deposit |
+
+For stages 2 and 3 the Bay takes nothing else until their bearings are in (the bore head is the
+Committee's), so a stage needs a Committee order or two first. Steel is 4 a bit (under stage 1's
+4.4) so the steel is in before the bits: with the bits full first, the bot's Bay floor jammed on
+its own slag (Steel blocked on slag, Concrete full, the Drill works starved of wire). About 50 min
+of the Bay floor for stage 2, 80 for stage 3. Progress survives every reset.
+
+### Measured pace (`tests/pace-reorganize.test.ts`, the campaign bot)
+
+Run 1 is the Act I planner to the Festival, then the Act II policy; it resets when its plan is
+done, the preview grew under 0.25 in 20 min, no Committee order is filling, and it holds at least
+12 Patents. Runs 2 and 3 buy Patents first (11 nodes, then 5-6), then play the same way.
+
+| | seed 1000 | seed 8919 |
+|---|---|---|
+| Run 1: reset at, Patents | 4:13, 19 | 4:08, 19 |
+| Run 1 peak (coin/min over 5 min) | 13,422 | 13,348 |
+| A third of run 1 (rule 3's limit) | 1:24 | 1:22 |
+| Run 2 passes run 1's peak at | 0:23 | 0:21 |
+| Run 3 passes it at | 0:15 | 0:15 |
+| Slice end (hand-over) in runs 1, 2, 3 | 0:31, 0:17, 0:10 | 0:30, 0:16, 0:10 |
+| Great Drill stage after runs 1, 2, 3 | 1, 1, 2 | 1, 2, 2 |
+
+- **Rule 3 holds** with room: runs 2 and 3 pass run 1's peak in about a sixth of run 1's length.
+  Run 2 resets at about 3 h with 12-17 Patents (the campaign scratch runs).
+- **First reset worth taking at 4-6 h** with 12-20 Patents: 4:08-4:13, 19.
+- **Rule 6** (seed 1000, never resetting, 7 h): the preview climbs 5.7, 10.3, 14.9, 19.1 at 1-4 h
+  and then holds at 19.1 to 7 h; coin earned 0.32M, 1.06M, 1.54M, 1.77M, 2.04M, 2.29M, 2.54M at
+  1-7 h; stage 1 stands at about 3:50. Progress slows and never stops; the flat preview is the
+  pressure toward a reset.
+- Honest: at most 4 clicks in any second in every run. The campaign takes about 55 s a seed.
+
+### Open after Milestone 5
+
+- **Rule 1 while the Bay fills.** The Committee now arrives with the Great Drill research, so its
+  orders and the preview's goals stand in that stretch. The Act II bot takes a Committee order
+  only when its own order stalls for 10 minutes, so the bot's measured gap barely moves (above).
+- **Coin piling up** (about 1.8M at 5 h): the works term turns coin put into the factory into
+  Patents (1.8M invested is about 4) and the preview names the coin to the next one; there is
+  still little to spend it on inside Act II besides claims, stamps and Mk2 machines.
+- **A never-resetting run's preview flattens** once every product is folded and the stage stands
+  (19.1 from 5 h to 7 h on seed 1000) while its coin keeps growing. That is the pressure toward a
+  reset, not a wall: the run still earns and builds (rule 6 holds on coin and lifetime progress).
+- **Stage 3 in three runs** needs two Committee orders a run; the campaign bot fills only The Pile
+  each run (its floor never routes oil to the Dock for Midnight Oil), so it ends run 3 at stage 2.
 ## 20. Idle and offline (Milestone 6)
 
 Pillar 4 finished: time away is paid honestly and the report says how, the player can make a

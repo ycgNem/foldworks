@@ -32,12 +32,14 @@ import { runOrders } from './systems/orders';
 import { megaGive, fname } from './systems/modules';
 import { entName } from './analysis';
 import { restore } from './snapshot';
+import { prules } from './patents';
 import type { Ent, FEnt } from './world';
 
 /** The offline efficiency now (DESIGN.md §12, §20): the base 0.5, plus the Night Shift bought with
  * coin, capped at 0.75. Milestone 5's Patent nodes plug in here. */
 export function offlineEfficiency(g: Game): number {
-  let e = RULES.offlineEff.value;
+  // the base 0.5 plus the Patent tree's offline nodes (DESIGN.md §19), then the Night Shift
+  let e = prules(g).offline;
   for (const u of IDLE_UPGRADES) if (g.has(u.id)) e += u.eff;
   return Math.min(IDLE.offlineEffMax.value, e);
 }

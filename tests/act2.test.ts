@@ -14,7 +14,7 @@ import { kitsFor, stampRefusal } from '../src/sim/systems/modules';
 import { foldRefusal, splusGate } from '../src/sim/systems/audits';
 import { auditTicks } from '../src/sim/systems/audits';
 import { machineRecipes } from '../src/sim/transfer';
-import { migrate } from '../src/engine/save';
+import { migrate, SAVE_VERSION } from '../src/engine/save';
 import type { Ent, ModuleDesign } from '../src/sim/world';
 
 function sandbox(seed = 1) {
@@ -688,10 +688,10 @@ describe('saves v3 and v4', () => {
   it('migrates a v2 save: parts bank, claims, Codex, Megaproject, Act II reputation', () => {
     const st = { coin: 'N:5', orders: { active: null, progress: {}, done: [], rep: { bramble: 2 } } };
     const d = migrate({ v: 2, saved: 0, seed: 1, snap: JSON.stringify(st) });
-    expect(d.v).toBeGreaterThanOrEqual(4);
+    expect(d.v).toBe(SAVE_VERSION);
     const s2 = JSON.parse(d.snap as string);
     expect(s2.parts).toBe('N:0');
-    expect(s2.orders.rep).toEqual({ bramble: 2, unit7: 0, voltaire: 0 });
+    expect(s2.orders.rep).toMatchObject({ bramble: 2, unit7: 0, voltaire: 0 });
     expect(s2.mega).toEqual({ stage: 0, progress: {} });
     expect(s2.codex).toEqual([]);
     expect(Num.parse('0').toNumber()).toBe(0);

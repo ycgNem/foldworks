@@ -8,7 +8,7 @@
 //   Overdrive (Workshop machines and Factory groups) about 3,600 clicks;
 //   rule 4 active/idle over 2:00-2:30 1.80-1.84; lifetime coin 4 h 1.80M, 5 h 2.05-2.07M.
 import { describe, expect, it } from 'vitest';
-import { act2Run, earnedAt, idleEarned, longestGap, patents, hmm, SEEDS2, RULE4_AT, RULE4_FOR } from './pace-act2-helpers';
+import { act2Run, earnedAt, idleEarned, longestGap, patentsAt, hmm, SEEDS2, RULE4_AT, RULE4_FOR } from './pace-act2-helpers';
 
 const T = 120_000;
 const MIN = 60;
@@ -53,15 +53,15 @@ describe('Act II pacing (bot2 after the planner)', () => {
         expect(gap.gap).toBeLessThanOrEqual(15 * MIN);
       }, T);
 
-      it('Reorganize: 5 h gives 12-20 Patents, 4 h fewer, doubling lifetime coin adds at least 3', () => {
+      it('Reorganize (DESIGN.md §19): the preview gives 12-20 Patents at 4 h and 5 h, more than at 2 h', () => {
         const r = act2Run(seed);
-        const e4 = earnedAt(r, 4 * 3600), e5 = earnedAt(r, 5 * 3600);
-        const p4 = patents(e4), p5 = patents(e5), p10 = patents(2 * e5);
-        console.log(`seed ${seed}: earned 4h ${Math.round(e4)} (${p4}) 5h ${Math.round(e5)} (${p5}) x2 (${p10})`);
+        const p2 = patentsAt(r, 2 * 3600), p3 = patentsAt(r, 3 * 3600), p4 = patentsAt(r, 4 * 3600), p5 = patentsAt(r, 5 * 3600);
+        console.log(`seed ${seed}: Patents 2h ${p2} 3h ${p3} 4h ${p4} 5h ${p5}`);
+        expect(p4).toBeGreaterThanOrEqual(12);
+        expect(p4).toBeLessThanOrEqual(20);
         expect(p5).toBeGreaterThanOrEqual(12);
         expect(p5).toBeLessThanOrEqual(20);
-        expect(p4).toBeLessThan(p5);
-        expect(p10 - p5).toBeGreaterThanOrEqual(3);
+        expect(p4).toBeGreaterThan(p2);
       }, T);
 
       it('rule 4: active play earns 1.5-4x idle from the same 2 h state', () => {

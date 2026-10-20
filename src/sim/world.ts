@@ -8,6 +8,8 @@ import type { ResearchId } from '../data/research';
 import type { ItemId } from '../data/items';
 import type { CustomerId } from '../data/orders';
 import type { SparkKind } from '../data/sparks';
+import type { BuildKind } from '../data/machines';
+import type { PatentId } from '../data/patents';
 
 export type Dir = 0 | 1 | 2 | 3;
 /** E, S, W, N */
@@ -185,6 +187,8 @@ export interface ModuleDesign {
   stamped: number;
   /** copies in the inventory, not placed (a count of modules) */
   spare: number;
+  /** the Stamp Press keeps one spare copy of it (DESIGN.md §19, a Patent node) */
+  auto?: boolean;
 }
 
 export type FKind = 'module' | 'trunk' | 'fdock' | 'fhopper' | 'fbay';
@@ -264,6 +268,65 @@ export interface OrderState {
   rep: Record<CustomerId, number>;
 }
 
+// ---- Reorganize, layer 1 (DESIGN.md §19, Milestone 5)
+
+/** One building of a blueprint, relative to its box. */
+export interface BlueprintPart { kind: BuildKind; dx: number; dy: number; rot: Dir; recipe: string | null }
+
+/** A saved Workshop layout (kept across every Reorganize; shared as an FWB1 string). */
+export interface Blueprint {
+  id: number;
+  name: string;
+  w: number;
+  h: number;
+  parts: BlueprintPart[];
+}
+
+/** A building planned from a blueprint: drawn as an outline, it does nothing until it is built. */
+export interface Ghost { kind: BuildKind; x: number; y: number; rot: Dir; recipe: string | null }
+
+/** One finished run, for the Reorganize card and the statistics. */
+export interface RunRecord {
+  run: number;
+  /** its length in ticks */
+  ticks: number;
+  patents: number;
+  earned: Num;
+  /** its best coin per minute over 5 minutes (a rate) */
+  peakPerMin: number;
+}
+
+/** What survives a Reorganize, beside the four kept fields that already lived in the run's state
+ * (`mega`, `codex`, `orders.rep`, the trophy flags): see src/sim/reorganize.ts KEPT. */
+export interface MetaState {
+  /** Reorganizes taken */
+  runs: number;
+  /** the tick the current run started on (the tick never resets: the command log stays ordered) */
+  runStart: number;
+  /** unspent, and ever earned */
+  patents: Num;
+  patentsEarned: Num;
+  /** Patent nodes bought */
+  nodes: PatentId[];
+  blueprints: Blueprint[];
+  nextBlueprint: number;
+  /** the Committee's Raccoon Bearings, waiting for a Great Drill stage that wants them */
+  bearings: Num;
+  /** lifetime statistics over every run */
+  lifetime: { earned: Num; delivered: Partial<Record<ItemId, Num>>; folds: number };
+  history: RunRecord[];
+  /** this run's best 5-minute coin per minute so far, and the minutes it is averaged over (rates) */
+  peakPerMin: number;
+  perMinRing: number[];
+}
+
+export function newMeta(): MetaState {
+  return {
+    runs: 0, runStart: 0, patents: Num.ZERO, patentsEarned: Num.ZERO, nodes: [], blueprints: [], nextBlueprint: 1,
+    bearings: Num.ZERO, lifetime: { earned: Num.ZERO, delivered: {}, folds: 0 }, history: [], peakPerMin: 0, perMinRing: [],
+  };
+}
+
 export interface State {
   seed: number;
   tick: number;
@@ -317,12 +380,21 @@ export interface State {
   codex: ItemId[];
   /** the Megaproject: stages done and what the current stage has been given. Survives every
    * reset (Milestone 5 keeps it apart from the run's state). */
-  mega: { stage: number; progress: Partial<Record<ItemId, Num>> };
+  mega: { stage: number; progress: Partial<Record<ItemId, Num>>; bearings?: number };
   /** the Factory-floor fold audit (nested folds), like `audit` on the Workshop */
   faudit: FAuditState | null;
   // ---- Milestone 6 (DESIGN.md §20)
   /** Inspiration credited to each research node, by item (capped at 30% of each item's cost) */
   inspire: Partial<Record<ResearchId, Partial<Record<ItemId, Num>>>>;
+  // ---- Reorganize (DESIGN.md §19)
+  /** what survives a Reorganize */
+  meta: MetaState;
+  /** blueprint ghosts waiting to be built (this run's) */
+  ghosts: Ghost[];
+  /** Patents earned so far this run by Megaproject deliveries (a fraction of each stage's worth) */
+  megaPatents: number;
+  /** coin handed over by head starts this run (coin invested = earned + granted - coin) */
+  granted: Num;
 }
 
 /** A nested-fold audit on the Factory floor (DESIGN.md §18 Nested folds). */
@@ -380,7 +452,7 @@ export function newState(seed: number): State {
     ents: [],
     nextId: 1,
     research: { done: [], selected: null, progress: {}, bank: {} },
-    orders: { active: null, progress: {}, done: [], rep: { bramble: 0, unit7: 0, voltaire: 0 } },
+    orders: { active: null, progress: {}, done: [], rep: { bramble: 0, unit7: 0, voltaire: 0, committee: 0 } },
     sparks: [],
     nextSpark: 0,
     visible: true,
@@ -405,6 +477,10 @@ export function newState(seed: number): State {
     mega: { stage: 0, progress: {} },
     faudit: null,
     inspire: {},
+    meta: newMeta(),
+    ghosts: [],
+    megaPatents: 0,
+    granted: Num.ZERO,
   };
 }
 

@@ -30,6 +30,9 @@ import { rail, diegetic } from './rail';
 import { buildBar } from './buildbar';
 import { gridIndex, capacity, powered, burnerOf, fuelCount, engineOf, producerKw, kw } from '../render/powerview';
 import type { App } from './app';
+// Milestone 5: Reorganize's preview on the bar, and the Patent rules
+import { previewPatents } from '../sim/reorganize';
+import { prules } from '../sim/patents';
 
 export interface HudState {
   /** the coin number shown, counting up toward the real value */

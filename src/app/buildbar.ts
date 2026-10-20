@@ -12,6 +12,7 @@ import { RESEARCH } from '../data/research';
 import { CHUNKS, PATCHES, FACTORY, type ChunkDef } from '../data/land';
 import { ITEMS, type ItemId } from '../data/items';
 import { RULES } from '../data/rules';
+import { prules } from '../sim/patents';
 import { Num } from '../engine/num';
 import { ICON, textWidth, wrapText, smallWidth } from '../ui/font';
 import { sheet, itemIcon, spriteName } from '../render/sprites';
@@ -384,7 +385,7 @@ function tools(app: App, x: number, y: number, w: number, h: number) {
     // the Fold tool wears the audit count, gold when one is graded
     if (t.id === 'fold' && g.s.audits.length) {
       const graded = g.s.audits.some((a) => a.result);
-      badge(ui, bx + 10, by - 5, `${g.s.audits.length}/${RULES.maxAudits.value}`, graded ? C.gold : C.teal0);
+      badge(ui, bx + 10, by - 5, `${g.s.audits.length}/${prules(g).maxAudits}`, graded ? C.gold : C.teal0);
     }
   });
 }

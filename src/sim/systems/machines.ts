@@ -11,6 +11,7 @@ import { RECIPE, type RecipeDef } from '../../data/recipes';
 import { BUILD, isMachine } from '../../data/machines';
 import { lineOf } from '../analysis';
 import { RULES } from '../../data/rules';
+import { prules } from '../patents';
 import { TICK_RATE } from '../../engine/time';
 import { offer, accepts } from '../transfer';
 import { powerFactor } from './power';
@@ -43,11 +44,11 @@ export function baseSpeed(m: Ent): number {
 }
 
 /** Count down Overdrive, then its cooling, and a Lucky Vein's boost (both systems that run
- * machines call it). */
-export function overdriveTick(m: Ent) {
+ * machines call it). Cool Hands (a Patent, §19) shortens the cooling. */
+export function overdriveTick(m: Ent, coolSec: number = RULES.overdriveCool.value) {
   if (m.od) {
     m.od--;
-    if (!m.od) m.cool = Math.round(RULES.overdriveCool.value * TICK_RATE);
+    if (!m.od) m.cool = Math.round(coolSec * TICK_RATE);
   } else if (m.cool) m.cool--;
   if (m.boost) m.boost--;
 }
@@ -133,7 +134,7 @@ export function runMachines(g: Game) {
       g.emit({ type: 'jam', x: m.x, y: m.y, id: m.why, value: m.id });
       if (g.first('jam:slag')) g.emit({ type: 'firstSlagJam', x: m.x, y: m.y, id: String(m.id) });
     }
-    overdriveTick(m);
+    overdriveTick(m, prules(g).overdriveCool);
     note(m);
   }
 }

@@ -84,8 +84,23 @@ export const RULES = {
   codexMult: r(30, '§18 Customers: Unit 7 rep 1, the Codex pays 30x a first delivery (100x paid ~71K in one burst, a motor 42K: the Milestone 3 gate audit)'),
   /** nested folds: the box limit on the Factory floor */
   nestedMax: r(6, '§18 Nested folds: a box up to 6x6 of modules and trunks'),
-  /** Reorganize (§15): patents = floor((lifetime coin / this) ^ 0.4) */
-  patentDivisor: r(2500, '§15 Reorganize, §16 rule 6: the Act II bot (tests/pace-act2-run.test.ts) has earned about 2.05M lifetime coin by 5 h and 1.8M by 4 h; 2.05M / 2,500 = 820 and 820 ^ 0.4 = 14.7, so a 5 h first run gives 14 Patents (12-20), 4 h 13, and doubling lifetime coin 19. Provisional: lifetime coin alone lets an idle slice factory earn about as many, so the formula is reopened for Milestone 5 (the Milestone 4 review)'),
+  // ---- Reorganize, layer 1 (DESIGN.md §19, Milestone 5)
+  /** Patents per chain step of each product folded this run, times its best grade's multiplier */
+  patentPerStep: r(0.5, "§19 Patents formula: the main term is half a Patent for each step of a folded product's chain from raw ore (an ingot 1, a Gizmo 4, a Drill Bit 5) times its best grade: the Act II bot's nine products (21.5 steps x grade) give about 11, an idle slice factory's three about 4"),
+  /** the works term: log2(1 + coin invested / this) */
+  patentWorksDivisor: r(100000, '§19 Patents formula: the minor term is log2(1 + coin invested / 100,000): the Act II bot invests about 280K by 4 h (2 Patents), spending the 1.8M it piles up would add 3 more; coin alone never dominates (the Milestone 4 review)'),
+  /** a reset needs at least this many Patents to be taken (the preview says what to do first) */
+  patentMin: r(1, '§19 Reorganize: at least one Patent, so a reset is never a loss by accident'),
+  /** blueprints: the box limit and the library size */
+  blueprintMax: r(16, '§19 Blueprints: a box up to 16x16, two Workshop chunks, a whole slice line set'),
+  blueprintSlots: r(24, '§19 Blueprints: 24 in the library, a page of the book with room to spare'),
+  /** the Builder Dragonfly: ticks between two ghosts built, per dragonfly */
+  droneTicks: r(40, '§19 Blueprints: a dragonfly builds one ghost every 2 s (40 ticks)'),
+  /** the Committee's reputation rewards (§19) */
+  coatBuffer: r(6, '§19 The Committee rep 1: module buffers hold 6 s of each rate (was 2, §11)'),
+  nightCrewSeconds: r(10, '§19 The Committee rep 2: each Slag Heap loses one slag every 10 s (a smelter makes one every 8 s: a heap fed by one smelter fills at a fifth of the speed)'),
+  /** the Committee rep 3: Machine Kits a stamp needs fewer */
+  pocketedKits: r(1, '§19 The Committee rep 3: every stamp needs 1 Machine Kit fewer (never below none; §18 Machine Kits)'),
 };
 
 export type RuleId = keyof typeof RULES;

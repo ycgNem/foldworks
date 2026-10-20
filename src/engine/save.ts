@@ -5,7 +5,7 @@
 // snapshot and the commands since it (src/sim/snapshot.ts).
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -58,13 +58,28 @@ export const MIGRATIONS: Record<number, Migration> = {
     delete st.audit;
     return { ...d, snap: JSON.stringify(st), v: 4 };
   },
-  // v5 (Milestone 6, idle and offline): Inspiration credited per research node. Paused machines
-  // and modules (`paused`) and the Night Shift (in `upgrades`) need nothing: absent means none.
-  // (Milestone 5 may add its own step; the lead renumbers at the merge.)
+  // v5 (Milestone 5, Reorganize): what survives a reset (`meta`: Patents, the tree, blueprints,
+  // bearings, run history), blueprint ghosts, the run's Megaproject Patents and head-start coin, and
+  // the Committee's reputation. An old save is a first run with nothing kept yet.
   4: (d) => {
     const st = JSON.parse(d.snap);
-    st.inspire ??= {};
+    st.meta ??= {
+      runs: 0, runStart: 0, patents: 'N:0', patentsEarned: 'N:0', nodes: [], blueprints: [], nextBlueprint: 1,
+      bearings: 'N:0', lifetime: { earned: 'N:0', delivered: {}, folds: 0 }, history: [], peakPerMin: 0, perMinRing: [],
+    };
+    st.ghosts ??= [];
+    st.megaPatents ??= 0;
+    st.granted ??= 'N:0';
+    st.orders ??= {};
+    st.orders.rep = { committee: 0, ...(st.orders.rep ?? {}) };
     return { ...d, snap: JSON.stringify(st), v: 5 };
+  },
+  // v6 (Milestone 6, idle and offline): Inspiration credited per research node. Paused machines
+  // and modules (`paused`) and the Night Shift (in `upgrades`) need nothing: absent means none.
+  5: (d) => {
+    const st = JSON.parse(d.snap);
+    st.inspire ??= {};
+    return { ...d, snap: JSON.stringify(st), v: 6 };
   },
 };
 

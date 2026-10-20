@@ -9,6 +9,7 @@ import { offer } from '../transfer';
 import { note } from './stats';
 import { overdriveTick, veinBoost } from './machines';
 import { isAudited } from './audits';
+import { prules } from '../patents';
 
 export function runMiners(g: Game) {
   const cap = RULES.outputCap.value;
@@ -46,7 +47,7 @@ export function runMiners(g: Game) {
       m.why = out;
     }
     if (m.out > 0 && offer(g, m.x + DX[m.rot], m.y + DY[m.rot], m.rot, m.outItem!)) m.out--;
-    overdriveTick(m);
+    overdriveTick(m, prules(g).overdriveCool);
     note(m);
   }
 }

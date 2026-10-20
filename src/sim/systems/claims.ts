@@ -8,7 +8,8 @@
 import type { Game, ActResult } from '../Game';
 import { OK, no } from '../Game';
 import { Num } from '../../engine/num';
-import { CLAIM_PRICE, PATCHES } from '../../data/land';
+import { CLAIM_PRICE, PATCHES, patchOpen } from '../../data/land';
+import { prules } from '../patents';
 import { RECIPE } from '../../data/recipes';
 import { RULES } from '../../data/rules';
 import { itemName, type ItemId } from '../../data/items';
@@ -46,8 +47,9 @@ export function copiesOf(g: Game, d: ModuleDesign): number {
 /** Claims held on an ore. */
 export function claimsHeld(g: Game, ore: ItemId): number {
   let deposits = 0;
-  for (const p of PATCHES) if (p.item === ore && g.owned(p.x, p.y)) deposits++;
-  return RULES.claimsBase.value + RULES.claimsPerDeposit.value * deposits + RULES.claimsPerBlock.value * (g.s.claimBlocks[ore] ?? 0);
+  for (const p of PATCHES) if (p.item === ore && patchOpen(p, g.s.mega.stage) && g.owned(p.x, p.y)) deposits++;
+  // the Surveyor's Charter (a Patent, §19) adds claims on every ore
+  return RULES.claimsBase.value + prules(g).extraClaims + RULES.claimsPerDeposit.value * deposits + RULES.claimsPerBlock.value * (g.s.claimBlocks[ore] ?? 0);
 }
 
 /** Claims in use on an ore: one per copy of every design that digs it. */
