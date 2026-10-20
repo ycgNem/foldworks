@@ -553,3 +553,87 @@ Findings for the sim and design (not changed here):
 - Open: rule 1 (a goal within reach every 3 min) fails for ~40 min while the Megaproject Bay
   fills (Act II pacing, the bot); coin piles up (~1.8M at 5 h) with too few sinks; the bot doesn't
   use nested folds yet. Carried to Milestone 5's planning.
+
+## Milestone 5 — Reorganize (2026-10-20)
+
+- 2026-10-20: **Patents = floor(0.5 x the chain steps of each distinct product folded this run x
+  its best grade + the Great Drill Patents delivered this run + log2(1 + invested / 100,000)).**
+  Why: a reset should pay for what the run understood and folded (pillar 1), not for coin; the
+  grade carries the audit's lesson to the reset; distinct products, not copies, so stamping more
+  of one line is not the way to Patents. Coin is the minor, logarithmic term, so the 1.8M hoard at
+  5 h is worth about 4 Patents if put into the factory, never the bulk. Milestone 4's provisional
+  coin-based `patentDivisor` is gone. Calibration and measurements: DESIGN.md §19.
+- 2026-10-20: **What a Reorganize keeps lives in `meta`, except four fields that already lived in
+  the run's state and stay there**: `mega`, `codex`, `orders.rep` and the trophy flags (plus
+  `counters`, `ordersSeen`, `factorySeen`). Why: moving them would touch every reader of them in
+  the app and the sim for no gain; the reset carries them over by name (`carry` in
+  src/sim/reorganize.ts, listed in `KEPT`).
+- 2026-10-20: **The tick and the RNG run on across a reset; `meta.runStart` marks a run's start.**
+  Why: the command log stays one ordered history, so seed + log replays across resets (tested).
+- 2026-10-20: **A head start applies at once when bought, and at the start of every later run; it
+  gives only the research it names, not the tree before it.** Why: buying one mid-run should do
+  something now (pillar 4); and the campaign bot found that giving the prerequisites too handed
+  Act II its steel research for free.
+- 2026-10-20: **The Patent tree has flat prices with prerequisites** (31 nodes, 82 Patents in all),
+  no growing price (CLAUDE.md: no geometric price curves) and no "+X% everything" node
+  (PLAN.md's not-list). Its automation branch serves pillar 2 (the chores of layer 0 become
+  machines: shovelling, picking research, accepting orders, stamping, building from blueprints).
+- 2026-10-20: **New currency: Raccoon Bearings** (the Committee's pay; kept through every reset;
+  spent only by the Great Drill's stages 2 and 3). Pillars: 5 (every customer is a character: the
+  Committee pays in what a coat full of raccoons would have) and 1 (bearings come from lines you
+  built to make what nobody else wants: slag, oil, gravel). It is not in PLAN.md's currency table:
+  **the owner should confirm it** (CLAUDE.md asks before changing the currency list).
+- 2026-10-20: **The Committee is the fourth customer**, met with the Great Drill research in the
+  first run (its bearings go to the Bay, and its orders are goals while the Bay fills: §16 rule
+  1), or after the first Reorganize once Folding is done. Its orders pay no coin, only bearings and
+  reputation; its reputation rewards are rules (module buffers 6 s, a slag-eating night crew, one
+  Machine Kit fewer per stamp).
+- 2026-10-20: **The Dock takes an item it normally refuses while the active order wants it** (slag
+  for The Pile, oil for Midnight Oil). Why: the Committee wants waste; making it go to the Dock is
+  the puzzle, not a new building.
+- 2026-10-20: **The Great Drill's stages 2 and 3 take nothing until their bearings are in, and
+  want 4 steel a bit** (stage 2: 250 bits, 1,000 steel, 4 bearings, 6 Patents; stage 3: 400 bits,
+  1,600 steel, 8 bearings, 8 Patents). Why: without the gate the first run filled stage 2 with
+  items and the preview passed 20 at 5 h; with more steel than 4.4 a bit the bot's Bay floor jammed
+  on its own slag once the bits were full. Rewards change rules for good (miners beside a patch;
+  deep deposits in chunk D).
+- 2026-10-20: **Offline efficiency is read through `offlineEfficiency(g)`** (0.5 + the offline
+  branch, 0.75 at most). The one read in src/sim/offline.ts changed; nothing else there.
+- 2026-10-20: **Blueprint share strings are our own format** (FWB1: a cell-byte grid plus recipe
+  bytes, LZSS, base64url, FNV-1a checksum, append-only tables), pure TypeScript so the sim stays
+  pure. The Blueprint Book is a list of named layouts with a mini map and four buttons, not a grid
+  of icon slots.
+- 2026-10-20: **The Act II bot (bot2) changes for later runs**: it takes only Bramble's Factory-floor
+  order (the Festival) of the slice's orders; after 10 minutes without progress on its order it
+  takes a Committee order its floor can fill (The Pile when a module outputs slag, Midnight Oil
+  when one outputs oil); the gravel line's sand miner turns away while nothing wants sand, and the
+  second coal miner rests once stage 1 runs miners +50% (both flooded the corridor in run 2); a
+  fold whose audit measured no output is cancelled and audited again. The campaign bot resets when
+  its plan is done, the preview grew under 0.25 in 20 minutes, no Committee order is filling, and
+  it has at least 12 Patents (run 1) or 4 (later runs).
+- 2026-10-20: **Bug fixed: a Reorganize rebuilt nothing of the old run's lookups**, so the old
+  floor's grid stayed under the new one (a head-start Miner was not placed where an old building
+  had stood). The reset now rebuilds both floors' lookups before placing anything.
+
+### Flagged as derivative (Milestone 5; owner to decide)
+
+- **The Builder Dragonfly and ghosts resemble Factorio's construction robots and ghost entities**
+  (planned buildings drawn as outlines, built by flying drones as materials allow). Kept because
+  blueprints are the reset's head start and building them by hand is the chore pillar 2 hands to
+  a machine. Differences: one Patent-bought helper on the Workshop only, building at a fixed
+  2 s pace with coin (no logistics network, no item delivery, no range), themed to the swamp.
+- **Blueprint share strings resemble Factorio's blueprint strings** (compressed layout text you
+  paste between saves). The format is our own; the idea of a pasteable layout string is the same.
+- **The Patent tree resembles Cookie Clicker's heavenly upgrades and Antimatter Dimensions'
+  infinity/eternity upgrade trees** (a reset currency spent on permanent nodes with
+  prerequisites). Differences: flat prices, no multiplier nodes; most nodes are head starts
+  measured in minutes saved or rule changes to folding and audits.
+- **The automation nodes resemble autobuyers** (Antimatter Dimensions above all): the Lab
+  Assistant, Order Clerk and Stamp Press do a chore on a timer. Kept for pillar 2; they act on this
+  game's own chores (research picks, orders, stamping kept-spare designs).
+- **The Reorganize card resembles every prestige confirm screen** (Cookie Clicker's Ascend,
+  Antimatter Dimensions' Big Crunch: the gain shown before you reset). It is pillar 4 as written;
+  ours lists the gain term by term with the goals that raise it, and what is kept and lost.
+- **The Patents formula was checked and is not derivative**: CC's heavenly chips and AD's infinity
+  points are a root or log of currency earned; ours counts distinct folded products by recipe
+  depth and audit grade, with coin as a minor log term.
