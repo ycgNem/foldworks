@@ -371,7 +371,7 @@ export class Renderer {
     }
     this.town.news.length = 0;
     if (ov.floor === 'factory') {
-      drawFactory(ctx, g, this.time, ov.factory);
+      drawFactory(ctx, g, this.time, ov.factory, (this.view.x + this.view.w - ox) / z);
       this.drawParade(g, dt);
       this.effects(dt);
       return;

@@ -15,9 +15,11 @@ import { bayFrame, megaFrac, mainOutput } from '../render/factory';
 import { claimsHeld, claimsUsed, claimPrice, copiesOf, oresOf } from '../sim/systems/claims';
 import { megaOpen } from '../sim/systems/modules';
 import { Num } from '../engine/num';
-import { frame, card, button, bar, section } from './chrome';
+import { frame, card, button, bar, section, label } from './chrome';
 import { screenHeader, icon, fmt, perMin, slamScale, rays, cells } from './widgets';
-import { customerPortrait } from './orders';
+import { customerPortrait, openOrders } from './orders';
+import { ORDERS, CUSTOMERS } from '../data/orders';
+import { offeredOrders, orderFrac } from '../sim/systems/orders';
 import { confetti } from './fold';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
@@ -331,7 +333,9 @@ export function megaScreen(app: App, r: Rect) {
     const done = g.s.mega.stage >= s, cur = g.s.mega.stage + 1 === s && !!megaStage(g.s.mega.stage);
     ui.fill(sx, ty, sw, 14, C.ink);
     ui.fill(sx + 1, ty + 1, sw - 2, 12, done ? C.brass1 : cur ? C.ground1 : C.shadow);
-    ui.text(done ? `${ICON.check} ${s}` : cur ? `Stage ${s}` : `${ICON.lock} ${s}`, sx + sw / 2, ty + 4, done ? C.ink : cur ? C.gold : C.hull1, { align: 'center' });
+    const shut = cur && !megaOpen(g, megaStage(g.s.mega.stage));
+    const curLabel = textWidth(`${ICON.lock} Stage ${s}`) + 4 <= sw ? `${ICON.lock} Stage ${s}` : `${ICON.lock} ${s}`;
+    ui.text(done ? `${ICON.check} ${s}` : cur ? (shut ? curLabel : `Stage ${s}`) : `${ICON.lock} ${s}`, sx + sw / 2, ty + 4, done ? C.ink : cur ? (shut ? C.violet : C.gold) : C.hull1, { align: 'center' });
     ui.hint(sx, ty, sw, 14, MEGA[s - 1]?.reward ?? '', 160); // Milestone 5: stages 2 and 3
   }
   ty += 18;
@@ -359,22 +363,17 @@ function bayFeeds(app: App): Partial<Record<ItemId, number>> {
 function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, x: number, y: number, w: number, h: number) {
   const ui = app.ui;
   const g = app.game;
+  // the Milestone 5-6 final round: a stage behind the Committee's reputation is the Committee's
+  // to open, so the panel's call to action is their orders, not the trunks
+  if (stage.rep && !megaOpen(g, stage)) {
+    lockedStage(app, stage, card(ui, x, y, w, h, `Stage ${stage.stage} opens with the Committee`, C.violet, 'orders'));
+    return;
+  }
   const inner = card(ui, x, y, w, h, 'Wanted, by trunk into the Bay', C.gold, 'mega');
   const bay = g.s.factory.ents.find((e) => e.kind === 'fbay');
   const feeds = bayFeeds(app);
   const end = inner.y + inner.h - 17;
   let yy = inner.y + 2;
-  // the Milestone 5-6 review round: stages 2 and 3 open at the Committee's reputation (kept through
-  // every reset); until then the Bay passes its steel on to the Dock and scraps its bits, and the
-  // gate says so plainly
-  if (stage.rep && !megaOpen(g, stage)) {
-    const rep = g.s.orders.rep.committee ?? 0;
-    ui.fill(inner.x, yy, inner.w, 20, C.ink);
-    ui.fill(inner.x + 1, yy + 1, inner.w - 2, 18, C.shadow);
-    ui.text(`${ICON.lock} Stage ${stage.stage} opens at the Committee's reputation ${stage.rep} (now ${rep})`, inner.x + 5, yy + 7, C.violet);
-    ui.hint(inner.x, yy, inner.w, 20, `Fill the Committee's odd orders (Orders, the raccoons' tab): each is +1 reputation, kept through every reset. Until then the Bay counts nothing for stage ${stage.stage}: its steel goes on to the Dock and sells, its bits are scrapped.`, 190);
-    yy += 24;
-  }
   const ents = Object.entries(stage.wants) as [ItemId, number][];
   const rowH = Math.max(24, Math.min(30, Math.floor((inner.h - 150) / ents.length)));
   let slowest = 0;
@@ -502,6 +501,73 @@ function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, x: nu
   } else if (g.done('greatDrill')) {
     ui.para(`Clear the Factory floor's corner (tiles ${FACTORY.bay.x}-${FACTORY.bay.x + 1}, ${FACTORY.bay.y}-${FACTORY.bay.y + 1}): the Bay lands there.`, inner.x, by - 8, inner.w, C.pipRed);
   } else ui.para(`Research ${RESEARCH.greatDrill.name} to bring the Bay.`, inner.x, by, inner.w, C.hull2);
+}
+
+/** A stage shut behind the Committee's reputation (the Milestone 5-6 review round's gate, shown
+ * as what to do about it in the final round): the Committee, its reputation now and needed, the
+ * orders it has on offer with their progress, and a key to its tab on the Orders screen; what the
+ * stage will want once open, quietly, under it. The Bay counts nothing meanwhile, so there is no
+ * "not arriving" or ETA to show. */
+function lockedStage(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, inner: Rect) {
+  const ui = app.ui;
+  const g = app.game;
+  const need = stage.rep ?? 0;
+  const rep = g.s.orders.rep.committee ?? 0;
+  const end = inner.y + inner.h - 19;
+  let yy = inner.y + 2;
+  // the Committee and its reputation: a pip for each level the stage needs
+  customerPortrait(app, 'committee', inner.x + 2, yy + 2, 24);
+  const nx = inner.x + 34;
+  ui.text(CUSTOMERS.committee.name, nx, yy + 2, C.violet, { shadow: C.ink });
+  ui.text(`Reputation ${rep} of ${need}`, nx, yy + 14, C.bone);
+  const px0 = nx + textWidth(`Reputation ${rep} of ${need}`) + 6;
+  for (let i = 0; i < need; i++) {
+    ui.fill(px0 + i * 10, yy + 14, 8, 7, C.ink);
+    ui.fill(px0 + i * 10 + 1, yy + 15, 6, 5, i < rep ? C.violet : C.shadow);
+  }
+  yy += 32;
+  const more = Math.max(0, need - rep);
+  yy += ui.para(`Fill ${more === 1 ? "one more of their orders" : `${more} more of their orders`} to open stage ${stage.stage}: each is +1 reputation, kept through every reset. Until then the Bay counts nothing for it: steel goes on to the Dock and sells, drill bits are scrapped.`, inner.x, yy, inner.w, C.hull3) + 6;
+  // their orders on offer, the one under way first
+  const offered = offeredOrders(g).filter((o) => o.customer === 'committee').sort((a, b) => (b.id === g.s.orders.active ? 1 : 0) - (a.id === g.s.orders.active ? 1 : 0));
+  if (yy + 10 <= end) { label(ui, offered.length ? 'their orders on offer' : 'no orders on offer yet', inner.x, yy, C.violet); yy += 10; }
+  if (!offered.length && yy + 10 <= end) {
+    const next = ORDERS.find((o) => o.customer === 'committee' && !g.s.orders.done.includes(o.id));
+    if (next) yy += ui.para(`Next: ${next.name}, after ${next.requires.filter((r) => !g.done(r)).map((r) => RESEARCH[r].name).join(' and ') || 'the Committee turns up'}.`, inner.x, yy, inner.w, C.hull2) + 2;
+  }
+  for (const o of offered) {
+    if (yy + 22 > end) break;
+    const active = o.id === g.s.orders.active;
+    const f = orderFrac(g, o.id);
+    ui.fill(inner.x, yy, inner.w, 21, C.ink, 0.5);
+    ui.text(o.name, inner.x + 3, yy + 2, active ? C.gold : C.bone);
+    const tag = active ? 'under way' : `+${o.rep} rep, ${fmt(o.pays)} coin`;
+    ui.text(tag, inner.x + inner.w - 3, yy + 2, active ? C.leaf : C.hull2, { align: 'right' });
+    let ix = inner.x + 3;
+    for (const [it, n] of Object.entries(o.wants) as [ItemId, number][]) {
+      const have = Math.min(n, Math.floor(g.s.orders.progress[o.id]?.[it]?.toNumber() ?? 0));
+      ui.ctx.drawImage(itemIcon(it), ix, yy + 11);
+      ix += 11 + ui.small(`${fmt(have)}/${fmt(n)}`, ix + 10, yy + 13, C.hull3) + 6;
+    }
+    bar(ui, Math.max(ix, inner.x + inner.w - 60), yy + 12, Math.min(57, inner.x + inner.w - 3 - ix), 6, f, active ? C.gold : C.violet);
+    ui.hint(inner.x, yy, inner.w, 21, `${o.pitch}${active ? '' : ' Pick it on the Orders screen, then send it to any Dock.'}`, 190);
+    yy += 24;
+  }
+  // what the stage wants once open, and what it pays
+  if (yy + 22 <= end) {
+    label(ui, `stage ${stage.stage}, once open`, inner.x, yy, C.hull2);
+    yy += 10;
+    let ix = inner.x;
+    for (const [it, n] of Object.entries(stage.wants) as [ItemId, number][]) {
+      ui.ctx.drawImage(itemIcon(it), ix, yy);
+      ix += 12 + ui.text(`${fmt(n)} ${ITEMS[it].name.toLowerCase()}`, ix + 11, yy, C.hull3) + 8;
+    }
+    yy += 12;
+  }
+  // the reward whole or not at all (it must not run under the Committee's key)
+  const reward = `Reward: ${stage.reward}`;
+  if (yy + wrapText(reward, inner.w).length * 10 <= end) ui.para(reward, inner.x, yy, inner.w, C.gold);
+  if (button(ui, 'megaCommittee', inner.x, inner.y + inner.h - 15, inner.w, 15, "The Committee's orders", { gold: true, icon: 'orders', tip: 'The Orders screen, on the Committee\'s tab' })) openOrders(app, 'committee');
 }
 
 function eta(secs: number): string {

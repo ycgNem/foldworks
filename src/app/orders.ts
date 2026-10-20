@@ -33,6 +33,12 @@ export function met(app: App, c: CustomerId): boolean {
   return customerMet(app.game, c);
 }
 
+/** Open the Orders screen on a customer's tab (the Great Drill's locked stage: the Committee). */
+export function openOrders(app: App, who: CustomerId) {
+  st.tab = who;
+  if (app.panel !== 'orders') app.togglePanel('orders');
+}
+
 /** Make a customer cheer on the Orders screen (an order of theirs was just filled). */
 export function cheerFor(app: App, who: CustomerId, secs = 5) {
   st.cheer = { who, until: app.ui.time + secs };
@@ -97,6 +103,9 @@ export function ordersScreen(app: App, r: Rect) {
   // ---- the customer tabs
   const y0 = r.y + 22;
   const tw = Math.floor((r.w - 16 - 4 * (CUSTOMER_IDS.length - 1)) / CUSTOMER_IDS.length);
+  // a narrow tab (1024x640: "Mayor Brambl") keeps the whole name: every tab's hearts move onto its
+  // portrait's foot, on a dark strip, when any name would be cut (the Milestone 5-6 final round)
+  const heartsOnFace = CUSTOMER_IDS.some((c) => met(app, c) && textWidth(CUSTOMERS[c].name) > tw - 33 - 30);
   CUSTOMER_IDS.forEach((c, i) => {
     const x = r.x + 8 + i * (tw + 4);
     const isMet = met(app, c);
@@ -111,15 +120,19 @@ export function ordersScreen(app: App, r: Rect) {
       icon(app, 'lock', x + 8, y0 + 7);
     }
     const tx = x + 33;
-    ui.clip(tx, y0, x + tw - tx - 30, 14);
-    ui.text(isMet ? d.name : '???', tx, y0 + 4, isMet ? (active ? ACCENT[c] : C.bone) : C.hull1, { shadow: C.ink });
+    const name = isMet ? d.name : '???';
+    ui.clip(tx, y0, x + tw - tx - (heartsOnFace ? 3 : 30), 14);
+    ui.text(name, tx, y0 + 4, isMet ? (active ? ACCENT[c] : C.bone) : C.hull1, { shadow: C.ink });
     ui.unclip();
     // the title gets the tab's whole width ("Baroness of the swamp's wires" was cut by the badge)
     const title = isMet ? d.title : d.afterReset ? 'With the Great Drill' : `After ${RESEARCH[d.meets!].name}`;
     ui.clip(tx, y0 + 14, x + tw - tx - 4, 14);
     ui.text(textWidth(title) <= x + tw - tx - 4 ? title : ellipsize(title, x + tw - tx - 4), tx, y0 + 18, C.hull2);
     ui.unclip();
-    if (isMet) hearts(app, x + tw - 26, y0 + 4, o.rep[c] ?? 0);
+    if (heartsOnFace && isMet) {
+      ui.fill(x + 4, y0 + 19, 24, 8, C.ink, 0.85);
+      hearts(app, x + 6, y0 + 20, o.rep[c] ?? 0);
+    } else if (isMet) hearts(app, x + tw - 26, y0 + 4, o.rep[c] ?? 0);
     // open orders: a red count on the portrait's corner, bouncing now and then
     if (isMet && open && !active) {
       const s = String(open);

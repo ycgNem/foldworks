@@ -24,7 +24,8 @@ import { nextGoal } from './goals';
 import { layout, type Layout } from './layout';
 import { plate, plateRaw, button, badge, uiIcon, nine, label, UICON, type UIconName } from './chrome';
 import { drawScreen } from './screens';
-import { auditBadge, factoryReport } from './fold';
+import { auditBadge, factoryReport, factoryHover } from './fold';
+import type { TipPlace } from '../ui/ui';
 import { topBar } from './topbar';
 import { rail, diegetic } from './rail';
 import { buildBar } from './buildbar';
@@ -279,15 +280,24 @@ function fitLines(fit: Fit, chrome: number, build: (w: number, all: boolean) => 
 /** The report lines for anything on the Workshop: machines (with their Act II lines) and the
  *  power buildings. */
 function entLines(app: App, e: Ent): { text: string; tone: Tone }[] {
+  const p = entParts(app, e);
+  return p ? [...p.head, ...p.a2, ...p.rest] : [];
+}
+
+/** A report in its parts: the head (the name, any first-minute instruction, what it is doing now),
+ *  the power and Overdrive lines, and the rest (rates, feed, byproduct, front). */
+function entParts(app: App, e: Ent): { head: { text: string; tone: Tone }[]; a2: { text: string; tone: Tone }[]; rest: { text: string; tone: Tone }[] } | null {
   const g = app.game;
-  if (isPower(e.kind)) return powerReport(app, e);
+  if (isPower(e.kind)) { const p = powerReport(app, e); return { head: p.slice(0, 2), a2: [], rest: p.slice(2) }; }
   const lines: { text: string; tone: Tone }[] = report(g, e);
-  if (!lines.length) return lines;
-  if (e.why === 'power' && lines[1]) lines[1] = { text: 'Stopped: no power', tone: 'blue' };
+  if (!lines.length) return null;
+  // the hand furnace's first-minute instruction comes before its status line
+  const st = e.kind === 'furnace' && !g.has('bellows') && lines.length > 2 ? 2 : 1;
+  if (e.why === 'power' && lines[st]) lines[st] = { text: 'Stopped: no power', tone: 'blue' };
   const a2 = act2Lines(app, e);
   // the grid's Brownout line says it already: drop the report's "Short of power" under it
-  const rest = a2.some((l) => l.text.startsWith('Brownout')) ? lines.slice(2).filter((l) => !l.text.startsWith('Short of power')) : lines.slice(2);
-  return [...lines.slice(0, 2), ...a2, ...rest];
+  const rest = a2.some((l) => l.text.startsWith('Brownout')) ? lines.slice(st + 1).filter((l) => !l.text.startsWith('Short of power')) : lines.slice(st + 1);
+  return { head: lines.slice(0, st + 1), a2, rest };
 }
 
 /** Power and Overdrive lines for a machine (DESIGN.md §18). */
@@ -726,6 +736,52 @@ export function banner(app: App, title: string, sub: string, color: string = C.g
 
 // ------------------------------------------------------------------ the hover report
 
+/** Where a world tooltip may sit: never over the hovered tile and its neighbours, nor the tile the
+ * goal points at (the first minute: the ore's tooltip sat on the Hand Furnace just as the goal said
+ * to crank it), and inside the floor between the top bar and the build bar where it fits (the
+ * Milestone 5-6 final round). */
+function worldTip(app: App, x: number, y: number, w = 1, h = 1): TipPlace {
+  const ui = app.ui;
+  const L = app.layout ?? layout(ui.w, ui.h);
+  const r = app.renderer;
+  const k = ui.scale;
+  const rect = (x0: number, y0: number, x1: number, y1: number) => {
+    const a = r.toScreen(x0, y0), b = r.toScreen(x1, y1);
+    return { x: Math.floor(a.x / k), y: Math.floor(a.y / k), w: Math.ceil((b.x - a.x) / k), h: Math.ceil((b.y - a.y) / k) };
+  };
+  const avoid = [rect(x - 1, y - 1, x + w + 1, y + h + 1)];
+  const goal = app.floor === 'workshop' ? nextGoal(app.game) : null;
+  if (goal?.tile) avoid.push(rect(goal.tile.x - 0.25, goal.tile.y - 0.25, goal.tile.x + 1.25, goal.tile.y + 1.25));
+  return { avoid, bounds: { x: 2, y: L.top.h + 2, w: ui.w - 4, h: L.band.y - L.top.h - 4 } };
+}
+
+/** The hover report, kept short (the Milestone 5-6 final round: fifteen lines covered a third of
+ * the floor): the name, what it is doing, the one cause most worth fixing and how, its rate. The
+ * whole report is a click away, pinned. */
+function compactEnt(app: App, e: Ent): { text: string; color: string }[] {
+  const g = app.game;
+  const p = entParts(app, e);
+  if (!p) return [];
+  const pool = [...p.rest, ...p.a2.filter((l) => l.tone !== 'hot')];
+  // blocked by its own byproduct: the fix is where the byproduct goes, whatever that line's tone
+  const byFix = e.state === 'blocked' && e.why && e.why === e.byItem ? p.rest.find((l) => l.text.includes('leaves by a side')) : undefined;
+  const cause = pool.find((l) => l.tone === 'bad') ?? byFix ?? pool.find((l) => l.tone === 'blue') ?? pool.find((l) => l.tone === 'warn');
+  const rate = p.rest.find((l) => l.text.startsWith('Makes ')) ?? p.rest.find((l) => l.text.startsWith('Grid '));
+  const hot = p.a2.find((l) => l.text.startsWith('Overdriven'));
+  const ready = p.a2.find((l) => l.text.startsWith('Overdrive: click'));
+  const picked = [hot, cause, rate].filter((l, i, a): l is { text: string; tone: Tone } => !!l && a.indexOf(l) === i);
+  const shown = [...p.head, ...picked];
+  const more = p.head.length + p.a2.length + p.rest.length - shown.length - (ready ? 1 : 0);
+  const out = shown.map((l, i) => ({ text: l.text, color: i === 0 ? C.gold : TONE[l.tone] }));
+  const modes = powered(e.kind) && g.done('tuning');
+  const what = `the full report${more > 0 ? ` (+${more} line${more > 1 ? 's' : ''})` : ''}${modes ? ' and its modes' : ''}`;
+  if (ready) {
+    out.push({ text: `Click: Overdrive ${RULES.overdriveMult.value}x for ${RULES.overdriveSeconds.value} s`, color: TONE.hot });
+    out.push({ text: `While it cools, a click pins ${what}.`, color: C.hull1 });
+  } else out.push({ text: `Click to pin ${what}.`, color: C.hull1 });
+  return out;
+}
+
 function hoverReport(app: App) {
   const ui = app.ui;
   const h = app.hud.hoverTile;
@@ -734,37 +790,39 @@ function hoverReport(app: App) {
   const g = app.game;
   if (app.floor === 'factory') {
     const fe = g.fentAt(h.x, h.y);
-    if (fe && fe.id !== app.fselected) ui.tip([...factoryReport(app, fe), { text: 'Click to pin. R rotates, X removes (back to the inventory).', color: C.hull1 }], 220);
+    if (fe && fe.id !== app.fselected) ui.tip(factoryHover(app, fe), 200, worldTip(app, fe.x, fe.y));
     return;
   }
+  const at = worldTip(app, h.x, h.y);
   const e = g.entAt(h.x, h.y);
   const spark = g.s.sparks.find((p) => p.x === h.x && p.y === h.y);
   if (spark) {
-    ui.tip([{ text: spark.kind === 'vein' ? 'Lucky Vein' : 'Inspector', color: C.gold }, { text: spark.kind === 'vein' ? "Click: this patch's miners run 3x for 60 s." : "Click: they grade this line and hand a minute of its output x the grade to research." }], 190);
+    ui.tip([{ text: spark.kind === 'vein' ? 'Lucky Vein' : 'Inspector', color: C.gold }, { text: spark.kind === 'vein' ? "Click: this patch's miners run 3x for 60 s." : "Click: they grade this line and hand a minute of its output x the grade to research." }], 190, at);
     return;
   }
   if (!e) {
     if (!g.owned(h.x, h.y)) {
       const ch = g.chunkAt(h.x, h.y)!;
       const ready = !ch.requires || g.done(ch.requires);
-      ui.tip([{ text: ch.name, color: C.gold }, { text: ready ? `Click to buy: ${ch.cost.toLocaleString('en-US')} coin` : `Research ${RESEARCH[ch.requires!].name} first` }], 170);
+      ui.tip([{ text: ch.name, color: C.gold }, { text: ready ? `Click to buy: ${ch.cost.toLocaleString('en-US')} coin` : `Research ${RESEARCH[ch.requires!].name} first` }], 170, at);
     } else if (g.oreAt(h.x, h.y)) {
       const ore = g.oreAt(h.x, h.y)!;
-      ui.tip([{ text: itemName(ore), color: C.iron2 }, { text: 'Click: 1 into a machine beside the deposit. A Miner goes on it.' }], 180);
+      ui.tip([{ text: itemName(ore), color: C.iron2 }, { text: 'Click: 1 into a machine beside the deposit. A Miner goes on it.' }], 180, at);
     }
     return;
   }
   if (app.selected === e.id) return;
-  if (e.kind === 'dock') { ui.tip([{ text: 'The Dock', color: C.gold }, { text: BUILD.dock.blurb }, { text: 'Click for orders.', color: C.hull2 }], 170); return; }
-  if (e.kind === 'hopper') { ui.tip([{ text: 'The Hopper', color: C.teal1 }, { text: BUILD.hopper.blurb }, { text: 'Click for the research tree.', color: C.hull2 }], 170); return; }
+  const on = worldTip(app, e.x, e.y, e.w, e.h);
+  if (e.kind === 'dock') { ui.tip([{ text: 'The Dock', color: C.gold }, { text: BUILD.dock.blurb }, { text: 'Click for orders.', color: C.hull2 }], 170, on); return; }
+  if (e.kind === 'hopper') { ui.tip([{ text: 'The Hopper', color: C.teal1 }, { text: BUILD.hopper.blurb }, { text: 'Click for the research tree.', color: C.hull2 }], 170, on); return; }
   if (e.kind === 'belt') {
-    ui.tip([{ text: 'Belt', color: C.bone }, { text: e.item ? `Carrying ${itemName(e.item).toLowerCase()}${e.mv ? '' : ' (stuck: what is ahead will not take it)'}` : 'Empty' }], 180);
+    ui.tip([{ text: 'Belt', color: C.bone }, { text: e.item ? `Carrying ${itemName(e.item).toLowerCase()}${e.mv ? '' : ' (stuck: what is ahead will not take it)'}` : 'Empty' }], 180, on);
     return;
   }
-  if (e.kind === 'heap') { ui.tip([{ text: 'Slag Heap', color: C.violet }, { text: `${e.count} / ${BUILD.heap.capacity} slag. Empties out its front into a belt or a brick press.` }], 180); return; }
-  if (e.kind === 'crate') { ui.tip([{ text: 'Buffer Crate', color: C.copper2 }, { text: `${e.store.length} / ${BUILD.crate.capacity}` }], 150); return; }
-  const lines = entLines(app, e);
-  if (lines.length) ui.tip([...lines.map((l, i) => ({ text: l.text, color: i === 0 ? C.gold : TONE[l.tone] })), { text: powered(e.kind) && g.done('tuning') ? 'Click to pin this report and pick a mode.' : 'Click to pin this report.', color: C.hull1 }], 220);
+  if (e.kind === 'heap') { ui.tip([{ text: 'Slag Heap', color: C.violet }, { text: `${e.count} / ${BUILD.heap.capacity} slag. Empties out its front into a belt or a brick press.` }], 180, on); return; }
+  if (e.kind === 'crate') { ui.tip([{ text: 'Buffer Crate', color: C.copper2 }, { text: `${e.store.length} / ${BUILD.crate.capacity}` }], 150, on); return; }
+  const lines = compactEnt(app, e);
+  if (lines.length) ui.tip(lines, 200, on);
 }
 
 // ------------------------------------------------------------------ title

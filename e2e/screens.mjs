@@ -378,8 +378,22 @@ export async function m5Setup(state) {
     a.panel = 'orders';
     (await import('/src/app/orders.ts')).cheerFor(a, 'committee', 0);
   }
-  // stage 1 stands; stage 2 waits on the Committee's reputation 3 (now 2)
-  if (state === 'mega2') { a.panel = 'mega'; a.gradeAt = a.ui.time - 30; }
+  // stage 1 stands; stage 2 waits on the Committee's reputation 3 (now 2: The Pile and the Brick
+  // Throne filled, Shiny Things under way). A shut stage counts nothing, so its progress is empty
+  // (the final round: the old state showed stage 2 bars part-filled, which the game cannot make),
+  // and the Bay stands in its corner, as it does once Great Drill is researched
+  if (state === 'mega2') {
+    g.s.mega = { stage: 1, progress: {} };
+    g.s.orders.done = ['thePile', 'brickThrone'];
+    g.s.orders.active = 'shinyThings';
+    g.s.orders.progress = { shinyThings: { copperWire: N.of(830), ironIngot: N.of(240) } };
+    a.step(2);
+    g.events.drain();
+    a.toasts = [];
+    a.trophyPops = [];
+    a.panel = 'mega';
+    a.gradeAt = a.ui.time - 30;
+  }
   return null;
 }
 
@@ -391,6 +405,9 @@ const SIZES = [[1280, 720], [1920, 1080], [1024, 640]];
 const STATES = {
   title: () => { const a = window.__app; a.screen = 'title'; },
   start: () => { const a = window.__app; a.newGame(7); a.freeze(); a.toasts = []; },
+  // the first minute: one ore fed by hand, the goal now says to crank the furnace, the ore hovered
+  // (its tooltip must leave the Hand Furnace beside it in view: the Milestone 5-6 final round)
+  firstClicks: () => { const a = window.__app; a.newGame(7); a.freeze(); a.toasts = []; a.act({ k: 'click', x: 2, y: 3 }); a.refusal = null; a.renderer.fx.pops = []; return { hover: [2, 3] }; },
   build: () => { const a = window.__app; a.setMode({ k: 'build', kind: 'miner' }); return { hover: [2, 3] }; },
   report: () => {
     const a = window.__app; a.setMode({ k: 'idle' });
@@ -515,6 +532,10 @@ STATES.act2toasts = {
     a.trophyPops = [{ id: 'estate', t: 0 }, { id: 'letThereBeLight', t: 0 }];
   },
 };
+// the same Workshop with nothing pinned and a kiln hovered: the compact hover report (the final
+// round: the name, what it does, the one cause worth fixing, the rate; the rest pinned by a click),
+// beside the kiln and clear of the build bar
+STATES.act2hover = { base: 'act2power', post: () => { const a = window.__app; a.selected = null; return { hover: [21, 1] }; } };
 for (const s of ACT2) STATES[s] = s;
 for (const s of WORKSHOP) STATES[s] = { ws: s };
 for (const s of M5) STATES[s] = { m5: s };

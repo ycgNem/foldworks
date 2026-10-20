@@ -257,9 +257,35 @@ From the idle-critic's review (`DECISIONS.md`, "The Milestone 5–6 review round
 - **Screens**: new states `patentsHover` (a buyable node's panel) and `act2toasts` (a tall pinned
   report with toasts and trophies above it); toasts and trophies are shot at rest.
 
+### The final round (after Milestones 5–6, 2026-10-20)
+
+From the idle-critic's re-review (`DECISIONS.md`, "The Milestone 5–6 final round: UI"):
+
+- **Top bar** (`src/app/topbar.ts`): counters get the room left after power at its smallest, the
+  health chip and both floor tabs labelled (all measured, `floorTabsWidth`, `healthWidth`), so the
+  Reorganize key goes to icon + "+N" first. The floor tabs have three modes: both labelled; the
+  current floor labelled and the other an icon; icons.
+- **Tooltip placement** (`src/ui/ui.ts`): `ui.tip(lines, width, { avoid, bounds })` places the
+  tooltip clear of the `avoid` rects (right, left, above, below the first), inside `bounds` where
+  it fits. `worldTip(app, x, y, w, h)` in `src/app/hud.ts` builds it for a world tile: the tile and
+  its neighbours, the goal's tile, the floor between the top bar and the build bar.
+- **Hover report** (`compactEnt` in `src/app/hud.ts`, `factoryHover` in `src/app/fold.ts`): name,
+  status, one cause, rate, then what a click does (Overdrive, or pin "+N lines"); about 5-7
+  lines. The pinned report (`reportCard`, `factoryCard`) keeps every line.
+- **Megaproject** (`lockedStage` in `src/app/act2screens.ts`): a stage behind the Committee's
+  reputation shows the Committee, its reputation pips, its orders on offer, the stage's wants
+  once open, the reward, and "The Committee's orders" (`openOrders(app, 'committee')` in
+  `src/app/orders.ts`).
+- **Small**: patent labels may list fallbacks (`SHORT` in `src/app/patents.ts`); the small font's V
+  tapers; the Factory camera frames the annex block for sale (`App.factorySpan`) and its label
+  slides into view at the screen edge (`drawFactory`'s `viewRight`); Orders tabs move the hearts
+  onto the portraits when a name would be cut.
+
 ### Screenshots
 
 `npm run screens` (e2e/out/screens/) covers every state at three sizes, now with `jam` (a slag
 jam's hover report), `act2power` (a busy Act II Workshop with a brownout and a pinned report),
-`slotHover` (a build slot's hover card) and `coinHover` (the coin drop-down). Before/after
-pairs worth comparing: `1280x720-start`, `-act2ws`, `-factory2`, `-research2`, `-orders2`.
+`slotHover` (a build slot's hover card) and `coinHover` (the coin drop-down); the final round adds
+`firstClicks` (the ore hovered as the goal says to crank the furnace) and `act2hover` (a kiln's
+compact hover report). Before/after pairs worth comparing: `1280x720-start`, `-act2ws`,
+`-factory2`, `-research2`, `-orders2`, `-mega2`, `1024x640-factory2`, `1024x640-orders2`.
