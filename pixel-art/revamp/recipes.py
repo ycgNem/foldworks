@@ -105,7 +105,7 @@ def shim(P):
     m.P, m.KEY, m.new, m.ascii_, m.ell, m.ring, m.strip, m.up = P, key, new, ascii_, ell, ring, strip, up
     m.hex2rgba, m.ART_PAL = hex2rgba, ART
     m.export = m.sheet = m.frame_of = m.check_palette = m.checker = m.text = m.text_w = m.nine = _unused
-    m.OUT = HERE / "out"
+    m.OUT, m.ROOT = HERE / "out", ROOT
     for name in ("common", "common_m4", "common_m5", "common_m2"):
         sys.modules[name] = m
     return m
