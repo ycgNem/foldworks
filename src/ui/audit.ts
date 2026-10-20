@@ -11,8 +11,10 @@ export interface AuditRec extends Rect {
   s?: string;
   /** active clip rect when it was drawn */
   clip?: Rect;
-  /** 'tip' for hover tooltips and the dragged stack, 'ui' for everything else */
-  layer: 'ui' | 'tip';
+  /** 'tip' for hover tooltips and the dragged stack (never checked); 'float' for things that float
+   * over the floor on purpose, toasts (checked against the screen edge and the HUD's text); 'ui'
+   * for everything else */
+  layer: 'ui' | 'tip' | 'float';
   /** draw order within the frame */
   seq: number;
 }
@@ -21,8 +23,9 @@ export interface AuditIssue {
   /**
    * clash: two texts overlap. overflow: text runs past the panel or button it starts in.
    * covered: something drawn later paints over the text.
+   * offscreen: a floating panel or its text runs past the edge of the screen.
    */
-  type: 'clash' | 'overflow' | 'covered';
+  type: 'clash' | 'overflow' | 'covered' | 'offscreen';
   text: string;
   rect: Rect;
   other?: string;
@@ -51,14 +54,15 @@ export function findIssues(recs: AuditRec[], screen: { w: number; h: number }): 
   const label = (r: AuditRec) => r.s ?? r.kind;
 
   const covers = recs.filter((r) => r.kind !== 'text');
-  // clash: overlapping texts in the same layer (a tooltip over the UI is intended).
+  // clash: overlapping texts in the same layer (a tooltip over the UI is intended), and a floating
+  // toast's text over the HUD's.
   // Texts are 9px cells and lines are 10px apart, so require at least 2x2 px of overlap.
   // If something opaque drawn between the two hides most of the overlap, the earlier text is
   // under it, not clashing: that shows up as 'covered' instead.
   for (let i = 0; i < texts.length; i++)
     for (let j = i + 1; j < texts.length; j++) {
       const a = texts[i], b = texts[j];
-      if (a.r.layer !== b.r.layer) continue;
+      if (a.r.layer !== b.r.layer && (a.r.layer === 'tip' || b.r.layer === 'tip')) continue;
       if (a.r.s === b.r.s && a.r.x === b.r.x && a.r.y === b.r.y) continue; // the same text drawn twice
       const o = intersect(a.v, b.v);
       if (!o || o.w < 2 || o.h < 2) continue;
@@ -91,6 +95,12 @@ export function findIssues(recs: AuditRec[], screen: { w: number; h: number }): 
         break;
       }
     }
+  }
+
+  // offscreen: a toast (the 'float' layer) must land wholly inside the screen
+  for (const r of recs) {
+    if (r.layer !== 'float' || r.kind === 'fill') continue;
+    if (r.x < 0 || r.y < 0 || r.x + r.w > screen.w || r.y + r.h > screen.h) issues.push({ type: 'offscreen', text: label(r), rect: { x: r.x, y: r.y, w: r.w, h: r.h } });
   }
   return issues;
 }

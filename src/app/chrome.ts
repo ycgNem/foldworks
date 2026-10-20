@@ -4,7 +4,7 @@
 // counters and portraits draw from the palette's C slots, so a new palette restyles them; sprites
 // are found by name, never by their pixels.
 import { C, rgba } from '../data/palette';
-import { ICON, smallWidth } from '../ui/font';
+import { ICON, smallWidth, textWidth, drawText } from '../ui/font';
 import { sheet, hasArt, type SpriteSheet } from '../render/sprites';
 import type { UI, TipLine } from '../ui/ui';
 
@@ -212,7 +212,84 @@ export function uiIcon(ui: UI, name: UIconName, x: number, y: number, half = 0) 
     return;
   }
   const g = GLYPH[name];
-  ui.text(g, Math.round(x) + (half ? 1 : 3), Math.round(y) + (half ? 1 : 4), name === 'coin' ? C.gold : name === 'heart' ? C.pipRed : C.bone, { shadow: C.ink });
+  if (!half) {
+    // a 16x16 stand-in at the icon's size and weight (the UI legibility round: a 5 px glyph beside
+    // the 16 px icons read as broken), until the art director draws the frame
+    ui.ctx.drawImage(fallbackIcon(name), Math.round(x), Math.round(y));
+    return;
+  }
+  ui.text(g, Math.round(x) + 1, Math.round(y) + 1, name === 'coin' ? C.gold : name === 'heart' ? C.pipRed : C.bone, { shadow: C.ink });
+}
+
+/** Code-drawn 16x16 pictograms for the icons appended after the atlas was drawn (Milestones 5
+ * and 6), outlined in ink like the drawn ones. Each row is 16 pixels: '.' is clear, the letters
+ * are palette slots (PICTO_INK). Placeholders: the art director's frames replace them. */
+const PICTO: Partial<Record<UIconName, string[]>> = {
+  // a certificate with a violet seal
+  patents: [
+    '................', '..kkkkkkkkkkk...', '..kbbbbbbbbbk...', '..kbhhhhhhhbk...', '..kbbbbbbbbbk...', '..kbhhhhhhbbk...',
+    '..kbbbbbbbbbk...', '..kbhhhhhbbbk...', '..kbbbbbbkkkk...', '..kbhhhbkvvvvk..', '..kbbbbkvbvvvvk.', '..kbbbkvvvvvvvk.',
+    '..kkkkkvvvvvvlk.', '......kkvvvvlkk.', '......kvlkkkvlk.', '......kkk...kkk.',
+  ],
+  // a blue sheet, its corner turned, a plan drawn on it
+  blueprint: [
+    '................', '.kkkkkkkkkk.....', '.kBBBBBBBBkk....', '.kBwBBBBBBkwk...', '.kBwBBwwwBkkkk..', '.kBwBBwBwBBBBk..',
+    '.kBwBBwwwBBBBk..', '.kBwBBBBBBBwBk..', '.kBwwwwwwwwwBk..', '.kBBBBBBwBBwBk..', '.kBwwwBBwBBwBk..', '.kBwBwBBwwwwBk..',
+    '.kBwwwBBBBBBBk..', '.kBBBBBBBBBBBk..', '.kkkkkkkkkkkkk..', '................',
+  ],
+  // two violet arrows chasing round
+  reset: [
+    '................', '....kkkkkk......', '..kkvvvvvvkk.k..', '.kvvkkkkkkvvkvk.', '.kvk......kvvvk.', 'kvk......kvvvvk.',
+    'kvk......kkkkkk.', 'kkk.............', '.............kkk', '.kkkkkk......kvk', '.kvvvvk......kvk', '.kvvvk......kvk.',
+    '.kvkvvkkkkkkvvk.', '..k.kkvvvvvvkk..', '......kkkkkk....', '................',
+  ],
+  // a crescent moon and two stars
+  overnight: [
+    '................', '......kkkk......', '....kkgggk......', '...kggggk.....k.', '..kgggGk.....kgk', '..kggGk.......k.',
+    '.kgggk..........', '.kgggk..........', '.kgggk.....k....', '.kggggk...kgk...', '..kggggk...k....', '..kGggggkk...kk.',
+    '...kGggggGkkkGk.', '....kkGGGGGGkk..', '......kkkkkk....', '................',
+  ],
+};
+const PICTO_INK: Record<string, string> = {
+  k: C.ink, b: C.bone, h: C.hull1, v: C.violet, l: C.slag, B: C.iron1, w: C.iron2, g: C.hot, G: C.brass1,
+};
+
+const fallbacks = new Map<UIconName, HTMLCanvasElement>();
+
+/** The 16x16 stand-in for an icon the atlas lacks: its pictogram, or a dark key with the glyph
+ * centred on it. */
+function fallbackIcon(name: UIconName): HTMLCanvasElement {
+  const hit = fallbacks.get(name);
+  if (hit) return hit;
+  const cv = document.createElement('canvas');
+  cv.width = 16;
+  cv.height = 16;
+  const ctx = cv.getContext('2d')!;
+  const p = PICTO[name];
+  if (p) {
+    p.forEach((row, y) => {
+      for (let x = 0; x < 16; x++) {
+        const col = PICTO_INK[row[x]];
+        if (!col) continue;
+        ctx.fillStyle = col;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    });
+  } else {
+    // a key the size of an icon: ink rim, a dark face with a lighter top, the glyph centred
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(1, 0, 14, 16);
+    ctx.fillRect(0, 1, 16, 14);
+    ctx.fillStyle = C.shadow;
+    ctx.fillRect(1, 1, 14, 14);
+    ctx.fillStyle = C.hull0;
+    ctx.fillRect(2, 1, 12, 1);
+    const g = GLYPH[name];
+    const col = name === 'coin' ? C.gold : name === 'heart' ? C.pipRed : C.bone;
+    drawText(ctx, g, 8 - Math.floor(textWidth(g) / 2), 4, col, 1, C.ink);
+  }
+  fallbacks.set(name, cv);
+  return cv;
 }
 
 /** A button with an optional icon; returns true when clicked. Code-drawn in the plate language:

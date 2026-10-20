@@ -349,6 +349,8 @@ export async function m5Setup(state) {
   a.trophyPops = [];
   if (state === 'reorg') a.panel = 'reorganize';
   if (state === 'patents') a.panel = 'patents';
+  // a node you can buy, hovered: its numbers, what it changes this run, its price
+  if (state === 'patentsHover') { a.panel = 'patents'; return { hoverId: 'patent_quickAudit' }; }
   if (state === 'blueprints') { g.s.ghosts = [{ kind: 'press', x: 9, y: 4, rot: 0, recipe: null }]; a.panel = 'blueprints'; }
   if (state === 'ghosts') {
     // ghosts already laid (one ready, two waiting for coin) and a blueprint following the mouse
@@ -365,7 +367,7 @@ export async function m5Setup(state) {
   return null;
 }
 
-export const M5 = ['reorg', 'patents', 'blueprints', 'ghosts', 'committee', 'mega2'];
+export const M5 = ['reorg', 'patents', 'patentsHover', 'blueprints', 'ghosts', 'committee', 'mega2'];
 
 const SIZES = [[1280, 720], [1920, 1080], [1024, 640]];
 // each state: a function run in the page that puts the app there (frozen); it may return
@@ -417,7 +419,7 @@ const STATES = {
     // the jam itself, held for the shot (the frozen game keeps it): slag backed up in the furnace
     f.state = 'blocked';
     f.why = 'slag';
-    f.hist = 'w'.repeat(20) + 'b'.repeat(40);
+    f.hist = 'w'.repeat(20) + 'x'.repeat(40); // 'x': blocked by its byproduct (stats.ts)
     a.game.events.drain();
     a.renderer.fx.flyers = [];
     a.renderer.fx.pops = [];
@@ -486,6 +488,17 @@ const STATES = {
   },
   lettersOff: async () => { const num = await import('/src/engine/num.ts'); num.setNotation('standard'); window.__app.panel = null; },
 };
+// a busy Act II Workshop with a tall pinned report, two toasts (one long) and two trophies: the
+// toasts keep their room above the report (the UI legibility round)
+STATES.act2toasts = {
+  base: 'act2power',
+  post: () => {
+    const a = window.__app;
+    a.toast('Research complete: Circuits', 'Unlocked the Assembler recipe for circuits: copper wire, plastic and glass.', '#93b6c9', 'flask');
+    a.toast('Lens Array: filled!', '+12,000 coin, +1 reputation. Unit 7 beeps twice, which you choose to read as thanks.', '#6fc1ae');
+    a.trophyPops = [{ id: 'estate', t: 0 }, { id: 'letThereBeLight', t: 0 }];
+  },
+};
 for (const s of ACT2) STATES[s] = s;
 for (const s of WORKSHOP) STATES[s] = { ws: s };
 for (const s of M5) STATES[s] = { m5: s };
@@ -506,7 +519,8 @@ async function main() {
     for (const [state, fn] of Object.entries(STATES)) {
       if (only.length && !only.includes(state)) continue;
       const name = `${w}x${h}-${state}`;
-      const r = typeof fn === 'string' ? await page.evaluate(act2Setup, fn) : fn.ws ? await page.evaluate(workshopSetup, fn.ws) : fn.idle ? await page.evaluate(idleSetup, fn.idle) : fn.m5 ? await page.evaluate(m5Setup, fn.m5) : await page.evaluate(fn);
+      const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post)) : await page.evaluate(f));
+      const r = await run(fn);
       // the goal card slides in when its goal changes: a state set from scratch shows it at rest
       await page.evaluate(() => { window.__app.hud.goalKey = null; });
       if (r?.drag) await dragTiles(page, r.drag);
@@ -517,7 +531,13 @@ async function main() {
         if (p) await page.mouse.move(p.x, p.y);
       } else if (r?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), r.hover); await page.mouse.move(p.x, p.y); }
       else await page.mouse.move(Math.floor(w / 2), Math.floor(h / 2) + 40);
-      await frames(page, state === 'megaDone' ? 40 : state === 'gradeSplus' ? 36 : state === 'toasts' ? 40 : 4);
+      // toasts and trophies shown at rest, where they land: sliding in they are not layout yet (the
+      // audit skips them then), and a shot mid-slide looks cut off at the edge
+      const land = () => { const a = window.__app; for (const t of a.toasts) t.t = Math.max(t.t, 0.3); for (const p of a.trophyPops) p.t = Math.max(p.t, 0.3); };
+      await page.evaluate(land);
+      await frames(page, 2);
+      await page.evaluate(land);
+      await frames(page, state === 'megaDone' ? 38 : state === 'gradeSplus' ? 34 : state === 'toasts' ? 38 : 2);
       await page.screenshot({ path: `${out}/${name}.png` });
       if (r?.drag) await page.mouse.up();
       const { issues, k } = await page.evaluate(() => {
@@ -530,7 +550,7 @@ async function main() {
           const root = document.createElement('div');
           root.id = '__auditOverlay';
           root.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:99';
-          const col = { clash: '#ff2d55', overflow: '#ff9500', covered: '#00c7ff' };
+          const col = { clash: '#ff2d55', overflow: '#ff9500', covered: '#00c7ff', offscreen: '#bf5af2' };
           for (const i of issues)
             for (const [r, dashed] of [[i.rect, false], [i.otherRect, true]]) {
               if (!r) continue;
