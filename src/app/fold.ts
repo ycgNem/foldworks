@@ -11,6 +11,8 @@ import { FACTORY } from '../data/land';
 import { ORDER } from '../data/orders';
 import { RESEARCH } from '../data/research';
 import { RULES, SCORE_WEIGHTS } from '../data/rules';
+import { prules } from '../sim/patents'; // Milestone 5: the Patent rules (More Auditors, Quick Audits)
+import type { Game } from '../sim/Game';
 import { megaStage } from '../data/megaprojects';
 import { ICON, textWidth, wrapText } from '../ui/font';
 import { TICK_RATE } from '../engine/time';
@@ -58,7 +60,7 @@ function drawPlus(ctx: CanvasRenderingContext2D, x: number, y: number, size: num
 
 export const perMin = perMinW;
 
-const warmTicks = () => RULES.auditWarmup.value * TICK_RATE;
+const warmTicks = (g?: Game) => (g ? prules(g).auditWarmup : RULES.auditWarmup.value) * TICK_RATE; // Quick Audits (§19)
 
 /** Coin a minute a set of outputs is worth at the Dock (rates per second). */
 function coinPerMin(outs: Partial<Record<ItemId, number>>, mult = 1): number {
@@ -188,13 +190,13 @@ export function auditBadge(app: App, L: Layout) {
   // "2/3 audits": a tab on the row's corner
   if (ws) {
     const graded = here.filter((a) => a.result).length;
-    const s = `Audits ${n}/${RULES.maxAudits.value}${graded ? `  ${graded} graded` : ''}`;
+    const s = `Audits ${n}/${prules(g).maxAudits}${graded ? `  ${graded} graded` : ''}`;
     const tw = textWidth(s) + 8;
     ui.fill(x0, y - 11, tw, 11, C.ink);
     ui.fill(x0 + 1, y - 10, tw - 2, 10, C.shadow);
     ui.fill(x0 + 1, y - 10, tw - 2, 1, graded ? C.brass1 : C.teal0);
     ui.text(s, x0 + 4, y - 9, graded ? C.gold : C.teal1);
-    ui.hint(x0, y - 11, tw, 11, `Up to ${RULES.maxAudits.value} lines can be audited at once, in boxes that never overlap. Click a graded badge to fold it.`, 180);
+    ui.hint(x0, y - 11, tw, 11, `Up to ${prules(g).maxAudits} lines can be audited at once, in boxes that never overlap. Click a graded badge to fold it.`, 180);
   }
   here.forEach((a, i) => auditChip(app, a, ws, x0 + i * (bw + gap), y, bw, bh));
 }
@@ -204,10 +206,10 @@ function auditChip(app: App, a: AnyAudit, ws: boolean, x: number, y: number, w: 
   const ui = app.ui;
   const g = app.game;
   const ctx = ui.ctx;
-  const total = auditTicks();
+  const total = auditTicks(g);
   const f = Math.min(1, a.t / total);
-  const warm = !a.result && a.t < warmTicks();
-  const res: AuditResult | null = a.result ?? (ws ? projectAudit(g, a as AuditState) : a.t > warmTicks() + TICK_RATE ? gradeFAudit(g) : null);
+  const warm = !a.result && a.t < warmTicks(g);
+  const res: AuditResult | null = a.result ?? (ws ? projectAudit(g, a as AuditState) : a.t > warmTicks(g) + TICK_RATE ? gradeFAudit(g) : null);
   const hov = ui.hover(x, y, w, h);
   plate(ui, x, y, w, h, { accent: a.result ? C.gold : warm ? C.hull1 : C.teal1, hover: hov, kind: 'button' });
   if (a.result) {
@@ -250,7 +252,7 @@ function auditChip(app: App, a: AnyAudit, ws: boolean, x: number, y: number, w: 
   } else if (res) {
     ui.text('so far', tx, y + 13, C.hull2);
     ui.text(res.grade.letter, tx + textWidth('so far') + 4, y + 13, GRADE_COL[res.grade.letter] ?? C.bone);
-  } else ui.text(warm ? `${Math.ceil((warmTicks() - a.t) / TICK_RATE)} s, then 60` : 'measuring', tx, y + 13, C.hull1);
+  } else ui.text(warm ? `${Math.ceil((warmTicks(g) - a.t) / TICK_RATE)} s, then ${prules(g).auditWindow}` : 'measuring', tx, y + 13, C.hull1);
   ui.unclip();
   // the score as one bar: U, W and C stacked in their weights
   const bw = tr - tx;

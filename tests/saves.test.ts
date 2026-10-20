@@ -156,13 +156,13 @@ describe('versions', () => {
     expect(s2.factory.ents.length).toBe(2);
   });
 
-  it('a v4 save (Milestone 4) gains Inspiration and loads', () => {
+  it('a v4 save (Milestone 4) gains the Reorganize meta and Inspiration, and loads', () => {
     const g = gameAt(300);
     const p = savePayload(g, 0);
     const st = JSON.parse(p.snap);
     delete st.inspire;
     const d = migrate({ ...p, v: 4, snap: JSON.stringify(st) });
-    expect(d.v).toBe(5);
+    expect(d.v).toBe(SAVE_VERSION);
     const back = checkSave(d as never);
     expect(back.s.inspire).toEqual({});
     expect(back.s.tick).toBe(300);

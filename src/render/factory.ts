@@ -9,6 +9,7 @@ import type { Game } from '../sim/Game';
 import { DX, DY, ccw, cw, opposite, type Dir, type FEnt } from '../sim/world';
 import { FACTORY } from '../data/land';
 import { RULES } from '../data/rules';
+import { prules } from '../sim/patents'; // Milestone 5: the Patent rules (More Auditors, Quick Audits)
 import { megaStage } from '../data/megaprojects';
 import { ITEMS, type ItemId } from '../data/items';
 import { BYPRODUCTS } from '../sim/systems/modules';
@@ -386,8 +387,8 @@ function fauditBox(ctx: CanvasRenderingContext2D, g: Game, time: number) {
   const b = a.box;
   const col = a.result ? C.gold : C.teal1;
   antsBox(ctx, b.x, b.y, b.w, b.h, col, rgba(col, 0.1), time);
-  const warm = RULES.auditWarmup.value * TICK_RATE;
-  const total = warm + RULES.auditWindow.value * TICK_RATE;
+  const warm = prules(g).auditWarmup * TICK_RATE; // Quick Audits (§19)
+  const total = warm + prules(g).auditWindow * TICK_RATE;
   const s = a.result ? `Graded ${a.result.grade.letter}` : a.t < warm ? `warming ${Math.ceil((total - a.t) / TICK_RATE)}s` : `${Math.ceil((total - a.t) / TICK_RATE)}s`;
   const ly = b.y > 0 ? b.y * TILE - 14 : (b.y + b.h) * TILE + 3;
   label(ctx, s, (b.x + b.w / 2) * TILE, ly, col);

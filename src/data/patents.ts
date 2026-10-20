@@ -261,7 +261,7 @@ export const PATENTS: Record<PatentId, PatentDef> = {
   }),
   // ---------------------------------------------------------------- offline (DESIGN.md §12)
   nightShift: P({
-    id: 'nightShift', name: 'Night Shift', branch: 'offline', cost: 2, requires: [], pos: [0, 0],
+    id: 'nightShift', name: 'Graveyard Shift', branch: 'offline', cost: 2, requires: [], pos: [0, 0],
     effect: { k: 'offline', add: 0.1 },
     text: 'Offline efficiency 0.6 (was 0.5).',
     flavor: 'The owls clock in.',

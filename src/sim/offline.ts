@@ -116,7 +116,7 @@ function jammedHist(hist: string, n: number): boolean {
   return true;
 }
 
-const heapCap = () => BUILD.heap.capacity ?? 400;
+const heapCap = (g: Game) => prules(g).heapCap; // Deep Heaps (§19)
 
 /**
  * An offline run that can be spread over frames: `step(maxTicks)` does at most that many live
@@ -183,7 +183,7 @@ export class OfflineRun {
     const J = IDLE.jamSeconds.value;
     for (const m of [...g.miners, ...g.machines]) if (jammedHist(m.hist, J)) { this.jammed.add('w' + m.id); this.jammedAtStart++; }
     for (const m of s.factory.ents) if (m.kind === 'module' && jammedHist(m.hist, J)) { this.jammed.add('f' + m.id); this.jammedAtStart++; }
-    for (const h of g.logistics) if (h.kind === 'heap' && h.count >= heapCap()) this.heapsFull.add(h.id);
+    for (const h of g.logistics) if (h.kind === 'heap' && h.count >= heapCap(g)) this.heapsFull.add(h.id);
     const ticks = Math.min(Math.floor(this.counted * TICK_RATE), RULES.offlineReplayTicks.value);
     // rates come from the replay's last 5 minutes, after lines have settled
     this.startLive(ticks, Math.min(ticks, 5 * 60 * TICK_RATE));
@@ -270,8 +270,8 @@ export class OfflineRun {
     let cause: { heap: Ent } | { bay: ItemId } | null = null;
     for (const [id, rate] of this.heapRate) {
       const h = g.byId.get(id);
-      if (!h || h.count >= heapCap()) continue;
-      const tf = (heapCap() - h.count) / rate;
+      if (!h || h.count >= heapCap(g)) continue;
+      const tf = (heapCap(g) - h.count) / rate;
       if (tf < dt) { dt = tf; cause = { heap: h }; }
     }
     const st = megaStage(g.s.mega.stage);
@@ -297,11 +297,11 @@ export class OfflineRun {
     for (const [id, rate] of this.heapRate) {
       const h = g.byId.get(id);
       if (!h) continue;
-      h.count = Math.min(heapCap(), Math.floor(h.count + rate * dt + 1e-9));
+      h.count = Math.min(heapCap(g), Math.floor(h.count + rate * dt + 1e-9));
     }
     this.extrapolated += dt;
     if (cause && 'heap' in cause) {
-      cause.heap.count = heapCap();
+      cause.heap.count = heapCap(g);
       this.heapFull(cause.heap, this.t, true);
     } else if (cause && 'bay' in cause) {
       // top up the last fraction so the want is met exactly, then say so
@@ -414,7 +414,7 @@ export class OfflineRun {
       this.jammed.add('f' + m.id);
       this.push({ t: Math.max(0, t - J), kind: 'jam', text: `${fname(g, m as FEnt)} blocked${m.why ? ' by ' + itemName(m.why).toLowerCase() : ''}`, x: m.x, y: m.y, floor: 'factory', why: m.why });
     }
-    for (const h of g.logistics) if (h.kind === 'heap' && h.count >= heapCap()) this.heapFull(h, t, false);
+    for (const h of g.logistics) if (h.kind === 'heap' && h.count >= heapCap(g)) this.heapFull(h, t, false);
   }
 
   private finish() {
@@ -427,8 +427,8 @@ export class OfflineRun {
     let nextHeap: OfflineReport['nextHeap'] = null;
     for (const [id, rate] of this.heapRate) {
       const h = g.byId.get(id);
-      if (!h || h.count >= heapCap()) continue;
-      const inSeconds = (heapCap() - h.count) / rate;
+      if (!h || h.count >= heapCap(g)) continue;
+      const inSeconds = (heapCap(g) - h.count) / rate;
       if (!nextHeap || inSeconds < nextHeap.inSeconds) nextHeap = { x: h.x, y: h.y, inSeconds };
     }
     const sum = (k: 'dock' | 'fdock' | 'hopper' | 'bay', item: ItemId) => (this.tally[k][item] ?? 0) + (this.extra[k][item] ?? 0);

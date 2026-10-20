@@ -14,6 +14,8 @@ export const UICON = {
   factory: 10, workshop: 11, coin: 12, heart: 13, clock: 14, lock: 15, star: 16, play: 17, pause: 18, ff: 19,
   // Act II (append-only, STYLE.md)
   power: 20, heavy: 21, codex: 22, survey: 23, mega: 24, kit: 25, claim: 26, overdrive: 27, mode: 28,
+  // Milestones 5 and 6 (append-only)
+  patents: 29, blueprint: 30, reset: 31, overnight: 32,
 } as const;
 export type UIconName = keyof typeof UICON;
 
@@ -23,6 +25,7 @@ const GLYPH: Record<UIconName, string> = {
   flow: '~', remove: ICON.cross, rotate: '@', factory: ICON.module, workshop: ICON.cog, coin: ICON.coin, heart: ICON.heart,
   clock: ICON.clock, lock: ICON.lock, star: ICON.star, play: ICON.right, pause: '|', ff: '>',
   power: ICON.bolt, heavy: ICON.cog, codex: '?', survey: ICON.flask, mega: ICON.star, kit: ICON.crate, claim: '^', overdrive: ICON.bolt, mode: '=',
+  patents: ICON.star, blueprint: ICON.module, reset: '@', overnight: ICON.clock,
 };
 
 /** What each accent colour means (docs/ui-redesign.md): gold is coin and "you can buy this", teal
@@ -192,17 +195,20 @@ export function card(ui: UI, x: number, y: number, w: number, h: number, title: 
 
 /** One UI icon at (x, y). `half` draws the 16x16 icon at 8x8 via the glyph fallback when small. */
 export function uiIcon(ui: UI, name: UIconName, x: number, y: number, half = 0) {
-  if (hasArt('ui_icons') && !half) {
-    ui.ctx.drawImage(sheet('ui_icons').frames[UICON[name]], Math.round(x), Math.round(y));
+  // an icon the atlas doesn't have yet (appended names wait for the art) falls back to its glyph
+  const big = hasArt('ui_icons') ? sheet('ui_icons').frames[UICON[name]] : undefined;
+  const small = hasArt('ui_icons_small') ? sheet('ui_icons_small').frames[UICON[name]] : undefined;
+  if (big && !half) {
+    ui.ctx.drawImage(big, Math.round(x), Math.round(y));
     return;
   }
-  if (half && hasArt('ui_icons_small')) {
+  if (half && small) {
     // the 8x8 drawings (drawn for that size, not a squeezed 16x16)
-    ui.ctx.drawImage(sheet('ui_icons_small').frames[UICON[name]], Math.round(x), Math.round(y));
+    ui.ctx.drawImage(small, Math.round(x), Math.round(y));
     return;
   }
-  if (hasArt('ui_icons') && half) {
-    ui.ctx.drawImage(sheet('ui_icons').frames[UICON[name]], Math.round(x), Math.round(y), 8, 8);
+  if (big && half) {
+    ui.ctx.drawImage(big, Math.round(x), Math.round(y), 8, 8);
     return;
   }
   const g = GLYPH[name];

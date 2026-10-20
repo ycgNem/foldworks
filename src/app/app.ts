@@ -557,6 +557,11 @@ export class App {
           a.sfx('milestone');
           this.renderer.fx.kick(5);
           // the card waits for the Gizmo parade into the Factory Dock to finish
+          if (this.game.s.meta.runs > 0) {
+            // a later run (DESIGN.md §19): the Festival again, celebrated briefly
+            this.toast('The Gizmo Festival, again', 'Bramble throws it every run. The swamp has learned to expect it.', C.gold, 'star');
+            break;
+          }
           if (this.renderer.parade && this.floor === 'factory') this.sliceAt = this.ui.time + Math.max(0.5, 3.6 - this.renderer.parade.t);
           else {
             this.panel = 'sliceEnd';
@@ -964,7 +969,7 @@ export class App {
     if (this.mode.k === 'remove') { this.act({ k: 'fremove', x: t.x, y: t.y }); return; }
     const e = g.fentAt(t.x, t.y);
     if (e?.kind === 'fdock') this.togglePanel('orders');
-    else if (e?.kind === 'fhopper') this.togglePanel('research');
+    else if (e?.kind === 'fhopper') { if (!g.act({ k: 'fclick', x: t.x, y: t.y }).ok) this.togglePanel('research'); } // Inspiration (§20)
     else if (e?.kind === 'fbay') this.togglePanel('mega');
     else if (e?.kind === 'module' && g.done('overdrive') && g.act({ k: 'fclick', x: t.x, y: t.y }).ok) return;
     else this.fselected = e && this.fselected !== e.id ? e.id : null;
