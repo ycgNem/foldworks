@@ -5,7 +5,7 @@
 // `reorganize` command (src/sim/reorganize.ts).
 import { C } from '../data/palette';
 import { ITEMS } from '../data/items';
-import { ICON, textWidth, ellipsize } from '../ui/font';
+import { ICON, textWidth, ellipsize, wrapText, LINE_H } from '../ui/font';
 import { itemIcon } from '../render/sprites';
 import { previewPatents, reorganizeRefusal, runSeconds, KEPT, LOST } from '../sim/reorganize';
 import { TICK_RATE } from '../engine/time';
@@ -86,6 +86,9 @@ export function reorganizeCard(app: App, r: Rect) {
 }
 
 function keepLose(ui: UI, inner: Rect, lines: string[], subs: string[], col: string) {
+  // the explanations go first when the column is too short for them (1024x640: the QA pass)
+  const need = lines.reduce((h, l, i) => h + wrapText(l, inner.w - 4).length * LINE_H + (subs[i] ? wrapText(subs[i], inner.w - 12).length * LINE_H : 0) + 3, 0);
+  if (need > inner.h - 2) subs = [];
   let y = inner.y + 2;
   for (let i = 0; i < lines.length; i++) {
     if (y + 9 > inner.y + inner.h) break;

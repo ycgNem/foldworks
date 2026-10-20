@@ -54,7 +54,7 @@ export function blueprintsScreen(app: App, r: Rect) {
   tool('ghostClear', 'Clear ghosts', 'Remove every ghost (nothing is refunded: ghosts cost nothing)', () => app.act({ k: 'ghostClear' }), !ghosts);
   const drones = prules(g).drones;
   const note = drones ? `${drones} ${drones === 1 ? 'dragonfly builds' : 'dragonflies build'} a ghost every ${RULES.droneTicks.value / 20} s` : 'Ghosts wait for you (or a Builder Dragonfly)';
-  if (bx + textWidth(note) < r.x + r.w - 8) ui.text(note, r.x + r.w - 8, y0 + 4, C.hull3, { align: 'right' });
+  if (bx + textWidth(note) < r.x + r.w - 14) ui.text(note, r.x + r.w - 14, y0 + 4, C.hull3, { align: 'right' });
   // ---- the book
   const ly = y0 + 18;
   const inner = card(ui, r.x + 8, ly, r.w - 16, bottom - ly, `${m.blueprints.length} of ${RULES.blueprintSlots.value} layouts`, C.teal1);
