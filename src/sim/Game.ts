@@ -30,6 +30,9 @@ import { runSparks, catchSpark } from './systems/sparks';
 import type { Tally } from './offline';
 import { runAudits, startAudit, cancelAudit, auditLock, auditTransfer } from './systems/audits';
 import { runStats } from './systems/stats';
+import { setPause, buyIdleUpgrade, type PauseCmd } from './systems/pause';
+import { inspire } from './systems/inspire';
+import type { IdleUpgradeId } from '../data/idle';
 
 export interface Intake {
   to: 'dock' | 'hopper';
@@ -72,7 +75,10 @@ export type Cmd =
   | { k: 'claim'; item: ItemId }
   | { k: 'faudit'; x: number; y: number; w: number; h: number }
   | { k: 'fauditCancel' }
-  | { k: 'ffold'; name: string | null };
+  | { k: 'ffold'; name: string | null }
+  // Milestone 6 (DESIGN.md §20): stop or restart a machine, a module or a whole line; the Night Shift
+  | PauseCmd
+  | { k: 'idleUpgrade'; id: IdleUpgradeId };
 
 export interface Logged { t: number; c: Cmd }
 
@@ -336,11 +342,18 @@ export class Game {
       case 'fremove': return fremove(this, c.x, c.y);
       case 'frotate': return frotate(this, c.x, c.y);
       case 'mode': return this.setMode(c.x, c.y, c.mode);
-      case 'fclick': return foverdrive(this, c.x, c.y);
+      case 'fclick': {
+        // the Factory Hopper takes Inspiration clicks (DESIGN.md §15); a module takes Overdrive
+        const fe = this.fentAt(c.x, c.y);
+        if (fe?.kind === 'fhopper') return this.countClick() ? inspire(this, fe.x + 1, fe.y + 1, 'factory') : no('too fast');
+        return foverdrive(this, c.x, c.y);
+      }
       case 'claim': return buyClaims(this, c.item);
       case 'faudit': return startFAudit(this, { x: c.x, y: c.y, w: c.w, h: c.h });
       case 'fauditCancel': return cancelFAudit(this);
       case 'ffold': return foldFAudited(this, c.name);
+      case 'pause': return setPause(this, c);
+      case 'idleUpgrade': return buyIdleUpgrade(this, c.id);
     }
   }
 
@@ -432,6 +445,18 @@ export class Game {
 
   /** Clicking the map: a Spark, an ore patch (hand-mining), the Hand Furnace (crank), a machine
    * blocked by its byproduct (shovel). Capped at 12 counted clicks a second (DESIGN.md §1). */
+  /** Count a click against the 12/s cap (DESIGN.md §1); false when it is over the cap. */
+  countClick(): boolean {
+    const s = this.s;
+    if (s.tick - s.clickWindow >= TICK_RATE) {
+      s.clickWindow = s.tick;
+      s.clicks = 0;
+    }
+    if (s.clicks >= RULES.clickCap.value) return false;
+    s.clicks++;
+    return true;
+  }
+
   private click(x: number, y: number): ActResult {
     const s = this.s;
     if (s.tick - s.clickWindow >= TICK_RATE) {
@@ -462,6 +487,12 @@ export class Game {
       if (auditLock(this, e.x, e.y)) return no('Auditing: Overdrive would spoil the measurement');
       return overdrive(this, e);
     }
+    // Inspiration (DESIGN.md §15, Act II on): a click on the Hopper credits the selected node
+    if (e && e.kind === 'hopper') {
+      const r = inspire(this, e.x + 1, e.y + 1);
+      if (r.ok) s.clicks++;
+      return r;
+    }
     if (!e || e.kind === 'miner') {
       const ore = this.oreAt(x, y);
       if (ore) {
@@ -482,7 +513,7 @@ export class Game {
         const inside = xx >= p.x && yy >= p.y && xx < p.x + p.w && yy < p.y + p.h;
         if (inside) continue;
         const m = this.entAt(xx, yy);
-        if (!m || !isMachine(m.kind) || m.kind === 'miner') continue;
+        if (!m || !isMachine(m.kind) || m.kind === 'miner' || m.paused) continue;
         // which way does the ore travel from the patch into m? from the nearest patch tile
         const fx = Math.max(p.x, Math.min(p.x + p.w - 1, xx)), fy = Math.max(p.y, Math.min(p.y + p.h - 1, yy));
         if (fx !== xx && fy !== yy) continue; // diagonal: not beside the patch

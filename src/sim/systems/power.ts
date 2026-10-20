@@ -121,7 +121,7 @@ export function runPower(g: Game) {
   for (const gr of g.grids) {
     // what is wanted: machines mid-craft, or ready to start and waiting on power
     let demand = 0;
-    for (const c of gr.consumers) if (c.active || c.why === 'power') demand += drawKw(c);
+    for (const c of gr.consumers) if (!c.paused && (c.active || c.why === 'power')) demand += drawKw(c);
     let supply = 0;
     const live: Ent[] = [];
     if (demand > 0) {

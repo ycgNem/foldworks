@@ -44,8 +44,8 @@ export const RULES = {
   /** a module's input and output buffers hold this many seconds of its rates */
   moduleBuffer: r(2, '§11 module buffers: 2 s of each rate, like a machine holding 2 crafts (§4)'),
   /** offline */
-  offlineEff: r(0.5, '§12 offline efficiency 0.5'),
-  offlineCapHours: r(24, '§12 elapsed time capped at 24 h in the slice'),
+  offlineEff: r(0.5, '§12 offline efficiency 0.5 at the start (PLAN.md Offline); §20 the Night Shift and Patents raise it, through offlineEfficiency()'),
+  offlineCapHours: r(168, '§12, §20 time away counts up to 7 days (ROADMAP.md Milestone 6; the slice had 24 h): a holiday week is paid, a month is not'),
   offlineReplayTicks: r(72000, '§12 replay up to 1 h of real ticks (72,000 ticks, about a second): heaps fill and lines jam in it as they would live'),
   /** Bramble rep 1: plates sell for this much more */
   repPlateBonus: r(0.2, '§7 Reputation: 1 rep -> plates sell for +20%'),

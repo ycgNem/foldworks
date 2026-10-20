@@ -688,7 +688,7 @@ describe('saves v3 and v4', () => {
   it('migrates a v2 save: parts bank, claims, Codex, Megaproject, Act II reputation', () => {
     const st = { coin: 'N:5', orders: { active: null, progress: {}, done: [], rep: { bramble: 2 } } };
     const d = migrate({ v: 2, saved: 0, seed: 1, snap: JSON.stringify(st) });
-    expect(d.v).toBe(4);
+    expect(d.v).toBeGreaterThanOrEqual(4);
     const s2 = JSON.parse(d.snap as string);
     expect(s2.parts).toBe('N:0');
     expect(s2.orders.rep).toEqual({ bramble: 2, unit7: 0, voltaire: 0 });

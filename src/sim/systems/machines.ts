@@ -56,6 +56,14 @@ export function runMachines(g: Game) {
   const cap = RULES.outputCap.value;
   const bellows = g.has('bellows');
   for (const m of g.machines) {
+    // stopped by the player (DESIGN.md §20): holds what it has, makes nothing, takes nothing
+    if (m.paused) {
+      m.state = 'idle';
+      m.why = 'paused';
+      overdriveTick(m);
+      note(m);
+      continue;
+    }
     const r = m.recipe ? RECIPE[m.recipe] : null;
     const wasBy = m.state === 'blocked' && m.why !== null && m.why === m.byItem;
     let progressed = false;

@@ -43,6 +43,19 @@ export function restore(p: { seed: number; snap: string; snapTick: number; log: 
   return g;
 }
 
+/** Check that a save holds a game that rebuilds (DESIGN.md §20, corruption recovery); throws if
+ * not. Returns the rebuilt game, so a caller that wants it does not rebuild twice. */
+export function checkSave(d: { seed?: unknown; snap?: unknown; snapTick?: unknown; log?: unknown; tick?: unknown }): Game {
+  if (typeof d.seed !== 'number' || typeof d.snap !== 'string') throw new Error('not a game save');
+  const p = { seed: d.seed, snap: d.snap, snapTick: Number(d.snapTick ?? 0), log: Array.isArray(d.log) ? (d.log as Logged[]) : [], tick: Number(d.tick ?? d.snapTick ?? 0) };
+  const g = restore(p);
+  const s = g.s;
+  if (!(s.coin instanceof Num) || !(s.earned instanceof Num)) throw new Error('coin is not a number');
+  if (!Array.isArray(s.ents) || !s.factory || !Array.isArray(s.factory.ents) || !s.research || !s.orders) throw new Error('the state is incomplete');
+  if (!Number.isFinite(s.tick) || s.tick < 0) throw new Error('the clock is broken');
+  return g;
+}
+
 /** Step `g` to `until`, applying each logged command at its tick. */
 export function replayInto(g: Game, log: Logged[], until: number) {
   let i = 0;

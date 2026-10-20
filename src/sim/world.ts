@@ -94,6 +94,10 @@ export interface Ent {
   bonus?: number;
   /** a Lucky Vein's boost on every machine of its line: ticks left (DESIGN.md §6) */
   boost?: number;
+  // ---- Milestone 6 (DESIGN.md §20); absent on older saves
+  /** stopped by the player (the 'pause' command): takes nothing, makes nothing, draws no power;
+   * splitters route around it as around any full machine */
+  paused?: boolean;
 }
 
 /** A box on the Workshop, in tiles. */
@@ -220,6 +224,8 @@ export interface FEnt {
   /** Overdrive on a module (DESIGN.md §18): ticks left at 3x, then ticks cooling */
   od?: number;
   cool?: number;
+  /** a module stopped by the player (DESIGN.md §20): runs at 0 and takes nothing */
+  paused?: boolean;
 }
 
 export interface FactoryState {
@@ -314,6 +320,9 @@ export interface State {
   mega: { stage: number; progress: Partial<Record<ItemId, Num>> };
   /** the Factory-floor fold audit (nested folds), like `audit` on the Workshop */
   faudit: FAuditState | null;
+  // ---- Milestone 6 (DESIGN.md §20)
+  /** Inspiration credited to each research node, by item (capped at 30% of each item's cost) */
+  inspire: Partial<Record<ResearchId, Partial<Record<ItemId, Num>>>>;
 }
 
 /** A nested-fold audit on the Factory floor (DESIGN.md §18 Nested folds). */
@@ -395,6 +404,7 @@ export function newState(seed: number): State {
     codex: [],
     mega: { stage: 0, progress: {} },
     faudit: null,
+    inspire: {},
   };
 }
 

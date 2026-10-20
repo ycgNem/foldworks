@@ -13,6 +13,7 @@ import { MEGA } from '../src/data/megaprojects';
 import { RULES, GRADES, SCORE_WEIGHTS } from '../src/data/rules';
 import { SPARKS } from '../src/data/sparks';
 import { TROPHIES } from '../src/data/trophies';
+import { IDLE, IDLE_UPGRADES } from '../src/data/idle';
 
 const DESIGN = fs.readFileSync('DESIGN.md', 'utf8');
 const SECTIONS = new Set([...DESIGN.matchAll(/^## (\d+)\./gm)].map((m) => m[1]));
@@ -38,6 +39,9 @@ function records(): [string, { derivation?: string } & Record<string, unknown>][
     ...TROPHIES.map((d) => ['trophy ' + d.id, d] as [string, any]),
     ...CLAIM_PRICE.map((d) => ['claim price ' + d.item, d] as [string, any]),
     ...MEGA.map((d) => ['megaproject stage ' + d.stage, d] as [string, any]),
+    // Milestone 6: idle and offline
+    ...Object.entries(IDLE).map(([k, d]) => ['idle rule ' + k, d] as [string, any]),
+    ...IDLE_UPGRADES.map((d) => ['night shift ' + d.id, d] as [string, any]),
   ];
 }
 
@@ -81,6 +85,7 @@ describe('cross-references', () => {
     for (const p of PATCHES) expect(items.has(p.item)).toBe(true);
     for (const c of CLAIM_PRICE) expect(PATCHES.some((p) => p.item === c.item), `claims for ${c.item} but no deposit`).toBe(true);
     for (const m of MEGA) for (const it of Object.keys(m.wants)) expect(items.has(it), `mega ${m.stage}: ${it}`).toBe(true);
+    for (const u of IDLE_UPGRADES) expect(research.has(u.requires), `night shift ${u.id}: ${u.requires}`).toBe(true);
   });
   it('the research tree has no cycles and every node can be reached', () => {
     const done = new Set<string>();
