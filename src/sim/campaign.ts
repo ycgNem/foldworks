@@ -6,7 +6,7 @@
 // at the same hand and click pace, and it reads only what the screen shows (the preview included).
 import type { Game } from './Game';
 import { Bot } from './bot';
-import { Act2Bot, PLAN2, type Step as Step2 } from './bot2';
+import { ANNEX1, Act2Bot, LANE, PLAN2, type Step as Step2 } from './bot2';
 import { TICK_RATE } from '../engine/time';
 import { previewPatents, runSeconds } from './reorganize';
 import { patentRefusal, hasPatent } from './patents';
@@ -25,13 +25,21 @@ export const PATENT_PRIORITY: PatentId[] = [
   'labAssistant', 'orderClerk', 'stampPress', 'drawerSpace',
 ];
 
-/** Two more Gizmo chains for the Factory floor, once the Surveyor's Charter halves the claims of
- * its S-graded ingot and wire designs: the Act II bot places them by search before its own plan
- * (a Gizmo works feeding the Dock, an ingot and a wire module feeding it, their slag to the Dock). */
-export const EXTRA_CHAINS: Step2[] = ['F', 'G'].flatMap((c): Step2[] => [
-  { k: 'fmod', id: 'giz' + c, design: 'Gizmo works', to: { k: 'dock' }, hub: true },
-  { k: 'fmod', id: 'ing' + c, design: 'Iron ingots', to: { k: 'mod', id: 'giz' + c }, by: { k: 'dock' } },
-  { k: 'fmod', id: 'wire' + c, design: 'Copper wire', to: { k: 'mod', id: 'giz' + c }, by: { k: 'dock' } },
+/** More Gizmo chains for the Factory floor, once the Surveyor's Charter halves the claims of its
+ * S-graded ingot and wire designs: the Act II bot places them by search before its own plan (a
+ * Gizmo works feeding the Dock, an ingot and a wire module feeding it, their slag to the Dock):
+ * two for sure, two more while claims and room allow (the Great Drill's deep seams add claims,
+ * DESIGN.md §19). */
+export const EXTRA_CHAINS: Step2[] = ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'].flatMap((c, i): Step2[] => [
+  // the later two in the annex's blocks 2 and 3 (bought once claims allow a chain there), beside the
+  // Factory annex's own chain in block 1 (bot2.ts ANNEX1), so the Bay floor keeps them
+  // (a block is bought when the chain finds no room in the blocks owned: two chains fit a block)
+  ...(i >= 2 ? [{ k: 'annex', n: Math.min(3, Math.ceil(i / 2) + 1), for: ['Iron ingots', 'Copper wire'] } as Step2] : []),
+  // the annex's block-1 chain and its lane first: the later chains sell through the lane
+  ...(i === 2 ? [{ k: 'fplan', name: 'annex1early', items: [...ANNEX1, ...LANE], opt: true, keep: true } as Step2] : []),
+  { k: 'fmod', id: 'giz' + c, design: 'Gizmo works', to: { k: 'dock' }, hub: true, opt: i >= 2, annex: i >= 2 },
+  { k: 'fmod', id: 'ing' + c, design: 'Iron ingots', to: { k: 'mod', id: 'giz' + c }, by: { k: 'dock' }, opt: i >= 2, annex: i >= 2 },
+  { k: 'fmod', id: 'wire' + c, design: 'Copper wire', to: { k: 'mod', id: 'giz' + c }, by: { k: 'dock' }, opt: i >= 2, annex: i >= 2 },
 ]);
 
 export interface RunLog {
@@ -106,7 +114,9 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
         planner.update();
         if (planner.step >= planner.plan.length) doneAt ??= g.s.tick;
         if (doneAt !== null && (g.flag('sliceEnd') || g.s.tick - doneAt >= 60 * TICK_RATE)) {
-          const extra = hasPatent(g, 'surveyCharter') ? EXTRA_CHAINS : [];
+          // the Great Drill's deep seams (stage 3, kept through every reset) are claims in chunk D
+          const deep: Step2[] = g.s.mega.stage >= 3 ? [{ k: 'land', id: 'D' }] : [];
+          const extra = [...deep, ...(hasPatent(g, 'surveyCharter') ? EXTRA_CHAINS : [])];
           bot = new Act2Bot(g, {}, [...extra, ...PLAN2]);
           handover = runSeconds(g);
         }

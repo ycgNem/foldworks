@@ -26,7 +26,7 @@ import type { Bot } from './bot';
 import { DX, DY, ccw, cw, opposite, type Box, type Dir, type Ent, type FEnt, type ModuleDesign } from './world';
 import { BUILD, isMachine, type BuildKind } from '../data/machines';
 import { RESEARCH, type ResearchId } from '../data/research';
-import { CHUNKS, FACTORY } from '../data/land';
+import { CHUNKS, FACTORY, FACTORY_MAX_H, FACTORY_MAX_W } from '../data/land';
 import { RECIPE } from '../data/recipes';
 import { ORDER, ORDERS } from '../data/orders';
 import type { ItemId } from '../data/items';
@@ -37,8 +37,9 @@ import { auditLock, foldRefusal } from './systems/audits';
 import { BYPRODUCTS, buildRoutes, kitsFor, mainItem, stampCost, stampRefusal } from './systems/modules';
 import { fauditLock, ffoldRefusal } from './systems/nested';
 import { shares } from './systems/stats';
-import { recipeKnown } from './transfer';
+import { accepts, recipeKnown } from './transfer';
 import { placeClaimRefusal } from './systems/claims';
+import { annexPrice, annexRefusal } from './systems/annex';
 
 /** E S W N */
 const E: Dir = 0, S: Dir = 1, W: Dir = 2, N: Dir = 3;
@@ -159,7 +160,9 @@ export const PARTS: Record<string, Pl[]> = {
     { kind: 'miner', x: 18, y: 3, rot: E, on: (b) => b.foldMode !== 'glass', off: S },
     ...draw(20, 3, ['b^b^']),
     ...draw(21, 4, ['k^']),
-    { kind: 'miner', x: 21, y: 5, rot: N, on: (b) => b.foldMode !== 'plastic', off: E },
+    // (also turned away while glass floods the shared belt and stops the refinery before the
+    // Concrete fold: the refinery's oil fires the concrete boiler, the review round's run-2 stall)
+    { kind: 'miner', x: 21, y: 5, rot: N, on: (b) => b.foldMode !== 'plastic' && !b.glassFlood(), off: E },
   ],
   // after Refining: the refinery (19,3) takes coal from (18,3), plastic north up column 20, its
   // oil south down column 19
@@ -252,18 +255,27 @@ const PHASE_X = ['loopX', 'corridor', 'steel', 'steelSlagHeap', 'gpFeed2', 'wire
 export type Dest = { k: 'dock' } | { k: 'hopper' } | { k: 'bay' } | { k: 'mod'; id: string };
 
 export type Step =
-  | { k: 'land'; id: string }
+  /** buy a chunk (`when`: only if this holds, else skipped) */
+  | { k: 'land'; id: string; when?: (g: Game) => boolean }
   | { k: 'need'; r: ResearchId }
   | { k: 'parts'; parts: string[] }
   | { k: 'corridor'; name: string; from: [number, number]; enter: Dir; to: 'hopper' | 'dock' }
-  | { k: 'fold'; box: Box; name: string; ready?: (g: Game, b: Act2Bot) => boolean; bg?: boolean; mode?: 'glass' | 'plastic' }
+  /** `pure`: items the line makes itself; an audit that measured them coming in from outside (a
+   * neighbour's belt leaking into the box) is cancelled and taken again, up to 3 times */
+  | { k: 'fold'; box: Box; name: string; ready?: (g: Game, b: Act2Bot) => boolean; bg?: boolean; mode?: 'glass' | 'plastic'; pure?: ItemId[] }
   /** wait until these designs are folded (a background fold must land before its box changes) */
   | { k: 'folded'; names: string[] }
-  | { k: 'fmod'; id: string; design: string; to: Dest; by?: Dest; hub?: boolean }
+  /** a module placed by search; `annex`: east of the 12x8 only; `opt`: skipped when it can't go */
+  | { k: 'fmod'; id: string; design: string; to: Dest; by?: Dest; hub?: boolean; annex?: boolean; opt?: boolean }
+  /** buy the annex up to `n` blocks (DESIGN.md §19), once coin is `spare` times the price */
+  | { k: 'annex'; n: number; spare?: number; for?: string[] }
+  /** a nested fold of a group on the Factory floor (skipped when the box can't be folded) */
+  | { k: 'ffold'; box: Box; name: string }
   | { k: 'order'; id: string }
   | { k: 'wait'; label: string; until: (g: Game, b: Act2Bot) => boolean }
   /** a whole Factory-floor layout laid by hand: everything else on the floor is cleared */
-  | { k: 'fplan'; name: string; items: FPl[] }
+  /** `keep`: lay it without clearing anything else (an annex plan beside the Act I chains) */
+  | { k: 'fplan'; name: string; items: FPl[]; opt?: boolean; keep?: boolean }
   | { k: 'mark'; name: string };
 
 /** Research the plan wants, in order (a node already paid for by the bank goes first). */
@@ -321,6 +333,35 @@ export const BAY_PLAN: FPl[] = [
   fm('Plastic II', 2, 3, N),
 ];
 
+/**
+ * The annex's first block (DESIGN.md §19 Factory annex: two columns east of the 12x8, beside the
+ * Dock): a Gizmo chain that sells what the Bay floor cleared away. The Gizmo works g (12,1) sells
+ * into the Dock; the wire w (13,0) and the ingots i (13,2) feed its back through (13,1); their
+ * slag rides (12,0) and (11,0) and (12,2) into the Dock.
+ *
+ *        A B | C D
+ *     0  . v | < w
+ *     1  D D | g <
+ *     2  D D | < i
+ */
+export const ANNEX1: FPl[] = [
+  ...ft([[13, 1, W], [12, 0, W], [11, 0, S], [12, 2, W]]),
+  fm('Gizmo works', 12, 1, W),
+  fm('Copper wire', 13, 0, S),
+  fm('Iron ingots', 13, 2, N),
+];
+/** The annex's lane (12,3) north into the trunk (12,2) and on into the Dock: what the annex's
+ * later blocks make joins it, before and after the block-1 chain is folded (ANNEX_II keeps (12,2)). */
+export const LANE: FPl[] = ft([[12, 3, N]]);
+/** The Dock's free sides on the 12x8 (ingots and wire that sell), beside the annex's trunks. */
+const DOCKS: FPl[] = [fm('Iron ingots', 10, 3, N), fm('Iron ingots', 11, 3, N), fm('Copper wire', 10, 0, S)];
+/** The annex chain folded into one module (§18 Nested folds) at (13,1), selling through (12,1);
+ * its slag down (13,2), along (13,3) into the lane. */
+export const ANNEX_II: FPl[] = [...ft([[12, 1, W], [13, 2, S], [13, 3, W], [12, 2, W]]), ...LANE, fm('Gizmo works II', 13, 1, W)];
+/** Annex tiles the hand-laid plans keep for themselves: a searched module or trunk never takes
+ * them, and only the lane's trunk is joined. */
+const ANNEX_HELD = new Set<number>([...ANNEX1, ...ANNEX_II].map((p) => p.y * FACTORY_MAX_W + p.x));
+
 export const PLAN2: Step[] = [
   { k: 'need', r: 'coalSeams' },
   { k: 'land', id: 'E' },
@@ -339,10 +380,14 @@ export const PLAN2: Step[] = [
   // the steel line is folded once it runs flat out (the spine is clear once coal is researched)
   { k: 'fold', box: { x: 19, y: 11, w: 3, h: 3 }, name: 'Steel', ready: (g) => working(g, 20, 12, 60, 0.9), bg: true },
   { k: 'fmod', id: 'steelHop', design: 'Steel', to: { k: 'hopper' }, by: { k: 'dock' } },
+  // the annex's first block (§19), once coin allows: a fourth Gizmo chain beside the Dock, which
+  // the Bay floor later keeps
+  { k: 'annex', n: 1 },
+  { k: 'fplan', name: 'annex1early', items: [...ANNEX1, ...LANE], opt: true, keep: true },
   { k: 'need', r: 'circuits' },
   { k: 'need', r: 'splitters' },
   { k: 'parts', parts: [...BASE, 'sandFeed', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitAsm', 'gp', 'gravel', 'g18', 'gravelOut', 'refinery', 'oilBelt'] },
-  { k: 'fold', box: { x: 12, y: 2, w: 4, h: 2 }, name: 'Circuits', ready: (g) => working(g, 15, 2, 60, 0.8), bg: true },
+  { k: 'fold', box: { x: 12, y: 2, w: 4, h: 2 }, name: 'Circuits', ready: (g) => working(g, 15, 2, 60, 0.8), bg: true, pure: ['copperWire'] },
   { k: 'parts', parts: [...BASE, 'sandFeed', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitAsm', 'gp', 'gravel', 'g18', 'gravelOut', 'refinery', 'oilSplit'] },
   { k: 'need', r: 'concrete' },
   { k: 'parts', parts: [...BASE, 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitAsm', 'gp', 'gravel', 'g18', 'refinery', 'oilSplit', 'concrete'] },
@@ -363,14 +408,25 @@ export const PLAN2: Step[] = [
   // the Megaproject Bay: drill bits from the Drill works, steel from a Steel copy
   { k: 'fplan', name: 'bay', items: BAY_PLAN },
   { k: 'parts', parts: PHASE_Z },
-  // while the Bay fills: the Dock's free sides take copies that sell (ingots and wire), one at a
-  // time as coin allows
-  { k: 'fplan', name: 'dock1', items: [...BAY_PLAN, fm('Iron ingots', 10, 3, N)] },
-  { k: 'fplan', name: 'dock2', items: [...BAY_PLAN, fm('Iron ingots', 10, 3, N), fm('Iron ingots', 11, 3, N)] },
-  { k: 'fplan', name: 'dock3', items: [...BAY_PLAN, fm('Iron ingots', 10, 3, N), fm('Iron ingots', 11, 3, N), fm('Copper wire', 10, 0, S)] },
-  { k: 'fplan', name: 'dock4', items: [...BAY_PLAN, fm('Iron ingots', 10, 3, N), fm('Iron ingots', 11, 3, N), fm('Copper wire', 10, 0, S), fm('Copper wire', 11, 0, S)] },
+  // while the Bay fills: the annex's first block takes the Gizmo chain the Bay floor cleared, and
+  // the Dock's free sides take copies that sell (ingots and wire), one at a time as coin and
+  // claims allow
+  { k: 'annex', n: 1 },
+  { k: 'fplan', name: 'annex1', items: [...BAY_PLAN, ...ANNEX1, ...LANE], opt: true },
+  { k: 'fplan', name: 'dock1', items: [...BAY_PLAN, ...ANNEX1, ...LANE, ...DOCKS.slice(0, 1)], opt: true },
+  { k: 'fplan', name: 'dock2', items: [...BAY_PLAN, ...ANNEX1, ...LANE, ...DOCKS], opt: true },
   { k: 'need', r: 'tuning' },
   { k: 'need', r: 'nestedFolds' },
+  // a deeper fold (§19: more steps folded files a better Gizmo): the annex chain as one module,
+  // put back where its Gizmo works stood, and copies of it in the annex's later blocks
+  { k: 'ffold', box: { x: 12, y: 0, w: 2, h: 3 }, name: 'Gizmo works II' },
+  { k: 'fplan', name: 'annexII', items: [...BAY_PLAN, ...LANE, ...DOCKS, ...ANNEX_II], opt: true },
+  { k: 'annex', n: 2, spare: 2, for: ['Gizmo works II'] },
+  { k: 'fmod', id: 'gizII2', design: 'Gizmo works II', to: { k: 'dock' }, annex: true, opt: true },
+  { k: 'annex', n: 3, spare: 2, for: ['Gizmo works II'] },
+  { k: 'fmod', id: 'gizII3', design: 'Gizmo works II', to: { k: 'dock' }, annex: true, opt: true },
+  // the Great Drill's deep seams (stage 3) are in chunk D: their claims once it is owned
+  { k: 'land', id: 'D', when: (g) => g.s.mega.stage >= 3 },
   { k: 'mark', name: 'end' },
 ];
 
@@ -638,25 +694,56 @@ export class Act2Bot {
       // gives way, after 10 minutes without progress, to a Committee order the floor fills itself
       const f = orderFrac(g, active);
       if (!this.orderWatch || this.orderWatch.id !== active || Math.abs(this.orderWatch.frac - f) > 1e-9) this.orderWatch = { id: active, frac: f, since: g.seconds };
-      else if (g.seconds - this.orderWatch.since >= 600 && ORDER[active].customer !== 'committee') {
+      else if (ORDER[active].customer !== 'committee' && ORDER[active].at !== 'factory' && (g.seconds - this.orderWatch.since >= 600 || g.s.tick % (60 * TICK_RATE) === 0)) {
         const c = this.committeeOrder(offeredOrders(g).map((o) => o.id));
         if (c) this.act({ k: 'order', id: c });
       }
       return;
     }
     const offered = offeredOrders(g);
-    const id = offered.find((o) => o.customer === 'bramble' && o.at === 'factory')?.id ?? this.wantOrders.find((p) => offered.some((q) => q.id === p)) ?? this.committeeOrder(offered.map((o) => o.id));
+    const id = offered.find((o) => o.customer === 'bramble' && o.at === 'factory')?.id ?? this.committeeOrder(offered.map((o) => o.id)) ?? this.wantOrders.find((p) => offered.some((q) => q.id === p));
     if (id) this.act({ k: 'order', id });
   }
 
-  /** The Committee's orders (DESIGN.md §19) this floor already fills on its own: The Pile while
-   * modules send slag to the Factory Dock, Midnight Oil once a Plastic module sends its oil there. */
-  private committeeOrder(offered: string[]): string | undefined {
+  /** What reaches a Dock each minute, as a player reads it off the floor: the Factory modules
+   * working with a trunk route to the Factory Dock, by the rates on their cards (DESIGN.md §19:
+   * the Committee's odd orders are goals while the Bay fills). */
+  dockPerMin(item: ItemId): number {
     const g = this.g;
-    const mods = g.s.factory.ents.filter((e) => e.kind === 'module').map((e) => g.design(e.design));
-    if (offered.includes('thePile') && mods.some((d) => d && (d.outs.slag ?? 0) > 0)) return 'thePile';
-    if (offered.includes('midnightOil') && mods.some((d) => d && (d.outs.oil ?? 0) > 0)) return 'midnightOil';
-    return undefined;
+    let n = 0;
+    for (const r of g.routes) {
+      if (r.to?.kind !== 'fdock') continue;
+      const d = g.design(r.from.design);
+      const v = d?.outs[item] ?? 0;
+      if (!v) continue;
+      // a byproduct rides its side route when it has one, the front route otherwise
+      const side = g.routes.some((q) => q.from === r.from && q.by);
+      if (BYPRODUCTS.has(item) ? side !== r.by : r.by) continue;
+      const busy = [...r.from.hist.slice(-60)].filter((c) => c === 'w').length / 60;
+      n += v * 60 * busy;
+    }
+    return n;
+  }
+
+  /** The Committee's orders (DESIGN.md §19) this floor fills within about 40 minutes on its own:
+   * The Pile while modules send slag to the Factory Dock, Midnight Oil while a Plastic module sends
+   * its oil there, and so on; the quickest first. */
+  private committeeOrder(offered: string[]): string | undefined {
+    let best: string | undefined, bestT = 40;
+    for (const id of offered) {
+      const o = ORDER[id];
+      if (o.customer !== 'committee') continue;
+      const p = this.g.s.orders.progress[id] ?? {};
+      let t = 0;
+      for (const [it, n] of Object.entries(o.wants) as [ItemId, number][]) {
+        const left = n - (p[it]?.toNumber() ?? 0);
+        if (left <= 0) continue;
+        const r = this.dockPerMin(it);
+        t = Math.max(t, r > 0 ? left / r : Infinity);
+      }
+      if (t < bestT) { bestT = t; best = id; }
+    }
+    return best;
   }
 
   // ---------------------------------------------------------------- the plan
@@ -704,7 +791,7 @@ export class Act2Bot {
       case 'need':
         return g.done(s.r) ? 'done' : `research ${s.r}`;
       case 'land': {
-        if (g.s.land.includes(s.id)) return 'done';
+        if (g.s.land.includes(s.id) || (s.when && !s.when(g))) return 'done';
         const ch = CHUNKS.find((c) => c.id === s.id)!;
         if (ch.requires && !g.done(ch.requires)) return `research ${ch.requires}`;
         if (g.s.coin.lt(ch.cost)) return `coin for land ${s.id}`;
@@ -742,7 +829,42 @@ export class Act2Bot {
         return this.fmod(s);
       case 'fplan':
         return this.fplan(s);
+      case 'annex': {
+        if ((g.s.annex ?? 0) >= s.n) return 'done';
+        // a block for a copy of a design: only when that copy could dig (claims)
+        if (s.for && s.for.some((n) => { const d = this.designNamed(n); return !d || !!placeClaimRefusal(g, d); })) return 'done';
+        const price = annexPrice(g);
+        if (!price) return 'done';
+        const why = annexRefusal(g);
+        if (why && !g.s.coin.lt(price)) return 'done';
+        if (g.s.coin.lt(price.mul(s.spare ?? 1))) return `coin for annex block ${(g.s.annex ?? 0) + 1}`;
+        this.buy({ k: 'annex' }, 'annex');
+        return 'annex';
+      }
+      case 'ffold':
+        return this.ffold(s);
     }
+  }
+
+  /** A nested fold on the Factory floor: audit the group once every module in it runs, then fold. */
+  private ffold(s: Extract<Step, { k: 'ffold' }>): string {
+    const g = this.g;
+    if (this.designNamed(s.name)) return 'done';
+    const a = g.s.faudit;
+    if (a) {
+      if (a.box.x !== s.box.x || a.box.y !== s.box.y) return 'another nested audit';
+      if (!a.result) return 'auditing the group';
+      if (!Object.keys(a.result.outs).length) { this.act({ k: 'fauditCancel' }); return 'audit made nothing: again'; }
+      if (this.act({ k: 'ffold', name: s.name })) { this.decide('fold:' + a.result.grade.letter); this.mark('ffold:' + s.name); }
+      return 'folding the group';
+    }
+    const mods = g.s.factory.ents.filter((e) => e.kind === 'module' && inside(s.box, e.x, e.y));
+    if (ffoldRefusal(g, s.box)) return 'done';
+    if (!this.warmSince.has(s.name)) this.warmSince.set(s.name, g.seconds);
+    const warm = mods.every((m) => m.hist.length >= 30 && [...m.hist.slice(-30)].filter((c) => c === 'w').length >= 20);
+    if (!warm && g.seconds - this.warmSince.get(s.name)! < 15 * 60) return 'group warming up';
+    this.buy({ k: 'faudit', ...s.box }, 'audit');
+    return 'auditing the group';
   }
 
   // ---------------------------------------------------------------- Workshop layout
@@ -804,6 +926,16 @@ export class Act2Bot {
 
   /** Set once the slag heap has filled for the Concrete audit. */
   concreteGo = false;
+
+  /** Glass backed up to the refinery while the Concrete line waits for its fold: the refinery
+   * stands blocked on plastic, so the concrete boiler gets no oil (a player sees the jam and turns
+   * the kiln's sand miner away until the line runs). */
+  glassFlood(): boolean {
+    const g = this.g;
+    if (!this.layout.includes('concrete') || this.designNamed('Concrete')) return false;
+    const r = g.entAt(19, 3);
+    return !!r && r.kind === 'refinery' && r.state === 'blocked';
+  }
 
   /** The slag valve (23,9): shut after Concrete is researched until the heap holds enough for a
    * full-speed audit (about 90 s of the mixer at full speed is 120 slag), then open for good. */
@@ -876,6 +1008,18 @@ export class Act2Bot {
       if (p.recipe && !recipeKnown(g, RECIPE[p.recipe])) continue;
       if (this.buy({ k: 'place', kind: p.kind, x: p.x, y: p.y, rot: this.rotOf(p) }, p.kind)) return;
     }
+    // a belt turned to a new job can keep an item from the old one that its new end never takes
+    // (sand left on the belt now feeding the concrete boiler): a player lifts the belt and lays it
+    // again, and the item goes with it
+    for (const p of want) {
+      if (p.kind !== 'belt') continue;
+      const e = g.entAt(p.x, p.y);
+      if (!e || e.kind !== 'belt' || !e.item || auditLock(g, p.x, p.y)) continue;
+      const f = g.entAt(p.x + DX[e.rot], p.y + DY[e.rot]);
+      if (!f || (f.kind !== 'boiler' && f.kind !== 'generator') || accepts(g, f, e.item, e.rot)) continue;
+      if (this.act({ k: 'remove', x: p.x, y: p.y })) this.mine.delete(e.id);
+      return;
+    }
   }
 
   // ---------------------------------------------------------------- folding
@@ -920,6 +1064,12 @@ export class Act2Bot {
       if (this.act({ k: 'auditCancel', id: a.id })) this.warmSince.set(s.name, g.seconds);
       return 'audit made nothing: again';
     }
+    // wire leaking in from a neighbour: the Bay floor's Circuits copy would starve without it
+    const leak = s.pure?.find((i) => (a.result!.ins[i] ?? 0) > 0);
+    if (leak && (this.reaudits.get(s.name) ?? 0) < 3) {
+      if (this.act({ k: 'auditCancel', id: a.id })) { this.reaudits.set(s.name, (this.reaudits.get(s.name) ?? 0) + 1); this.warmSince.set(s.name, g.seconds); }
+      return `audit measured ${leak} coming in: again`;
+    }
     const r = this.act({ k: 'fold', name: s.name, id: a.id });
     if (r) {
       this.decide('fold:' + a.result.grade.letter);
@@ -943,11 +1093,14 @@ export class Act2Bot {
     if (!d) return `no design ${s.design}`;
     if (d.spare < 1) {
       const why = stampRefusal(g, d);
+      if (why && s.opt && !g.s.coin.lt(stampCost(g, d))) return 'done';
       if (why) return `stamp ${s.design}: ${why}`;
       this.buy({ k: 'stamp', id: d.id }, 'stamp');
       return 'stamping';
     }
     if (g.s.tick < this.placeAt) return `no room for ${s.id}`;
+    // an optional copy that can't dig (claims) or has no annex to stand in is skipped
+    if (s.opt && (placeClaimRefusal(g, d) || (s.annex && g.fw <= FACTORY.w))) return 'done';
     // out of claims for another copy digging: clear the newest Act I chain (its miners stop)
     if (placeClaimRefusal(g, d)) return this.clearChain(`claims for ${s.id}`);
     // a destination module that does not take these goods: no room to clear would help
@@ -955,9 +1108,10 @@ export class Act2Bot {
       if (dest?.k !== 'mod' || !items.length) continue;
       const m = g.s.factory.ents.find((e) => e.id === this.mods[dest.id]);
       const dd = m && g.design(m.design);
-      if (!dd || !items.every((i) => (dd.ins[i] ?? 0) > 0)) return `${dest.id} does not take ${items.join(', ')}`;
+      if (!dd || !items.every((i) => (dd.ins[i] ?? 0) > 0)) return s.opt ? 'done' : `${dest.id} does not take ${items.join(', ')}`;
     }
-    const plan = placeModule(g, d, s.to, s.by, this.mods, s.hub);
+    const plan = placeModule(g, d, s.to, s.by, this.mods, s.hub, s.annex ? { x0: FACTORY.w + 2, tx0: FACTORY.w } : undefined);
+    if (!plan && s.opt) return 'done';
     if (!plan) {
       // no room: clear the newest Act I chain (modules back to the inventory, trunks refunded)
       if (nextChainToClear(g, new Set(Object.values(this.mods)))) return this.clearChain(`room for ${s.id}`);
@@ -986,8 +1140,9 @@ export class Act2Bot {
     for (const p of s.items) want.set(`${p.x},${p.y}`, p);
     const fits = (e: FEnt, p: FPl | undefined) => !!p && e.kind === p.kind && e.rot === p.rot && (p.kind === 'trunk' || g.design(e.design)?.name === p.design);
     // clear: modules first (their flows stop), newest first, then trunks
+    // the annex (east of the 12x8) is laid by its own steps: a 12x8 plan never clears it
     const extra = g.s.factory.ents
-      .filter((e) => (e.kind === 'module' || e.kind === 'trunk') && !fits(e, want.get(`${e.x},${e.y}`)))
+      .filter((e) => !s.keep && (e.kind === 'module' || e.kind === 'trunk') && e.x < FACTORY.w && !fits(e, want.get(`${e.x},${e.y}`)))
       .sort((a, b) => (a.kind === b.kind ? b.id - a.id : a.kind === 'module' ? -1 : 1));
     if (extra.length) {
       const e = extra[0];
@@ -996,11 +1151,25 @@ export class Act2Bot {
       }
       return `clearing the floor for ${s.name}`;
     }
-    const missing = s.items.filter((p) => { const e = g.fentAt(p.x, p.y); return !e || !fits(e, p); });
+    const skip = this.skipped.get(s.name) ?? new Set<string>();
+    const missing = s.items.filter((p) => { const e = g.fentAt(p.x, p.y); return !skip.has(`${p.x},${p.y}`) && (!e || !fits(e, p)); });
     if (!missing.length) {
       this.mark('fplan:' + s.name);
       return 'done';
     }
+    // an optional plan leaves out what can't go (a module without claims or design, a tile off the
+    // floor) and lays the rest
+    const skipIt = (p: FPl, why: string) => {
+      if (!s.opt) return why;
+      skip.add(`${p.x},${p.y}`);
+      this.skipped.set(s.name, skip);
+      return `skipping ${p.design ?? 'a trunk'}: ${why}`;
+    };
+    const off = missing.find((p) => p.x >= g.fw || p.y >= g.fh);
+    if (off) return skipIt(off, 'off the floor');
+    // a tile taken by something this plan does not clear (the annex, or a plan that keeps the rest)
+    const taken = missing.find((p) => g.fentAt(p.x, p.y) && (s.keep || p.x >= FACTORY.w));
+    if (taken) return skipIt(taken, 'the tile is taken');
     const t = missing.find((p) => p.kind === 'trunk');
     if (t) {
       if (g.s.coin.lt(FACTORY.trunkCost)) return 'coin for trunks';
@@ -1009,18 +1178,25 @@ export class Act2Bot {
     }
     const m = missing[0];
     const d = this.designNamed(m.design!);
-    if (!d) return `no design ${m.design}`;
+    if (!d) return skipIt(m, `no design ${m.design}`);
     if (d.spare < 1) {
       const why = stampRefusal(g, d);
+      if (why && !g.s.coin.lt(stampCost(g, d))) return skipIt(m, `stamp ${d.name}: ${why}`);
       if (why) return `stamp ${d.name}: ${why}`;
       this.buy({ k: 'stamp', id: d.id }, 'stamp');
       return 'stamping';
     }
     const why = placeClaimRefusal(g, d);
-    if (why) return `place ${d.name}: ${why}`;
+    if (why) return skipIt(m, `place ${d.name}: ${why}`);
     if (this.buy({ k: 'fplace', design: d.id, x: m.x, y: m.y, rot: m.rot }, 'module')) this.mark('module:' + d.name);
     return `placing ${d.name}`;
   }
+
+  /** audits taken again because something the line makes came in from outside */
+  private reaudits = new Map<string, number>();
+
+  /** tiles an optional plan left out, by plan name */
+  private skipped = new Map<string, Set<string>>();
 
   /** Queue the removal of the newest Act I chain (modules back to the inventory, trunks refunded). */
   private clearChain(why: string): string {
@@ -1182,8 +1358,10 @@ export function nextChainToClear(g: Game, mine: Set<number>): { x: number; y: nu
 
 export interface FPlan { x: number; y: number; rot: Dir; trunks: { x: number; y: number; rot: Dir }[] }
 
-const finb = (x: number, y: number) => x >= 0 && y >= 0 && x < FACTORY.w && y < FACTORY.h;
-const FW = FACTORY.w;
+// the Factory floor grows east with the annex (DESIGN.md §19): bounds read the floor as it stands;
+// the hazard grids are laid out at the widest it gets
+const finb = (g: Game, x: number, y: number) => x >= 0 && y >= 0 && x < g.fw && y < g.fh;
+const FW = FACTORY_MAX_W;
 
 /** What a new trunk tile must avoid: tiles someone's items arrive at (a module's front, the tile
  * an existing trunk points into), and directions that would make it a module's byproduct route
@@ -1191,17 +1369,17 @@ const FW = FACTORY.w;
 interface FHaz { arrive: Uint8Array; away: Uint8Array }
 
 function fhazards(g: Game): FHaz {
-  const arrive = new Uint8Array(FW * FACTORY.h);
-  const away = new Uint8Array(FW * FACTORY.h);
+  const arrive = new Uint8Array(FW * FACTORY_MAX_H);
+  const away = new Uint8Array(FW * FACTORY_MAX_H);
   for (const e of g.s.factory.ents) {
     if (e.kind === 'module' || e.kind === 'trunk') {
       const x = e.x + DX[e.rot], y = e.y + DY[e.rot];
-      if (finb(x, y)) arrive[y * FW + x] = 1;
+      if (finb(g, x, y)) arrive[y * FW + x] = 1;
     }
     if (e.kind === 'module') {
       for (const s of [ccw(e.rot), cw(e.rot)]) {
         const x = e.x + DX[s], y = e.y + DY[s];
-        if (finb(x, y)) away[y * FW + x] |= 1 << s;
+        if (finb(g, x, y)) away[y * FW + x] |= 1 << s;
       }
     }
   }
@@ -1246,9 +1424,11 @@ function trunkPath(g: Game, h: FHaz, sx: number, sy: number, d0: Dir, first: Dir
       if (cur === start && first !== null && d !== first) continue;
       if (!tileOk(h, x, y, d)) continue;
       const nx = x + DX[d], ny = y + DY[d];
-      if (!finb(nx, ny)) continue;
+      if (!finb(g, nx, ny)) continue;
       const t = g.fentAt(nx, ny);
       if (t) {
+        // a trunk held by a plan (the annex's) is not joined
+        if (t.kind === 'trunk' && blocked.has(ny * FW + nx)) continue;
         // a trunk: join it if it leads to the destination (trunks merge, 8 items/s shared)
         const end = t.kind === 'trunk' ? followTrunk(g, t, d) : { e: t, d };
         if (!end || !end.e || !dest(end.e, end.d)) continue;
@@ -1302,32 +1482,44 @@ const byOuts = (d: ModuleDesign) => (Object.keys(d.outs) as ItemId[]).filter((i)
 const mainOuts = (d: ModuleDesign, by: boolean) => (Object.keys(d.outs) as ItemId[]).filter((i) => !by || !BYPRODUCTS.has(i));
 
 /** `hub`: several modules will feed this one, so the tiles around its back stay open for their trunks. */
-export function placeModule(g: Game, d: ModuleDesign, to: Dest, by: Dest | undefined, mods: Record<string, number>, hub = false): FPlan | null {
+export function placeModule(g: Game, d: ModuleDesign, to: Dest, by: Dest | undefined, mods: Record<string, number>, hub = false, area?: { x0: number; tx0: number }): FPlan | null {
   const byItems = byOuts(d);
   const main = mainOuts(d, !!by);
   const h = fhazards(g);
   const blocked = new Set<number>();
+  // a module for the annex (§19) and its trunks stay east of the 12x8: the Bay floor's hand-laid
+  // plan clears everything else on the 12x8
+  // (modules from x0, trunks from tx0; the tiles the hand-laid annex plans hold stay free, and their
+  // trunks are joined only at the lane)
+  if (area) {
+    for (let y = 0; y < g.fh; y++) for (let x = 0; x < area.tx0; x++) blocked.add(y * FW + x);
+    for (const k of ANNEX_HELD) if (k !== 3 * FW + 12) blocked.add(k);
+  } else {
+    // a module for the 12x8 stays on it, off the tiles the annex plans hold beside the Dock
+    for (let y = 0; y < g.fh; y++) for (let x = FACTORY.w; x < g.fw; x++) blocked.add(y * FW + x);
+    for (const k of ANNEX_HELD) blocked.add(k);
+  }
   // the Megaproject Bay's corner stays clear until it arrives
   if (!g.s.factory.ents.some((e) => e.kind === 'fbay')) for (let y = FACTORY.bay.y; y < FACTORY.bay.y + 2; y++) for (let x = FACTORY.bay.x; x < FACTORY.bay.x + 2; x++) blocked.add(y * FW + x);
   // trunks pointing into a tile would feed a module there (or stop dead at it)
   let best: FPlan | null = null;
-  for (let y = 0; y < FACTORY.h; y++)
-    for (let x = 0; x < FW; x++) {
+  for (let y = 0; y < g.fh; y++)
+    for (let x = area?.x0 ?? 0; x < g.fw; x++) {
       if (g.fentAt(x, y) || blocked.has(y * FW + x) || h.arrive[y * FW + x]) continue;
       for (let rot = 0 as Dir; rot < 4; rot = (rot + 1) as Dir) {
         const fx = x + DX[rot], fy = y + DY[rot];
-        if (!finb(fx, fy)) continue;
+        if (!finb(g, fx, fy)) continue;
         // a module that takes inputs keeps its back open for the trunk that will feed it
         if (Object.keys(d.ins).length) {
           const bx = x - DX[rot], by_ = y - DY[rot];
-          if (!finb(bx, by_) || blocked.has(by_ * FW + bx) || h.arrive[by_ * FW + bx]) continue;
+          if (!finb(g, bx, by_) || blocked.has(by_ * FW + bx) || h.arrive[by_ * FW + bx]) continue;
           const t = g.fentAt(bx, by_);
           if (t && !(t.kind === 'trunk' && t.rot === rot)) continue;
           if (hub) {
             let open = 0;
             for (const k of [opposite(rot), ccw(rot), cw(rot)]) {
               const nx = bx + DX[k], ny = by_ + DY[k];
-              if (finb(nx, ny) && !g.fentAt(nx, ny) && !blocked.has(ny * FW + nx)) open++;
+              if (finb(g, nx, ny) && !g.fentAt(nx, ny) && !blocked.has(ny * FW + nx)) open++;
             }
             if (open < 3) continue;
           }
@@ -1351,7 +1543,7 @@ export function placeModule(g: Game, d: ModuleDesign, to: Dest, by: Dest | undef
           let side: Trunk[] | null = null;
           for (const s of [ccw(rot), cw(rot)]) {
             const sx = x + DX[s], sy = y + DY[s];
-            if (!finb(sx, sy) || g.fentAt(sx, sy)) continue;
+            if (!finb(g, sx, sy) || g.fentAt(sx, sy)) continue;
             const sp = trunkPath(g, h, sx, sy, s, s, destPred(g, by, byItems, mods), bl);
             if (sp && (!side || sp.length < side.length)) side = sp;
           }
