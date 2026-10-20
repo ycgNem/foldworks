@@ -21,8 +21,8 @@ MACHINES = {
     "miner": dict(src="t_miner", swap=False, anim="miner_work", fps=12),
     "smelter": dict(src="t_smelter2", swap=True, anim="fire", fps=8),
     "press": dict(src="press", swap=False, anim="press_work", fps=8),
-    "assembler": dict(src="assembler", swap=False, anim="assembler_work", fps=8),
-    "furnace": dict(src="furnace", swap=False, anim="fire", fps=8),
+    "assembler": dict(src="assembler", swap=False, anim="assembler_work", fps=8, lift=True),
+    "furnace": dict(src="furnace", swap=False, anim="fire", fps=8, lift=True, inner=P["wood0"]),
     "boiler": dict(src="boiler", swap=False, anim="fire", fps=8),
     "steam_engine": dict(src="steam_engine", swap=True, anim="steam_engine_work", fps=10),
     "generator": dict(src="generator", swap=False, anim="fire", fps=12),
@@ -34,6 +34,32 @@ MK2 = {"smelter_mk2": "smelter", "press_mk2": "press", "assembler_mk2": "assembl
 
 GLOW = [P["lamp0"], P["lamp1"], P["lamp2"], P["lamp3"]]
 VIOLET_GLOW = [P["slag1"], P["violet"]]
+# Mk1 machines whose draft is too dark at 16 px get their steel and inner darks one step lighter
+# (the outline stays ink): the assembler's arms and the furnace's north side read again
+LIFT = {P["ink2"]: P["steel0"], P["steel0"]: P["steel1"], P["steel1"]: P["steel2"], P["steel2"]: P["steel3"],
+        P["brass1"]: P["brass2"], P["wood0"]: P["wood1"], P["wood1"]: P["wood2"]}
+
+
+def lift_map(lift):
+    """LIFT, plus a machine's own extra steps (the furnace's back is shaded brick, not night)."""
+    if not lift:
+        return None
+    return {**LIFT, **(lift if isinstance(lift, dict) else {})}
+
+
+def soften_inner(im, col):
+    """Ink inside the silhouette (not touching the outside) becomes col: a dark draft that came
+    out as a black blob at 16 px gets its shaded face back, its outline kept."""
+    out = im.copy()
+    a = im.load()
+    w, h = im.size
+    ink = rgb(P["ink"])
+    pts = [(x, y) for y in range(h) for x in range(w)
+           if a[x, y][3] and a[x, y][:3] == ink and all(
+               0 <= x + dx < w and 0 <= y + dy < h and a[x + dx, y + dy][3]
+               for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)))]
+    draw(out, pts, col)
+    return out
 
 
 def strip_rim(im):
@@ -116,7 +142,7 @@ def drop_shadow(im, col=None):
     return out
 
 
-def shrink(rows, box=15, size=16):
+def shrink(rows, box=15, size=16, lift=None, inner=None):
     """Shrink each facing's frames to fill a box x box square (one crop box and scale for all of
     a facing's frames, the same scale for east and west), bottom-centred, re-outlined, shadowed."""
     stripped = {d: [strip_rim(f) for f in fr] for d, fr in rows.items()}
@@ -141,7 +167,10 @@ def shrink(rows, box=15, size=16):
                     else c.crop((cut // 2, 0, w - (cut - cut // 2), h))
             cv = new(size, size)
             cv.alpha_composite(c, ((box - c.width) // 2, box - h))
-            res.append(drop_shadow(clean_edges(cv)))
+            cv = clean_edges(cv)
+            if inner:
+                cv = soften_inner(cv, inner)
+            res.append(drop_shadow(recolor(cv, lift) if lift else cv))
         out[d] = res
     return out
 
@@ -179,7 +208,7 @@ def build(only=None):
             print("missing draft", name)
             continue
         fs = facings(spec)
-        mk1 = shrink(fs)
+        mk1 = shrink(fs, lift=lift_map(spec.get("lift")), inner=spec.get("inner"))
         export(name, to_rows(mk1), spec["fps"], facings=4)
         done[name] = fs
     for mk2, base in MK2.items():
