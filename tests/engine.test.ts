@@ -98,4 +98,16 @@ describe('overlap audit', () => {
     expect(findIssues([rec('panel', 0, 0, 30, 20, 0), rec('text', 4, 4, 40, 9, 1, 'long')], { w: 200, h: 100 })[0].type).toBe('overflow');
     expect(findIssues([rec('text', 4, 4, 40, 9, 0, 'under'), rec('fill', 0, 0, 50, 20, 1)], { w: 200, h: 100 })[0].type).toBe('covered');
   });
+  it('checks toasts (the float layer): on screen, inside their plate, over no HUD text; tooltips are free', () => {
+    const fl = (r: AuditRec): AuditRec => ({ ...r, layer: 'float' });
+    const tip = (r: AuditRec): AuditRec => ({ ...r, layer: 'tip' });
+    // a toast at rest on the right, over nothing: clean
+    expect(findIssues([rec('panel', 0, 0, 60, 20, 0), rec('text', 4, 4, 40, 9, 1, 'hud'), fl(rec('panel', 120, 30, 70, 20, 2)), fl(rec('text', 124, 34, 50, 9, 3, 'toast'))], { w: 200, h: 100 })).toEqual([]);
+    // running past the right edge
+    expect(findIssues([fl(rec('panel', 150, 30, 70, 20, 0)), fl(rec('text', 154, 34, 40, 9, 1, 'toast'))], { w: 200, h: 100 }).map((i) => i.type)).toContain('offscreen');
+    // over the HUD's text
+    expect(findIssues([rec('text', 124, 34, 40, 9, 0, 'hud'), fl(rec('panel', 120, 30, 70, 20, 1)), fl(rec('text', 124, 40, 50, 9, 2, 'toast'))], { w: 200, h: 100 }).map((i) => i.type)).toContain('covered');
+    // a tooltip may do all of that
+    expect(findIssues([rec('text', 124, 34, 40, 9, 0, 'hud'), tip(rec('panel', 150, 30, 70, 20, 1)), tip(rec('text', 124, 34, 50, 9, 2, 'tip'))], { w: 200, h: 100 })).toEqual([]);
+  });
 });

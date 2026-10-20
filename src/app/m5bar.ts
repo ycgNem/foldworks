@@ -3,16 +3,40 @@
 // Patent Office as menus; the overnight check. Imported for its side effects by screens.ts.
 import { C } from '../data/palette';
 import { ICON, textWidth } from '../ui/font';
-import { previewPatents } from '../sim/reorganize';
+import { previewPatents, runSeconds } from '../sim/reorganize';
+import { RULES } from '../data/rules';
+import { TICK_RATE } from '../engine/time';
+import { duration, plain } from '../engine/fmt';
 import { button } from './chrome';
 import { registerCounter, registerMenu } from './topbar';
 import type { App } from './app';
 
-/** Patents held, and a violet "Reorganize +N" key once a reset would pay. */
+/** The first run's preview at which the Reorganize key appears: half the low end of a first reset
+ * worth taking (DESIGN.md §16: 12-20 Patents at 4-6 h), so it shows up as the reset starts to
+ * matter, not at the first fold's +1 (the UI legibility round, 2026-10-20). */
+const FIRST_RUN_KEY = 6;
+
+/** Is a reset worth putting on the top bar? It must be possible (patentMin), and pay at least
+ * half of what the last run banked (the first run: FIRST_RUN_KEY). The Patent Office's own
+ * Reorganize... button is always there. */
+function resetMeaningful(app: App, now: number): boolean {
+  const m = app.game.s.meta;
+  if (now < RULES.patentMin.value) return false;
+  const last = m.history[m.history.length - 1];
+  return now >= (last ? Math.ceil(last.patents / 2) : FIRST_RUN_KEY);
+}
+
+/** "19 in 4h 36m, 4.1 an hour" */
+function perHour(patents: number, ticks: number): string {
+  const sec = ticks / TICK_RATE;
+  return `${patents} in ${duration(sec)}${sec >= 60 ? `, ${plain((patents * 3600) / sec, 1)} an hour` : ''}`;
+}
+
+/** Patents held, and a violet "Reorganize +N" key once a reset is worth taking. */
 registerCounter({
   id: 'patents',
-  show: (app) => app.game.s.meta.runs > 0 || app.game.s.designs.length > 0,
-  draw: (app, x, y) => {
+  show: (app) => app.game.s.meta.runs > 0 || app.game.s.meta.patents.gt(0) || resetMeaningful(app, previewPatents(app.game).now),
+  draw: (app, x, y, room) => {
     const ui = app.ui;
     const g = app.game;
     let w = 0;
@@ -23,10 +47,20 @@ registerCounter({
       w += 4;
     }
     const pv = previewPatents(g).now;
-    if (pv >= 1) {
-      const label = `Reorganize +${pv}`;
-      const bw = textWidth(label) + 10;
-      if (button(ui, 'reorganizeBar', x + w, y - 4, bw, 14, label, { active: app.panel === 'reorganize', tip: [{ text: 'Reorganize', color: C.violet }, { text: `Start a new run for ${pv} ${pv === 1 ? 'Patent' : 'Patents'}. A card says what it keeps and what it clears first.` }] })) app.togglePanel('reorganize');
+    if (resetMeaningful(app, pv)) {
+      // where the bar is short of room, the reset icon stands for the word
+      const short = w + textWidth(`Reorganize +${pv}`) + 10 > room;
+      const label = short ? `+${pv}` : `Reorganize +${pv}`;
+      const bw = textWidth(label) + (short ? 26 : 10);
+      const m = g.s.meta;
+      const last = m.history[m.history.length - 1];
+      const tip = [
+        { text: 'Reorganize', color: C.violet },
+        { text: `Start a new run for ${pv} ${pv === 1 ? 'Patent' : 'Patents'}. A card says what it keeps and what it clears first.` },
+        { text: `This run: ${perHour(pv, runSeconds(g) * TICK_RATE)}.`, color: C.teal1 },
+        ...(last ? [{ text: `Last run: ${perHour(last.patents, last.ticks)}.`, color: C.hull2 }] : []),
+      ];
+      if (button(ui, 'reorganizeBar', x + w, short ? y - 5 : y - 4, bw, short ? 16 : 14, label, { active: app.panel === 'reorganize', tip, icon: short ? 'reset' : undefined })) app.togglePanel('reorganize');
       w += bw;
     }
     return w;

@@ -177,7 +177,11 @@ export function rail(app: App, L: Layout) {
     const wants = Object.entries(st.wants) as [ItemId, number][];
     y = railCard(app, 'mega', x, y, w, 'Megaproject', C.glow, 'mega', 11 + wants.length * 9, (bx, by, bw) => {
       ui.clip(bx, by, bw, 10);
-      ui.text(ellipsize(st.name.replace(/^The /, ''), bw - 26), bx, by, C.bone, { shadow: C.ink });
+      // "Great Drill, stage 1", or "Stage 1" where that does not fit (the card's title names it)
+      const full = st.name.replace(/^The /, '');
+      const tail = full.split(', ').slice(1).join(', ');
+      const name = textWidth(full) <= bw - 26 || !tail ? full : tail.charAt(0).toUpperCase() + tail.slice(1);
+      ui.text(ellipsize(name, bw - 26), bx, by, C.bone, { shadow: C.ink });
       ui.unclip();
       ui.small(`${Math.floor(megaFrac(g) * 100)}%`, bx + bw, by + 2, C.glow, { align: 'right' });
       wants.forEach(([item, n], i) => wantRow(app, item, Math.min(n, g.s.mega.progress[item]?.toNumber() ?? 0), n, bx, by + 11 + i * 9, bw, C.glow));

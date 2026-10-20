@@ -8,7 +8,8 @@ import type { Game, ActResult } from '../Game';
 import { OK, no } from '../Game';
 import { isMachine } from '../../data/machines';
 import { RESEARCH } from '../../data/research';
-import { IDLE_UPGRADE, type IdleUpgradeId } from '../../data/idle';
+import { IDLE, IDLE_UPGRADE, type IdleUpgradeId } from '../../data/idle';
+import { offlineEfficiency, offlineEfficiencyUncapped } from '../offline';
 import { Num } from '../../engine/num';
 import { lineOf } from '../analysis';
 import { auditLock } from './audits';
@@ -88,12 +89,23 @@ export function pausedCount(g: Game): number {
   return n;
 }
 
-/** Why a Night Shift upgrade can't be bought now, or null. */
+/** What a Night Shift upgrade would add to the offline efficiency now: its points, less what the
+ * 0.75 ceiling cuts off (the Patent tree's offline nodes and the Night Shift overlap, §20). */
+export function idleUpgradeGain(g: Game, id: IdleUpgradeId): number {
+  const u = IDLE_UPGRADE[id];
+  if (!u || g.has(id)) return 0;
+  const now = offlineEfficiency(g);
+  return Math.max(0, Math.round((Math.min(IDLE.offlineEffMax.value, offlineEfficiencyUncapped(g) + u.eff) - now) * 1e6) / 1e6);
+}
+
+/** Why a Night Shift upgrade can't be bought now, or null. One that would add nothing (the
+ * efficiency is at its ceiling already) is refused, saying why, so no coin buys nothing. */
 export function idleUpgradeRefusal(g: Game, id: IdleUpgradeId): string | null {
   const u = IDLE_UPGRADE[id];
   if (!u) return 'no such upgrade';
   if (g.has(id)) return 'already bought';
   if (!g.done(u.requires)) return `Needs research: ${RESEARCH[u.requires].name}`;
+  if (idleUpgradeGain(g, id) <= 0) return `Offline efficiency is at its ${Math.round(IDLE.offlineEffMax.value * 100)}% ceiling already (your Patents): this would add nothing`;
   if (g.s.coin.lt(u.cost)) return `Needs ${Num.of(u.cost).format()} coin`;
   return null;
 }

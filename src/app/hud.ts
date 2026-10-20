@@ -14,7 +14,7 @@ import { RULES } from '../data/rules';
 import { MEGA } from '../data/megaprojects';
 import { TICK_RATE } from '../engine/time';
 import { TITLE } from '../game-info';
-import { ICON, textWidth, drawText } from '../ui/font';
+import { ICON, textWidth, drawText, ellipsize } from '../ui/font';
 import { sheet, itemIcon, hasArt, spriteName } from '../render/sprites';
 import { report, nominal, lineReport, entName } from '../sim/analysis';
 import { poleReach, drawKw } from '../sim/systems/power';
@@ -220,32 +220,60 @@ function centerOverlay(app: App, L: Layout) {
 /** where the toasts on the right must stop this frame (the pinned report's top, when it is there) */
 let sideFloor = Infinity;
 
-/** The pinned report, on its own floor: anchored bottom-right above the build bar, or left of the
- *  floor when it would sit on what it reports on. */
+/** Room kept for toasts above a pinned report on the right (the UI legibility round: a tall report
+ * pushed every toast off the screen): two trophies, or a toast of three lines. */
+const TOAST_ROOM = 54;
+
+/** How a pinned report fits: its width, the wider width it may take when it is tall, the most it
+ * may be tall, and where it goes for a height and width. */
+interface Fit { w: number; wide: number; maxH: number; place: (h: number, w: number) => { x: number; y: number } }
+
+/** The pinned report, on its own floor: anchored bottom-right above the build bar (leaving room for
+ *  toasts above it), or left of the floor when it would sit on what it reports on. */
 function pinnedReport(app: App, L: Layout) {
   sideFloor = Infinity;
   const g = app.game;
   const ui = app.ui;
-  const w = Math.min(206, L.center.w - 8);
-  const place = (tx: number, ty: number) => (h: number) => {
-    const s = app.renderer.toScreen(tx, ty);
-    const sx = s.x / ui.scale, sy = s.y / ui.scale;
-    const right = L.side.x + L.side.w - w, left = L.center.x + 4;
-    const y = Math.max(L.top.h + 4, L.band.y - h - 6);
-    const under = (x0: number) => sx > x0 - 12 && sx < x0 + w + 12 && sy > y - 12 && sy < y + h + 12;
-    const x = under(right) && !under(left) ? left : right;
-    // the toasts above it on the right stop short of it
-    if (x === right) sideFloor = y - 3;
-    return { x, y };
-  };
+  const fit = (tx: number, ty: number): Fit => ({
+    w: Math.min(206, L.center.w - 8),
+    wide: Math.min(256, L.center.w - 8),
+    maxH: L.band.y - 6 - (L.side.y + TOAST_ROOM),
+    place: (h: number, w: number) => {
+      const s = app.renderer.toScreen(tx, ty);
+      const sx = s.x / ui.scale, sy = s.y / ui.scale;
+      const right = L.side.x + L.side.w - w, left = L.center.x + 4;
+      const y = Math.max(L.top.h + 4, L.band.y - h - 6);
+      const under = (x0: number) => sx > x0 - 12 && sx < x0 + w + 12 && sy > y - 12 && sy < y + h + 12;
+      const x = under(right) && !under(left) ? left : right;
+      // the toasts above it on the right stop short of it
+      if (x === right) sideFloor = y - 3;
+      return { x, y };
+    },
+  });
   if (app.floor === 'workshop' && app.selected) {
     const e = g.byId.get(app.selected);
-    if (e) reportCard(app, e, place(e.x + e.w / 2, e.y + e.h / 2), w);
+    if (e) reportCard(app, e, fit(e.x + e.w / 2, e.y + e.h / 2));
     else app.selected = null;
   } else if (app.floor === 'factory' && app.fselected) {
     const e = g.fById.get(app.fselected);
-    if (e && e.kind !== 'trunk') factoryCard(app, e, place(e.x + 0.5, e.y + 0.5), w);
+    if (e && e.kind !== 'trunk') factoryCard(app, e, fit(e.x + 0.5, e.y + 0.5));
   }
+}
+
+/** A report's lines wrapped to a width that keeps it under `fit.maxH`: its own width, then the
+ *  wider one, then without the optional lines, then cut with a note of how many more there are. */
+function fitLines(fit: Fit, chrome: number, build: (w: number, all: boolean) => { text: string; color: string }[]): { w: number; lines: { text: string; color: string }[] } {
+  const tall = (n: number) => chrome + n * 10 > fit.maxH;
+  let w = fit.w;
+  let lines = build(w, true);
+  if (tall(lines.length) && fit.wide > w) { w = fit.wide; lines = build(w, true); }
+  if (tall(lines.length)) lines = build(w, false);
+  if (tall(lines.length)) {
+    const keep = Math.max(1, Math.floor((fit.maxH - chrome) / 10) - 1);
+    const more = lines.length - keep;
+    lines = [...lines.slice(0, keep), { text: `+${more} more line${more > 1 ? 's' : ''}: hover it for the whole report`, color: C.hull1 }];
+  }
+  return { w, lines };
 }
 
 /** The report lines for anything on the Workshop: machines (with their Act II lines) and the
@@ -256,7 +284,10 @@ function entLines(app: App, e: Ent): { text: string; tone: Tone }[] {
   const lines: { text: string; tone: Tone }[] = report(g, e);
   if (!lines.length) return lines;
   if (e.why === 'power' && lines[1]) lines[1] = { text: 'Stopped: no power', tone: 'blue' };
-  return [...lines.slice(0, 2), ...act2Lines(app, e), ...lines.slice(2)];
+  const a2 = act2Lines(app, e);
+  // the grid's Brownout line says it already: drop the report's "Short of power" under it
+  const rest = a2.some((l) => l.text.startsWith('Brownout')) ? lines.slice(2).filter((l) => !l.text.startsWith('Short of power')) : lines.slice(2);
+  return [...lines.slice(0, 2), ...a2, ...rest];
 }
 
 /** Power and Overdrive lines for a machine (DESIGN.md §18). */
@@ -353,22 +384,25 @@ function powerReport(app: App, e: Ent): { text: string; tone: Tone }[] {
   return out;
 }
 
-function reportCard(app: App, e: Ent, place: (h: number) => { x: number; y: number }, w: number) {
+function reportCard(app: App, e: Ent, fit: Fit) {
   const ui = app.ui;
   const g = app.game;
   const lines = entLines(app, e);
   if (!lines.length) { app.selected = null; return; }
-  const wrapped: { text: string; color: string }[] = [];
-  for (const l of lines.slice(1)) for (const t of wrap(l.text, w - 14)) wrapped.push({ text: t, color: TONE[l.tone] });
-  // the whole line around it, in plain English
-  const lr = isMachine(e.kind) ? lineReport(g, e) : [];
-  if (lr.length) {
-    wrapped.push({ text: '', color: C.hull1 });
-    for (const l of lr) for (const t of wrap(l.text, w - 14)) wrapped.push({ text: t, color: TONE[l.tone] });
-  }
   const modes = powered(e.kind) && g.done('tuning');
+  // the whole line around it, in plain English (left out first when the report would be too tall)
+  const lr = isMachine(e.kind) ? lineReport(g, e) : [];
+  const { w, lines: wrapped } = fitLines(fit, 30 + (modes ? 18 : 0), (ww, all) => {
+    const out: { text: string; color: string }[] = [];
+    for (const l of lines.slice(1)) for (const t of wrap(l.text, ww - 14)) out.push({ text: t, color: TONE[l.tone] });
+    if (all && lr.length) {
+      out.push({ text: '', color: C.hull1 });
+      for (const l of lr) for (const t of wrap(l.text, ww - 14)) out.push({ text: t, color: TONE[l.tone] });
+    }
+    return out;
+  });
   const h = 30 + wrapped.length * 10 + (modes ? 18 : 0);
-  const { x, y } = place(h);
+  const { x, y } = fit.place(h, w);
   const pip = e.state === 'work' ? C.pipGreen : e.state === 'blocked' ? C.pipRed : e.state === 'starved' ? (e.why === 'power' ? C.pipBlue : C.pipYellow) : C.hull1;
   plate(ui, x, y, w, h, { accent: pip });
   ui.fill(x + 5, y + 5, 18, 18, C.ink);
@@ -397,13 +431,16 @@ function reportCard(app: App, e: Ent, place: (h: number) => { x: number; y: numb
 }
 
 /** The pinned report for a module (or the Factory Dock, Hopper or Bay) on the Factory floor. */
-function factoryCard(app: App, e: FEnt, place: (h: number) => { x: number; y: number }, w: number) {
+function factoryCard(app: App, e: FEnt, fit: Fit) {
   const ui = app.ui;
   const lines = factoryReport(app, e);
-  const wrapped: { text: string; color: string }[] = [];
-  for (const l of lines.slice(1)) for (const t of wrap(l.text, w - 14)) wrapped.push({ text: t, color: l.color ?? C.bone });
+  const { w, lines: wrapped } = fitLines(fit, 26, (ww) => {
+    const out: { text: string; color: string }[] = [];
+    for (const l of lines.slice(1)) for (const t of wrap(l.text, ww - 14)) out.push({ text: t, color: l.color ?? C.bone });
+    return out;
+  });
   const h = 26 + wrapped.length * 10;
-  const { x, y } = place(h);
+  const { x, y } = fit.place(h, w);
   const pip = e.kind !== 'module' ? C.gold : e.state === 'work' ? C.pipGreen : e.state === 'blocked' ? C.pipRed : e.state === 'starved' ? C.pipYellow : C.hull1;
   plate(ui, x, y, w, h, { accent: pip });
   if (e.kind === 'module') ui.ctx.drawImage(sheet('module').frames[0], x + 6, y + 5);
@@ -419,7 +456,10 @@ function factoryCard(app: App, e: FEnt, place: (h: number) => { x: number; y: nu
 const TOAST_ICON: Record<string, UIconName> = { flask: 'research', crate: 'orders', module: 'fold' };
 
 /** The right side: toasts stacking down from the top-right corner (newest on top, sliding in and
- *  fading out), then the trophies just earned. No column behind them. */
+ *  fading out), then the trophies just earned. No column behind them. Every line is wrapped to the
+ *  column (a long word is cut to fit), so nothing runs off the screen; a toast that has no room in
+ *  full shows its title alone, and one with no room for that waits off the stack. A toast that has
+ *  landed is on the audit's 'float' layer: on screen, inside its plate, over no other HUD text. */
 function sideStack(app: App, L: Layout, dt: number) {
   const ui = app.ui;
   for (const t of app.toasts) t.t += dt;
@@ -433,10 +473,17 @@ function sideStack(app: App, L: Layout, dt: number) {
   for (const t of app.toasts.slice().reverse()) {
     const icon = t.icon ? (TOAST_ICON[t.icon] ?? (t.icon in UICON ? (t.icon as UIconName) : null)) : null;
     const tx = icon ? 24 : 8;
-    const title = wrap(t.title, w - tx - 6);
-    const lines = wrap(t.text, w - tx - 6);
-    const h = Math.max(icon ? 24 : 0, 9 + title.length * 10 + lines.length * 10);
-    if (y + h > bottom) break;
+    const tw = w - tx - 6;
+    let title = fitWrap(t.title, tw);
+    let lines = fitWrap(t.text, tw);
+    let h = Math.max(icon ? 24 : 0, 9 + title.length * 10 + lines.length * 10);
+    if (y + h > bottom) {
+      // no room in full: the title alone, on one line
+      title = [ellipsize(t.title, tw)];
+      lines = [];
+      h = Math.max(icon ? 24 : 0, 19);
+      if (y + h > bottom) break;
+    }
     const k = Math.min(1, t.t * 5);
     const x = S.x + Math.round((1 - k * k * (3 - 2 * k)) * (w + 8));
     ui.ctx.globalAlpha = Math.min(1, (t.life - t.t) * 2);
@@ -447,26 +494,31 @@ function sideStack(app: App, L: Layout, dt: number) {
       if (icon) uiIcon(ui, icon, x + 5, y + 4);
       title.forEach((l, i) => ui.text(l, x + tx, y + 5 + i * 10, t.color, { shadow: C.ink }));
       lines.forEach((l, i) => ui.text(l, x + tx, y + 5 + title.length * 10 + i * 10, C.bone));
-    });
+    }, k < 1 ? 'tip' : 'float');
     ui.ctx.globalAlpha = 1;
     y += h + 3;
   }
-  app.trophyPops.slice(-2).forEach((p) => {
+  for (const p of app.trophyPops.slice(-2)) {
     const t = TROPHIES.find((q) => q.id === p.id)!;
-    const h = 24;
-    if (y + h > bottom) return;
+    // the trophy's name wraps under its label (two lines at most) instead of running off the edge
+    const name = fitWrap(t.name, w - 30).slice(0, 2);
+    const h = 16 + name.length * 10;
+    if (y + h > bottom) break;
     const slide = Math.min(1, p.t * 5) * (p.t > 3.6 ? Math.max(0, (4 - p.t) / 0.4) : 1);
     const x = S.x + Math.round((1 - slide) * (w + 8));
     ui.floating(() => {
       plate(ui, x, y, w, h, { accent: C.gold, blocking: false, fill: C.brass0, alpha: 0.95 });
-      uiIcon(ui, 'trophies', x + 5, y + 4);
+      uiIcon(ui, 'trophies', x + 5, y + Math.floor((h - 16) / 2));
       label(ui, 'trophy!', x + 24, y + 5, C.hot);
-      ui.clip(x + 24, y, w - 28, h);
-      ui.text(t.name, x + 24, y + 12, C.bone, { shadow: C.ink });
-      ui.unclip();
-    });
+      name.forEach((l, i) => ui.text(l, x + 24, y + 12 + i * 10, C.bone, { shadow: C.ink }));
+    }, slide < 1 ? 'tip' : 'float');
     y += h + 3;
-  });
+  }
+}
+
+/** Wrap to a width, cutting any single word wider than it (a toast never runs off the screen). */
+function fitWrap(s: string, w: number): string[] {
+  return wrap(s, w).map((l) => (textWidth(l) > w ? ellipsize(l, w) : l));
 }
 
 function wrap(s: string, w: number): string[] {

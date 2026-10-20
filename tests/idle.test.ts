@@ -14,6 +14,7 @@ import { fingerprint, restore } from '../src/sim/snapshot';
 import { runOffline, forecast, offlineEfficiency, copyGame, OfflineRun } from '../src/sim/offline';
 import { inspiredFrac } from '../src/sim/systems/inspire';
 import { researchFrac } from '../src/sim/systems/research';
+import { idleUpgradeGain } from '../src/sim/systems/pause';
 import type { ModuleDesign } from '../src/sim/world';
 
 function must(g: Game, c: Cmd) {
@@ -239,25 +240,89 @@ describe('the Night Shift and offline efficiency (DESIGN.md §20)', () => {
     g.s.upgrades.push('nightForeman', 'nightRota', 'nightForeman');
     expect(offlineEfficiency(g)).toBeLessThanOrEqual(IDLE.offlineEffMax.value);
   });
+
+  it('refuses a Night Shift upgrade that would add nothing at the 0.75 ceiling, saying why', () => {
+    const g = new Game(1);
+    g.s.coin = N(1e7);
+    g.s.research.done.push('steamPower', 'circuits');
+    // the Patent tree's offline nodes alone reach the ceiling
+    g.s.meta.nodes.push('nightShift', 'nightWatch', 'lightsOn');
+    expect(offlineEfficiency(g)).toBeCloseTo(IDLE.offlineEffMax.value, 9);
+    expect(idleUpgradeGain(g, 'nightForeman')).toBe(0);
+    const r = g.act({ k: 'idleUpgrade', id: 'nightForeman' });
+    expect(r.ok).toBe(false);
+    expect(r.why).toMatch(/ceiling/);
+    expect(g.s.coin.toNumber()).toBe(1e7);
+    // one node short of it: the upgrade adds only what is left under the ceiling, and is sold
+    g.s.meta.nodes = ['nightShift'];
+    const gain = idleUpgradeGain(g, 'nightForeman');
+    expect(gain).toBeGreaterThan(0);
+    expect(offlineEfficiency(g) + gain).toBeLessThanOrEqual(IDLE.offlineEffMax.value + 1e-9);
+    must(g, { k: 'idleUpgrade', id: 'nightForeman' });
+  });
 });
 
 describe('the offline model (DESIGN.md §12)', () => {
-  it('reports a jam with its time and machine, replayed tick by tick', () => {
+  it('reports a stopped line as one row: its first machine to block, why, a fix, how many it stopped', () => {
     const g = furnaceLine();
     // the starting heap holds 400; at 7.5 slag/min it fills in about 53 min
     const rep = runOffline(g, 2 * 3600);
-    const jam = rep.timeline.find((e) => e.kind === 'jam' && e.text.startsWith('Hand Furnace'));
-    expect(jam).toBeDefined();
-    expect(jam!.t / 60).toBeGreaterThan(45);
-    expect(jam!.t / 60).toBeLessThan(60);
-    expect(jam!.x).toBe(3);
-    expect(jam!.y).toBe(3);
-    expect(jam!.why).toBe('slag');
-    expect(jam!.est).toBeFalsy();
-    const heap = rep.timeline.find((e) => e.kind === 'heap');
-    expect(heap).toBeDefined();
-    expect(heap!.t).toBeLessThanOrEqual(jam!.t + IDLE.jamSeconds.value + 1);
+    // the furnace and its Miner jam: one line, one row (the heap's filling is its cause, not a row)
+    const rows = rep.timeline.filter((e) => e.kind === 'jam' || e.kind === 'heap');
+    expect(rows).toHaveLength(1);
+    const jam = rows[0];
+    expect(jam.kind).toBe('jam');
+    expect(jam.text).toMatch(/^Hand Furnace's line stopped: its Slag Heap filled \(2 machines\)$/);
+    expect(jam.t / 60).toBeGreaterThan(45);
+    expect(jam.t / 60).toBeLessThan(60);
+    expect(jam.x).toBe(3);
+    expect(jam.y).toBe(3);
+    expect(jam.why).toBe('slag');
+    expect(jam.est).toBeFalsy();
+    expect(rep.jams).toBe(2);
+    const l = rep.lines[jam.line!];
+    expect(l.count).toBe(2);
+    expect(l.root.name).toBe('Hand Furnace');
+    expect(l.heap).not.toBeNull();
+    expect(l.heap!.t).toBeLessThanOrEqual(l.root.t + IDLE.jamSeconds.value + 1);
+    // 0.125 slag/s for 2 h is 900 slag, 400 of it room: two more heaps keep it running
+    expect(l.fix).toBe('2 more Slag Heaps keep it running 2h');
+    expect(l.cause).toBe('its Slag Heap filled');
+    expect(l.stopKeeps).toMatch(/53m \d\ds of running/);
     expect(rep.firstJam?.x).toBe(3);
+  });
+
+  it('a jam that is not a heap filling buys nothing by stopping, and says what to build instead', () => {
+    // the furnace's slag out of its north side by belt into the Dock (row 1), which takes it only for
+    // the Committee's order: once The Pile fills, the Dock refuses slag and the line stops
+    const g = new Game(7);
+    g.s.coin = N(1e6);
+    g.s.upgrades.push('bellows');
+    must(g, { k: 'place', kind: 'miner', x: 2, y: 3, rot: 0 });
+    must(g, { k: 'remove', x: 3, y: 4 });
+    must(g, { k: 'place', kind: 'belt', x: 3, y: 2, rot: 3 });
+    for (const x of [3, 4, 5]) must(g, { k: 'place', kind: 'belt', x, y: 1, rot: 0 });
+    g.s.orders.active = 'thePile';
+    g.s.orders.progress.thePile = { slag: N(800) };
+    const live = copyGame(g);
+    // 700 slag at 0.125/s: 450 in the replayed hour, the rest in the first extrapolated segment
+    const rep = runOffline(g, 8 * 3600, { eff: 1 });
+    expect(rep.orders).toContain('thePile');
+    const l = rep.lines.find((x) => x.root.why === 'slag')!;
+    expect(l).toBeDefined();
+    expect(l.cause).toBe('the Dock stopped taking slag (The Pile filled)');
+    expect(l.heap).toBeNull();
+    expect(l.stopKeeps).toBeNull();
+    expect(l.root.t / 3600).toBeGreaterThan(1.4);
+    expect(l.root.t / 3600).toBeLessThan(1.8);
+    // the segment ended when the order filled, so the stopped line is not paid on (DESIGN.md §12)
+    expect(rep.segments).toBeGreaterThanOrEqual(1);
+    live.s.visible = false;
+    const e0 = live.s.earned.toNumber();
+    live.step(8 * 3600 * TICK_RATE);
+    const idle = live.s.earned.toNumber() - e0;
+    expect(rep.coin.toNumber()).toBeLessThanOrEqual(idle * 1.01);
+    expect(rep.coin.toNumber()).toBeGreaterThan(idle * 0.9);
   });
 
   it('finds a heap filling past the replay hour, re-measures, and pays the jammed line nothing after', () => {
@@ -266,12 +331,15 @@ describe('the offline model (DESIGN.md §12)', () => {
     const rep = runOffline(g, 4 * 3600, { eff: 1 });
     // two heaps: 800 slag, about 107 min; the second fills in an extrapolated segment
     expect(rep.segments).toBeGreaterThanOrEqual(1);
-    const heaps = rep.timeline.filter((e) => e.kind === 'heap');
-    expect(heaps.length).toBe(2);
+    // both heaps are the one line's cause: one row, at the second heap's filling (worked out from
+    // the rates), with the room of both
+    expect(rep.timeline.filter((e) => e.kind === 'heap')).toHaveLength(0);
     const jam = rep.timeline.find((e) => e.kind === 'jam' && e.text.startsWith('Hand Furnace'))!;
     expect(jam).toBeDefined();
     expect(jam.t / 60).toBeGreaterThan(90);
     expect(jam.t / 60).toBeLessThan(125);
+    expect(jam.est).toBe(true);
+    expect(rep.lines[0].heap!.room).toBe(800);
     // at efficiency 1 the model pays what the same 4 h live pays, never more
     const e0 = live.s.earned.toNumber();
     live.s.visible = false;
