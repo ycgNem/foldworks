@@ -18,7 +18,7 @@ import type { GameEvent } from '../engine/events';
 import { drawText, textWidth, ICON } from '../ui/font';
 import { Ground, TILE } from './ground';
 import { sheet, drawRot, frameAt, itemIcon, hasArt, spriteName } from './sprites';
-import { Fx, FOLD_DUR } from './fx';
+import { Fx, FOLD_DUR, FOLD_FLASH } from './fx';
 import { onGridKind, powered, gridIndex, cheb, wirePairs, reached, capacity } from './powerview';
 
 export class Camera {
@@ -90,8 +90,9 @@ export class Renderer {
   private wiresV = -1;
   /** when each burner last puffed smoke */
   private smokeAt = new Map<number, number>();
-  /** a picture of the graded fold box, taken while the grade card waits (the fold animation uses it) */
-  private foldSnap: { x: number; y: number; w: number; h: number; img: HTMLCanvasElement; t: number } | null = null;
+  /** pictures of the graded fold boxes, taken while their grades wait (the fold animation folds
+   *  the right one), keyed by box */
+  private foldSnaps = new Map<string, { x: number; y: number; w: number; h: number; img: HTMLCanvasElement; t: number }>();
   /** any grid browned out last frame (a fizz when one starts) */
   private wasBrown = false;
 
@@ -226,16 +227,45 @@ export class Renderer {
         case 'firstSlagJam': fx.ring(px + 8, py + 8, C.pipRed, 18, 0.8); break;
         // ---- Act II
         case 'overdrive': {
-          // x, y is the machine's centre tile
+          // x, y is the machine's (or module's) centre tile; d is how many it set running hot
           const cx = px + 8, cy = py + 8;
+          const n = e.d ?? 1;
+          if (e.floor === 'factory') {
+            // a module and every module trunked to it: a burst on each, a big one on the clicked
+            for (const m of g.s.factory.ents) {
+              if (m.kind !== 'module' || !(m.od ?? 0) || m.id === e.value) continue;
+              fx.burst(m.x * TILE + 8, m.y * TILE + 8, 12, [C.hot, C.glow, C.gold], 55, 20, 1, 0.6);
+              fx.ring(m.x * TILE + 8, m.y * TILE + 8, C.glow, 14, 0.4, 4);
+            }
+            fx.burst(cx, cy, 34, [C.hot, C.glow, C.gold, C.copper2, C.bone], 100, 30, 1, 0.9);
+            fx.ring(cx, cy, C.glow, 24, 0.45, 6);
+            fx.ring(cx, cy, C.hot, 34, 0.7, 10);
+            fx.text(cx, cy - 22, '3x!', C.hot, 1.4, true);
+            if (n > 1) fx.text(cx, cy - 8, `Group overdriven x${n}`, C.gold, 1.8);
+            fx.kick(n > 1 ? 4 : 3);
+            this.sfx('overdrive');
+            if (n > 1) this.sfx('powerOn', 0.5, 1.4);
+            break;
+          }
           const ent = g.byId.get(e.value ?? -1);
           const r = ent && ent.w > 1 ? 24 : 14;
           fx.burst(cx, cy, 28, [C.hot, C.glow, C.gold, C.copper2], 90, 30, 1, 0.8);
           fx.ring(cx, cy, C.glow, r + 10, 0.45, r - 6);
           fx.ring(cx, cy, C.hot, r + 18, 0.7, r);
-          fx.text(cx, cy - r - 6, '3x!', C.hot, 1.2, true);
-          fx.kick(3);
+          fx.text(cx, cy - r - 10, '3x!', C.hot, 1.4, true);
+          if (n > 1) fx.text(cx, cy - r + 4, `Line overdriven x${n}`, C.gold, 1.8);
+          fx.kick(n > 1 ? 4 : 3);
           this.sfx('overdrive');
+          if (n > 1) this.sfx('powerOn', 0.5, 1.4);
+          break;
+        }
+        case 'overdriveLine': {
+          // the rest of the clicked machine's line: a smaller burst and ring on each
+          const ent = g.byId.get(e.value ?? -1);
+          const c = ent && ent.w > 1 ? 16 : 8;
+          const bx = (ent ? ent.x * TILE : px) + c, by = (ent ? ent.y * TILE : py) + c;
+          fx.burst(bx, by, 12, [C.hot, C.glow, C.gold], 55, 20, 1, 0.6);
+          fx.ring(bx, by, C.glow, c + 8, 0.4, c - 4);
           break;
         }
         case 'mode': {
@@ -268,10 +298,13 @@ export class Renderer {
             fx.ring(px, py, C.gold, 40, 0.8, 6);
             break;
           }
-          const snap = this.foldSnap;
-          const box = snap ?? { x: Math.round((e.x ?? 0) - 1), y: Math.round((e.y ?? 0) - 1), w: 2, h: 2, img: null };
+          // the picture of this box: the snapshot whose centre and area match the event's
+          let snap: { x: number; y: number; w: number; h: number; img: HTMLCanvasElement | null } | null = null;
+          for (const [key, q] of this.foldSnaps)
+            if (q.x + q.w / 2 === e.x && q.y + q.h / 2 === e.y && q.w * q.h === (e.d ?? q.w * q.h)) { snap = q; this.foldSnaps.delete(key); break; }
+          const side = Math.max(1, Math.round(Math.sqrt(e.d ?? 4)));
+          const box = snap ?? { x: Math.round((e.x ?? 0) - side / 2), y: Math.round((e.y ?? 0) - side / 2), w: side, h: side, img: null };
           fx.folds.push({ x: box.x * TILE, y: box.y * TILE, w: box.w * TILE, h: box.h * TILE, img: snap?.img ?? null, t: 0, letter: e.id ?? '' });
-          this.foldSnap = null;
           this.sfx('whoosh');
           break;
         }
@@ -807,25 +840,31 @@ export class Renderer {
     }
   }
 
-  /** While a graded line waits for its fold, keep a picture of its box (the fold animation folds it). */
+  /** While graded lines wait for their folds, keep a picture of each box (the fold animation
+   *  folds it). Pictures of boxes no longer graded are dropped. */
   private snapFold(g: Game) {
-    const a = g.s.audit;
-    if (!a || !a.result) return;
-    const b = a.box;
-    const s = this.foldSnap;
-    if (s && s.x === b.x && s.y === b.y && s.w === b.w && s.h === b.h && this.time - s.t < 0.5) return;
-    const p0 = this.toScreen(b.x, b.y), p1 = this.toScreen(b.x + b.w, b.y + b.h);
-    const img = s && s.w === b.w && s.h === b.h ? s.img : document.createElement('canvas');
-    img.width = b.w * TILE;
-    img.height = b.h * TILE;
-    const c = img.getContext('2d')!;
-    c.imageSmoothingEnabled = false;
-    try {
-      c.drawImage(this.ctx.canvas, p0.x, p0.y, p1.x - p0.x, p1.y - p0.y, 0, 0, img.width, img.height);
-    } catch {
-      return;
+    const keep = new Set<string>();
+    for (const a of g.s.audits) {
+      if (!a.result) continue;
+      const b = a.box;
+      const key = `${b.x},${b.y},${b.w},${b.h}`;
+      keep.add(key);
+      const s = this.foldSnaps.get(key);
+      if (s && this.time - s.t < 0.5) continue;
+      const p0 = this.toScreen(b.x, b.y), p1 = this.toScreen(b.x + b.w, b.y + b.h);
+      const img = s ? s.img : document.createElement('canvas');
+      img.width = b.w * TILE;
+      img.height = b.h * TILE;
+      const c = img.getContext('2d')!;
+      c.imageSmoothingEnabled = false;
+      try {
+        c.drawImage(this.ctx.canvas, p0.x, p0.y, p1.x - p0.x, p1.y - p0.y, 0, 0, img.width, img.height);
+      } catch {
+        continue;
+      }
+      this.foldSnaps.set(key, { x: b.x, y: b.y, w: b.w, h: b.h, img, t: this.time });
     }
-    this.foldSnap = { x: b.x, y: b.y, w: b.w, h: b.h, img, t: this.time };
+    for (const k of [...this.foldSnaps.keys()]) if (!keep.has(k)) this.foldSnaps.delete(k);
   }
 
   /** The fold box: marching ants and brass corners; teal while it audits, gold once graded. */
@@ -859,8 +898,10 @@ export class Renderer {
   }
 
   private audit(g: Game) {
-    const a = g.s.audit;
-    if (!a) return;
+    for (const a of g.s.audits) this.auditBox(g, a);
+  }
+
+  private auditBox(_g: Game, a: Game['s']['audits'][number]) {
     const ctx = this.ctx;
     const done = !!a.result;
     const pulse = 0.12 + 0.08 * Math.sin(this.time * 5);
@@ -1006,18 +1047,28 @@ export class Renderer {
     const ctx = this.ctx;
     // folds that finish this frame send their module flying to the Factory tab
     for (const f of this.fx.folds) {
+      const cx = f.x + f.w / 2, cy = f.y + f.h / 2;
+      // the flash as the packet becomes a tile
+      if (f.t < FOLD_DUR * FOLD_FLASH && f.t + dt >= FOLD_DUR * FOLD_FLASH) {
+        this.fx.burst(cx, cy, 16, [C.bone, C.gold, C.hot], 60, 0, 1, 0.5);
+        this.fx.ring(cx, cy, C.bone, Math.max(f.w, f.h) / 2 + 6, 0.35, 6);
+        this.sfx('stamp', 0.7);
+      }
       if (f.t < FOLD_DUR && f.t + dt >= FOLD_DUR) {
-        const s = this.toScreen((f.x + f.w / 2) / TILE, (f.y + f.h / 2) / TILE);
+        const s = this.toScreen(cx / TILE, cy / TILE);
         const t = this.factoryTarget ?? { x: this.W / 2, y: this.H - 20 };
         this.fx.fly(s.x, s.y, t.x, t.y, 'module', true);
-        this.fx.burst(f.x + f.w / 2, f.y + f.h / 2, 30, [C.gold, C.brass1, C.hot, C.bone], 70, 40, 1, 0.9);
-        this.fx.ring(f.x + f.w / 2, f.y + f.h / 2, C.gold, 26, 0.6, 4);
-        this.fx.kick(3);
+        const top = f.letter === 'S+';
+        this.fx.burst(cx, cy, top ? 70 : 30, top ? [C.gold, C.hot, C.bone, C.gold] : [C.gold, C.brass1, C.hot, C.bone], top ? 110 : 70, 40, top ? 2 : 1, top ? 1.3 : 0.9);
+        this.fx.ring(cx, cy, C.gold, top ? 44 : 26, top ? 0.9 : 0.6, 4);
+        if (top) { this.fx.ring(cx, cy, C.hot, 60, 1.1, 10); this.fx.text(cx, cy - 18, 'S+ MODULE!', C.gold, 2, true); }
+        else if (f.letter) this.fx.text(cx, cy - 14, `${f.letter} module!`, C.gold, 1.4, true);
+        this.fx.kick(top ? 7 : 3);
         this.sfx('stampLand', 0.8);
       }
     }
     this.fx.update(dt);
-    for (const f of this.fx.folds) this.foldAnim(f.x, f.y, f.w, f.h, f.img, f.t / FOLD_DUR);
+    for (const f of this.fx.folds) this.foldAnim(f.x, f.y, f.w, f.h, f.img, f.t / FOLD_DUR, f.letter);
     for (const p of this.fx.parts) {
       ctx.globalAlpha = Math.max(0, Math.min(1, p.life / p.max * 1.5));
       ctx.fillStyle = p.color;
@@ -1033,35 +1084,125 @@ export class Renderer {
     }
   }
 
-  /** One frame of the fold: the box's picture folds in half sideways, then top to bottom, along
-   *  creases, down to one tile, which becomes a brass module that pops. k runs 0..1. */
-  private foldAnim(X: number, Y: number, W: number, H: number, img: HTMLCanvasElement | null, k: number) {
+  /** One frame of the fold (k runs 0..1): a paper crease sweeps across the box's picture, the
+   *  four corners fold in to the middle, the packet squeezes down to one tile, a flash, then the
+   *  brass module pops. The art director's 'fx_fold' strip plays over the first part when it
+   *  exists; otherwise all of it is drawn here. */
+  private foldAnim(X: number, Y: number, W: number, H: number, img: HTMLCanvasElement | null, k: number, letter: string) {
     const ctx = this.ctx;
     const ease = (t: number) => t * t * (3 - 2 * t);
-    const kx = ease(Math.min(1, k / 0.4)), ky = ease(Math.max(0, Math.min(1, (k - 0.3) / 0.4)));
-    const w = Math.max(TILE, Math.round(W + (TILE - W) * kx)), h = Math.max(TILE, Math.round(H + (TILE - H) * ky));
     const cx = X + W / 2, cy = Y + H / 2;
-    const x0 = Math.round(cx - w / 2), y0 = Math.round(cy - h / 2);
-    if (k < 0.75) {
-      // the line's picture, squeezed; the two halves darken toward the crease like a page turning
-      ctx.fillStyle = rgba(C.ink, 0.5);
-      ctx.fillRect(Math.round(cx - W / 2), Math.round(cy - H / 2), Math.round(W), Math.round(H));
-      if (img) ctx.drawImage(img, x0, y0, w, h);
-      else { ctx.fillStyle = C.brass0; ctx.fillRect(x0, y0, w, h); }
-      ctx.fillStyle = rgba(C.ink, 0.15 + 0.4 * kx);
-      ctx.fillRect(x0 + Math.floor(w / 2), y0, 1, h);
-      ctx.fillStyle = rgba(C.ink, 0.15 + 0.4 * ky);
-      ctx.fillRect(x0, y0 + Math.floor(h / 2), w, 1);
-      ctx.fillStyle = rgba(C.gold, 0.25 + 0.5 * Math.max(kx, ky));
-      ctx.fillRect(x0, y0, w, 1); ctx.fillRect(x0, y0 + h - 1, w, 1); ctx.fillRect(x0, y0, 1, h); ctx.fillRect(x0 + w - 1, y0, 1, h);
-    } else {
-      // the module, popping from 1.5x down to its tile
-      const p = (k - 0.75) / 0.25;
-      const sc = 1 + 0.5 * Math.sin(p * Math.PI);
-      const m = sheet('module');
-      const s = Math.round(TILE * sc);
-      ctx.drawImage(m.frames[0], Math.round(cx - s / 2), Math.round(cy - s / 2), s, s);
+    const top = letter === 'S+';
+    const SWEEP = 0.2, CORNERS = 0.48, SQUEEZE = FOLD_FLASH;
+    // the floor under the box goes dark while it folds away
+    if (k < SQUEEZE) {
+      ctx.fillStyle = rgba(C.ink, 0.55);
+      ctx.fillRect(X, Y, W, H);
     }
+    const art = hasArt('fx_fold');
+    if (k < CORNERS && art) {
+      // the picture under the art director's fold strip (drawn below, stretched over the box)
+      if (img) ctx.drawImage(img, X, Y, W, H);
+      else { ctx.fillStyle = C.brass0; ctx.fillRect(X, Y, W, H); }
+    } else if (k < CORNERS) {
+      // the picture, whole
+      if (img) ctx.drawImage(img, X, Y, W, H);
+      else { ctx.fillStyle = C.brass0; ctx.fillRect(X, Y, W, H); }
+      // the crease: a bright band sweeping left to right, leaving the fold lines behind it
+      const p = Math.min(1, k / SWEEP);
+      const bx = Math.round(X + p * W);
+      ctx.fillStyle = rgba(C.bone, 0.18);
+      ctx.fillRect(X, Y, bx - X, H);
+      if (p < 1) {
+        ctx.fillStyle = rgba(C.bone, 0.85);
+        ctx.fillRect(bx - 1, Y, 2, H);
+        ctx.fillStyle = rgba(top ? C.gold : C.hot, 0.7);
+        ctx.fillRect(bx - 3, Y, 2, H);
+      }
+      ctx.fillStyle = rgba(C.ink, 0.6);
+      if (bx > cx) ctx.fillRect(Math.round(cx), Y, 1, H);
+      if (p >= 0.5) ctx.fillRect(X, Math.round(cy), Math.round(Math.min(W, bx - X)), 1);
+      // the corners fold in: paper backs (brass) growing from each corner along the diagonals
+      const c = ease(Math.max(0, (k - SWEEP) / (CORNERS - SWEEP)));
+      if (c > 0) {
+        const L = Math.round((c * Math.min(W, H)) / 2);
+        for (const [ox, oy, sx, sy] of [[X, Y, 1, 1], [X + W, Y, -1, 1], [X, Y + H, 1, -1], [X + W, Y + H, -1, -1]]) {
+          ctx.fillStyle = C.brass0;
+          ctx.beginPath();
+          ctx.moveTo(ox, oy);
+          ctx.lineTo(ox + sx * L, oy);
+          ctx.lineTo(ox, oy + sy * L);
+          ctx.closePath();
+          ctx.fill();
+          // the paper's back catches the light along the fold
+          ctx.strokeStyle = C.brass1;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(ox + sx * L, oy + sy * 0.5);
+          ctx.lineTo(ox + sx * 0.5, oy + sy * L);
+          ctx.stroke();
+        }
+      }
+      ctx.fillStyle = rgba(C.gold, 0.4 + 0.4 * c);
+      ctx.fillRect(X, Y, W, 1); ctx.fillRect(X, Y + H - 1, W, 1); ctx.fillRect(X, Y, 1, H); ctx.fillRect(X + W - 1, Y, 1, H);
+    } else if (k < SQUEEZE) {
+      // the folded packet squeezes down to one tile: brass, with its crease X
+      const q = ease((k - CORNERS) / (SQUEEZE - CORNERS));
+      const w = Math.max(TILE, Math.round(W + (TILE - W) * q)), h = Math.max(TILE, Math.round(H + (TILE - H) * q));
+      const x0 = Math.round(cx - w / 2), y0 = Math.round(cy - h / 2);
+      ctx.fillStyle = C.ink;
+      ctx.fillRect(x0 - 1, y0 - 1, w + 2, h + 2);
+      ctx.fillStyle = C.brass0;
+      ctx.fillRect(x0, y0, w, h);
+      ctx.fillStyle = C.brass1;
+      ctx.fillRect(x0, y0, w, 1); ctx.fillRect(x0, y0, 1, h);
+      ctx.strokeStyle = rgba(C.ink, 0.6);
+      ctx.beginPath();
+      ctx.moveTo(x0 + 0.5, y0 + 0.5); ctx.lineTo(x0 + w - 0.5, y0 + h - 0.5);
+      ctx.moveTo(x0 + w - 0.5, y0 + 0.5); ctx.lineTo(x0 + 0.5, y0 + h - 0.5);
+      ctx.stroke();
+      ctx.fillStyle = top ? C.gold : C.hot;
+      ctx.fillRect(x0 + w - 3, y0 + 1, 2, 2);
+    }
+    // the art director's fold strip (the crease and the corners): played once, stretched over
+    // the box, before the squeeze
+    if (art && k < CORNERS) {
+      const s = sheet('fx_fold');
+      const fi = Math.min(s.frames.length - 1, Math.floor(k * FOLD_DUR * (s.fps || 16)));
+      ctx.drawImage(s.frames[fi], X, Y, W, H);
+    }
+    if (k >= SQUEEZE) {
+      // the flash, then the module popping from 1.6x down to its tile
+      const p = (k - SQUEEZE) / (1 - SQUEEZE);
+      if (p < 0.25) {
+        ctx.fillStyle = rgba(C.bone, (0.25 - p) * 3.2);
+        const r = Math.round(TILE / 2 + 10 * p);
+        ctx.fillRect(Math.round(cx - r), Math.round(cy - r), r * 2, r * 2);
+      }
+      const sc = 1 + 0.6 * Math.sin(Math.min(1, p * 1.4) * Math.PI);
+      const m = sheet('module');
+      const sz = Math.round(TILE * sc);
+      ctx.drawImage(m.frames[0], Math.round(cx - sz / 2), Math.round(cy - sz / 2), sz, sz);
+      if (top) {
+        // S+: gold sparkles circling the new module
+        for (let i = 0; i < 6; i++) {
+          const a = p * 6 + (i * Math.PI) / 3, rr = 10 + p * 6;
+          ctx.fillStyle = i % 2 ? C.gold : C.bone;
+          ctx.fillRect(Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr), 1, 1);
+        }
+      }
+    }
+  }
+
+  /** The first Miner placed: a fountain of ore and gold, rings, and a big "FIRST MINER!" */
+  firstMiner(tx: number, ty: number) {
+    const fx = this.fx;
+    const x = tx * TILE + 8, y = ty * TILE + 8;
+    fx.fountain(x, y - 4, 40, [C.gold, C.iron2, C.hot, C.bone], 110, 2, 1.3);
+    fx.ring(x, y, C.gold, 36, 0.9, 4);
+    fx.ring(x, y, C.iron2, 24, 0.6, 2);
+    fx.text(x, y - 22, 'FIRST MINER!', C.gold, 2.4, true);
+    fx.kick(4);
   }
 
   /** Pops and flying coins and labels, drawn in screen space at the UI scale (crisp text). */

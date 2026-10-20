@@ -51,10 +51,14 @@ export const CLAIM_PRICE: { item: ItemId; price: number; derivation: string }[] 
 /** The Workshop's size in tiles: the four slice chunks, then Act II's two to the east. */
 export const WORKSHOP = { w: 24, h: 16, derivation: '§9 the slice Workshop is 16x16; §18 Land: chunks E and F widen it to 24x16' };
 
-/** What chunk A starts with (§9): the Hand Furnace beside the patch, a 3-tile belt from it whose
+/** What chunk A starts with (§9): the Hand Furnace beside the patch with a Slag Heap under it, a 3-tile belt from it whose
  * last tile turns into the Dock (rotate it to feed the Hopper instead), the Dock and the Hopper. */
-export const START_LAYOUT: { kind: 'furnace' | 'belt' | 'dock' | 'hopper'; x: number; y: number; rot: 0 | 1 | 2 | 3 }[] = [
+export const START_LAYOUT: { kind: 'furnace' | 'belt' | 'dock' | 'hopper' | 'heap'; x: number; y: number; rot: 0 | 1 | 2 | 3 }[] = [
   { kind: 'furnace', x: 3, y: 3, rot: 0 },
+  // a Slag Heap under the furnace: hand-smelting never jams before the first Miner (the Milestone
+  // 3 gate review lost 100 s of clicks to it); the slag lesson comes with the first built line. It
+  // faces east, so it empties into a second heap put beside it, never onto a belt below
+  { kind: 'heap', x: 3, y: 4, rot: 0 },
   { kind: 'belt', x: 4, y: 3, rot: 0 },
   { kind: 'belt', x: 5, y: 3, rot: 0 },
   { kind: 'belt', x: 6, y: 3, rot: 3 },

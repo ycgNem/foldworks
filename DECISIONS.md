@@ -323,3 +323,103 @@ CLAUDE.md's standing instruction says to build nothing from Milestone 4 before t
   Why: the critic called the 70 s wait dead air; now there is a number to watch move.
 - 2026-10-20: **Twelve Act II trophies.** "First power" counts the first grid with power
   flowing (`gridsLit`), and "first Mk2" counts any Mk2 (`mk2Built`), both new counters.
+
+## The Milestone 3 gate (2026-10-20)
+
+The pacing-auditor's gate audit: the Workshop stretch (0–28 min) passes every check with tight
+seed spreads and honest bots; the gate failed on three things (check 11, the floor phase being
+only the audit timer, and §16 rule 4 after the slice). Fixed or decided:
+
+- 2026-10-20: **A Lucky Vein runs the whole line its patch feeds at 3× for 60 s**, not just the
+  patch's miners. Why: in a balanced 1:1 line the extra ore only backed up, so catching a Spark
+  earned nothing and active play after the slice earned exactly what idle play did (rule 4 at
+  1.00). Boosts still never reach an audited machine.
+- 2026-10-20: **The Codex pays 30× an item's value for its first delivery** (it was 100×). At
+  100× it was a ~71K one-off burst, and a single motor paid 42K, 0.7 of the whole Grand Turbine
+  order. Still a burst worth chasing.
+- 2026-10-20: **§13 check 7 accepted as measured.** A realistic one-machine imbalance (4:2 or
+  3:3) grades B, one step under a balanced A, not C. §10's derivation is rewritten: balancing
+  is worth a grade step and a machine, and handling slag is worth the whole grade.
+- 2026-10-20: **Overdrive's ceiling is +50%** (10 s at 3× in every 40 s), not the "+67%" §18 said.
+  §16 rule 4 in Act II is measured on building, orders, Sparks and Overdrive together.
+
+### Flagged as derivative (the Milestone 3 gate)
+
+- **Machine Kits paid per stamp and made by your own lines** have the shape of shapez's blueprint
+  cost (pasting a blueprint costs a shape your factory makes). Ours differs: kits are needed
+  only for designs holding Act II buildings, they scale with the design's bill
+  (1 + floor(bill ÷ 1,500)), and Machine Kits are one recipe among Act II's products. ROADMAP.md
+  Milestone 4 names Machine Kits explicitly, so they stay for now. **For the owner:** the
+  alternative that re-derives "production feeds expansion" (§15) without a dedicated item is
+  for a stamp to consume the steel and gears its Act II machines are made of, delivered to the
+  Factory Hopper.
+
+### The gate's blocking findings, fixed (2026-10-20)
+
+The idle-critic's gate verdict was "pass with conditions"; its four blocking findings and the
+auditor's slice-end and rule-4 levers are settled here.
+
+- 2026-10-20: **An audit takes stock already in the box off its outputs.** Items held in crates,
+  buffers and belts when the window opens are counted; whatever of them leaves during the window
+  is subtracted from the outputs (the same item first, then by value). Why: a crate of Gizmos
+  draining out of a box graded as a Gizmo factory and folded into one (finding 1).
+- 2026-10-20: **A brownout lowers U.** A machine's busy time counts at the speed power let it
+  run, and a machine jammed on slag counts the slag it would have made against W. Why: an
+  underpowered line graded the same as a powered one.
+- 2026-10-20: **A grade S+ (≥ 0.97, ×1.35) sits above S**, and every grade gets advice, each line
+  worth what it would add ("+0.12 → A"), with the bottleneck named. Why: S was the default for
+  any tidy line, so a perfect line had nothing left to reach (finding 3). A new top grade, not a
+  currency, floor or reset.
+- 2026-10-20: **Up to three Workshop audits at once** (`RULES.maxAudits`), boxes never
+  overlapping, each folded or cancelled by id. Why: the slice's three folds were three 70 s waits
+  in a row (finding 10). Saves migrate v3 → v4 (`audit` → `audits[]`).
+- 2026-10-20: **A nested fold needs a chain inside its box**: at least one module in it must feed
+  another in it. Why: two unrelated modules boxed together stacked ×1.25 on both for nothing
+  (finding 4). The depth-2 bill is the sum of its modules' bills.
+- 2026-10-20: **Overdrive runs the clicked machine's whole line**, and on the Factory floor a
+  click overdrives a module and every module joined to it by trunks. Why: one machine at 3×
+  only starved or backed up its neighbours; the auditor measured 1.03× over idle (rule 4).
+  Audited machines are never overdriven.
+- 2026-10-20: **The slice ends when Bramble's Gizmo Festival is filled** (400 Gizmos, paying
+  64,000, only Factory Dock deliveries count). Why: "three products chained for 30 s" was met
+  by the audit timer alone, so the floor phase had no build in it. Gizmos at rate need a Gizmo
+  module fed by gear and wire modules: the Factory floor has to be built.
+- 2026-10-20: **The Hand Furnace starts with a Slag Heap under it.** Why: hand-smelting jammed
+  before the first Miner and the critic lost 100 s of clicks to it; the slag lesson now comes
+  with the first built line, where a heap is a decision rather than a chore.
+- 2026-10-20: **Machine Kits: 1 + floor(bill ÷ 500)** (was ÷ 1,500). Why: at 1,500 a stamp took
+  2–3 kits, about 3% of its price in goods, a chore with no weight.
+
+### Flagged as derivative (the gate fixes and Act II; owner to decide)
+
+- **Power** (boilers and steam engines that must touch, poles with a square reach and a link
+  distance, a satisfaction ratio that slows every machine on the grid) has the shape of
+  Factorio's steam stage. ROADMAP.md Milestone 4 names boilers, engines, poles and generators,
+  so it stays; ours differs in that power gates only Act II buildings, fuel is Coal from your own
+  lines, and a brownout is graded (U drops). **For the owner:** a re-derivation that keeps the
+  roadmap's pillar is power as a per-module upkeep paid in Coal at the Factory Hopper.
+- **The Motor** (steel + gears + wire) resembles Factorio's engine unit; it is re-derived as
+  1 steel + 4 copper wire + 1 circuit, so it reads as a wound coil on a board.
+- **Plastic from coal** follows the common factory-game chain; it stays as one Act II recipe.
+- **The Megaproject Bay** (a fixed building that eats staged deliveries for a floor-wide reward)
+  resembles shapez's hub levels and Factorio's rocket silo. Ours is staged by Bramble's orders
+  and pays a +50% drill boost, not a win. Kept; the owner may rename or re-theme it.
+
+### Pacing round 4 (the Festival slice end, 2026-10-20)
+
+- 2026-10-20: **Lamp Posts wants 60 gears + 200 wire and pays 2,000** (was 150 + 300 for 4,500).
+  Why: one order runs at a time and Lamp Posts' gears are research's until Folding, so it held the
+  order slot, and the Gizmo Festival behind it, ~9 min after Folding.
+- 2026-10-20: **The starting Slag Heap faces east**, into a second heap a player puts beside it,
+  never onto a belt below it (a heap empties out of its front).
+- 2026-10-20: **§13 check 9 is the Festival**: filled by 45 min (planner mean), no sooner than 6 min
+  after Folding. Measured 31:43, 8:23 after Folding; all 26 Act I pace tests pass (DESIGN.md §13,
+  "Round 4").
+- 2026-10-20: **The bots audit up to three lines at once**, fold only once every running audit is
+  graded (a fold takes away machines another audit may be measuring), audit a line only while it
+  runs, and name designs instead of indexing them. The planner and Dock-only player take orders in
+  plan order; the greedy player sends L1's gears to its active order before research.
+- 2026-10-20: **A fold needs two kinds of machine, or one machine in the box feeding another.**
+  Why: the Act II bot found the old rule refused an all-assembler line (circuits into motors),
+  which is a line by any reading; a lone miner, or two machines side by side that don't feed each
+  other, are still refused.

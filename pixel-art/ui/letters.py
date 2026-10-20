@@ -161,9 +161,78 @@ GRADES = [
 ]
 
 
+def splus(s):
+    """The S+ stamp (score >= 0.97), frame 6: the S in a narrower cut with a superscript plus.
+
+    The plus is the cue that reads at 1x (a shape no other grade has, so it survives colour
+    blindness); the second cue is light: the face is a step brighter than S (hot rims, a gold
+    lower half where S goes brass, a bone glint band across it), and the sparkles are bigger.
+    Columns of the 8-cell glyph are 3,3,2,2,2,2,3,3 px wide so the S keeps its weight in 20 px.
+    """
+    S = 32
+    rows = L["gS"]
+    cols_w = [3, 3, 2, 2, 2, 2, 3, 3]
+    xs = [i for i, w in enumerate(cols_w) for _ in range(w)]
+    gw, gh = len(xs), len(rows) * 3
+    raw = [[rows[y // 3][xs[x]] == "#" for x in range(gw)] for y in range(gh)]
+
+    def empty(xx, yy):
+        return not (0 <= xx < gw and 0 <= yy < gh and raw[yy][xx])
+    cut = [(x, y) for y in range(gh) for x in range(gw) if raw[y][x] and any(
+        empty(x + dx, y) and empty(x, y + dy) and empty(x + dx, y + dy)
+        for dx, dy in ((-1, -1), (1, -1), (-1, 1), (1, 1)))]
+    for (x, y) in cut:
+        raw[y][x] = False
+    ox, oy = 1, 2
+    fm = {(ox + x, oy + y) for y in range(gh) for x in range(gw) if raw[y][x]}
+    depth = {(x, y + 1) for (x, y) in fm} | {(x + 1, y + 1) for (x, y) in fm}
+    body = fm | depth
+    for (x, y) in dilate(body, S, S, 1) - body:
+        s.px(x, y, k)
+    for (x, y) in depth - fm:
+        s.px(x, y, b1)
+    for (x, y) in fm:
+        up_ = (x, y - 1) not in fm
+        lf = (x - 1, y) not in fm
+        dn = (x, y + 1) not in fm
+        col = gold
+        if up_ or lf:
+            col = hot
+        if dn:
+            col = b1
+        u = (x - ox) + (y - oy)                          # the glint band, top-right to bottom-left
+        if 18 <= u <= 20 and not (up_ or lf or dn):
+            col = bone if u == 19 else hot
+        hsh = (x * 92837111 ^ y * 689287499) % 100        # the same stamp wear as the others
+        if col == gold and hsh < 6:
+            col = hot
+        s.px(x, y, col)
+    # the plus: 9x9, arms 3 px thick, a superscript beside the S's top bowl
+    cx, cy = 26, 8
+    cross = {(cx + dx, cy + dy) for dx in range(-4, 5) for dy in range(-1, 2)} |             {(cx + dx, cy + dy) for dx in range(-1, 2) for dy in range(-4, 5)}
+    deep = {(x + 1, y + 1) for (x, y) in cross} - cross
+    for (x, y) in dilate(cross | deep, S, S, 1) - cross - deep:
+        s.px(x, y, k)
+    for (x, y) in deep:
+        s.px(x, y, b0)
+    for (x, y) in cross:
+        lit = (x - 1, y) not in cross or (x, y - 1) not in cross
+        dark = (x + 1, y) not in cross or (x, y + 1) not in cross
+        s.px(x, y, hot if lit else (b1 if dark else gold))
+    s.px(cx - 1, cy - 1, bone)
+    s.px(cx - 3, cy - 1, bone)
+    # sparkles: a big one low right, a small one at the plus's foot, a fleck top-left
+    for (sx, sy, big) in ((27, 24, True), (23, 17, False)):
+        s.px(sx, sy, bone)
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            s.px(sx + dx, sy + dy, hot)
+            if big:
+                s.px(sx + 2 * dx, sy + 2 * dy, gold)
+    s.px(30, 29, hot)
+
 def grades():
     S = 32
-    s = new(S, S, 5)
+    s = new(S, S, 6)
     for f, (ch, (hi, base, lo, edge)) in enumerate(GRADES):
         s.frame(f + 1)
         m, gw, gh = glyph_mask(ch)
@@ -201,6 +270,8 @@ def grades():
                 if big:
                     for dx, dy in arms:
                         s.px(sx + 2 * dx, sy + 2 * dy, gold)
+    s.frame(6)
+    splus(s)
     return s
 
 
@@ -211,7 +282,7 @@ def build():
     g = logo_glint(face)
     out["logo_glint"] = (export(g, "logo_glint", 12, scale=2), g)
     gr = grades()
-    out["ui_grade"] = (export(gr, "ui_grade", 0, extra={"order": ["S", "A", "B", "C", "D"]}), gr)
+    out["ui_grade"] = (export(gr, "ui_grade", 0, extra={"order": ["S", "A", "B", "C", "D", "S+"]}), gr)
     # check: the logo with a glint frame laid over it, on the panel wood and on ink
     lg = out["logo"][0]
     im = Image.new("RGBA", (LOGO_W + 8, LOGO_H * 2 + 12), (0x3a, 0x25, 0x32, 255))

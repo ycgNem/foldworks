@@ -114,7 +114,12 @@ with three modules, and the offline report have been looked at.
 before reading either report. Then either the model changes (in `DESIGN.md`, the slice is
 revised and reviewed again) or the gate is marked passed here with the date.
 
-**Gate status: not reached.**
+**Gate status: passed with conditions, 2026-10-20 (the owner's evening of play still owed).** The
+idle-critic passed the slice with four blocking conditions and the pacing-auditor failed it on
+three checks; the slice was revised (the Gizmo Festival slice end, several audits at once, stock
+taken off audit outputs, S+, nested folds need a chain, line Overdrive, the starting Slag Heap) and
+every §13 check passes again (DECISIONS.md, "The Milestone 3 gate" and after). Milestone 4 was
+built in the same session on the owner's instruction.
 
 ---
 

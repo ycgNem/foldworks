@@ -110,8 +110,10 @@ The player switches floors with Tab or the floor tabs. Both floors run all the t
 - **After the Bellows**, the furnace runs itself at 2.0 s per ingot and needs 1 ore click per 2 s
   (1.5 coin/s). The first Miner (40 coin) takes **≈27 s** and ends the clicking.
 - **Sparks** (slice set). One every 3–6 min (uniform), visible for 20 s, on the Workshop floor:
-  - **Lucky Vein**: an ore patch tile glitters. Click it and that patch's miners run at 3× for
-    60 s. It only appears on a patch that has a working miner.
+  - **Lucky Vein**: an ore patch tile glitters. Click it and that patch's miners **and every
+    machine of the line they feed** run at 3× for 60 s. It only appears on a patch that has a
+    working miner. *(Milestone 3 gate audit: boosting only the miners did nothing in a balanced
+    1:1 line; the extra ore just backed up.)*
   - **Inspector**: walks up to a line (the busiest connected group of machines). Click and they
     grade it with §10's audit formula and hand **60 s of that line's measured output × the
     grade multiplier to research, as items** (the selected node first, then the bank). This
@@ -128,8 +130,8 @@ The player switches floors with Tab or the floor tabs. Both floors run all the t
   | Order | Wants | Pays | Derivation |
   |---|---|---|---|
   | The Boardwalk | 80 iron plates | 600 coin + 1 rep | 1.5× value: worth routing a line to it. 80, not 200 (round 3) or 400 (first draft): a player who accepts it the moment Pressing offers it has one plate line on the Dock, so every coin of income stops until it is filled; at 30 plates/min, 200 was 6.7 min with no coin at all (the greedy bot's longest stretch, §13 check 10), 80 is 2.7 min |
-  | Lamp Posts | 150 gears + 300 wire | 4,500 coin + 1 rep | 1.6× value |
-  | The Gizmo Festival | 40 Gizmos | 8,000 coin + 1 rep + the Folding hint | 2.5×: the run-up to the fold |
+  | Lamp Posts | 60 gears + 200 wire | 2,000 coin + 1 rep | 1.6× value. 60 gears, not 150 (pacing round 4): one order runs at a time, and its gears are research's until Folding, so at 150 it held the order slot, and the Gizmo Festival behind it, ~9 min after Folding |
+  | The Gizmo Festival | 400 Gizmos, **Factory Dock only** | 64,000 coin + 1 rep | 2×. Offered with Folding; filling it ends the slice (§11). Only Factory Dock deliveries count, so it needs Gizmo modules fed by ingot (or gear) and wire modules: the Factory floor built, not the Workshop's Gizmo assembler |
 
   Items delivered to the Dock fill the active order first, then sell.
 - **Reputation (Bramble)**: 1 rep → plates sell for +20%. 2 rep → one free Buffer Crate a
@@ -216,7 +218,8 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
 ## 10. Folding (the signature mechanic)
 
 1. **Select.** The Fold tool drags a box, at most 8×8 in the slice. It must contain **at least
-   two kinds of machine** (a module is a line, not a part: a lone miner in a 1×1 box graded S)
+   two kinds of machine, or one machine feeding another** (a module is a line, not a part: a lone
+   miner in a 1×1 box graded S; an all-assembler line such as circuits into motors is a line)
    and no Dock, Hopper or Hand Furnace, and every building in it wholly. Belts crossing the box
    edge become the module's **ports** (in or out, by belt direction). Power never crosses the
    box (§18). While a box is audited, Lucky Veins and Overdrive don't touch it, so a boost is
@@ -241,9 +244,12 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
    | C | ≥ 0.50 | ×0.90 |
    | D | < 0.50 | ×0.75 |
 
-   *Derivation: a balanced 4-smelter/3-press plate line with slag handled reaches A or S. The
-   same machines with an unbalanced ratio or slag backing up land at C. That 25–50% gap is
-   bigger than one extra machine's worth, so balancing beats buying.*
+   *Derivation: a balanced 4-smelter/3-press plate line with slag handled reaches A (0.873).
+   Slag backing up lands at D. A realistic one-machine imbalance (4:2 or 3:3) lands at B
+   (0.73–0.80), one grade step (×1.10 → ×1.00) plus the machine it didn't need; feeding every
+   ingot to one press lands at D. So balancing is worth a grade step and a machine, and slag is
+   worth the whole grade. (Measured at the Milestone 3 gate; the earlier claim of a 25–50% gap
+   for any imbalance was too strong.)*
 4. **Fold.** The machines go into the module, the belts are refunded, and the box empties. The
    module is a 1×1 item with a name you choose (the default is its main output, e.g. "Plates
    ×28/min"), its port list, and its rates × the grade multiplier.
@@ -273,11 +279,15 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
 - Modules run as rate functions, not crafts: each tick a module consumes its inputs at rate
   if they're available (fractional amounts banked), produces at rate, and is **starved** or
   **blocked** in proportion. The same status pips apply.
-- **The slice ends here**: modules making **three different products** run on the Factory
-  floor, **at least one feeding another**, each at half speed or better for 30 s straight, all
-  reaching the Factory Dock. Then Bramble's closing line and a "Milestone reached" card.
-  *Derivation (Milestone 1–2 review): three copies of one module beside the Dock ended the
-  slice 15 s after the first fold; the floor has to be a puzzle first (§14 question 3).*
+- **The slice ends here**: when **Bramble's Gizmo Festival** is filled, 400 Gizmos delivered to
+  the **Factory Dock** (§7). Then Bramble's closing line and a "Milestone reached" card. A Gizmo
+  module needs a Gizmo line folded with at least one other kind of machine (a module is a line,
+  §10) and modules feeding it ingots or gears and wire at matched rates, so the floor is a puzzle
+  and a build: one Gizmo chain makes ~0.27 Gizmos/s (25 min for the Festival), so the player stamps
+  more chains while claims (§18) and coin allow. *Derivation (the Milestone 3 gate): the earlier
+  rule (three products chained for 30 s) was met by the audit timer alone, 4:18 after Folding;
+  before that, three copies of one module beside the Dock ended the slice 15 s after the first
+  fold (Milestone 1–2 review).*
 
 ## 12. Offline (slice)
 
@@ -313,10 +323,10 @@ part of the slice) and asserts the mean, with the spread logged.
 7. **Balance beats buying**: the balanced plate line folds at **A or better**, and the
    unbalanced line with the same machines folds at **C or worse**.
 8. **Slag lesson**: a smelter line with no slag route stalls within **3 min**.
-9. **Slice end** (the rule in `sliceEndParts`): modules making three different products, one feeding
-   another, all reaching the Factory Dock, by **45 min** (planner mean), and no sooner than **4 min**
-   after Folding is researched (three 70 s audits, one at a time, and 30 s of running). The greedy
-   and Dock-only bots reach it too, by 60 min. *Revised in round 3 from 60–90 min; see below.*
+9. **Slice end**: Bramble's Gizmo Festival filled (400 Gizmos at the Factory Dock, §7, §11), by
+   **45 min** (planner mean), and no sooner than **6 min** after Folding is researched (three
+   audits at once, then the floor built and 400 Gizmos made). The greedy and Dock-only bots reach
+   it too, by 60 min. *Revised in round 3 from 60–90 min, and in round 4 to the Festival; see below.*
 10. **No dead air**: in the first 35 min (or until the slice ends, if sooner), no stretch longer
     than **3 min** passes with nothing bought, researched, filled or folded (the greedy bot).
 11. **Hopper versus Dock**: a player who sends everything to the Dock still reaches Folding by
@@ -327,16 +337,38 @@ part of the slice) and asserts the mean, with the spread logged.
     state with no inputs, and (b) **4.5 h** of the planner's measured active rate (its coin per hour
     over the 10 minutes after its slice end): the first hour replayed in full plus 7 h at ×0.5.
 
-**Measured** (round 3, 2026-10-20, `tests/pace-*.test.ts`, 50 seeds unless noted, mean (range)):
-Bellows 0:21; first Miner 0:47; Pressing 1:48 (Dock-only 3:29); chunk B 10:47 (10:05–11:13); chunk C
-22:28 (10 seeds, 21:59–22:59); first Gizmo 18:09 (17:27–18:36); Folding 27:07 (26:08–28:18); first
-fold 28:32 (27:45–29:28), "Copper wire" graded S (0.95); slice end 31:26 (30:38–32:22), 4:18 after
-Folding (4:02–4:37), with "Iron ingots" S (1.00) feeding "Gear works" S (0.91); greedy slice end 29:51
-and Dock-only 38:47 (36:17–42:49) (10 seeds each); check 7: balanced A 0.873 (U 1.00, W 1.00, C 0.37),
-wrong ratio D 0.474 (U 0.34), slag backing up D 0.073 (U 0, W 0); check 8: jam 38 s after the line
-starts; check 10: greedy's longest stretch 162 s (150–163); check 11: Dock-only Folding 34:15
-(30:58–38:46), 7.1 min behind; check 12 (2 seeds): 8 h offline = 1.78 h of active earning, 0.79 of
-8 h open and idle. Every check holds; no test is `it.fails`.
+**Measured** (round 4, 2026-10-20, `tests/pace-*.test.ts`, 50 seeds unless noted, mean (range)):
+Bellows 0:21; first Miner 0:47; Pressing 1:47 (Dock-only 3:13); chunk B 9:20 (7:38–10:28); first
+Gizmo 16:13 (14:41–17:50); Folding 23:19 (21:03–26:03); first fold 24:35 (22:18–27:18); slice end
+31:43 (29:32–34:32), 8:23 after Folding (7:30–8:44), with "Iron ingots" S+ (1.00), "Copper wire" S
+(0.95) and "Gizmo works" A (0.89) on seed 1000; greedy slice end 28:55 and Dock-only 39:09
+(36:19–44:23) (10 seeds each); check 7: balanced A 0.873 (U 1.00, W 1.00, C 0.37), wrong ratio D
+0.474 (U 0.34), slag backing up D 0.073 (U 0, W 0); check 8: jam 38 s after the line starts; check
+10: greedy's longest stretch 171 s (104–244); check 11: Dock-only Folding 32:26 (29:30–38:01), 9.1
+min behind; check 12 (2 seeds): 8 h offline = 3.97 h of active earning, 0.59 of 8 h open and idle.
+Every check holds; no test is `it.fails`.
+
+**Round 4: the Festival ends the slice** (2026-10-20, after the Milestone 3 gate). The gate found
+the old rule met by the audit timer alone, so the slice now ends when the Gizmo Festival is filled
+at the Factory Dock. What the bots do, and what moved:
+- The Hand Furnace starts with its Slag Heap, so the first minutes lose no clicks to a jam: chunk B
+  10:47 → 9:20, Folding 27:07 → 23:19.
+- After Folding they audit three lines at once (`RULES.maxAudits`) and fold "Copper wire", "Iron
+  ingots" and "Gizmo works". A module must box two kinds of machine (§10), so the Gizmo module is
+  L1's press, gear assembler and Gizmo assembler: ingots and wire in, graded A (U 0.75: one gear
+  assembler makes gears for two Gizmo assemblers, the ratio left for the player to fix).
+- On the floor one Gizmo chain (ingots and wire into a Gizmo module) makes ~0.27 Gizmos/s, 25 min
+  for the Festival alone. The bots stamp four more chains as coin comes in (stamps cost bill ×
+  (1 + 0.5 per copy), linear), five in all, which uses every copper claim (3 + 2 for chunk B's
+  deposit, §18): the floor phase is a build (folds, 15 modules, ~30 trunk tiles, 12 stamps), then
+  ~5 min of the Festival filling, 8:23 in all.
+- Lamp Posts (150 gears) held the one order slot, and the Festival behind it, ~9 min after
+  Folding, since its gears are research's until then: it is 60 gears + 200 wire now (§7). The
+  planner and Dock-only player take their orders in turn (Boardwalk, Festival, Lamp Posts); the
+  greedy player takes Lamp Posts when offered and sends L1's gears to it before research.
+- Check 12's margin is smaller (3.97 h of the 4.5 h ceiling, was 1.78): the slice-end factory
+  sells ~1.4 Gizmos/s at the Factory Dock, ~477K coin/h, and the offline ×0.5 applies to the same
+  rate.
 
 **Why check 9 is no longer 60–90 min** (round 3). The window came from §16's table when the slice
 ended with three stamped copies of one module, and the planner reached that at ~29 min. Under the
@@ -405,7 +437,7 @@ If any answer is no, change the model here before building more.
 | By | Reached |
 |---|---|
 | 40 min | first fold (measured: 28:32, planner bot) |
-| 90 min | slice end: Factory floor running (measured: 31:26 under the three-product rule; §13 check 9 is revised to ≤ 45 min) |
+| 90 min | slice end: the Gizmo Festival filled at the Factory Dock (measured: 31:43; §13 check 9 is revised to ≤ 45 min) |
 | 3 h | Act II: power, steel, glass, circuits |
 | 5 h | first Reorganize (12–20 Patents) |
 | 15 h | District floor (Act III) |
@@ -479,8 +511,9 @@ what they run on.
 | Motor | 420 | Assembler | 2 steel + gear + circuit | 8.0 s |
 | Drill Bit | megaproject | Assembler | 4 steel + motor + 2 concrete | 12 s |
 
-*Derivation: each step pays about 1.5–4× its inputs' value, more for longer chains (circuit 3.4×,
-motor 2.6×), so a deeper line is always worth building; slag now has two outlets (gravel,
+*Derivation: each step pays about 1.5–4.5× its inputs' value (circuit 3.7×, motor 2.7×, glass 4×,
+concrete 4.4×); per machine-second a deeper chain earns more (motor 6.3 coin/s against steel's
+1.7), so a deeper line is always worth building; slag now has two outlets (gravel,
 bricks) and the refinery's oil is a byproduct with a use (boiler fuel), so zero-waste lines
 are possible and earn W = 1.*
 
@@ -510,15 +543,18 @@ are possible and earn W = 1.*
   power; **Overclocked** 1.5× speed at 2.2× power; **Precision** 0.8× speed, +25% of the main
   output (§15).
 - **Overdrive** (research *Overdrive*): click a machine to run it 3× for 10 s, then it cools
-  for 30 s (§15). Any machine, Mk1 included. *Derivation: one player clicking a 6-machine line
-  about every 5 s keeps a third of it overdriven: +67% while active, the main lever behind
-  §16 rule 4 (active 2–3× idle) in Act II.*
+  for 30 s (§15). Any machine, Mk1 included. *Derivation: each machine can be overdriven 10 s in
+  every 40, so a line clicked in step runs at most (10 × 3 + 30) ÷ 40 = 1.5×: +50% while
+  active (an earlier "+67%" was wrong, the Milestone 3 gate audit). It is one of Act II's
+  active levers with building, orders and Sparks; §16 rule 4 is measured on all of them
+  together.*
 
 ### Customers
 - **Unit 7** (met with *Coal Seams*): a collecting robot. Orders: *Calibration Weights* (300
   steel → 9,000), *Lens Array* (400 glass + 60 circuits → 24,000), *One of Everything* (one of
   every item made so far → 30,000). Reputation: 1 opens **the Codex** (every item with its
-  story; a first delivery of each pays 100 × its value once); 2 teaches **Recycled Glass**
+  story; a first delivery of each pays 30 × its value once; 100× was a 71K one-off burst, a single motor
+  paying 42K); 2 teaches **Recycled Glass**
   (Kiln: 3 gravel → glass, 2.5 s); 3 adds +10% to Precision's yield.
 - **Dame Voltaire** (met with *Steam Power*): the swamp's electricity baroness. Orders:
   *Streetlamps* (150 circuits + 300 glass → 40,000), *Concrete Promenade* (800 concrete →

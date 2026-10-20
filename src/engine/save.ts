@@ -5,7 +5,7 @@
 // snapshot and the commands since it (src/sim/snapshot.ts).
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -49,6 +49,14 @@ export const MIGRATIONS: Record<number, Migration> = {
     st.orders ??= {};
     st.orders.rep = { bramble: 0, unit7: 0, voltaire: 0, ...(st.orders.rep ?? {}) };
     return { ...d, snap: JSON.stringify(st), v: 3 };
+  },
+  // v4 (the Milestone 3 gate): several Workshop audits at once
+  3: (d) => {
+    const st = JSON.parse(d.snap);
+    st.audits = st.audit ? [{ ...st.audit, id: 1 }] : (st.audits ?? []);
+    st.nextAudit = st.audits.length + 1;
+    delete st.audit;
+    return { ...d, snap: JSON.stringify(st), v: 4 };
   },
 };
 

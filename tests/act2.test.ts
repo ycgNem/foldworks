@@ -6,7 +6,7 @@ import { Game, type Cmd } from '../src/sim/Game';
 import { N, Num } from '../src/engine/num';
 import { RESEARCH_IDS } from '../src/data/research';
 import { CHUNKS } from '../src/data/land';
-import { RULES } from '../src/data/rules';
+import { RULES, GRADES, gradeFor } from '../src/data/rules';
 import { TICK_RATE } from '../src/engine/time';
 import { drawKw } from '../src/sim/systems/power';
 import { claimsHeld, claimPrice } from '../src/sim/systems/claims';
@@ -73,26 +73,26 @@ describe('power (DESIGN.md §18 Power)', () => {
     // 2.0 s glass: 30 a minute
     expect(k.crafts).toBeGreaterThanOrEqual(29);
     expect(k.crafts).toBeLessThanOrEqual(30);
-    // 60 kW of 150: 0.4 load, 1 coal per 3 s at full load -> about 8 coal a minute (plus what sits in the burner)
+    // 60 kW of 200: 0.3 load, 1 coal per 3 s at full load -> about 6 coal a minute (plus what sits in the burner)
     const burnt = coal - (gen.inBuf.coal ?? 0);
-    expect(burnt).toBeGreaterThanOrEqual(7);
-    expect(burnt).toBeLessThanOrEqual(10);
+    expect(burnt).toBeGreaterThanOrEqual(5);
+    expect(burnt).toBeLessThanOrEqual(8);
   });
 
   it('a brownout runs every machine on the grid at supply / demand', () => {
     const g = sandbox();
-    // three kilns (180 kW) on one generator (150 kW): 5/6 speed
-    for (const y of [3, 4, 5]) must(g, { k: 'place', kind: 'kiln', x: 21, y, rot: 0 });
+    // four kilns (240 kW) on one generator (200 kW): 5/6 speed
+    for (const y of [2, 3, 4, 5]) must(g, { k: 'place', kind: 'kiln', x: 21, y, rot: 0 });
     must(g, { k: 'place', kind: 'generator', x: 19, y: 6, rot: 0 });
     must(g, { k: 'place', kind: 'pole', x: 19, y: 4, rot: 0 });
-    const ks = [3, 4, 5].map((y) => at(g, 21, y));
+    const ks = [2, 3, 4, 5].map((y) => at(g, 21, y));
     const gen = at(g, 19, 6);
     for (let i = 0; i < 60 * TICK_RATE; i++) {
       for (const k of ks) feed(k, 'sand');
       gen.inBuf.coal = 4;
       g.tick();
     }
-    expect(g.grids[0].sat).toBeCloseTo(150 / 180, 3);
+    expect(g.grids[0].sat).toBeCloseTo(200 / 240, 3);
     for (const k of ks) {
       expect(k.crafts).toBeGreaterThanOrEqual(24);
       expect(k.crafts).toBeLessThanOrEqual(26);
@@ -158,12 +158,13 @@ describe('Mk2, modes and Overdrive (DESIGN.md §18 Machines)', () => {
     return { g, m, run };
   }
 
-  it('a Mk2 Smelter is 2x2 and smelts at 3x', () => {
+  it('a Mk2 Smelter is 2x2 and smelts at 4x', () => {
     const { m, run } = powered('smelterMk2', 20, 3);
     expect(m.w).toBe(2);
     run(60 * TICK_RATE, 'ironOre');
-    expect(m.crafts).toBeGreaterThanOrEqual(88);
-    expect(m.crafts).toBeLessThanOrEqual(90);
+    // 4x a 2.0 s smelt: 120 a minute, one Mk1 belt
+    expect(m.crafts).toBeGreaterThanOrEqual(118);
+    expect(m.crafts).toBeLessThanOrEqual(120);
   });
 
   it('a Mk2 hands its output out of both front tiles in turn', () => {
@@ -252,6 +253,7 @@ describe('Mk2, modes and Overdrive (DESIGN.md §18 Machines)', () => {
     expect(g.act({ k: 'click', x: 3, y: 11 }).why).toMatch(/Auditing/);
     const miner = at(g, 2, 11);
     g.s.veins[String(g.patchOf[11 * g.W + 2])] = 60 * TICK_RATE;
+    miner.boost = 60 * TICK_RATE;
     miner.out = 0;
     const c0 = miner.crafts;
     for (let i = 0; i < 20 * TICK_RATE; i++) { miner.out = 0; g.tick(); }
@@ -268,6 +270,29 @@ function design(g: Game, over: Partial<ModuleDesign>): ModuleDesign {
   g.s.designs.push(d);
   return d;
 }
+
+describe('the Lucky Vein (DESIGN.md §6)', () => {
+  it('runs every machine of the line its patch feeds at 3x for 60 s, not just the miners', () => {
+    const g = sandbox();
+    must(g, { k: 'place', kind: 'miner', x: 2, y: 11, rot: 0 });
+    must(g, { k: 'place', kind: 'smelter', x: 3, y: 11, rot: 0 });
+    must(g, { k: 'place', kind: 'heap', x: 3, y: 12, rot: 1 });
+    must(g, { k: 'place', kind: 'press', x: 4, y: 11, rot: 0 });
+    must(g, { k: 'place', kind: 'crate', x: 5, y: 11, rot: 0 });
+    g.step(10 * TICK_RATE);
+    at(g, 5, 11).store = [];
+    g.s.sparks.push({ kind: 'vein', x: 2, y: 11, life: 400 });
+    g.s.clickWindow = -100;
+    must(g, { k: 'click', x: 2, y: 11 });
+    const sm = at(g, 3, 11), pr = at(g, 4, 11);
+    expect(sm.boost).toBe(RULES.veinSeconds.value * TICK_RATE);
+    expect(pr.boost).toBe(RULES.veinSeconds.value * TICK_RATE);
+    const c0 = sm.crafts;
+    g.step(20 * TICK_RATE);
+    // a 2.0 s smelt at 3x: about 30 in 20 s (fed by the 3x miner beside it)
+    expect(sm.crafts - c0).toBeGreaterThanOrEqual(26);
+  });
+});
 
 describe('claims and Machine Kits (DESIGN.md §18)', () => {
   it('a design with miners inside holds a claim per copy; more are bought 4 at a time at x(1 + 0.5 b)', () => {
@@ -287,12 +312,12 @@ describe('claims and Machine Kits (DESIGN.md §18)', () => {
   it('stamping a design with Act II buildings costs Machine Kits; a Hopper banks them', () => {
     const g = sandbox();
     const d = design(g, { parts: [{ kind: 'kiln', dx: 0, dy: 0, rot: 0, recipe: null }, { kind: 'pole', dx: 1, dy: 0, rot: 0, recipe: null }], bill: 3200, outs: { glass: 0.5 } });
-    expect(kitsFor(g, d)).toBe(3);
-    expect(g.act({ k: 'stamp', id: d.id }).why).toMatch(/3 Machine Kits/);
-    // three kits into the Workshop Hopper
-    g.intake.push({ to: 'hopper', item: 'machineKit', x: 7, y: 5, n: N(3) });
+    expect(kitsFor(g, d)).toBe(7); // 1 + floor(3,200 / 500)
+    expect(g.act({ k: 'stamp', id: d.id }).why).toMatch(/7 Machine Kits/);
+    // seven kits into the Workshop Hopper
+    g.intake.push({ to: 'hopper', item: 'machineKit', x: 7, y: 5, n: N(7) });
     g.tick();
-    expect(g.s.parts.toNumber()).toBe(3);
+    expect(g.s.parts.toNumber()).toBe(7);
     must(g, { k: 'stamp', id: d.id });
     expect(g.s.parts.toNumber()).toBe(0);
     // slice-era designs stay coin-only
@@ -302,16 +327,16 @@ describe('claims and Machine Kits (DESIGN.md §18)', () => {
 });
 
 describe('customers and the Codex (DESIGN.md §18 Customers)', () => {
-  it('Unit 7 rep 1: the first delivery of each item pays 100x its value, once', () => {
+  it('Unit 7 rep 1: the first delivery of each item pays 30x its value, once', () => {
     const g = sandbox();
     g.s.orders.rep.unit7 = 1;
     const c0 = g.s.coin.toNumber();
     g.intake.push({ to: 'dock', item: 'steel', x: 7, y: 2 });
     g.tick();
-    expect(g.s.coin.toNumber() - c0).toBe(15 + 1500);
+    expect(g.s.coin.toNumber() - c0).toBe(15 + 450);
     g.intake.push({ to: 'dock', item: 'steel', x: 7, y: 2 });
     g.tick();
-    expect(g.s.coin.toNumber() - c0).toBe(15 + 1500 + 15);
+    expect(g.s.coin.toNumber() - c0).toBe(15 + 450 + 15);
     expect(g.s.codex).toContain('steel');
   });
 
@@ -422,11 +447,138 @@ describe('nested folds (DESIGN.md §18)', () => {
   });
 });
 
+describe('the Milestone 3 gate fixes', () => {
+  /** Two short miner+smelter lines on chunk C's iron, ingots out to crates. */
+  function twoLines() {
+    const g = sandbox();
+    for (const y of [11, 12]) {
+      must(g, { k: 'place', kind: 'miner', x: 2, y, rot: 0 });
+      must(g, { k: 'place', kind: 'smelter', x: 4, y, rot: 0 });
+      must(g, { k: 'place', kind: 'belt', x: 3, y, rot: 0 });
+      must(g, { k: 'place', kind: 'belt', x: 5, y, rot: 0 });
+      must(g, { k: 'place', kind: 'crate', x: 6, y, rot: 0 });
+    }
+    must(g, { k: 'place', kind: 'heap', x: 4, y: 13, rot: 1 });
+    must(g, { k: 'place', kind: 'heap', x: 4, y: 10, rot: 3 });
+    return g;
+  }
+
+  it('audits up to three lines at once, and folds the graded one named', () => {
+    const g = twoLines();
+    g.step(10 * TICK_RATE);
+    must(g, { k: 'audit', x: 2, y: 11, w: 4, h: 1 });
+    expect(g.act({ k: 'audit', x: 2, y: 11, w: 3, h: 2 }).why).toMatch(/overlaps/);
+    must(g, { k: 'audit', x: 2, y: 12, w: 4, h: 1 });
+    expect(g.s.audits).toHaveLength(2);
+    g.step(auditTicks() + 1);
+    expect(g.s.audits.every((a) => a.result)).toBe(true);
+    const second = g.s.audits[1].id;
+    must(g, { k: 'fold', name: 'B', id: second });
+    expect(g.s.audits).toHaveLength(1);
+    expect(g.s.designs[0].name).toBe('B');
+  });
+
+  it('takes stock already in the box off the outputs: a crate of Gizmos is not production', () => {
+    const g = twoLines();
+    // a crate of 50 Gizmos inside the box, draining out of it during the window
+    must(g, { k: 'place', kind: 'crate', x: 5, y: 9, rot: 0 });
+    must(g, { k: 'place', kind: 'belt', x: 6, y: 9, rot: 0 });
+    must(g, { k: 'place', kind: 'crate', x: 7, y: 9, rot: 0 });
+    at(g, 5, 9).store = new Array(50).fill('gizmo');
+    must(g, { k: 'audit', x: 2, y: 9, w: 5, h: 3 });
+    g.step(auditTicks() + 1);
+    const res = g.s.audits[0].result!;
+    expect(res.outs.gizmo ?? 0).toBeLessThan(0.01);
+  });
+
+  it('a brownout lowers U: work counts at the speed power allowed', () => {
+    const g = sandbox();
+    must(g, { k: 'place', kind: 'miner', x: 20, y: 5, rot: 0 });
+    must(g, { k: 'place', kind: 'kiln', x: 21, y: 5, rot: 0 });
+    must(g, { k: 'place', kind: 'kiln', x: 21, y: 6, rot: 0 });
+    must(g, { k: 'place', kind: 'kiln', x: 21, y: 4, rot: 0 });
+    must(g, { k: 'place', kind: 'generator', x: 19, y: 6, rot: 0 });
+    must(g, { k: 'place', kind: 'pole', x: 19, y: 4, rot: 0 });
+    // the generator alone can't carry five kilns' worth (300 kW on 200)
+    must(g, { k: 'place', kind: 'kiln', x: 20, y: 3, rot: 0 });
+    must(g, { k: 'place', kind: 'kiln', x: 20, y: 4, rot: 0 });
+    const ks = [at(g, 21, 5), at(g, 21, 6), at(g, 21, 4), at(g, 20, 3), at(g, 20, 4)];
+    const gen = at(g, 19, 6);
+    must(g, { k: 'audit', x: 19, y: 3, w: 3, h: 4 });
+    for (let i = 0; i < auditTicks() + 2; i++) {
+      for (const k of ks) feed(k, 'sand');
+      gen.inBuf.coal = 4;
+      g.tick();
+    }
+    const kilnU = ks.map((k) => g.s.audits[0].result!.busy[k.id]);
+    for (const u of kilnU) expect(u).toBeLessThan(0.7);
+  });
+
+  it('S+ sits above S, and every grade gets advice', () => {
+    expect(GRADES[0].letter).toBe('S+');
+    expect(gradeFor(0.98).letter).toBe('S+');
+    expect(gradeFor(0.95).letter).toBe('S');
+    const g = twoLines();
+    g.step(20 * TICK_RATE);
+    must(g, { k: 'audit', x: 2, y: 11, w: 4, h: 1 });
+    g.step(auditTicks() + 1);
+    expect(g.s.audits[0].result!.advice.length).toBeGreaterThan(0);
+  });
+
+  it('Overdrive runs the clicked machine\'s whole line', () => {
+    const g = twoLines();
+    g.step(5 * TICK_RATE);
+    g.s.clickWindow = -100;
+    must(g, { k: 'click', x: 4, y: 11 });
+    expect(at(g, 4, 11).od).toBeGreaterThan(0);
+    expect(at(g, 2, 11).od).toBeGreaterThan(0); // its miner too
+    expect(at(g, 4, 12).od ?? 0).toBe(0); // not the other line
+  });
+
+  it('a Factory module and the modules joined to it can be overdriven', () => {
+    const g = sandbox();
+    g.first('factoryOpen');
+    const a = design(g, { outs: { ironIngot: 0.5 }, parts: [{ kind: 'miner', dx: 0, dy: 0, rot: 0, recipe: 'mineIron' }, { kind: 'smelter', dx: 1, dy: 0, rot: 0, recipe: null }] });
+    const b = design(g, { ins: { ironIngot: 0.5 }, outs: { ironPlate: 0.5 }, parts: [{ kind: 'press', dx: 0, dy: 0, rot: 0, recipe: null }] });
+    must(g, { k: 'fplace', design: a.id, x: 4, y: 1, rot: 0 });
+    must(g, { k: 'fplace', design: b.id, x: 5, y: 1, rot: 0 });
+    for (let x = 6; x < 10; x++) must(g, { k: 'ftrunk', x, y: 1, rot: 0 });
+    must(g, { k: 'fclick', x: 5, y: 1 });
+    expect(g.fentAt(4, 1)!.od).toBeGreaterThan(0);
+    expect(g.fentAt(5, 1)!.od).toBeGreaterThan(0);
+    expect(g.act({ k: 'fclick', x: 5, y: 1 }).why).toMatch(/already/);
+  });
+
+  it('a nested fold needs one module inside feeding another', () => {
+    const g = sandbox();
+    g.first('factoryOpen');
+    const a = design(g, { outs: { ironPlate: 0.5 }, parts: [{ kind: 'press', dx: 0, dy: 0, rot: 0, recipe: null }] });
+    const b = design(g, { outs: { copperWire: 0.5 }, parts: [{ kind: 'press', dx: 0, dy: 0, rot: 0, recipe: null }] });
+    must(g, { k: 'fplace', design: a.id, x: 4, y: 1, rot: 0 });
+    must(g, { k: 'fplace', design: b.id, x: 4, y: 2, rot: 0 });
+    expect(g.act({ k: 'faudit', x: 4, y: 1, w: 1, h: 2 }).why).toMatch(/feed another/);
+  });
+
+  it('the Hand Furnace starts with a Slag Heap, so hand-smelting never jams', () => {
+    const g = new Game(1);
+    expect(g.entAt(3, 4)?.kind).toBe('heap');
+  });
+});
+
 describe('fold rules (DESIGN.md §10, §18; the Milestone 1-2 review)', () => {
-  it('a fold needs two kinds of machine', () => {
+  it('a fold needs two kinds of machine, or one feeding another', () => {
     const g = sandbox();
     must(g, { k: 'place', kind: 'miner', x: 2, y: 11, rot: 0 });
     expect(foldRefusal(g, { x: 2, y: 11, w: 1, h: 1 })).toMatch(/two kinds/);
+    // two assemblers side by side, not feeding each other: refused
+    must(g, { k: 'place', kind: 'assembler', x: 6, y: 9, rot: 3 });
+    must(g, { k: 'place', kind: 'assembler', x: 7, y: 9, rot: 3 });
+    expect(foldRefusal(g, { x: 6, y: 9, w: 2, h: 1 })).toMatch(/feeding another/);
+    // a gear assembler handing gears into a Gizmo assembler: a line
+    must(g, { k: 'remove', x: 6, y: 9 });
+    must(g, { k: 'place', kind: 'assembler', x: 6, y: 9, rot: 0 });
+    must(g, { k: 'recipe', x: 6, y: 9, recipe: 'cutGear' });
+    expect(foldRefusal(g, { x: 6, y: 9, w: 2, h: 1 })).toBeNull();
   });
 
   it('power never crosses a fold box', () => {
@@ -440,16 +592,26 @@ describe('fold rules (DESIGN.md §10, §18; the Milestone 1-2 review)', () => {
   });
 });
 
-describe('saves v3', () => {
+describe('saves v3 and v4', () => {
   it('migrates a v2 save: parts bank, claims, Codex, Megaproject, Act II reputation', () => {
     const st = { coin: 'N:5', orders: { active: null, progress: {}, done: [], rep: { bramble: 2 } } };
     const d = migrate({ v: 2, saved: 0, seed: 1, snap: JSON.stringify(st) });
-    expect(d.v).toBe(3);
+    expect(d.v).toBe(4);
     const s2 = JSON.parse(d.snap as string);
     expect(s2.parts).toBe('N:0');
     expect(s2.orders.rep).toEqual({ bramble: 2, unit7: 0, voltaire: 0 });
     expect(s2.mega).toEqual({ stage: 0, progress: {} });
     expect(s2.codex).toEqual([]);
     expect(Num.parse('0').toNumber()).toBe(0);
+  });
+
+  it('migrates a v3 save: its one audit becomes the first of the audits', () => {
+    const st = { audit: { box: { x: 1, y: 2, w: 3, h: 1 }, t: 5, ids: [], ins: {}, outs: {}, busy: {}, crafts0: {}, ports: [], result: null } };
+    const d = migrate({ v: 3, saved: 0, seed: 1, snap: JSON.stringify(st) });
+    const s2 = JSON.parse(d.snap as string);
+    expect(s2.audit).toBeUndefined();
+    expect(s2.audits).toHaveLength(1);
+    expect(s2.audits[0].id).toBe(1);
+    expect(s2.nextAudit).toBe(2);
   });
 });

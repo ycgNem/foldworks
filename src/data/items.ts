@@ -33,7 +33,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   copperWire: { id: 'copperWire', name: 'Copper wire', value: 2, color: 'amber', flavor: 'Two from every ingot. Coils itself when nobody looks.', derivation: '§3 4 per ingot: +1 over the ingot' },
   gear: { id: 'gear', name: 'Gear', value: 14, color: 'mist', flavor: 'Teeth on the outside, purpose on the inside.', derivation: '§3 10 in -> 14 (+40%)' },
   slagBrick: { id: 'slagBrick', name: 'Slag brick', value: 6, color: 'plum', flavor: 'Waste, pressed into usefulness. The swamp town loves a brick.', derivation: '§3 research 9: waste becomes value' },
-  gizmo: { id: 'gizmo', name: 'Gizmo', value: 80, color: 'gold', flavor: "Does something. Bramble isn't sure what. Bramble loves it.", derivation: '§3 20 in -> 80 (x4): the first product' },
+  gizmo: { id: 'gizmo', name: 'Gizmo', value: 80, color: 'gold', flavor: "Does something. Bramble isn't sure what. Bramble loves it.", derivation: '§3 18 in (gear + 2 wire) -> 80 (x4.4): the first product' },
   coal: { id: 'coal', name: 'Coal', value: 2, color: 'ink', flavor: 'Old swamp, squashed flat for a very long time. Burns with opinions.', derivation: '§18 Items: raw, 2 (it burns: worth a little more than ore)' },
   sand: { id: 'sand', name: 'Sand', value: 1, color: 'clay', flavor: 'Gets everywhere. Especially into glass.', derivation: '§18 Items: raw, 1' },
   steel: { id: 'steel', name: 'Steel', value: 15, color: 'mist', flavor: 'Iron that went to finishing school.', derivation: '§18 Items: ingot 3 + coal 2 -> 15 (x3)' },

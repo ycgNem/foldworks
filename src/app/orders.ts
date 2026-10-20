@@ -7,7 +7,7 @@ import { RESEARCH } from '../data/research';
 import { ORDERS, CUSTOMERS, ORDER, type CustomerId, type OrderDef } from '../data/orders';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { RULES } from '../data/rules';
-import { ICON, textWidth } from '../ui/font';
+import { ICON, textWidth, ellipsize } from '../ui/font';
 import { itemIcon, sheet, hasArt } from '../render/sprites';
 import { orderFrac } from '../sim/systems/orders';
 import { saleValue } from '../sim/systems/docks';
@@ -101,19 +101,24 @@ export function ordersScreen(app: App, r: Rect) {
       icon(app, 'lock', x + 8, y0 + 7);
     }
     const tx = x + 33;
-    const badge = isMet && open && !active ? `${open} open` : '';
-    const bw = badge ? textWidth(badge) + 4 : 0;
     ui.clip(tx, y0, x + tw - tx - 30, 14);
     ui.text(isMet ? d.name : '???', tx, y0 + 4, isMet ? (active ? ACCENT[c] : C.bone) : C.hull1, { shadow: C.ink });
     ui.unclip();
-    ui.clip(tx, y0 + 14, x + tw - tx - 6 - bw, 14);
-    ui.text(isMet ? d.title : `After ${RESEARCH[d.meets!].name}`, tx, y0 + 18, C.hull2);
+    // the title gets the tab's whole width ("Baroness of the swamp's wires" was cut by the badge)
+    const title = isMet ? d.title : `After ${RESEARCH[d.meets!].name}`;
+    ui.clip(tx, y0 + 14, x + tw - tx - 4, 14);
+    ui.text(textWidth(title) <= x + tw - tx - 4 ? title : ellipsize(title, x + tw - tx - 4), tx, y0 + 18, C.hull2);
     ui.unclip();
     if (isMet) hearts(app, x + tw - 26, y0 + 4, o.rep[c] ?? 0);
-    if (badge) {
-      ui.fill(x + tw - bw - 4, y0 + 17, bw, 9, C.ink);
-      ui.fill(x + tw - bw - 3, y0 + 18, bw - 2, 7, C.pipRed);
-      ui.text(badge, x + tw - bw - 2, y0 + 18, C.bone);
+    // open orders: a red count on the portrait's corner, bouncing now and then
+    if (isMet && open && !active) {
+      const s = String(open);
+      const bw = Math.max(9, textWidth(s) + 4);
+      const bob = Math.floor(ui.time * 2 + i) % 4 === 0 ? 1 : 0;
+      ui.fill(x + 22, y0 + 1 - bob, bw, 9, C.ink);
+      ui.fill(x + 23, y0 + 2 - bob, bw - 2, 7, C.pipRed);
+      ui.text(s, x + 22 + Math.floor((bw - textWidth(s)) / 2), y0 + 2 - bob, C.bone);
+      ui.hint(x + 22, y0, bw, 10, `${open} open order${open > 1 ? 's' : ''} from ${d.name}`, 150);
     }
   });
   const y1 = y0 + 34;
@@ -181,7 +186,7 @@ export function ordersScreen(app: App, r: Rect) {
     py += 10;
   }
   if (who === 'unit7' && py + 15 <= pc.y + pc.h + 1) {
-    if (button(ui, 'openCodex', pc.x, pc.y + pc.h - 15, pc.w, 14, `Open the Codex`, { gold: rep >= 1, icon: undefined, tip: 'Every item, with its story. A first delivery of each pays 100x its value once Unit 7 likes you.' })) app.panel = 'codex';
+    if (button(ui, 'openCodex', pc.x, pc.y + pc.h - 15, pc.w, 14, `Open the Codex`, { gold: rep >= 1, icon: undefined, tip: 'Every item, with its story. A first delivery of each pays 30x its value once Unit 7 likes you.' })) app.panel = 'codex';
   }
   // ---- the orders, then the Dock's price board
   const ox = r.x + 8 + leftW + 6, ow = r.x + r.w - 8 - ox;
@@ -240,7 +245,18 @@ function orderCard(app: App, d: OrderDef, x: number, y: number, w: number, h: nu
   const pay = `${ICON.coin} ${Num.of(d.pays).format()}  +${d.rep}${ICON.heart}`;
   ui.text(pay, x + w - 8, y + 5, C.brass0, { align: 'right' });
   if (active) ui.text('ACTIVE', x + 13 + textWidth(d.name), y + 5, C.moss);
-  wantsLine(app, d, x + 9, y + 17, x + w - 8, false);
+  let wx = x + w - 8;
+  if (d.at === 'factory') {
+    // only deliveries to the Factory Dock count: a plate on the card says so
+    const s = 'Factory Dock only';
+    const sw = textWidth(s) + 6;
+    wx -= sw + 4;
+    ui.fill(wx + 4, y + 15, sw, 11, C.ink);
+    ui.fill(wx + 5, y + 16, sw - 2, 9, C.copper0);
+    ui.text(s, wx + 7, y + 17, C.hot);
+    ui.hint(wx + 4, y + 15, sw, 11, 'Only what reaches the Factory Dock counts toward this order: trunk your modules into the Factory Dock on the Factory floor. The Workshop Dock just sells.', 180);
+  }
+  wantsLine(app, d, x + 9, y + 17, wx, false);
   const f = orderFrac(g, d.id);
   bar(ui, x + 9, y + 32, w - 114, 7, f, ACCENT[d.customer], C.shadow);
   ui.text(`${Math.floor(f * 100)}%`, x + w - 82, y + 32, C.shadow, { align: 'right' });
@@ -261,7 +277,7 @@ function lockedCard(app: App, d: OrderDef, x: number, y: number, w: number) {
     ui.ctx.globalAlpha = 1;
     ix += 14 + ui.text(fmt(n), ix + 10, y + 16, C.hull2);
   }
-  const need = `Needs ${d.requires.filter((q) => !g.done(q)).map((q) => RESEARCH[q].name).join(', ')}`;
+  const need = `Needs ${d.requires.filter((q) => !g.done(q)).map((q) => RESEARCH[q].name).join(', ')}${d.at === 'factory' ? '; Factory Dock only' : ''}`;
   ui.clip(ix + 4, y, x + w - 8 - ix - 4, 28);
   ui.text(need, x + w - 8, y + 16, C.hull1, { align: 'right' });
   ui.unclip();

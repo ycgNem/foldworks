@@ -13,8 +13,10 @@ import { ITEMS, type ItemId } from '../data/items';
 import { megaStage } from '../data/megaprojects';
 import { availableNodes, researchFrac, available } from '../sim/systems/research';
 import { offeredOrders } from '../sim/systems/orders';
-import { auditTicks } from '../sim/systems/audits';
-import { feedsDock, sliceEndParts, stampCost } from '../sim/systems/modules';
+import { auditTicks, gradedAudit } from '../sim/systems/audits';
+import { feedsDock, stampCost, mainItem } from '../sim/systems/modules';
+import { ORDER } from '../data/orders';
+import type { FEnt } from '../sim/world';
 import { claimRefusal } from '../sim/systems/claims';
 import { DX, DY } from '../sim/world';
 
@@ -125,6 +127,43 @@ function act2Alerts(g: Game): Goal | null {
   return null;
 }
 
+/** The Gizmo Festival, step by step: accept it, fold the Gizmo line and what feeds it, place
+ * them on the Factory floor, trunk them together and the Gizmos into the Factory Dock. */
+function festivalGoal(g: Game, mods: FEnt[]): Goal | null {
+  const s = g.s;
+  const id = 'gizmoFestival';
+  const d = ORDER[id];
+  if (!d || s.orders.done.includes(id)) return null;
+  const want = d.wants.gizmo ?? 400;
+  const have = Math.min(want, Math.floor(s.orders.progress[id]?.gizmo?.toNumber() ?? 0));
+  if (s.orders.active !== id) return { text: `Accept Bramble's Gizmo Festival (O): ${fmt(want)} Gizmos into the Factory Dock pay ${fmt(d.pays)}. Only the Factory Dock counts.`, ui: 'orders' };
+  // which designs make what: a design counts for an item when its main product is that item
+  const makes = (item: ItemId) => s.designs.filter((q) => mainItem(q) === item);
+  const gizmoDesigns = makes('gizmo');
+  if (!gizmoDesigns.length) return { text: `The Festival wants ${fmt(want)} Gizmos from the Factory floor. Fold a Gizmo line (F): an Assembler making Gizmos, boxed with its belts.`, ui: 'fold' };
+  const gd = gizmoDesigns[0];
+  const needs = (Object.keys(gd.ins) as ItemId[]).filter((it) => it !== 'slag');
+  for (const it of needs) if (!makes(it).length) return { text: `The Gizmo module takes ${ITEMS[it].name.toLowerCase()} at its back. Fold a line that makes ${ITEMS[it].name.toLowerCase()} (F) to feed it.`, ui: 'fold' };
+  const placed = (item: ItemId) => mods.filter((m) => { const q = g.design(m.design); return !!q && mainItem(q) === item; });
+  const gm = placed('gizmo');
+  if (!gm.length) return { text: 'Place the Gizmo module on the Factory floor (Tab), its gold front toward the Factory Dock.', ui: 'factory' };
+  for (const it of needs) if (!placed(it).length) return { text: `Place a ${ITEMS[it].name.toLowerCase()} module on the Factory floor and trunk its front into the Gizmo module's back.`, ui: 'factory' };
+  const feeding = gm.filter((m) => feedsDock(g, m));
+  if (!feeding.length) return { text: 'Trunk the Gizmo module\'s front (gold mark) to the Factory Dock: only Factory Dock deliveries count for the Festival.', ui: 'factory' };
+  const starved = feeding.find((m) => m.state === 'starved');
+  if (starved && starved.why) return { text: `The Gizmo module is starved of ${ITEMS[starved.why as ItemId]?.name.toLowerCase() ?? 'input'}: trunk more of it into its back. Festival: ${fmt(have)}/${fmt(want)} Gizmos.`, ui: 'factory' };
+  let rate = 0;
+  for (const r of g.routes) {
+    if (r.by || r.to?.kind !== 'fdock') continue;
+    const q = g.design(r.from.design);
+    const last = r.tiles[r.tiles.length - 1];
+    if (q && mainItem(q) === 'gizmo' && last) rate += last.flow * 60;
+  }
+  const left = want - have;
+  const eta = rate > 0 ? ` About ${Math.max(1, Math.ceil(left / rate))} min to go.` : '';
+  return { text: `The Gizmo Festival: ${fmt(have)}/${fmt(want)} Gizmos delivered at the Factory Dock${rate > 0 ? `, ${Math.round(rate)} a minute` : ''}.${eta}` };
+}
+
 export function nextGoal(g: Game): Goal | null {
   const s = g.s;
   const furnace = g.machines.find((m) => m.kind === 'furnace');
@@ -140,9 +179,19 @@ export function nextGoal(g: Game): Goal | null {
   }
   // folding and the Factory floor (DESIGN.md §10-§11)
   if (g.done('folding')) {
-    const a = s.audit;
-    if (a && !a.result) return { text: `Auditing the box: ${Math.ceil((auditTicks() - a.t) / 20)} s to go. Keep playing; the grade comes next.`, tile: { x: a.box.x + Math.floor(a.box.w / 2), y: a.box.y } };
-    if (a && a.result) return { text: `Graded ${a.result.grade.letter}! Open the grade card and fold the line into a module.` };
+    const graded = s.audits.filter((q) => q.result);
+    const running = s.audits.filter((q) => !q.result);
+    if (graded.length) {
+      const a = gradedAudit(g)!;
+      const more = graded.length > 1 ? ` (${graded.length} lines are graded)` : '';
+      return { text: `Graded ${a.result!.grade.letter}${more}! Click its gold badge at the edge of the floor and fold the line into a module.` };
+    }
+    if (running.length) {
+      const next = Math.min(...running.map((q) => Math.ceil((auditTicks() - q.t) / 20)));
+      const room = RULES.maxAudits.value - s.audits.length;
+      const a = running[0];
+      return { text: `Auditing ${running.length > 1 ? `${running.length} boxes` : 'the box'}: the next grade in ${next} s.${room > 0 ? ` Box another line meanwhile (F): ${room} more can run.` : ' Keep playing.'}`, tile: { x: a.box.x + Math.floor(a.box.w / 2), y: a.box.y } };
+    }
     if (!s.designs.length) return { text: 'Folding is ready: press F and drag a box over a line that runs well (up to 8x8).', ui: 'fold' };
     const mods = s.factory.ents.filter((e) => e.kind === 'module');
     if (!mods.length) return { text: 'Go to the Factory floor (Tab) and place your module, its gold front toward a trunk to the Factory Dock.', ui: 'factory' };
@@ -150,13 +199,11 @@ export function nextGoal(g: Game): Goal | null {
     if (alert) return alert;
     const jam = mods.find((m) => m.state === 'blocked');
     if (jam && !s.flags.includes('sliceEnd')) return { text: 'A module is blocked: hover it on the Factory floor to see why.' };
-    // the slice's end (DECISIONS.md, the Milestone 1-2 review): three products, chained, running
-    if (!s.flags.includes('sliceEnd') && !g.done('coalSeams')) {
-      const p = sliceEndParts(g);
-      const feeding = mods.filter((m) => feedsDock(g, m)).length;
-      if (p.designs < 3) return { text: `Build a Factory: modules making three different products into the Factory Dock, one feeding another, for 30 s. Products running: ${Math.min(3, p.designs)} of 3 (${feeding} module${feeding === 1 ? '' : 's'} reach the Dock).`, ui: 'modules' };
-      if (!p.chained) return { text: 'Chain two modules: one module\'s front trunk into the back of another that uses it (gears from plates, bricks from slag), all reaching the Factory Dock.', ui: 'modules' };
-      return { text: 'Nearly there: keep all three products running at half speed or better for 30 s.' };
+    // the slice's end (DECISIONS.md, the gate's blocking findings): Bramble's Gizmo Festival,
+    // filled only by the Factory Dock
+    if (!s.flags.includes('sliceEnd')) {
+      const fest = festivalGoal(g, mods);
+      if (fest) return fest;
     }
     if (g.flag('sliceEnd') || g.done('coalSeams')) {
       const a2 = act2Goal(g);

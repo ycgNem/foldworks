@@ -48,7 +48,7 @@ export const CUSTOMERS: Record<CustomerId, CustomerDef> = {
       'UNIT 7 IS PLEASED. UNIT 7 IS OFTEN PLEASED. THIS IS MORE.',
     ],
     rewards: [
-      { rep: 1, text: 'The Codex opens: a first delivery of each item pays 100x its value' },
+      { rep: 1, text: 'The Codex opens: a first delivery of each item pays 30x its value' },
       { rep: 2, text: 'Recycled Glass: the Kiln makes glass from 3 gravel' },
       { rep: 3, text: 'Precision mode yields +35% instead of +25%' },
     ],
@@ -84,20 +84,22 @@ export interface OrderDef {
   rep: number;
   /** research that must be done before it is offered */
   requires: ResearchId[];
+  /** only deliveries to this Dock count (the Gizmo Festival: the Factory Dock) */
+  at?: 'factory';
   derivation: string;
 }
 
 export const ORDERS: OrderDef[] = [
   { id: 'boardwalk', customer: 'bramble', name: 'The Boardwalk', pitch: 'My frogs keep sinking. A boardwalk, please. Iron, flat.', wants: { ironPlate: 80 }, pays: 600, rep: 1, requires: ['pressing'], derivation: '§7 80 plates -> 600 + 1 rep: 1.5x value; 80 so a player who takes it the moment Pressing offers it (one plate line on the Dock) waits under 3 min for coin (§13 check 10)' },
-  { id: 'lampPosts', customer: 'bramble', name: 'Lamp Posts', pitch: 'The swamp is dark at night. Gears to turn, wire to glow.', wants: { gear: 150, copperWire: 300 }, pays: 4500, rep: 1, requires: ['gearcutting', 'wireDrawing'], derivation: '§7 150 gears + 300 wire -> 4,500 + 1 rep: 1.6x value' },
+  { id: 'lampPosts', customer: 'bramble', name: 'Lamp Posts', pitch: 'The swamp is dark at night. Gears to turn, wire to glow.', wants: { gear: 60, copperWire: 200 }, pays: 2000, rep: 1, requires: ['gearcutting', 'wireDrawing'], derivation: '§7 60 gears + 200 wire (1,240) -> 2,000 + 1 rep: 1.6x value; 60 gears, not 150: one order at a time, and at 150 its gears (research\'s until Folding) held the Gizmo Festival up ~9 min (pacing round 4)' },
   // Act II (DESIGN.md §18 Customers)
   { id: 'calibration', customer: 'unit7', name: 'Calibration Weights', pitch: 'UNIT 7 REQUIRES MASS. PRECISE MASS. STEEL MASS.', wants: { steel: 300 }, pays: 9000, rep: 1, requires: ['steelmaking'], derivation: '§18 Customers: 300 steel (4,500) -> 9,000: 2x' },
   { id: 'lensArray', customer: 'unit7', name: 'Lens Array', pitch: 'UNIT 7 WISHES TO SEE FURTHER. ALSO, SHINIER.', wants: { glass: 400, circuit: 60 }, pays: 24000, rep: 1, requires: ['circuits'], derivation: '§18 Customers: 400 glass + 60 circuits (9,800) -> 24,000: 2.4x' },
-  { id: 'everything', customer: 'unit7', name: 'One of Everything', pitch: 'THE COLLECTION HAS GAPS. GAPS ARE INTOLERABLE.', wants: { steel: 20, glass: 20, concrete: 20, plastic: 20, circuit: 10, motor: 5 }, pays: 30000, rep: 1, requires: ['motors', 'concrete'], derivation: '§18 Customers: a sample of every tier-2 product (~5,000) -> 30,000: the collector\'s premium' },
+  { id: 'everything', customer: 'unit7', name: 'One of Everything', pitch: 'THE COLLECTION HAS GAPS. GAPS ARE INTOLERABLE.', wants: { steel: 20, glass: 20, concrete: 20, plastic: 20, circuit: 10, motor: 5 }, pays: 9500, rep: 1, requires: ['motors', 'concrete'], derivation: '§18 Customers: a sample of every tier-2 product (4,420 at Dock value) -> 9,500: 2.1x, inside the 1.5-2.5x band (the pacing audit)' },
   { id: 'streetlamps', customer: 'voltaire', name: 'Streetlamps', pitch: 'Light the swamp, darling. Every lane. Every lily.', wants: { circuit: 150, glass: 300 }, pays: 40000, rep: 1, requires: ['circuits'], derivation: '§18 Customers: 150 circuits + 300 glass (18,900) -> 40,000: 2.1x' },
   { id: 'promenade', customer: 'voltaire', name: 'Concrete Promenade', pitch: 'One must have somewhere to promenade. In shoes.', wants: { concrete: 800 }, pays: 45000, rep: 1, requires: ['concrete'], derivation: '§18 Customers: 800 concrete (17,600) -> 45,000: 2.6x' },
   { id: 'turbine', customer: 'voltaire', name: 'The Grand Turbine', pitch: 'Something enormous that hums. I will name it after myself.', wants: { motor: 40, steel: 600 }, pays: 60000, rep: 1, requires: ['motors'], derivation: '§18 Customers: 40 motors + 600 steel (25,800) -> 60,000: 2.3x' },
-  { id: 'gizmoFestival', customer: 'bramble', name: 'The Gizmo Festival', pitch: 'A festival! Of Gizmos! I do not know what they do and neither will the guests.', wants: { gizmo: 40 }, pays: 8000, rep: 1, requires: ['gizmoTheory'], derivation: '§7 40 Gizmos -> 8,000 + 1 rep + the Folding hint: 2.5x' },
+  { id: 'gizmoFestival', customer: 'bramble', name: 'The Gizmo Festival', pitch: 'A festival! Of Gizmos! By the crateload, from your Factory floor. I do not know what they do and neither will the guests.', wants: { gizmo: 400 }, pays: 64000, rep: 1, requires: ['folding'], at: 'factory', derivation: '§7 400 Gizmos (32,000) -> 64,000 + 1 rep: 2x; §11 only the Factory Dock counts, so the slice ends with a Gizmo module fed by gear and wire modules running at rate (the Milestone 3 gate review)' },
 ];
 
 export const ORDER: Record<string, OrderDef> = Object.fromEntries(ORDERS.map((o) => [o.id, o]));

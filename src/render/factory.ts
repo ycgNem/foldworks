@@ -166,10 +166,66 @@ export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number
       ctx.fillRect(x + 2, y + 12, 1, 2);
       ctx.fillRect(x + 4, y + 12, 1, 2);
     }
+    // Overdrive (DESIGN.md §18): running hot, then a cooling arc
+    if ((e.od ?? 0) > 0) moduleHot(ctx, e, time);
+    else if ((e.cool ?? 0) > 0) coolArc(ctx, x, y, e.cool ?? 0);
     pip(ctx, x, y, PIP[e.state], e.state === 'blocked', time);
   }
   fauditBox(ctx, g, time);
   overlays(ctx, g, ov, time);
+}
+
+/** A module running at 3x: a hot pulse over the case, the art director's 'module_od' overlay
+ *  (or a marching hot-and-gold rim drawn here), embers rising off it; it blinks in its last 2 s. */
+function moduleHot(ctx: CanvasRenderingContext2D, e: FEnt, time: number) {
+  const x = e.x * TILE, y = e.y * TILE;
+  const od = e.od ?? 0;
+  if (od < 2 * TICK_RATE && Math.floor(time * 8) % 2) return;
+  ctx.fillStyle = rgba(C.glow, 0.16 + 0.12 * Math.sin(time * 12 + e.id));
+  ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
+  if (hasArt('module_od')) {
+    const s = sheet('module_od');
+    ctx.drawImage(s.frames[(Math.floor(time * (s.fps || 8)) + e.id) % s.frames.length], x, y);
+  } else {
+    // a rim one pixel outside the case: hot and gold dashes marching round it
+    const P = 4 * (TILE + 1);
+    const off = Math.floor(time * 16);
+    for (let i = 0; i < P; i++) {
+      let px: number, py: number;
+      if (i < TILE + 1) { px = x - 1 + i; py = y - 1; }
+      else if (i < 2 * (TILE + 1)) { px = x + TILE; py = y - 1 + (i - TILE - 1); }
+      else if (i < 3 * (TILE + 1)) { px = x + TILE - (i - 2 * (TILE + 1)); py = y + TILE; }
+      else { px = x - 1; py = y + TILE - (i - 3 * (TILE + 1)); }
+      const k = (i + off) % 6;
+      ctx.fillStyle = k < 2 ? C.hot : k < 4 ? C.gold : C.copper2;
+      ctx.fillRect(px, py, 1, 1);
+    }
+  }
+  // embers rising off the top, each on its own clock
+  for (let i = 0; i < 3; i++) {
+    const t = (time * 1.4 + i / 3 + e.id * 0.17) % 1;
+    ctx.fillStyle = rgba(i % 2 ? C.hot : C.glow, 1 - t);
+    ctx.fillRect(x + 3 + ((i * 5 + e.id) % 10), Math.round(y - 1 - t * 9), 1, 1);
+  }
+}
+
+/** A module cooling after Overdrive: a dim arc round its edge that shrinks as it cools. */
+function coolArc(ctx: CanvasRenderingContext2D, x: number, y: number, cool: number) {
+  const total = RULES.overdriveCool.value * TICK_RATE;
+  const frac = Math.min(1, cool / total);
+  const W = TILE, H = TILE;
+  const P = 2 * (W + H) - 4;
+  const n = Math.round(P * frac);
+  ctx.fillStyle = rgba(C.iron2, 0.9);
+  // clockwise from the top-left corner
+  for (let i = 0; i < n; i++) {
+    let px: number, py: number;
+    if (i < W) { px = i; py = 0; }
+    else if (i < W + H - 1) { px = W - 1; py = i - W + 1; }
+    else if (i < 2 * W + H - 2) { px = W - 1 - (i - (W + H - 2)); py = H - 1; }
+    else { px = 0; py = H - 1 - (i - (2 * W + H - 3)); }
+    ctx.fillRect(x + px, y + py, 1, 1);
+  }
 }
 
 /** A depth-2 module's doubled frame: a teal ring outside the case with brass corners, breathing
@@ -402,7 +458,12 @@ function overlays(ctx: CanvasRenderingContext2D, g: Game, ov: FactoryOverlay, ti
     }
   } else {
     const e = g.fentAt(h.x, h.y);
-    if (e) outline(ctx, e.x, e.y, e.w, e.h, rgba(C.bone, 0.7));
+    // a module Overdrive can run hot: a pulsing hot frame says "click me"
+    const odReady = e?.kind === 'module' && g.done('overdrive') && !(e.od ?? 0) && !(e.cool ?? 0);
+    if (e && odReady) {
+      outline(ctx, e.x, e.y, e.w, e.h, rgba(C.glow, 0.6 + 0.4 * Math.sin(time * 10)));
+      label(ctx, '3x', (e.x + 0.5) * TILE, e.y * TILE - 13, C.hot);
+    } else if (e) outline(ctx, e.x, e.y, e.w, e.h, rgba(C.bone, 0.7));
     else if (h.x >= 0 && h.y >= 0 && h.x < FACTORY.w && h.y < FACTORY.h) {
       ctx.fillStyle = rgba(C.bone, 0.12);
       ctx.fillRect(h.x * TILE, h.y * TILE, TILE, TILE);

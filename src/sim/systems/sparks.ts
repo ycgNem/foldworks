@@ -1,6 +1,6 @@
 // Sparks (DESIGN.md §6): one every 3-6 minutes, visible for 20 s, paused while the tab is hidden.
 // A Lucky Vein glitters on a patch with a working miner (click: that patch's miners run 3x for
-// 60 s). An Inspector walks up to the busiest line (click: they grade it with §10's formula and
+// 60 s, and so does every machine of the line it feeds). An Inspector walks up to the busiest line (click: they grade it with §10's formula and
 // hand over 60 s of its measured output x the grade multiplier, in kind, to research; paid in
 // items, not coin, so it is not a bank-percentage windfall: DECISIONS.md). Missing one costs
 // nothing.
@@ -83,7 +83,15 @@ export function catchSpark(g: Game, p: Spark): ActResult {
   g.bump('sparks');
   if (p.kind === 'vein') {
     const pi = g.patchOf[p.y * g.W + p.x];
-    g.s.veins[pi] = RULES.veinSeconds.value * TICK_RATE;
+    const ticks = RULES.veinSeconds.value * TICK_RATE;
+    g.s.veins[pi] = ticks;
+    // the whole line the patch feeds runs 3x, not just its miners: a balanced line's smelters
+    // would otherwise only back up the extra ore (the pacing audit at the Milestone 3 gate)
+    for (const l of lines(g)) {
+      if (!l.some((e) => e.kind === 'miner' && g.patchOf[e.y * g.W + e.x] === pi)) continue;
+      for (const e of l) if (isMachine(e.kind)) e.boost = ticks;
+    }
+    for (const m of g.miners) if (g.patchOf[m.y * g.W + m.x] === pi) m.boost = ticks;
     g.emit({ type: 'sparkGet', x: p.x, y: p.y, id: 'vein' });
     return { ok: true };
   }

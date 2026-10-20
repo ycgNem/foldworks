@@ -102,6 +102,7 @@ const G: Record<string, string> = {
   '×': '...|...|#.#|.#.|#.#|...|...', // times (rates, multipliers)
   '·': '.|.|.|#|.|.|.', // middle dot (the fold score formula)
   '÷': '...|.#.|...|###|...|.#.|...', // divide
+  '→': '.....|..#..|...#.|#####|...#.|..#..|.....', // arrow (the grade advice: "+0.12 → A")
   // Special symbols (use via ICON constants below)
   '\u0001': '.....|.#.#.|#####|#####|.###.|..#..|.....', // heart
   '\u0002': '.....|.###.|#####|##.##|#####|.###.|.....', // coin with a square hole

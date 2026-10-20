@@ -15,7 +15,8 @@ import { savePayload, restore } from '../sim/snapshot';
 import { DX, DY, type Dir, type Floor } from '../sim/world';
 import { FACTORY } from '../data/land';
 import { runOffline, type OfflineReport } from '../sim/offline';
-import { foldRefusal } from '../sim/systems/audits';
+import { foldRefusal, gradedAudit } from '../sim/systems/audits';
+import { RULES } from '../data/rules';
 import { ffoldRefusal } from '../sim/systems/nested';
 import { factoryOpen } from '../sim/systems/modules';
 import { BUILD, STORE_TABS, type BuildKind } from '../data/machines';
@@ -97,6 +98,8 @@ export class App {
   nameDraft: string | null = null;
   /** when the grade card opened (its stamp animation runs from here) */
   gradeAt = 0;
+  /** the Workshop audit whose grade card is open (several can be graded at once) */
+  gradeId: number | null = null;
   /** what happened while the player was away, shown once on Continue */
   offline: OfflineReport | null = null;
   /** a bot playing this game (debug handle and the e2e scripts) */
@@ -153,6 +156,7 @@ export class App {
     this.renderer.ground = null;
     this.hud = newHudState();
     this.offline = null;
+    this.gradeId = null;
     this.setFloor('workshop', true);
     this.fitCamera(true);
   }
@@ -180,6 +184,8 @@ export class App {
     }
     this.hud = newHudState();
     this.hud.coinShown = this.game.s.coin.toNumber();
+    // a saved game past its first Miner never celebrates it again
+    this.hud.firstMiner = this.game.miners.length > 0 || this.game.done('pressing');
   }
 
   /** Switch the floor on screen (the Factory opens with the first fold). */
@@ -189,6 +195,7 @@ export class App {
       return;
     }
     const first = f !== this.floor;
+    if (first) this.renderer.fx.clearWorld();
     this.floor = f;
     this.renderer.floor = f;
     this.mode = { k: 'idle' };
@@ -340,7 +347,18 @@ export class App {
         case 'crank': a.sfx('crank', 0.8, 0.8 + (e.value ?? 0) * 0.6); break;
         case 'crankEmpty': a.sfx('error', 0.5); break;
         case 'shovel': a.sfx('shovel'); break;
-        case 'place': a.sfx(e.id === 'belt' ? 'belt' : 'place'); break;
+        case 'place': {
+          a.sfx(e.id === 'belt' ? 'belt' : 'place');
+          // the first Miner: the first thing that works without a click (the first automation)
+          if (e.id === 'miner' && (e.floor ?? 'workshop') === 'workshop' && this.game.miners.length === 1 && !this.hud.firstMiner) {
+            this.hud.firstMiner = true;
+            a.sfx('fanfare', 0.7);
+            a.sfx('codex', 0.6, 1.2);
+            this.renderer.firstMiner(e.x ?? 0, e.y ?? 0);
+            this.toast('Your first Miner!', 'It digs on its own: ore every 2 s, no clicks. Belt it into the furnace and the line runs while you watch.', C.gold, 'build');
+          }
+          break;
+        }
         case 'remove': a.sfx('remove'); break;
         case 'rotate': a.sfx('rotate'); break;
         case 'upgrade':
@@ -379,13 +397,20 @@ export class App {
         case 'jam': a.sfx('jam', 0.4); break;
         case 'auditStart': a.sfx('foldStart'); break;
         case 'auditCancel': a.sfx('close'); break;
-        case 'auditDone':
-          // the grade card opens with its stamp (the stamp's sound plays when it lands)
+        case 'auditDone': {
+          // the grade card opens with its stamp (the stamp's sound plays when it lands), unless
+          // the player is reading another line's grade card: then its badge waits, glowing
+          const reading = this.panel === 'grade' && this.gradeId !== null && this.game.s.audits.some((q) => q.id === this.gradeId && q.result);
+          this.audio.sfx('auditTick');
+          if (e.id === 'S+') this.toast('S+! A flawless line', 'Every machine busy, every scrap of waste handled, not a tile wasted. Fold it: x1.35 for good.', C.gold, 'star');
+          if (reading) break;
           this.panel = e.floor === 'factory' ? 'fgrade' : 'grade';
+          if (e.floor !== 'factory' && e.value !== undefined) this.gradeId = e.value;
           this.gradeAt = this.ui.time;
           this.nameDraft = null;
-          this.audio.sfx('auditTick');
+          this.hud.stamped = false;
           break;
+        }
         // ---- Act II (Milestone 4)
         case 'overdrive': break; // the renderer plays its burst, sound and kick
         case 'mode': a.sfx('click'); break;
@@ -418,7 +443,11 @@ export class App {
         case 'fold':
           a.sfx('fold');
           this.renderer.fx.kick(4);
-          this.toast('Folded!', 'The line is a module now: one tile with its rates. Open Modules (I) or the Factory floor (Tab) to place it.', C.gold, 'module');
+          if (e.id === 'S+') {
+            a.sfx('fanfare', 0.8);
+            this.hud.celebs.push({ kind: 'splus', t: 0, x: this.ui.w / 2, y: this.ui.h / 2, id: 'fold' });
+            this.toast('Folded at S+!', 'The best module there is: x1.35 its rates, in one tile. The Gazette is printing a special edition.', C.gold, 'star');
+          } else this.toast('Folded!', 'The line is a module now: one tile with its rates. Open Modules (I) or the Factory floor (Tab) to place it.', C.gold, 'module');
           break;
         case 'firstFold':
           this.toast('The Factory floor is open', 'Press Tab or the Factory tab to go there. Modules run as rates; trunk belts carry 480 a minute.', C.gold, 'factory');
@@ -543,9 +572,11 @@ export class App {
       return;
     }
     if (this.floor !== 'workshop') this.setFloor('workshop', true);
-    if (this.game.s.audit) {
-      this.panel = this.game.s.audit.result ? 'grade' : null;
-      return this.refuse(this.game.s.audit.result ? 'Fold or cancel the graded line first' : 'An audit is running: one at a time');
+    if (this.game.s.audits.length >= RULES.maxAudits.value) {
+      const ga = gradedAudit(this.game);
+      this.panel = ga ? 'grade' : null;
+      if (ga) { this.gradeId = ga.id; this.gradeAt = this.ui.time; this.hud.stamped = false; this.nameDraft = null; }
+      return this.refuse(ga ? 'Fold or cancel a graded line first' : `${RULES.maxAudits.value} audits are running: wait for a grade`);
     }
     this.setMode(this.mode.k === 'fold' ? { k: 'idle' } : { k: 'fold' });
   }
@@ -775,6 +806,7 @@ export class App {
     if (e?.kind === 'fdock') this.togglePanel('orders');
     else if (e?.kind === 'fhopper') this.togglePanel('research');
     else if (e?.kind === 'fbay') this.togglePanel('mega');
+    else if (e?.kind === 'module' && g.done('overdrive') && g.act({ k: 'fclick', x: t.x, y: t.y }).ok) return;
     else this.fselected = e && this.fselected !== e.id ? e.id : null;
   }
 

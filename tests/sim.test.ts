@@ -80,7 +80,7 @@ describe('belts', () => {
   it('never duplicates or loses an item over 10,000 ticks', () => {
     const g = sandbox();
     must(g, { k: 'place', kind: 'miner', x: 2, y: 3, rot: 0 }); // into the Hand Furnace
-    must(g, { k: 'place', kind: 'heap', x: 3, y: 4, rot: 0 });
+    if (!g.entAt(3, 4)) must(g, { k: 'place', kind: 'heap', x: 3, y: 4, rot: 0 }); // the start layout has one now
     must(g, { k: 'place', kind: 'miner', x: 1, y: 2, rot: 3 });
     belt(g, 1, 1, 1, 0);
     belt(g, 2, 1, 2, 0);
@@ -135,6 +135,7 @@ describe('machines', () => {
 
   it('a smelter line with no slag route stalls within 3 minutes (DESIGN.md §13 check 8)', () => {
     const g = sandbox();
+    must(g, { k: 'remove', x: 3, y: 4 }); // without the starting heap
     must(g, { k: 'place', kind: 'miner', x: 2, y: 3, rot: 0 });
     g.step(20 * 180);
     const f = g.machines.find((m) => m.kind === 'furnace')!;
@@ -153,7 +154,7 @@ describe('machines', () => {
   it('a press picks its recipe from the first input and makes plates', () => {
     const g = sandbox();
     must(g, { k: 'place', kind: 'miner', x: 2, y: 3, rot: 0 });
-    must(g, { k: 'place', kind: 'heap', x: 3, y: 4, rot: 0 });
+    if (!g.entAt(3, 4)) must(g, { k: 'place', kind: 'heap', x: 3, y: 4, rot: 0 }); // the start layout has one now
     // furnace (3,3) -> belt (4,3) -> belt (5,3) -> (6,3) turns north into the Dock: put a press inline
     g.act({ k: 'remove', x: 5, y: 3 });
     must(g, { k: 'place', kind: 'press', x: 5, y: 3, rot: 0 });
@@ -169,7 +170,7 @@ describe('determinism and saves', () => {
     const g = sandbox(9, true);
     // the sandbox's grants are not commands; replay the same grants first
     must(g, { k: 'place', kind: 'miner', x: 2, y: 3, rot: 0 });
-    must(g, { k: 'place', kind: 'heap', x: 3, y: 4, rot: 0 });
+    if (!g.entAt(3, 4)) must(g, { k: 'place', kind: 'heap', x: 3, y: 4, rot: 0 }); // the start layout has one now
     g.step(500);
     must(g, { k: 'place', kind: 'miner', x: 1, y: 2, rot: 3 });
     belt(g, 1, 1, 5, 0);

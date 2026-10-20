@@ -86,7 +86,7 @@ function linked(app: App): { id: ScreenName; label: string; icon: IconName; tip:
   const g = app.game;
   const out: { id: ScreenName; label: string; icon: IconName; tip: string }[] = [{ id: 'orders', label: 'Orders', icon: 'orders', tip: 'Customers and their orders (O)' }];
   if (g.done('folding')) out.push({ id: 'modules', label: 'Modules', icon: 'fold', tip: 'Your folded designs: stamp, place, unfold (I)' });
-  if (g.done('coalSeams')) out.push({ id: 'codex', label: 'Codex', icon: 'codex', tip: "Unit 7's Codex: a first delivery of each item pays 100x" });
+  if (g.done('coalSeams')) out.push({ id: 'codex', label: 'Codex', icon: 'codex', tip: "Unit 7's Codex: a first delivery of each item pays 30x" });
   if (g.done('coalSeams')) out.push({ id: 'survey', label: 'Survey', icon: 'survey', tip: 'The Survey Office: deposit claims for source modules' });
   if (g.done('greatDrill') || g.s.mega.stage > 0) out.push({ id: 'mega', label: 'Drill', icon: 'mega', tip: 'The Megaproject: the Great Drill' });
   return out;

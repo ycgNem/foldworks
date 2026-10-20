@@ -8,7 +8,7 @@ import { play, spread, describe2, SEEDS } from './pace-helpers';
 
 const NO_HEAPS: Step[] = [
   { k: 'upgrade', id: 'bellows' },
-  { k: 'place', kind: 'heap', x: 3, y: 4, rot: 3 },
+  { k: 'place', kind: 'heap', x: 3, y: 4, rot: 0 }, // the start layout's
   { k: 'place', kind: 'miner', x: 2, y: 3, rot: 0 },
   { k: 'place', kind: 'miner', x: 2, y: 2, rot: 0 },
   { k: 'place', kind: 'smelter', x: 3, y: 2, rot: 0 },

@@ -5,7 +5,7 @@
 // the per-product price, Machine Kits and claims explained; unfold, place, rename) with a ledger
 // beside it, the Factory floor's store column and reports, the offline report, and the slice's
 // closing card. Reads the App and the Game; changes the game only through App.act.
-import { C } from '../data/palette';
+import { C, rgba } from '../data/palette';
 import { ITEMS, itemName, type ItemId } from '../data/items';
 import { FACTORY } from '../data/land';
 import { ORDER } from '../data/orders';
@@ -17,20 +17,44 @@ import { TICK_RATE } from '../engine/time';
 import { Num } from '../engine/num';
 import { sheet, itemIcon, hasArt, spriteName } from '../render/sprites';
 import { mainOutput, megaFrac } from '../render/factory';
-import { auditTicks, projectAudit, entsIn } from '../sim/systems/audits';
+import { auditTicks, projectAudit, entsIn, gradedAudit } from '../sim/systems/audits';
 import { BUILD } from '../data/machines';
 import { gradeFAudit } from '../sim/systems/nested';
 import { inBill, defaultName, stampCost, stampRefusal, unfoldRefusal, fname, feedsDock, productCopies, kitsFor, mainItem, sliceEndParts } from '../sim/systems/modules';
 import { claimsHeld, claimsUsed, oresOf, copiesOf } from '../sim/systems/claims';
-import type { AuditResult, Box, FEnt, ModuleDesign } from '../sim/world';
+import type { AuditResult, AuditState, Box, FAuditState, FEnt, ModuleDesign } from '../sim/world';
 import { frame, card, button, bar, uiIcon, portrait, coinIcon } from './chrome';
-import { icon, perMin as perMinW, screenHeader, cells, fmt } from './widgets';
+import { icon, perMin as perMinW, screenHeader, cells, fmt, rays } from './widgets';
 import type { Layout } from './layout';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
 
-const GRADE_ORDER = ['S', 'A', 'B', 'C', 'D'];
-const GRADE_COL: Record<string, string> = { S: C.gold, A: C.leaf, B: C.teal1, C: C.copper2, D: C.pipRed };
+/** the grade art's frame order (S+ is the sixth frame, drawn after the first five) */
+const GRADE_ORDER = ['S', 'A', 'B', 'C', 'D', 'S+'];
+/** best first, for sorting */
+export const GRADE_RANK = ['S+', 'S', 'A', 'B', 'C', 'D'];
+export const GRADE_COL: Record<string, string> = { 'S+': C.gold, S: C.gold, A: C.leaf, B: C.teal1, C: C.copper2, D: C.pipRed };
+
+/** The grade art's frame for a letter (S+ falls back to S, with a plus drawn over it, until its
+ * own frame exists). */
+function gradeFrame(letter: string): { img: CanvasImageSource; plus: boolean } {
+  const fr = sheet('ui_grade').frames;
+  const i = GRADE_ORDER.indexOf(letter);
+  if (i >= 0 && i < fr.length) return { img: fr[i], plus: false };
+  return { img: fr[0], plus: letter === 'S+' };
+}
+
+/** A gold plus beside an S emblem drawn at (x, y, size). */
+function drawPlus(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  const u = Math.max(1, Math.round(size / 16));
+  const cx = x + size - 3 * u, cy = y + 3 * u;
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(cx - 3 * u, cy - u * 2, 6 * u, 4 * u);
+  ctx.fillRect(cx - u * 2, cy - 3 * u, 4 * u, 6 * u);
+  ctx.fillStyle = C.gold;
+  ctx.fillRect(cx - 2 * u, cy - u, 4 * u, 2 * u);
+  ctx.fillRect(cx - u, cy - 2 * u, 2 * u, 4 * u);
+}
 
 export const perMin = perMinW;
 
@@ -45,8 +69,11 @@ function coinPerMin(outs: Partial<Record<ItemId, number>>, mult = 1): number {
 
 /** A grade letter as the art's 32x32 sprite drawn at `size`, or text. */
 function gradeIcon(app: App, letter: string, x: number, y: number, size: number) {
-  if (hasArt('ui_grade')) app.ui.ctx.drawImage(sheet('ui_grade').frames[GRADE_ORDER.indexOf(letter)], x, y, size, size);
-  else app.ui.text(letter, x + size / 2 - 2, y + size / 2 - 4, GRADE_COL[letter] ?? C.bone);
+  if (hasArt('ui_grade')) {
+    const f = gradeFrame(letter);
+    app.ui.ctx.drawImage(f.img, x, y, size, size);
+    if (f.plus) drawPlus(app.ui.ctx, x, y, size);
+  } else app.ui.text(letter, x + size / 2 - 2, y + size / 2 - 4, GRADE_COL[letter] ?? C.bone);
 }
 
 // ------------------------------------------------------------------ a text field
@@ -80,108 +107,187 @@ export function textField(app: App, id: string, x: number, y: number, w: number,
   return focused ? app.hud.draft : value;
 }
 
-// ------------------------------------------------------------------ the audit badge
+// ------------------------------------------------------------------ the audit badges
 
-/** While a box is measured: a ring that runs down 70 s, the projected grade with live U/W/C bars
- * and their share of the score, the coin a minute the line makes, and Cancel. The audit on the
- * other floor shows as a small chip with a Go button. */
+/** The graded Workshop audit the grade card shows: the one picked (by its badge), else the first. */
+export function selectedAudit(app: App): AuditState | null {
+  const g = app.game;
+  const a = app.gradeId !== null ? g.s.audits.find((q) => q.id === app.gradeId && q.result) : null;
+  return a ?? gradedAudit(g);
+}
+
+/** Open the grade card for a Workshop audit (its stamp falls again). */
+export function openGrade(app: App, id: number) {
+  app.gradeId = id;
+  app.panel = 'grade';
+  app.gradeAt = app.ui.time;
+  app.nameDraft = null;
+  app.hud.stamped = false;
+}
+
+type AnyAudit = AuditState | FAuditState;
+
+/** A box's rect on screen, in UI px. */
+function boxOnScreen(app: App, b: Box): Rect {
+  const p0 = app.renderer.toScreen(b.x, b.y), p1 = app.renderer.toScreen(b.x + b.w, b.y + b.h);
+  const k = app.ui.scale;
+  return { x: p0.x / k - 3, y: p0.y / k - 3, w: (p1.x - p0.x) / k + 6, h: (p1.y - p0.y) / k + 6 };
+}
+
+function overlapArea(a: Rect, b: Rect): number {
+  const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  return w > 0 && h > 0 ? w * h : 0;
+}
+
+/** Every audit on this floor as a compact badge (a ring running down the 70 s, the projected
+ * grade's parts as one stacked bar, the grade emblem once graded), in a row along the bottom of
+ * the floor view, or the top when the bottom would cover a box being audited or dragged. A
+ * graded badge opens its own grade card; a running one shows its box. The audits on the other
+ * floor show as a chip with a Go button. */
 export function auditBadge(app: App, L: Layout) {
   const ui = app.ui;
   const g = app.game;
   const ws = app.floor === 'workshop';
-  const here = ws ? g.s.audit : g.s.faudit;
-  const there = ws ? g.s.faudit : g.s.audit;
   const c = L.center;
-  if (!here) {
-    if (!there) return;
-    const left = Math.max(0, Math.ceil((auditTicks() - there.t) / TICK_RATE));
-    const s = there.result ? `Graded ${there.result.grade.letter} on the ${ws ? 'Factory floor' : 'Workshop'}` : `Audit on the ${ws ? 'Factory floor' : 'Workshop'}: ${left} s`;
+  const here: AnyAudit[] = ws ? g.s.audits : g.s.faudit ? [g.s.faudit] : [];
+  const there: AnyAudit[] = ws ? (g.s.faudit ? [g.s.faudit] : []) : g.s.audits;
+  let topY = c.y + 20;
+  // the other floor: one chip, top right
+  if (there.length) {
+    const graded = there.filter((a) => a.result).length;
+    const first = there.find((a) => a.result) ?? there[0];
+    const left = Math.max(0, Math.ceil((auditTicks() - first.t) / TICK_RATE));
+    const where = ws ? 'Factory floor' : 'Workshop';
+    const s = graded ? `${graded} graded on the ${where}` : there.length > 1 ? `${there.length} audits on the ${where}` : `Audit on the ${where}: ${left} s`;
     const w = Math.min(c.w - 8, textWidth(s) + 52);
-    const x = c.x + Math.floor((c.w - w) / 2), y = c.y + 20;
+    const x = c.x + c.w - w - 4, y = c.y + 4;
     frame(ui, x, y, w, 18);
     ui.clip(x + 4, y, w - 44, 18);
-    ui.text(s, x + 6, y + 6, there.result ? C.gold : C.teal1);
+    ui.text(s, x + 6, y + 6, graded ? C.gold : C.teal1);
     ui.unclip();
-    if (button(ui, 'gotoAudit', x + w - 38, y + 3, 34, 12, 'Go', { gold: !!there.result })) {
+    if (button(ui, 'gotoAudit', x + w - 38, y + 3, 34, 12, 'Go', { gold: !!graded, pulse: !!graded })) {
       app.setFloor(ws ? 'factory' : 'workshop', true);
-      app.lookAt(there.box.x + there.box.w / 2, there.box.y + there.box.h / 2);
+      app.lookAt(first.box.x + first.box.w / 2, first.box.y + first.box.h / 2);
     }
-    return;
+    topY = y + 22;
   }
-  const w = Math.min(236, c.w - 8), h = 64;
-  const x = c.x + Math.floor((c.w - w) / 2), y = c.y + 20;
-  frame(ui, x, y, w, h);
-  const total = auditTicks();
-  const f = Math.min(1, here.t / total);
-  // the ring
-  const cx = x + 20, cy = y + 22, rad = 13;
+  if (!here.length) return;
+  const n = here.length, gap = 3, bh = 32;
+  const bw = Math.min(118, Math.floor((c.w - 8 - gap * (n - 1)) / n));
+  const rowW = n * bw + (n - 1) * gap;
+  const x0 = c.x + Math.floor((c.w - rowW) / 2);
+  // the row goes where it covers the least of the boxes on the floor (the critic: the old badge
+  // hid the top boxes): the bottom first, then the top
+  const boxes = here.map((a) => boxOnScreen(app, a.box));
+  const drag = app.dragBox();
+  if (drag) boxes.push(boxOnScreen(app, drag));
+  const head = ws ? 11 : 0;
+  const cost = (y: number) => boxes.reduce((s, b) => s + overlapArea(b, { x: x0, y: y - head, w: rowW, h: bh + head }), 0);
+  const bottomY = c.y + c.h - bh - 4, upY = topY + head;
+  const y = cost(bottomY) <= cost(upY) ? bottomY : upY;
+  // "2/3 audits": a tab on the row's corner
+  if (ws) {
+    const graded = here.filter((a) => a.result).length;
+    const s = `Audits ${n}/${RULES.maxAudits.value}${graded ? `  ${graded} graded` : ''}`;
+    const tw = textWidth(s) + 8;
+    ui.fill(x0, y - 11, tw, 11, C.ink);
+    ui.fill(x0 + 1, y - 10, tw - 2, 10, C.shadow);
+    ui.fill(x0 + 1, y - 10, tw - 2, 1, graded ? C.brass1 : C.teal0);
+    ui.text(s, x0 + 4, y - 9, graded ? C.gold : C.teal1);
+    ui.hint(x0, y - 11, tw, 11, `Up to ${RULES.maxAudits.value} lines can be audited at once, in boxes that never overlap. Click a graded badge to fold it.`, 180);
+  }
+  here.forEach((a, i) => auditChip(app, a, ws, x0 + i * (bw + gap), y, bw, bh));
+}
+
+/** One audit's badge. */
+function auditChip(app: App, a: AnyAudit, ws: boolean, x: number, y: number, w: number, h: number) {
+  const ui = app.ui;
+  const g = app.game;
   const ctx = ui.ctx;
+  const total = auditTicks();
+  const f = Math.min(1, a.t / total);
+  const warm = !a.result && a.t < warmTicks();
+  const res: AuditResult | null = a.result ?? (ws ? projectAudit(g, a as AuditState) : a.t > warmTicks() + TICK_RATE ? gradeFAudit(g) : null);
+  const hov = ui.hover(x, y, w, h);
+  frame(ui, x, y, w, h);
+  ui.region(x, y, w, h, 'button');
+  if (a.result) {
+    // a graded badge glows gold and asks to be clicked
+    ui.fill(x + 3, y + 3, w - 6, h - 6, C.gold, 0.12 + 0.1 * Math.sin(ui.time * 6));
+    if (Math.floor(ui.time * 2) % 2 === 0) ui.fill(x + 3, y + 3, w - 6, 1, C.gold);
+  } else if (hov) ui.fill(x + 3, y + 3, w - 6, h - 6, C.teal1, 0.1);
+  // the ring
+  const cx = x + 15, cy = y + 16, rad = 11;
   ctx.fillStyle = C.ink;
   ctx.beginPath(); ctx.arc(cx, cy, rad + 2, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = C.shadow;
   ctx.lineWidth = 3;
+  ctx.strokeStyle = C.shadow;
   ctx.beginPath(); ctx.arc(cx, cy, rad - 1, 0, Math.PI * 2); ctx.stroke();
-  ctx.strokeStyle = here.result ? C.gold : here.t < warmTicks() ? C.hull2 : C.teal1;
+  ctx.strokeStyle = a.result ? C.gold : warm ? C.hull2 : C.teal1;
   ctx.beginPath(); ctx.arc(cx, cy, rad - 1, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f); ctx.stroke();
   ctx.lineWidth = 1;
-  const res: AuditResult | null = here.result ?? (ws ? projectAudit(g) : here.t > warmTicks() + TICK_RATE ? gradeFAudit(g) : null);
-  const left = Math.max(0, Math.ceil((total - here.t) / TICK_RATE));
-  if (here.result) gradeIcon(app, here.result.grade.letter, cx - 8, cy - 8, 16);
+  const left = Math.max(0, Math.ceil((total - a.t) / TICK_RATE));
+  if (a.result) gradeIcon(app, a.result.grade.letter, cx - 8, cy - 8, 16);
   else ui.text(`${left}`, cx - Math.floor(textWidth(String(left)) / 2), cy - 3, C.bone);
-  ui.text(here.result ? 'graded' : 's left', cx, y + 40, C.hull2, { align: 'center' });
-  // the title: what is being measured
-  const tx = x + 40;
-  const n = here.ids.length;
-  let busy = 0;
-  for (const id of here.ids) {
-    const m = ws ? g.byId.get(id) : g.fById.get(id);
-    if (m && m.state === 'work') busy++;
+  // the words
+  const tx = x + 30, tr = x + w - 4;
+  const canCancel = !a.result;
+  // a running audit: the art director's stopwatch ticking beside its name
+  const watch = !a.result && hasArt('ui_audit');
+  if (watch) {
+    const sw = sheet('ui_audit');
+    ctx.drawImage(sw.frames[Math.floor(ui.time * (sw.fps || 4)) % sw.frames.length], tx, y + 2);
   }
-  const warm = here.t < warmTicks();
-  const title = here.result ? 'Graded!' : warm ? `Warming up: ${Math.ceil((warmTicks() - here.t) / TICK_RATE)} s` : `${ws ? 'Line' : 'Group'} ${here.box.w}x${here.box.h}: ${busy}/${n} ${ws ? 'busy' : 'running'}`;
-  ui.text(title, tx, y + 5, here.result ? C.gold : warm ? C.hull2 : C.teal1);
-  // the projection: a grade letter with the live parts beside it
-  const gx = x + w - 30;
+  ui.clip(tx, y, tr - tx - (canCancel ? 10 : 0), h);
+  const full = `${ws ? 'Line' : 'Group'} ${a.box.w}x${a.box.h}`;
+  const room = tr - tx - (canCancel ? 10 : 0) - (watch ? 14 : 0);
+  ui.text(a.result ? 'Graded!' : warm ? (textWidth('Warming up') <= room ? 'Warming up' : 'Warm-up') : textWidth(full) <= room ? full : `${a.box.w}x${a.box.h}`, tx + (watch ? 14 : 0), y + 4, a.result ? C.gold : warm ? C.hull2 : C.teal1);
+  ui.unclip();
+  ui.clip(tx, y, tr - tx, h);
+  if (a.result) {
+    const s = `${a.result.grade.letter} x${a.result.grade.mult.toFixed(2)}`;
+    ui.text(s, tx, y + 13, GRADE_COL[a.result.grade.letter] ?? C.bone);
+    if (tx + textWidth(s) + 6 + textWidth('fold!') <= tr) ui.text('fold!', tr, y + 13, Math.floor(ui.time * 3) % 2 ? C.hot : C.bone, { align: 'right' });
+  } else if (res) {
+    ui.text('so far', tx, y + 13, C.hull2);
+    ui.text(res.grade.letter, tx + textWidth('so far') + 4, y + 13, GRADE_COL[res.grade.letter] ?? C.bone);
+  } else ui.text(warm ? `${Math.ceil((warmTicks() - a.t) / TICK_RATE)} s, then 60` : 'measuring', tx, y + 13, C.hull1);
+  ui.unclip();
+  // the score as one bar: U, W and C stacked in their weights
+  const bw = tr - tx;
+  ui.fill(tx, y + 23, bw, 5, C.ink);
   if (res) {
-    gradeIcon(app, res.grade.letter, gx, y + 4, 24);
-    ui.text(here.result ? 'final' : 'so far', gx + 12, y + 29, C.hull2, { align: 'center' });
-  } else {
-    ui.fill(gx, y + 4, 24, 24, C.ink);
-    ui.text('?', gx + 10, y + 12, C.hull2);
-    ui.text('soon', gx + 12, y + 29, C.hull1, { align: 'center' });
-  }
-  const parts: [string, number, number][] = res ? [['U', res.grade.u, SCORE_WEIGHTS.u], ['W', res.grade.w, SCORE_WEIGHTS.w], ['C', res.grade.c, SCORE_WEIGHTS.c]] : [['U', 0, SCORE_WEIGHTS.u], ['W', 0, SCORE_WEIGHTS.w], ['C', 0, SCORE_WEIGHTS.c]];
-  const bw = gx - 4 - (tx + 8) - 30;
-  let yy = y + 15;
-  for (const [k, v, wgt] of parts) {
-    ui.text(k, tx, yy, C.hull3);
-    if (res) bar(ui, tx + 8, yy + 1, bw, 6, v, v >= 0.9 ? C.leaf : v >= 0.6 ? C.pipYellow : C.pipRed);
-    else {
-      ui.fill(tx + 8, yy + 1, bw, 6, C.ink);
-      for (let i = 0; i < bw - 2; i += 4) if ((i / 4 + Math.floor(ui.time * 6)) % 2 === 0) ui.fill(tx + 9 + i, yy + 2, 2, 4, C.hull0);
+    let bx = tx + 1;
+    for (const [v, wgt, col] of [[res.grade.u, SCORE_WEIGHTS.u, C.leaf], [res.grade.w, SCORE_WEIGHTS.w, C.teal1], [res.grade.c, SCORE_WEIGHTS.c, C.brass1]] as [number, number, string][]) {
+      const pw = Math.round((bw - 2) * v * wgt);
+      ui.fill(bx, y + 24, pw, 3, col);
+      bx += pw;
     }
-    ui.text(res ? `+${(v * wgt).toFixed(2)}` : `x${wgt}`, gx - 4, yy, res ? C.bone : C.hull1, { align: 'right' });
-    yy += 9;
+  } else for (let i = 0; i < bw - 2; i += 4) if ((i / 4 + Math.floor(ui.time * 6)) % 2 === 0) ui.fill(tx + 1 + i, y + 24, 2, 3, C.hull0);
+  // cancel a running audit; a graded one is cancelled on its card
+  const aid = 'id' in a ? a.id : -1;
+  if (canCancel && button(ui, 'cancelAudit:' + aid, x + w - 13, y + 3, 10, 10, '', { tip: `Stop measuring this box; the ${ws ? 'line' : 'group'} keeps running.` })) {
+    app.act(ws ? { k: 'auditCancel', id: aid } : { k: 'fauditCancel' });
+    return;
   }
-  const hint = [{ text: ws ? 'Fold audit' : 'Nested fold audit', color: C.teal1 }, { text: `It runs for 70 s: 10 s to warm up, then 60 s measured. Score = 0.6 U (busy) + 0.2 W (waste handled) + 0.2 C (compact). The grade shown is the window so far.` }];
-  ui.hint(x, y, w, 44, hint, 200);
-  // the coin a minute the line makes (at the grade so far), and Cancel or See the grade
-  const by = y + h - 17;
-  const cpm = res ? coinPerMin(res.outs, res.grade.mult) : 0;
-  coinIcon(ui, tx, by + 3, false);
-  ui.text(res ? `${fmt(cpm)}/min` : 'measuring...', tx + 10, by + 3, res ? C.gold : C.hull1);
-  let ix = tx + 14 + textWidth(res ? `${fmt(cpm)}/min` : 'measuring...');
-  if (res) {
-    for (const [it, r] of (Object.entries(res.outs) as [ItemId, number][]).slice(0, 2)) {
-      const s = `${perMin(r * res.grade.mult)}`;
-      if (ix + 12 + textWidth(s) > x + w - 50) break;
-      ctx.drawImage(itemIcon(it), ix, by + 3);
-      ix += 13 + ui.text(s, ix + 10, by + 3, C.leaf);
+  if (canCancel) ui.text(ICON.cross, x + w - 11, y + 4, C.bone);
+  if (hov) {
+    const lines: { text: string; color?: string }[] = [{ text: a.result ? `Graded ${a.result.grade.letter}: click to open its card` : `${ws ? 'Fold audit' : 'Nested fold audit'}: ${left} s to go`, color: a.result ? C.gold : C.teal1 }];
+    if (res) {
+      lines.push({ text: `U ${Math.round(res.grade.u * 100)}% (x0.6), W ${Math.round(res.grade.w * 100)}% (x0.2), C ${Math.round(res.grade.c * 100)}% (x0.2): score ${res.grade.score.toFixed(2)}` });
+      lines.push({ text: `Worth ${fmt(coinPerMin(res.outs, res.grade.mult))} coin a minute at the Dock${a.result ? '' : ' at the grade so far'}.`, color: C.gold });
+    } else lines.push({ text: 'It runs 70 s: 10 s to warm up, then 60 s measured. The projected grade shows once the window opens.' });
+    if (!a.result) lines.push({ text: 'Click to look at its box.', color: C.hull2 });
+    ui.tip(lines, 210);
+    if (ui.clicked) {
+      ui.eat();
+      ui.sfx('click');
+      if (a.result) {
+        if (ws) openGrade(app, aid);
+        else { app.panel = 'fgrade'; app.gradeAt = ui.time; app.nameDraft = null; app.hud.stamped = false; }
+      } else app.lookAt(a.box.x + a.box.w / 2, a.box.y + a.box.h / 2);
     }
   }
-  if (here.result) {
-    if (button(ui, 'openGrade', x + w - 46, by, 42, 13, 'Grade', { gold: true, pulse: true, tip: 'Open the grade card' })) { app.panel = ws ? 'grade' : 'fgrade'; app.gradeAt = ui.time; app.nameDraft = null; app.hud.stamped = false; }
-  } else if (button(ui, 'cancelAudit', x + w - 46, by, 42, 13, 'Cancel', { tip: `Stop measuring; the ${ws ? 'line' : 'group'} keeps running.` })) app.act(ws ? { k: 'auditCancel' } : { k: 'fauditCancel' });
 }
 
 // ------------------------------------------------------------------ the grade card
@@ -201,13 +307,18 @@ interface GradeSpec {
   facts: string[];
   cancelLabel: string;
   cancelTip: string;
+  /** several graded audits: which one this is, and a way to step between them */
+  pager?: { i: number; n: number; go: (d: number) => void };
 }
 
 export function gradeCard(app: App, L: Layout) {
   const g = app.game;
-  const a = g.s.audit;
+  const a = selectedAudit(app);
   if (!a || !a.result) { app.panel = null; return; }
+  app.gradeId = a.id;
   const res = a.result;
+  const graded = g.s.audits.filter((q) => q.result);
+  const gi = graded.indexOf(a);
   drawGrade(app, L, {
     res,
     box: a.box,
@@ -219,13 +330,14 @@ export function gradeCard(app: App, L: Layout) {
       busy: res.busy[m!.id] ?? 0,
     })),
     defaultName: defaultName(scaled(res)),
-    fold: (name) => app.act({ k: 'fold', name }).ok,
-    cancel: () => app.act({ k: 'auditCancel' }),
+    fold: (name) => app.act({ k: 'fold', name, id: a.id }).ok,
+    cancel: () => app.act({ k: 'auditCancel', id: a.id }),
     foldTip: 'The machines go into a one-tile module; belts are refunded; the box empties.',
     unit: 'machines',
-    facts: [`Stamping copies costs the machines' price (${fmt(foldBill(app))} coin) x (1 + 0.5 n), n counted per product.`],
+    facts: [`Stamping copies costs the machines' price (${fmt(foldBill(app, a))} coin) x (1 + 0.5 n), n counted per product.`],
     cancelLabel: 'Keep the line',
     cancelTip: 'Cancel the audit. The line stays and keeps running; audit it again any time.',
+    pager: graded.length > 1 ? { i: gi, n: graded.length, go: (d) => { const q = graded[(gi + d + graded.length) % graded.length]; openGrade(app, q.id); } } : undefined,
   });
 }
 
@@ -260,9 +372,8 @@ export function fgradeCard(app: App, L: Layout) {
   });
 }
 
-/** The coin price of the machines in the Workshop audit's box (its stamp bill once folded). */
-function foldBill(app: App): number {
-  const a = app.game.s.audit;
+/** The coin price of the machines in a Workshop audit's box (its stamp bill once folded). */
+function foldBill(app: App, a: AuditState | null): number {
   if (!a) return 0;
   let bill = 0;
   for (const e of entsIn(app.game, a.box)) if (inBill(e.kind)) bill += BUILD[e.kind].cost;
@@ -273,18 +384,38 @@ function scaled(res: AuditResult): Partial<Record<ItemId, number>> {
   return Object.fromEntries(Object.entries(res.outs).map(([k, v]) => [k, (v ?? 0) * res.grade.mult])) as Partial<Record<ItemId, number>>;
 }
 
+/** The S+ moment (the grade card's stamp, the audit's last tick, the fold): gold everywhere. */
+export function celebrateTop(app: App) {
+  app.audio.sfx('fanfare');
+  app.audio.sfx('gradeS', 1, 1.26);
+  app.audio.sfx('codex', 0.8, 1.5);
+  app.renderer.fx.kick(9);
+  app.hud.confetti = Math.max(app.hud.confetti, 150);
+  app.hud.celebs.push({ kind: 'splus', t: 0, x: app.ui.w / 2, y: app.ui.h / 2 });
+  for (let i = 0; i < 120; i++) app.hud.rain.push({ x: Math.random() * app.ui.w, y: -Math.random() * app.ui.h * 0.7, vx: (Math.random() - 0.5) * 30, vy: 50 + Math.random() * 60, f: Math.floor(Math.random() * 8), spin: Math.random() * 6, gold: true });
+}
+
 function drawGrade(app: App, L: Layout, sp: GradeSpec) {
   const ui = app.ui;
   const res = sp.res;
   const gr = res.grade;
+  const top = gr.letter === 'S+';
   const O = L.overlay;
   ui.fill(O.x, O.y, O.w, O.h, C.ink, 0.6);
-  const w = Math.min(380, O.w - 12), h = Math.min(258, O.h - 8);
+  const w = Math.min(380, O.w - 12), h = Math.min(264, O.h - 8);
   const x = O.x + Math.floor((O.w - w) / 2), y = O.y + Math.floor((O.h - h) / 2);
   frame(ui, x, y, w, h);
   ui.fill(x + 3, y + 3, w - 6, 15, C.shadow);
+  if (top) ui.fill(x + 3, y + 17, w - 6, 1, Math.floor(ui.time * 4) % 2 ? C.gold : C.hot);
   uiIcon(ui, 'fold', x + 6, y + 2);
-  ui.text(sp.title, x + 26, y + 7, C.hot, { shadow: C.ink });
+  ui.text(sp.title, x + 26, y + 7, top ? C.gold : C.hot, { shadow: C.ink });
+  // several graded lines: step between their cards
+  if (sp.pager) {
+    const pw = 70, px = x + w - 6 - pw;
+    if (button(ui, 'gradePrev', px, y + 4, 14, 11, ICON.left, { tip: 'The previous graded line' })) sp.pager.go(-1);
+    ui.text(`${sp.pager.i + 1} of ${sp.pager.n}`, px + pw / 2, y + 6, C.gold, { align: 'center' });
+    if (button(ui, 'gradeNext', px + pw - 14, y + 4, 14, 11, ICON.right, { tip: 'The next graded line' })) sp.pager.go(1);
+  }
   // the stamp: it slams down from 3x, then the burst and confetti
   const t = ui.time - app.gradeAt;
   const k = t < 0.28 ? 3 - 2 * (t / 0.28) ** 2 : 1;
@@ -293,33 +424,59 @@ function drawGrade(app: App, L: Layout, sp: GradeSpec) {
   const sx = x + 8, sy = y + 22;
   if (t >= 0.28 && !app.hud.stamped) {
     app.hud.stamped = true;
-    app.audio.sfx(('grade' + gr.letter) as 'gradeS');
-    app.renderer.fx.kick(gr.letter === 'S' ? 6 : 3);
-    app.hud.confetti = gr.letter === 'S' || gr.letter === 'A' ? 60 : 16;
+    if (top) celebrateTop(app);
+    else {
+      app.audio.sfx(('grade' + gr.letter) as 'gradeS');
+      app.renderer.fx.kick(gr.letter === 'S' ? 6 : 3);
+      app.hud.confetti = gr.letter === 'S' || gr.letter === 'A' ? 60 : 16;
+    }
   }
   const ctx = ui.ctx;
   const half = 24 * S;
   const mx = sx + half, my = sy + half;
   const colW = 48 * S + 6;
   // the burst stays in the stamp's own column, under the title strip (the critic: it covered
-  // "Audit:", "Compact" and "Score")
+  // "Audit:", "Compact" and "Score"); S+ turns gold rays behind it
   ui.clip(x + 3, y + 18, colW + 6, 48 * S + 4);
+  if (top && t >= 0.28) rays(app, mx, my, 48 * S, C.gold, 16);
   if (t >= 0.28 && hasArt('fx_burst')) {
     const b = sheet('fx_burst');
     const fi = Math.min(b.frames.length - 1, Math.floor((t - 0.28) * 15));
     if ((t - 0.28) * 15 < b.frames.length + 6) ctx.drawImage(b.frames[fi], mx - 32 * S, my - 32 * S, 64 * S, 64 * S);
   }
   ui.unclip();
-  // the scale steps in whole numbers so the stamp stays crisp as it falls
-  const kk = Math.max(S, Math.round(k * S));
+  // the scale steps in whole numbers so the stamp stays crisp as it falls; it falls inside the
+  // card (clipped to it) so it never breaks out over the floor
+  const kk = Math.max(S, Math.min(S * 2, Math.round(k * S)));
   const big = 48 * kk;
   const ox = mx - big / 2, oy = my - big / 2;
+  ui.clip(x + 3, y + 18, w - 6, h - 21);
   if (hasArt('ui_stamp_ring')) ctx.drawImage(sheet('ui_stamp_ring').frames[0], ox, oy, big, big);
   else { ctx.fillStyle = GRADE_COL[gr.letter]; ctx.fillRect(ox, oy, big, big); }
-  if (hasArt('ui_grade')) ctx.drawImage(sheet('ui_grade').frames[GRADE_ORDER.indexOf(gr.letter)], ox + 8 * kk, oy + 8 * kk, 32 * kk, 32 * kk);
+  if (hasArt('ui_grade')) {
+    const f = gradeFrame(gr.letter);
+    ctx.drawImage(f.img, ox + 8 * kk, oy + 8 * kk, 32 * kk, 32 * kk);
+    if (f.plus) drawPlus(ctx, ox + 8 * kk, oy + 8 * kk, 32 * kk);
+  }
   else ui.text(gr.letter, mx - 4, my - 6, C.ink, { scale: 2 });
+  // S+: a glint sweeps across the stamp now and then
+  if (top && t >= 0.28) {
+    const sw = (ui.time * 0.7) % 2;
+    if (sw < 1) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(mx, my, 20 * S, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.fillStyle = rgba(C.bone, 0.55);
+      const gx = Math.round(mx - 24 * S + sw * 48 * S);
+      ctx.fillRect(gx, my - 24 * S, 2 * S, 48 * S);
+      ctx.fillRect(gx + 4 * S, my - 24 * S, S, 48 * S);
+      ctx.restore();
+    }
+  }
+  ui.unclip();
   confetti(app, mx, my);
-  ui.text(`Score ${gr.score.toFixed(2)}`, mx, sy + 48 * S + 4, C.bone, { align: 'center' });
+  ui.text(`Score ${gr.score.toFixed(2)}`, mx, sy + 48 * S + 4, top ? C.gold : C.bone, { align: 'center' });
   ui.text(`rates x${gr.mult.toFixed(2)}`, mx, sy + 48 * S + 14, gr.mult >= 1 ? C.leaf : C.pipRed, { align: 'center' });
   // the three parts
   const px = x + 14 + colW, pw = x + w - 10 - px;
@@ -351,37 +508,48 @@ function drawGrade(app: App, L: Layout, sp: GradeSpec) {
   rates('Makes', res.outs, C.leaf);
   rates('Takes', res.ins, C.copper2);
   ui.text(`Worth ${fmt(coinPerMin(res.outs, gr.mult))} coin a minute at the Dock`, px, yy, C.gold);
-  yy += 11;
-  // each thing in the box and how busy it was
+  yy += 12;
+  // each thing in the box and how busy it was: beside the stamp when there is room
   const ax = x + 10, aw = w - 20;
-  yy = Math.max(yy + 2, sy + 48 * S + 26);
-  {
-    let mxx = ax;
-    ui.text('Inside', mxx, yy + 4, C.hull2);
+  const stampBottom = sy + 48 * S + 24;
+  const inside = (ix0: number, iy: number, right: number) => {
+    let mxx = ix0;
+    ui.text('Inside', mxx, iy + 4, C.hull2);
     mxx += textWidth('Inside') + 6;
     for (const p of sp.parts) {
-      if (mxx + 20 > ax + aw) break;
-      ui.fill(mxx, yy, 18, 18, C.ink);
-      p.draw(mxx + 1, yy + 1);
-      ui.fill(mxx, yy + 19, 18, 3, C.ink);
-      ui.fill(mxx + 1, yy + 20, Math.round(16 * p.busy), 1, p.busy >= 0.9 ? C.leaf : p.busy >= 0.6 ? C.pipYellow : C.pipRed);
-      ui.hint(mxx, yy, 18, 22, `${p.name}: busy ${Math.round(p.busy * 100)}%`, 140);
+      if (mxx + 20 > right) break;
+      ui.fill(mxx, iy, 18, 18, C.ink);
+      p.draw(mxx + 1, iy + 1);
+      ui.fill(mxx, iy + 19, 18, 3, C.ink);
+      ui.fill(mxx + 1, iy + 20, Math.round(16 * p.busy), 1, p.busy >= 0.9 ? C.leaf : p.busy >= 0.6 ? C.pipYellow : C.pipRed);
+      ui.hint(mxx, iy, 18, 22, `${p.name}: busy ${Math.round(p.busy * 100)}%`, 140);
       mxx += 21;
     }
+  };
+  if (yy + 22 <= stampBottom) {
+    inside(px, yy, px + pw);
+    yy = stampBottom + 2;
+  } else {
+    yy = Math.max(yy + 2, stampBottom + 2);
+    inside(ax, yy, ax + aw);
     yy += 26;
   }
-  // what would raise it
+  // what would raise it: the advice gets the card's width, each line saying what it is worth
   const by = y + h - 36;
-  if (res.advice.length && gr.letter !== 'S') {
-    ui.text('To raise it:', ax, yy, C.gold);
-    yy += 10;
-    for (const l of res.advice.slice(0, 2)) {
-      if (yy + 20 > by - 2) break;
-      yy += ui.para(`${ICON.right} ${l}`, ax, yy, aw, C.bone) + 1;
-    }
-  } else if (gr.letter === 'S') {
-    ui.text('A perfect fold. The Gazette will hear of this.', ax, yy, C.gold);
+  const lines = res.advice.slice(0, 3);
+  if (top) {
+    ui.text(`${ICON.star} S+: the top grade. A flawless line, x${gr.mult.toFixed(2)} for good.`, ax, yy, C.gold, { shadow: C.ink });
     yy += 12;
+  } else if (lines.length) {
+    ui.text(gr.letter === 'S' ? 'One step to S+:' : 'To raise it:', ax, yy, C.gold);
+    yy += 11;
+  }
+  if (!top) {
+    for (const l of lines) {
+      const n = wrapText(`${ICON.right} ${l}`, aw).length;
+      if (yy + n * 10 > by - 2) break;
+      yy += ui.para(`${ICON.right} ${l}`, ax, yy, aw, C.bone) + 2;
+    }
   }
   // what the fold does, in numbers, while there is room
   const facts: string[] = [`${sp.parts.length} ${sp.unit} on ${res.boxTiles} tiles become one tile, running at these rates for good.`];
@@ -406,15 +574,16 @@ function drawGrade(app: App, L: Layout, sp: GradeSpec) {
   ui.text('Name', ax, by + 3, C.hull2);
   app.nameDraft = textField(app, 'foldName', ax + 26, by, aw - 26, app.nameDraft);
   const bw = Math.floor((aw - 4) / 2);
-  if (button(ui, 'doFold', ax, by + 16, bw, 15, 'Fold it!', { gold: true, pulse: true, tip: sp.foldTip })) {
+  if (button(ui, 'doFold', ax, by + 16, bw, 15, top ? 'Fold it! S+' : 'Fold it!', { gold: true, pulse: true, tip: sp.foldTip })) {
     app.hud.focus = null;
     app.input.typing = null;
-    if (sp.fold(app.nameDraft)) { app.panel = null; app.hud.stamped = false; }
+    if (sp.fold(app.nameDraft)) { app.panel = null; app.hud.stamped = false; app.gradeId = null; }
   }
   if (button(ui, 'cancelFold', ax + bw + 4, by + 16, bw, 15, sp.cancelLabel, { tip: sp.cancelTip })) {
     sp.cancel();
     app.panel = null;
     app.hud.stamped = false;
+    app.gradeId = null;
   }
 }
 
@@ -643,14 +812,20 @@ function ledger(app: App, x: number, y: number, w: number, h: number, foot = 0) 
       yy += 17;
     }
   }
-  // the slice's end, until it is reached
-  if (!g.flag('sliceEnd') && yy + 34 <= end) {
-    const p = sliceEndParts(g);
-    ui.text('The Factory goal', inner.x, yy, C.hot);
+  // the slice's end, until it is reached: Bramble's Gizmo Festival, by the Factory Dock alone
+  const fest = ORDER.gizmoFestival;
+  if (!g.flag('sliceEnd') && fest && yy + 34 <= end) {
+    const want = fest.wants.gizmo ?? 400;
+    const have = Math.min(want, Math.floor(g.s.orders.progress.gizmoFestival?.gizmo?.toNumber() ?? 0));
+    const gizmoMod = g.s.factory.ents.some((m) => { const q = m.kind === 'module' ? g.design(m.design) : null; return !!q && mainItem(q) === 'gizmo' && feedsDock(g, m); });
+    ui.text('The Gizmo Festival', inner.x, yy, C.hot);
     yy += 10;
-    ui.text(`${p.designs >= 3 ? ICON.check : ICON.cross} ${Math.min(3, p.designs)}/3 products running`, inner.x, yy, p.designs >= 3 ? C.leaf : C.bone);
+    ui.ctx.drawImage(itemIcon('gizmo'), inner.x, yy);
+    bar(ui, inner.x + 11, yy + 1, inner.w - 50, 6, have / want, C.leaf);
+    ui.text(`${have}/${want}`, inner.x + inner.w, yy, C.gold, { align: 'right' });
     yy += 10;
-    ui.text(`${p.chained ? ICON.check : ICON.cross} one module feeding another`, inner.x, yy, p.chained ? C.leaf : C.bone);
+    ui.text(`${gizmoMod ? ICON.check : ICON.cross} a Gizmo module to the Factory Dock`, inner.x, yy, gizmoMod ? C.leaf : C.bone);
+    ui.hint(inner.x, yy - 21, inner.w, 31, `Bramble's last order of the slice: ${want} Gizmos, counted only at the Factory Dock. Fold a Gizmo line and the gear and wire lines that feed it, place them, and trunk the Gizmos into the Factory Dock.`, 180);
     yy += 10;
   } else {
     const tip = 'Stamps grow by product, not design: a better line for the same product doesn\'t reset the price.';
@@ -772,6 +947,12 @@ export function factoryReport(app: App, e: FEnt): { text: string; color?: string
     const where = !r?.to ? 'its front leads nowhere: lay a trunk to the Factory Dock' : r.to.kind === 'module' ? `${fname(g, r.to)} does not take it` : 'the trunk is full';
     out.push({ text: `Blocked: ${ITEMS[e.why as ItemId]?.name.toLowerCase() ?? 'output'} has nowhere to go (${where})`, color: C.pipRed });
   } else out.push({ text: 'Idle', color: C.hull2 });
+  if (g.done('overdrive')) {
+    const od = e.od ?? 0, cool = e.cool ?? 0;
+    if (od > 0) out.push({ text: `Overdriven: ${RULES.overdriveMult.value}x for ${Math.ceil(od / TICK_RATE)} s more`, color: C.glow });
+    else if (cool > 0) out.push({ text: `Cooling: Overdrive again in ${Math.ceil(cool / TICK_RATE)} s`, color: C.hull2 });
+    else out.push({ text: `Overdrive: click to run it and every module trunked to it ${RULES.overdriveMult.value}x for ${RULES.overdriveSeconds.value} s`, color: C.glow });
+  }
   out.push({ text: `Makes ${Object.entries(d.outs).map(([k, v]) => `${perMin(v ?? 0)} ${ITEMS[k as ItemId].name.toLowerCase()}`).join(', ')} a minute at full speed` });
   if (Object.keys(d.ins).length) out.push({ text: `Takes ${Object.entries(d.ins).map(([k, v]) => `${perMin(v ?? 0)} ${ITEMS[k as ItemId].name.toLowerCase()}`).join(', ')} a minute at its back` });
   if (g.routes.some((q) => q.from === e && q.by && q.to)) out.push({ text: 'Byproducts leave by its side trunk', color: C.violet });
@@ -881,9 +1062,9 @@ export function sliceEndCard(app: App, L: Layout) {
   confetti(app, x + 36, y + 40);
   const parts = sliceEndParts(g);
   const prods = factoryProducts(app);
-  ui.text('The swamp has a Factory!', x + 70, y + 26, C.hot);
+  ui.text('The Gizmo Festival is on!', x + 70, y + 26, C.hot);
   const named = listNames(prods.slice(0, 4));
-  const quote = `"${named[0].toUpperCase() + named.slice(1)}, humming into one Dock${chainedNow(app) ? ', one module feeding the next' : ''}. I understand none of it and I love all of it. Ribbit!" Mayor Bramble`;
+  const quote = `"Four hundred Gizmos! ${named[0].toUpperCase() + named.slice(1)}, humming into one Dock${chainedNow(app) ? ', one module feeding the next' : ''}. I understand none of it and I love all of it. Ribbit!" Mayor Bramble`;
   ui.para(quote, x + 70, y + 38, w - 82, C.bone);
   // what the player built: the products, side by side
   let yy = y + 84;
@@ -899,7 +1080,7 @@ export function sliceEndCard(app: App, L: Layout) {
   }
   yy += 16;
   const secs = Math.floor(g.seconds);
-  const best = g.s.designs.map((d) => d.grade.letter).sort((a, b) => GRADE_ORDER.indexOf(a) - GRADE_ORDER.indexOf(b))[0] ?? '-';
+  const best = g.s.designs.map((d) => d.grade.letter).sort((a, b) => GRADE_RANK.indexOf(a) - GRADE_RANK.indexOf(b))[0] ?? '-';
   const rows: [string, string][] = [
     ['Time', `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`],
     ['Coin earned', g.s.earned.format()],

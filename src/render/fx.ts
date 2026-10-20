@@ -22,6 +22,14 @@ export class Fx {
   /** reduced motion: no shake, fewer particles */
   calm = false;
 
+  /** Drop the effects placed on a floor (particles, pops, rings): they are in that floor's
+   * coordinates, and would play over the other floor after a switch. */
+  clearWorld() {
+    this.parts = [];
+    this.pops = [];
+    this.rings = [];
+  }
+
   burst(x: number, y: number, n: number, colors: string[], speed = 30, grav = 60, size = 1, life = 0.6) {
     if (this.calm) n = Math.ceil(n / 3);
     for (let i = 0; i < n; i++) {
@@ -107,8 +115,11 @@ export class Fx {
   }
 }
 
-/** seconds a fold animation lasts on the floor (the flight to the tab is a Flyer after it) */
-export const FOLD_DUR = 0.9;
+/** seconds a fold animation lasts on the floor (the flight to the tab is a Flyer after it): the
+ *  crease and the corners, the squeeze to a tile, then the flash and the module's pop */
+export const FOLD_DUR = 1.3;
+/** the share of FOLD_DUR at which the packet becomes a tile (the flash) */
+export const FOLD_FLASH = 0.68;
 
 export function fmtShort(v: number): string {
   if (v < 10 && v !== Math.floor(v)) return v.toFixed(1);

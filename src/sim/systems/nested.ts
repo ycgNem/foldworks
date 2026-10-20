@@ -50,6 +50,10 @@ export function ffoldRefusal(g: Game, b: Box): string | null {
   const mods = ents.filter((e) => e.kind === 'module');
   if (mods.length < 2) return 'Box at least two modules: a nested fold folds a group';
   for (const m of mods) if (g.design(m.design)?.depth === 2) return `${fname(g, m)} is folded from modules already: depth 2 is the limit`;
+  // a group, not a pile: at least one module inside must feed another inside (two unrelated
+  // modules in a box would stack their grades for nothing; the Milestone 3 gate review)
+  const ids = new Set(mods.map((m) => m.id));
+  if (!g.routes.some((r) => !r.by && r.to && ids.has(r.from.id) && ids.has(r.to.id))) return 'Box a group that works together: at least one module inside must feed another inside';
   return null;
 }
 

@@ -21,7 +21,7 @@ import { RECIPES } from '../../data/recipes';
 import { ITEMS, itemName, type ItemId } from '../../data/items';
 import { megaStage } from '../../data/megaprojects';
 import { DX, DY, ccw, cw, newFEnt, opposite, type Dir, type FEnt, type ModuleDesign } from '../world';
-import { entsIn, inBox } from './audits';
+import { entsIn, inBox, gradedAudit } from './audits';
 import { claimRefusal, oresOf } from './claims';
 import { hopperWantsSlag } from '../transfer';
 import { fauditFlow, fauditLock } from './nested';
@@ -55,8 +55,8 @@ export function defaultName(outs: Partial<Record<ItemId, number>>): string {
 }
 
 /** Fold the audited line into a module design (DESIGN.md §10 Fold). */
-export function foldAudited(g: Game, name: string | null): ActResult {
-  const a = g.s.audit;
+export function foldAudited(g: Game, name: string | null, id?: number): ActResult {
+  const a = id !== undefined ? g.s.audits.find((q) => q.id === id) : gradedAudit(g) ?? g.s.audits[0];
   if (!a) return no('Nothing is being audited');
   if (!a.result) return no('The audit is still running');
   const res = a.result;
@@ -92,7 +92,7 @@ export function foldAudited(g: Game, name: string | null): ActResult {
   g.s.ents = g.s.ents.filter((e) => !ids.has(e.id));
   g.s.coin = g.s.coin.add(refund);
   g.layoutDirty = true;
-  g.s.audit = null;
+  g.s.audits = g.s.audits.filter((q) => q !== a);
   g.bump('folds');
   if (res.grade.letter === 'S') g.bump('foldS');
   g.first('factoryOpen');
@@ -180,7 +180,7 @@ export function unfoldRefusal(g: Game, d: ModuleDesign): string | null {
     for (let x = d.box.x; x < d.box.x + d.box.w; x++) {
       if (!g.inb(x, y) || !g.owned(x, y)) return 'Its land is not yours any more';
       if (g.entAt(x, y)) return `The box at ${d.box.x},${d.box.y} is not empty: clear ${d.box.w}x${d.box.h} tiles there`;
-      if (g.s.audit && x >= g.s.audit.box.x && y >= g.s.audit.box.y && x < g.s.audit.box.x + g.s.audit.box.w && y < g.s.audit.box.y + g.s.audit.box.h) return 'An audit is running there';
+      if (g.s.audits.some((a) => inBox(a.box, x, y))) return 'An audit is running there';
     }
   let belts = 0;
   for (const p of d.parts) if (!inBill(p.kind)) belts += BUILD[p.kind].cost;
@@ -365,6 +365,36 @@ export function buildRoutes(g: Game): Route[] {
   return routes;
 }
 
+/** Overdrive a module and every module joined to it by trunk routes (DESIGN.md §18). */
+export function foverdrive(g: Game, x: number, y: number): ActResult {
+  if (!g.done('overdrive')) return no('Research Overdrive first');
+  const m = g.fentAt(x, y);
+  if (!m || m.kind !== 'module') return no('Click a module to overdrive it');
+  if ((m.od ?? 0) > 0) return no('Overdriven already');
+  if ((m.cool ?? 0) > 0) return no(`Cooling down: ${Math.ceil((m.cool ?? 0) / TICK_RATE)} s`);
+  if (fauditLock(g, x, y)) return no('Auditing: Overdrive would spoil the measurement');
+  const ticks = Math.round(RULES.overdriveSeconds.value * TICK_RATE);
+  const seen = new Set<number>([m.id]);
+  const todo = [m];
+  while (todo.length) {
+    const cur = todo.pop()!;
+    for (const r of g.routes) {
+      const other = r.from === cur ? r.to : r.to === cur ? r.from : null;
+      if (other && other.kind === 'module' && !seen.has(other.id)) { seen.add(other.id); todo.push(other); }
+    }
+  }
+  let n = 0;
+  for (const id of seen) {
+    const e = g.fById.get(id)!;
+    if ((e.od ?? 0) > 0 || (e.cool ?? 0) > 0 || fauditLock(g, e.x, e.y)) continue;
+    e.od = ticks;
+    n++;
+  }
+  g.bump('overdrives');
+  g.emit({ type: 'overdrive', x: m.x, y: m.y, value: m.id, d: n, floor: 'factory' });
+  return OK;
+}
+
 /** Does the route chain from m reach the Factory Dock (through other modules)? */
 export function feedsDock(g: Game, m: FEnt, depth = 0): boolean {
   if (depth > 40) return false;
@@ -388,7 +418,8 @@ export function runModules(g: Game) {
     if (m.kind !== 'module') continue;
     const d = g.design(m.design);
     if (!d) continue;
-    const k = drill > 1 && Object.keys(oresOf(g, d)).length ? drill : 1;
+    const k = (drill > 1 && Object.keys(oresOf(g, d)).length ? drill : 1) * ((m.od ?? 0) > 0 ? RULES.overdriveMult.value : 1);
+    if (m.od) { m.od--; if (!m.od) m.cool = Math.round(RULES.overdriveCool.value * TICK_RATE); } else if (m.cool) m.cool--;
     let frac = 1;
     let why: string | null = null;
     let kind: 'starved' | 'blocked' | null = null;
@@ -498,10 +529,11 @@ export function sliceEndParts(g: Game): { designs: number; chained: boolean; run
   return { designs, chained, running: live.length };
 }
 
+/** The slice ends when Bramble's Gizmo Festival is filled at the Factory Dock (DESIGN.md §11):
+ * Gizmos at rate need a Gizmo module fed by gear and wire modules, so the floor must be built. */
 function sliceEndCheck(g: Game) {
   if (g.flag('sliceEnd')) return;
-  const p = sliceEndParts(g);
-  if (p.designs >= 3 && p.chained && g.first('sliceEnd')) g.emit({ type: 'sliceEnd', value: p.running, floor: 'factory' });
+  if (g.s.orders.done.includes('gizmoFestival') && g.first('sliceEnd')) g.emit({ type: 'sliceEnd', value: sliceEndParts(g).running, floor: 'factory' });
 }
 
 /** Put the Megaproject Bay down once its 2x2 at the floor's corner is clear. */

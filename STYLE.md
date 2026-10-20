@@ -81,6 +81,22 @@ that roll and bump, pops and flying coins on every sale. Never a bare map with a
   go on the end and the first 20 never move. 16×16 drawings live in
   `pixel-art/ui/icons_m4.py`, 8×8 ones in `pixel-art/m2/sprites.py`.
 
+## Juice round additions (`pixel-art/m5/`, the S+ frame in `pixel-art/ui/letters.py`)
+
+- **S+** is `ui_grade` frame 6 (`order` gains `"S+"`; frames 1-5 never move). It is the only
+  grade with a mark outside its letter: a narrower S with a superscript gold plus. The plus is
+  the cue that survives colour blindness; the brighter face is the second cue.
+- **Paper is the fold's material.** `fx_fold` folds a bone sheet over the box (crease sweep,
+  corners in, sealed envelope, flash, sparkles); hull3/hull2 are the paper's back and shade.
+- **Overlays keep the read.** `module_od` (like `fx_overdrive`) never touches a module's icon
+  well (x, y 3..12) or the pip's top-right 5x5; it heats the brass band instead, redder than the
+  machine ring (copper1 bodies, glow and hot heads).
+- **Panel pictures are scenes, not sprites on a plate** (`mega_stage1` 48x48 at a whole 8x in
+  the Megaproject panel, `research_lab` 64x48 in the research card): a backdrop, a floor, one
+  lit subject, and 2-4 frames of small motion. They may use more colours (up to ~26).
+- **Research node icons** that had none live in their own named atlas `ui_research` (16x16),
+  not appended to `ui_icons`, so the 8x8 `ui_icons_small` list does not have to follow.
+
 ## Tools
 
 pixel-art-studio for everything (`pixel-art/<slug>/build.py`, every pixel placed on purpose).

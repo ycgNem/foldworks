@@ -15,6 +15,7 @@ import { orderFrac } from '../sim/systems/orders';
 import { trophyValue } from '../sim/systems/stats';
 import { Num } from '../engine/num';
 import { frame, card, button, bar, badge, portrait, uiIcon, type UIconName } from './chrome';
+import { fmt } from './widgets';
 import type { Layout } from './layout';
 import { modulesScreen, gradeCard, fgradeCard, offlineCard, sliceEndCard } from './fold';
 import { ordersScreen } from './orders';
@@ -77,10 +78,23 @@ const TREE: Record<ResearchId, [number, number, number?]> = {
 const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
   pressing: 'ironPlate', surveyEast: 'workshop', copperSmelting: 'copperIngot', wireDrawing: 'copperWire', gearcutting: 'gear',
   splitters: 'flow', buffers: 'orders', gizmoTheory: 'gizmo', slagBricks: 'slagBrick', folding: 'fold',
-  coalSeams: 'coal', steelmaking: 'steel', overdrive: 'ff', steamPower: 'factory', surveying: 'workshop', glassworks: 'glass',
+  coalSeams: 'coal', steelmaking: 'steel', overdrive: 'overdrive', steamPower: 'power', surveying: 'survey', glassworks: 'glass',
   crushing: 'gravel', concrete: 'concrete', refining: 'plastic', machineKits: 'machineKit', circuits: 'circuit',
-  heavyMachines: 'build', tuning: 'options', motors: 'motor', nestedFolds: 'fold', greatDrill: 'drillBit',
+  heavyMachines: 'heavy', tuning: 'mode', motors: 'motor', nestedFolds: 'fold', greatDrill: 'mega',
 };
+
+/** nodes with their own drawing in ui_research (the art director's), by frame */
+const NODE_ART: Partial<Record<ResearchId, number>> = { surveyEast: 0, splitters: 1, buffers: 2, nestedFolds: 3 };
+
+/** A research node's icon at 16 px (or 8 px when small). */
+function nodeIcon(ui: App['ui'], id: ResearchId, x: number, y: number, small = false) {
+  const art = NODE_ART[id];
+  const sz = small ? 8 : 16;
+  if (art !== undefined && hasArt('ui_research')) { ui.ctx.drawImage(sheet('ui_research').frames[art], x, y, sz, sz); return; }
+  const ic = NODE_ICON[id];
+  if (ic in ITEMS) ui.ctx.drawImage(itemIcon(ic), x, y, sz, sz);
+  else uiIcon(ui, ic as UIconName, x, y, small ? 1 : 0);
+}
 
 function starfield(app: App, r: Rect) {
   const ui = app.ui;
@@ -147,6 +161,7 @@ function researchTree(app: App, r: Rect) {
     }
   // the nodes
   let hovered: ResearchId | null = null;
+  const placed: { x: number; y: number; w: number }[] = [];
   for (const d of nodes) {
     const p = pos(d.id);
     const done = g.done(d.id), can = available(g, d.id), sel = g.s.research.selected === d.id;
@@ -180,15 +195,27 @@ function researchTree(app: App, r: Rect) {
       ctx.fillStyle = state ? C.shadow : C.ink;
       ctx.beginPath(); ctx.arc(p.x, p.y, 9, 0, Math.PI * 2); ctx.fill();
     }
-    const ic = NODE_ICON[d.id];
     // locked icons are drawn darkened (the art director's note)
     ctx.globalAlpha = state === 0 ? 0.35 : 1;
-    if (ic in ITEMS) ctx.drawImage(itemIcon(ic), x + 8, y + 8, 16, 16);
-    else uiIcon(ui, ic as UIconName, x + 8, y + 8);
+    nodeIcon(ui, d.id, x + 8, y + 8);
     ctx.globalAlpha = 1;
     if (!done && researchFrac(g, d.id) > 0) bar(ui, x + 4, y + 31, 24, 4, researchFrac(g, d.id), C.teal1);
-    const label = d.name;
-    ui.text(label, p.x, TREE[d.id][2] ? y + 36 : y - 9, done ? C.brass1 : can ? C.bone : C.hull1, { align: 'center', shadow: C.ink });
+    // the label goes above or below its node (TREE's flag), whichever does not run into another
+    // node, kept left of the info card; a long name loses its "The" when nothing else fits
+    const others = nodes.filter((q) => q.id !== d.id).map((q) => pos(q.id));
+    const place = (label: string, below: boolean) => {
+      const lw = textWidth(label);
+      const lx = Math.round(Math.min(p.x - lw / 2, r.x + r.w - info - 14 - lw));
+      const ly = below ? y + 36 : y - 9;
+      const free = others.every((o) => lx + lw < o.x - 13 || lx > o.x + 13 || ly + 9 < o.y - 13 || ly > o.y + 13)
+        && placed.every((q) => lx + lw < q.x || lx > q.x + q.w || ly + 9 < q.y || ly > q.y + 9);
+      return { label, lx, ly, lw, free };
+    };
+    const pref = !!TREE[d.id][2];
+    const short = d.name.replace(/^The /, '');
+    const spot = [place(d.name, pref), place(short, pref), place(d.name, !pref), place(short, !pref)].find((q) => q.free) ?? place(d.name, pref);
+    placed.push({ x: spot.lx, y: spot.ly, w: spot.lw });
+    ui.text(spot.label, spot.lx, spot.ly, done ? C.brass1 : can ? C.bone : C.hull1, { shadow: C.ink });
     if (hov && ui.clicked && (can || sel)) {
       ui.eat();
       app.act({ k: 'research', id: sel ? null : d.id });
@@ -198,8 +225,18 @@ function researchTree(app: App, r: Rect) {
   const show = hovered ?? g.s.research.selected ?? nodes.find((d) => available(g, d.id))?.id ?? null;
   const ix = r.x + r.w - info - 8, iy = r.y + 26;
   const inner = card(ui, ix, iy, info, r.h - 32, show ? RESEARCH[show].name : 'Research', C.teal1, 'research');
+  const banked = (Object.entries(g.s.research.bank) as [ItemId, Num][]).filter(([, v]) => v.gt(0));
+  const end = inner.y + inner.h - (banked.length ? 24 : 0);
+  /** what is still owed on a node, in items */
+  const owed = (id: ResearchId) => {
+    const prog = g.s.research.progress[id] ?? {};
+    let n = 0;
+    for (const [item, c] of Object.entries(RESEARCH[id].cost) as [ItemId, number][]) n += Math.max(0, c - (prog[item]?.toNumber() ?? 0));
+    return n;
+  };
   if (show) {
     const d = RESEARCH[show];
+    const done = g.done(show);
     let y = inner.y;
     y += ui.para(`Unlocks ${d.unlocks}.`, inner.x, y, inner.w, C.bone) + 4;
     ui.text('Costs, delivered to the Hopper:', inner.x, y, C.hull2);
@@ -208,24 +245,84 @@ function researchTree(app: App, r: Rect) {
     for (const [item, n] of Object.entries(d.cost) as [ItemId, number][]) {
       ctx.drawImage(itemIcon(item), inner.x, y);
       const have = Math.min(n, Math.floor(prog[item]?.toNumber() ?? 0));
-      ui.text(`${ITEMS[item].name}: ${g.done(show) ? n : have}/${n}`, inner.x + 11, y, C.bone);
+      ui.text(`${ITEMS[item].name}: ${fmt(done ? n : have)}/${fmt(n)}`, inner.x + 11, y, C.bone);
+      ui.text(done || have >= n ? ICON.check : `${Math.floor((have / n) * 100)}%`, inner.x + inner.w, y, done || have >= n ? C.leaf : C.teal1, { align: 'right' });
       y += 10;
-      bar(ui, inner.x + 11, y, inner.w - 11, 4, g.done(show) ? 1 : have / n, C.teal1);
+      bar(ui, inner.x + 11, y, inner.w - 11, 4, done ? 1 : have / n, C.teal1);
       y += 7;
     }
     if (d.requires.length) {
       y += 2;
-      ui.para(`Needs: ${d.requires.map((q) => (g.done(q) ? ICON.check : '') + RESEARCH[q].name).join(', ')}`, inner.x, y, inner.w, C.hull2);
-      y += 20;
+      y += ui.para(`Needs: ${d.requires.map((q) => (g.done(q) ? ICON.check : '') + RESEARCH[q].name).join(', ')}`, inner.x, y, inner.w, C.hull2) + 2;
     }
     const sel = g.s.research.selected === show;
-    if (g.done(show)) ui.text(`${ICON.check} Researched`, inner.x, y + 4, C.leaf);
+    if (done) { ui.text(`${ICON.check} Researched`, inner.x, y + 4, C.leaf); y += 16; }
     else if (available(g, show)) {
       if (button(ui, 'selectNode', inner.x, y + 2, inner.w, 16, sel ? 'Selected (click to clear)' : 'Research this', { gold: !sel, active: sel })) app.act({ k: 'research', id: sel ? null : show });
-    } else ui.text(`${ICON.lock} Locked`, inner.x, y + 4, C.hull1);
+      y += 22;
+    } else { ui.text(`${ICON.lock} Locked`, inner.x, y + 4, C.hull1); y += 16; }
+    // the whole node's progress, big
+    if (!done && y + 24 <= end) {
+      const f = researchFrac(g, show);
+      ui.text('In all', inner.x, y + 5, C.hull2);
+      ui.text(`${Math.floor(f * 100)}%`, inner.x + inner.w, y, C.teal1, { align: 'right', scale: 2, shadow: C.ink });
+      bar(ui, inner.x, y + 19, inner.w, 7, f, C.teal1);
+      const gl = (ui.time * 0.8) % 1.6;
+      if (gl < 1 && f > 0.03) ui.fill(inner.x + 1 + Math.floor(gl * Math.max(1, inner.w * f - 3)), y + 20, 2, 5, C.bone, 0.5);
+      y += 31;
+    }
+    // what it leads to
+    const next = RESEARCH_LIST.filter((q) => q.requires.includes(show));
+    if (next.length && y + 20 <= end) {
+      ui.text('Leads to', inner.x, y, C.gold);
+      y += 10;
+      for (const q of next) {
+        if (y + 10 > end) break;
+        nodeIcon(ui, q.id, inner.x, y, true);
+        ui.clip(inner.x + 11, y, inner.w - 11, 10);
+        ui.text(`${g.done(q.id) ? ICON.check + ' ' : ''}${q.name}`, inner.x + 11, y, g.done(q.id) ? C.brass1 : C.bone);
+        ui.unclip();
+        y += 10;
+      }
+      y += 4;
+    }
+    // ready now: every node that can be picked, the closest to done starred
+    const ready = RESEARCH_LIST.filter((q) => !g.done(q.id) && available(g, q.id) && q.id !== show).sort((p, q) => owed(p.id) - owed(q.id));
+    if (ready.length && y + 22 <= end) {
+      ui.text('Ready to research', inner.x, y, C.teal1);
+      y += 10;
+      ready.forEach((q, i) => {
+        if (y + 12 > end) return;
+        const best = i === 0;
+        const hv = ui.hover(inner.x, y - 1, inner.w, 12);
+        ui.region(inner.x, y - 1, inner.w, 12, 'button');
+        if (best) ui.fill(inner.x, y - 1, inner.w, 12, C.gold, 0.12 + 0.08 * Math.sin(ui.time * 5));
+        else if (hv) ui.fill(inner.x, y - 1, inner.w, 12, C.teal1, 0.12);
+        nodeIcon(ui, q.id, inner.x + 1, y, true);
+        ui.clip(inner.x + 12, y, inner.w - 44, 10);
+        ui.text(q.name, inner.x + 12, y, best ? C.gold : C.bone);
+        ui.unclip();
+        ui.text(best ? `${ICON.star} ${fmt(owed(q.id))}` : fmt(owed(q.id)), inner.x + inner.w - 1, y, best ? C.gold : C.hull3, { align: 'right' });
+        if (hv) {
+          ui.tip([{ text: q.name, color: C.gold }, { text: `Unlocks ${q.unlocks}.` }, { text: `${fmt(owed(q.id))} items still owed.${best ? ' The closest to done.' : ''} Click to research it.`, color: C.hull2 }], 180);
+          if (ui.clicked) { ui.eat(); ui.sfx('click'); app.act({ k: 'research', id: q.id }); }
+        }
+        y += 12;
+      });
+    }
+    // the lab at work in whatever room is left (the art director's scene)
+    if (hasArt('research_lab')) {
+      const lab = sheet('research_lab');
+      const room = end - 4 - y;
+      const k = room >= lab.h * 2 + 4 && inner.w >= lab.w * 2 ? 2 : 1;
+      if (room >= lab.h + 4) {
+        const lx = inner.x + Math.floor((inner.w - lab.w * k) / 2), ly = end - 2 - lab.h * k;
+        ui.fill(lx - 2, ly - 2, lab.w * k + 4, lab.h * k + 4, C.ink);
+        ctx.drawImage(lab.frames[Math.floor(ui.time * lab.fps) % lab.frames.length], lx, ly, lab.w * k, lab.h * k);
+      }
+    }
   }
   // the bank
-  const banked = (Object.entries(g.s.research.bank) as [ItemId, Num][]).filter(([, v]) => v.gt(0));
   if (banked.length) {
     let bx = inner.x;
     const by = inner.y + inner.h - 12;

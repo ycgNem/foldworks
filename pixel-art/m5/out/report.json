@@ -1,0 +1,98 @@
+{
+ "fx_fold": {
+  "frame": [
+   32,
+   32
+  ],
+  "frames": 8,
+  "colours": 10,
+  "fps": 16,
+  "anchor": [
+   0,
+   0
+  ]
+ },
+ "module_od": {
+  "frame": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "colours": 4,
+  "fps": 8,
+  "anchor": [
+   0,
+   0
+  ]
+ },
+ "ui_audit": {
+  "frame": [
+   12,
+   12
+  ],
+  "frames": 4,
+  "colours": 9,
+  "fps": 4,
+  "anchor": [
+   0,
+   0
+  ]
+ },
+ "mega_stage1": {
+  "frame": [
+   48,
+   48
+  ],
+  "frames": 10,
+  "colours": 26,
+  "fps": 4,
+  "anchor": [
+   0,
+   0
+  ],
+  "names": [
+   "p0a",
+   "p0b",
+   "p1a",
+   "p1b",
+   "p2a",
+   "p2b",
+   "p3a",
+   "p3b",
+   "run1",
+   "run2"
+  ]
+ },
+ "ui_research": {
+  "frame": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "colours": 22,
+  "fps": 0,
+  "anchor": [
+   0,
+   0
+  ],
+  "names": [
+   "surveyEast",
+   "splitters",
+   "buffers",
+   "nestedFolds"
+  ]
+ },
+ "research_lab": {
+  "frame": [
+   64,
+   48
+  ],
+  "frames": 4,
+  "colours": 23,
+  "fps": 6,
+  "anchor": [
+   0,
+   0
+  ]
+ }
+}

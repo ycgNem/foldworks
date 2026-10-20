@@ -61,7 +61,7 @@ function auditAndWait(g: Game, box = { x: 2, y: 11, w: 2, h: 2 }) {
   g.step(30 * TICK_RATE); // let the line fill first
   must(g, { k: 'audit', ...box });
   g.step(auditTicks());
-  return g.s.audit!;
+  return g.s.audits[0]!;
 }
 
 describe('the fold audit', () => {
@@ -108,7 +108,7 @@ describe('the fold audit', () => {
     expect(g.act({ k: 'rotate', x: 3, y: 11 }).ok).toBe(false);
     expect(g.act({ k: 'place', kind: 'belt', x: 3, y: 12, rot: 0 }).ok).toBe(false);
     must(g, { k: 'auditCancel' });
-    expect(g.s.audit).toBeNull();
+    expect(g.s.audits).toHaveLength(0);
     must(g, { k: 'rotate', x: 3, y: 12 });
   });
 });
@@ -119,7 +119,7 @@ describe('fold, stamp, unfold', () => {
     auditAndWait(g);
     const before = g.s.coin;
     must(g, { k: 'fold', name: null });
-    expect(g.s.audit).toBeNull();
+    expect(g.s.audits).toHaveLength(0);
     expect(g.s.designs).toHaveLength(1);
     const d = g.s.designs[0];
     expect(d.spare).toBe(1);
@@ -256,10 +256,18 @@ describe('the Factory floor', () => {
     expect((g.s.delivered.gear?.toNumber() ?? 0)).toBeGreaterThan(0);
   });
 
-  it('ends the slice when three products run chained into the Factory Dock for 30 s', () => {
+  it('ends the slice when the Gizmo Festival is filled, and only Factory Dock Gizmos count', () => {
     const g = chain();
+    must(g, { k: 'order', id: 'gizmoFestival' });
+    // Workshop Gizmos sell; they don't fill the Festival
+    g.intake.push({ to: 'dock', item: 'gizmo', x: 7, y: 2, n: N(500) });
+    g.step(2 * TICK_RATE);
+    expect(g.s.orders.done).not.toContain('gizmoFestival');
+    expect(g.flag('sliceEnd')).toBe(false);
     g.events.drain();
-    g.step(50 * TICK_RATE);
+    g.intake.push({ to: 'dock', item: 'gizmo', x: 11, y: 2, n: N(400), floor: 'factory' });
+    g.step(2 * TICK_RATE);
+    expect(g.s.orders.done).toContain('gizmoFestival');
     expect(g.flag('sliceEnd')).toBe(true);
     expect(g.events.drain().some((e) => e.type === 'sliceEnd')).toBe(true);
   });

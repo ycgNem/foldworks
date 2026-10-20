@@ -81,7 +81,7 @@ function audit(variant: 'balanced' | 'ratio' | 'slag') {
   g.step(60 * TICK_RATE);
   must(g, { k: 'audit', x: 9, y: 2, w: 4, h: 8 });
   g.step(auditTicks());
-  const r = g.s.audit!.result!;
+  const r = g.s.audits[0]!.result!;
   const gr = r.grade;
   console.log(`[pace] ${variant}: ${gr.letter} score ${gr.score.toFixed(3)} (U ${gr.u.toFixed(3)}, W ${gr.w.toFixed(3)}, C ${gr.c.toFixed(3)}), plates ${((r.outs.ironPlate ?? 0) * 60).toFixed(0)}/min`);
   return r;

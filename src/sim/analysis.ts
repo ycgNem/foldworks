@@ -33,6 +33,16 @@ export function outLinks(e: Ent): { x: number; y: number; d: Dir }[] {
   }
 }
 
+/** Machine to machine, does `to` use what `from` hands over this way (its output out of the
+ * front, its byproduct out of a side)? Any other link carries whatever comes. */
+function hands(g: Game, from: Ent, to: Ent, d: Dir): boolean {
+  if (!isMachine(from.kind) || !isMachine(to.kind)) return true;
+  const r = from.recipe ? RECIPE[from.recipe] : null;
+  if (!r) return true;
+  const item = d === from.rot ? r.outputs[0].item : r.byproduct?.item;
+  return !!item && uses(g, to, item);
+}
+
 /** Does machine m use this item (its recipe, or any recipe it could pick)? */
 function uses(g: Game, m: Ent, item: string): boolean {
   if (m.recipe) return RECIPE[m.recipe].inputs.some((s) => s.item === item);
@@ -68,7 +78,7 @@ export function lines(g: Game): Ent[][] {
     if (isSink(e)) continue;
     for (const l of outLinks(e)) {
       const t = g.entAt(l.x, l.y);
-      if (t && !isSink(t) && t !== e && linked(g, e, t, l.d)) union(e.id, t.id);
+      if (t && !isSink(t) && t !== e && linked(g, e, t, l.d) && hands(g, e, t, l.d)) union(e.id, t.id);
     }
   }
   const groups = new Map<number, Ent[]>();

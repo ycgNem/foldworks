@@ -22,7 +22,7 @@ import { runMachines, crankFurnace, shovel, overdrive } from './systems/machines
 import { runPower, buildGrids, type Grid } from './systems/power';
 import { buyClaims } from './systems/claims';
 import { startFAudit, cancelFAudit, foldFAudited, runFAudits } from './systems/nested';
-import { runModules, buildRoutes, foldAudited, stamp, unfold, renameDesign, fplace, fremove, frotate, type Route } from './systems/modules';
+import { runModules, buildRoutes, foldAudited, stamp, unfold, renameDesign, fplace, fremove, frotate, foverdrive, type Route } from './systems/modules';
 import { runDocks } from './systems/docks';
 import { runOrders } from './systems/orders';
 import { runResearch, selectResearch } from './systems/research';
@@ -56,8 +56,8 @@ export type Cmd =
   | { k: 'visible'; v: boolean }
   // folding (DESIGN.md §10)
   | { k: 'audit'; x: number; y: number; w: number; h: number }
-  | { k: 'auditCancel' }
-  | { k: 'fold'; name: string | null }
+  | { k: 'auditCancel'; id?: number }
+  | { k: 'fold'; name: string | null; id?: number }
   | { k: 'stamp'; id: number }
   | { k: 'unfold'; id: number }
   | { k: 'rename'; id: number; name: string }
@@ -68,6 +68,7 @@ export type Cmd =
   | { k: 'frotate'; x: number; y: number }
   // Act II (DESIGN.md §18)
   | { k: 'mode'; x: number; y: number; mode: Mode }
+  | { k: 'fclick'; x: number; y: number }
   | { k: 'claim'; item: ItemId }
   | { k: 'faudit'; x: number; y: number; w: number; h: number }
   | { k: 'fauditCancel' }
@@ -325,8 +326,8 @@ export class Game {
       case 'recipe': return this.setRecipe(c.x, c.y, c.recipe);
       case 'visible': this.s.visible = c.v; return OK;
       case 'audit': return startAudit(this, { x: c.x, y: c.y, w: c.w, h: c.h } as Box);
-      case 'auditCancel': return cancelAudit(this);
-      case 'fold': return foldAudited(this, c.name);
+      case 'auditCancel': return cancelAudit(this, c.id);
+      case 'fold': return foldAudited(this, c.name, c.id);
       case 'stamp': return stamp(this, c.id);
       case 'unfold': return unfold(this, c.id);
       case 'rename': return renameDesign(this, c.id, c.name);
@@ -335,6 +336,7 @@ export class Game {
       case 'fremove': return fremove(this, c.x, c.y);
       case 'frotate': return frotate(this, c.x, c.y);
       case 'mode': return this.setMode(c.x, c.y, c.mode);
+      case 'fclick': return foverdrive(this, c.x, c.y);
       case 'claim': return buyClaims(this, c.item);
       case 'faudit': return startFAudit(this, { x: c.x, y: c.y, w: c.w, h: c.h });
       case 'fauditCancel': return cancelFAudit(this);
@@ -605,7 +607,7 @@ export class Game {
 
   /** Called by `offer` for every item that changes tile. */
   onTransfer(x: number, y: number, dir: Dir, item: string) {
-    if (this.s.audit) auditTransfer(this, x, y, dir, item);
+    if (this.s.audits.length) auditTransfer(this, x, y, dir, item);
     for (const w of this.watchers) w(x, y, dir, item);
   }
 

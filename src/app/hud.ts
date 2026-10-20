@@ -69,7 +69,9 @@ export interface HudState {
   codexSeen: number;
   /** screen-wide celebrations (the Megaproject, claims) and their confetti rain (UI px) */
   celebs: { kind: string; t: number; x: number; y: number; id?: string; value?: number }[];
-  rain: { x: number; y: number; vx: number; vy: number; f: number; spin: number }[];
+  rain: { x: number; y: number; vx: number; vy: number; f: number; spin: number; gold?: boolean }[];
+  /** the first Miner has been celebrated */
+  firstMiner: boolean;
   /** the last coin value seen, and sparkles around the counter while it climbs */
   coinLast: number;
   glints: { x: number; y: number; t: number }[];
@@ -78,7 +80,7 @@ export interface HudState {
 export function newHudState(): HudState {
   return {
     coinShown: 0, coinBump: 0, hoverTile: null, storeTab: 'build', seen: new Set(), problemIdx: 0, ship: [], focus: null, draft: '', fieldSeen: false, stamped: false, confetti: 0, flakes: [], treePage: 2, buildTab: 'build',
-    tabSeen: new Set(), tabRung: new Set(), opened: new Set(), codexSeen: 0, celebs: [], rain: [], coinLast: -1, glints: [],
+    tabSeen: new Set(), tabRung: new Set(), opened: new Set(), codexSeen: 0, celebs: [], rain: [], coinLast: -1, glints: [], firstMiner: false,
   };
 }
 
@@ -237,10 +239,20 @@ function leftColumn(app: App, L: Layout, dt: number) {
     ui.text(d.name, tx, inner.y + 11, C.bone);
     ui.unclip();
     bar(ui, tx, inner.y + 21, inner.w - 30, 6, orderFrac(g, d.id), C.leaf);
+    if (d.at === 'factory') {
+      // only the Factory Dock fills it: a small plate on the card's corner says so
+      const s = 'Factory Dock only';
+      const sw = textWidth(s) + 4;
+      const sx = inner.x + inner.w - sw;
+      ui.fill(sx, inner.y + 31, sw, 10, C.ink);
+      ui.text(s, sx + 2, inner.y + 32, C.hot);
+    }
     let ix = inner.x;
+    const room = inner.x + inner.w - (d.at === 'factory' ? textWidth('Factory Dock only') + 8 : 0);
     for (const [item, n] of Object.entries(d.wants) as [ItemId, number][]) {
-      ui.ctx.drawImage(itemIcon(item), ix, inner.y + 32);
       const have = Math.min(n, Math.floor(o.progress[d.id]?.[item]?.toNumber() ?? 0));
+      if (ix + 10 + textWidth(`${have}/${n}`) > room) break;
+      ui.ctx.drawImage(itemIcon(item), ix, inner.y + 32);
       ix += 11 + ui.text(`${have}/${n}`, ix + 10, inner.y + 32, C.hull3);
     }
   } else {
@@ -252,7 +264,8 @@ function leftColumn(app: App, L: Layout, dt: number) {
       ui.para('"Got anything for me? Everything sells at the Dock."', tx, inner.y + 11, inner.w - 30, C.hull2);
     }
   }
-  ui.hint(r.x, y, r.w, oh, [{ text: CUSTOMERS.bramble.name, color: C.leaf }, { text: 'Items sent to the Dock fill the active order first, then sell. Orders never expire.' }], 180);
+  const atF = o.active && ORDER[o.active].at === 'factory';
+  ui.hint(r.x, y, r.w, oh, [{ text: CUSTOMERS.bramble.name, color: C.leaf }, { text: atF ? 'This order counts only what reaches the Factory Dock: trunk the modules that make it into the Factory Dock. The Workshop Dock just sells.' : 'Items sent to the Dock fill the active order first, then sell. Orders never expire.' }], 180);
   y += oh;
 
   // research
@@ -279,10 +292,12 @@ function leftColumn(app: App, L: Layout, dt: number) {
   const stack = toastStack(app, r.w, bottom - y, dt);
 
   const room = bottom - stack.h - y;
-  const gh = room >= 120 ? 58 : room;
+  const goal = nextGoal(g);
+  // the Next card grows to its goal's lines (they were cut at four), leaving Shipping 44 px
+  const goalLines = wrap(goal ? goal.text : 'Build, balance, and keep the pips green.', r.w - 10).length;
+  const gh = room >= 120 ? Math.max(58, Math.min(room - 44, 20 + goalLines * 10)) : room;
   if (gh >= 34) {
     const gin = card(ui, r.x, y, r.w, gh, 'Next', C.glow, 'star');
-    const goal = nextGoal(g);
     ui.clip(gin.x, gin.y, gin.w, gin.h);
     ui.para(goal ? goal.text : 'Build, balance, and keep the pips green.', gin.x, gin.y, gin.w, C.bone);
     ui.unclip();
@@ -479,7 +494,9 @@ function store(app: App, L: Layout) {
     }
     if (storeTab(app, 'tabUpgrades', r.x + r.w - 4 - ew, r.y + 3, ew, 13, 'Extras', 'star', h.storeTab === 'upgrades', upgradesReady && h.storeTab !== 'upgrades', [{ text: 'Extras', color: C.gold }, { text: 'The Bellows and land.' }])) h.storeTab = 'upgrades';
   }
-  const top = r.y + 19;
+  let top = r.y + 19;
+  // until it is bought, the Bellows sits on top of the store, lit up: the first goal points at it
+  if (h.storeTab === 'build' && !g.has('bellows')) top = bellowsCard(app, r.x + 4, top, r.w - 8) + 3;
   const avail = r.y + r.h - 4 - top;
   if (h.storeTab === 'build') {
     const kinds = STORE_TABS.find((t) => t.id === h.buildTab)!.kinds;
@@ -489,6 +506,48 @@ function store(app: App, L: Layout) {
       storeRow(app, kind, i, r.x + 4, top + i * rowH, r.w - 8, rowH - 2);
     });
   } else upgradesTab(app, r.x + 4, top, r.w - 8, avail);
+}
+
+/** The Bellows as a big lit card at the top of the store while it is unbought: the furnace at 2x
+ *  breathing embers, what it does, and its price (a BUY button once affordable, else how close). */
+function bellowsCard(app: App, x: number, y: number, w: number): number {
+  const ui = app.ui;
+  const g = app.game;
+  const u = UPGRADES.bellows;
+  const h = 46;
+  const afford = g.s.coin.gte(u.cost);
+  ui.mark('bellows', x, y, w, h);
+  const hov = ui.hover(x, y, w, h);
+  ui.region(x, y, w, h, 'button');
+  const pulse = 0.5 + 0.5 * Math.sin(ui.time * (afford ? 7 : 3));
+  ui.fill(x, y, w, h, C.ink);
+  ui.fill(x + 1, y + 1, w - 2, h - 2, afford ? (pulse > 0.5 ? C.gold : C.brass1) : C.brass0);
+  ui.fill(x + 2, y + 2, w - 4, h - 4, hov ? C.ground2 : C.ground1);
+  ui.fill(x + 2, y + 2, w - 4, 1, C.brass1);
+  // the furnace at 2x in a well, with embers rising
+  ui.fill(x + 4, y + 5, 36, 36, C.ink);
+  ui.fill(x + 5, y + 6, 34, 34, C.shadow);
+  const s = sheet('furnace');
+  ui.ctx.drawImage(s.frames[Math.floor(ui.time * (s.fps || 6)) % s.frames.length], x + 6, y + 7, 32, 32);
+  for (let i = 0; i < 4; i++) {
+    const t = (ui.time * 0.9 + i * 0.27) % 1;
+    ui.fill(x + 12 + ((i * 7) % 20), Math.round(y + 34 - t * 26), 1, 1, i % 2 ? C.hot : C.glow, 1 - t);
+  }
+  const tx = x + 45, tr = x + w - 4;
+  ui.text('The Bellows', tx, y + 5, C.gold, { shadow: C.ink });
+  ui.clip(tx, y, tr - tx, h);
+  ui.text(textWidth('The furnace runs itself') <= tr - tx ? 'The furnace runs itself' : 'Runs by itself', tx, y + 15, C.bone);
+  ui.unclip();
+  if (afford) {
+    if (button(ui, 'buyBellows', tx, y + 27, tr - tx, 14, `Buy: ${ICON.coin} ${u.cost}`, { gold: true, pulse: true, tip: [{ text: 'The Bellows', color: C.gold }, { text: 'The Hand Furnace runs on its own: an ingot every 2 s while it has ore. No more cranking.' }] })) app.act({ k: 'upgrade', id: 'bellows' });
+  } else {
+    const have = Math.max(0, Math.floor(g.s.coin.toNumber()));
+    bar(ui, tx, y + 29, tr - tx - 34, 7, have / u.cost, C.gold);
+    ui.text(`${have}/${u.cost}`, tr, y + 28, C.gold, { align: 'right' });
+    if (hov) ui.tip([{ text: 'The Bellows', color: C.gold }, { text: `The Hand Furnace runs on its own: an ingot every 2 s while it has ore. ${u.cost - have} coin to go: crank the furnace and sell ingots at the Dock.` }], 190);
+  }
+  if (afford && Math.floor(ui.time * 2) % 2 === 0) badge(ui, x + w - 26, y - 3, 'BUY', C.pipRed);
+  return y + h;
 }
 
 /** One store tab: a small icon and its name (the icon alone when the name does not fit); a fresh
@@ -683,7 +742,7 @@ function bottomBar(app: App, L: Layout) {
   const tools: BarItem[] = [
     { id: 'rotate', icon: 'rotate', label: 'Rotate', key: 'R', active: false, tip: `Rotate what you place, or the machine under the mouse. Facing ${['east', 'south', 'west', 'north'][app.rot]}`, onClick: () => { app.rot = ((app.rot + 1) % 4) as 0; app.audio.sfx('rotate'); } },
     { id: 'remove', icon: 'remove', label: 'Remove', key: 'X', active: app.mode.k === 'remove', tip: 'Remove a building: full refund', onClick: () => app.setMode(app.mode.k === 'remove' ? { k: 'idle' } : { k: 'remove' }) },
-    { id: 'fold', icon: 'fold', label: 'Fold', key: 'F', active: app.mode.k === 'fold', tip: g.done('folding') ? 'Drag a box over a working line: it is audited for 70 s, graded, and folded into one tile' : 'Locked: research Folding', onClick: () => app.toggleFold(), opts: { disabled: !g.done('folding'), gold: g.done('folding') && !g.s.designs.length && !g.s.audit, pulse: g.done('folding') && !g.s.designs.length && !g.s.audit && app.mode.k !== 'fold' } },
+    { id: 'fold', icon: 'fold', label: 'Fold', key: 'F', active: app.mode.k === 'fold', tip: g.done('folding') ? 'Drag a box over a working line: it is audited for 70 s, graded, and folded into one tile' : 'Locked: research Folding', onClick: () => app.toggleFold(), opts: { disabled: !g.done('folding'), gold: g.done('folding') && !g.s.designs.length && !g.s.audits.length, pulse: g.done('folding') && !g.s.designs.length && !g.s.audits.length && app.mode.k !== 'fold' } },
     { id: 'flow', icon: 'flow', label: 'Flow', key: 'L', active: app.flowOverlay, tip: 'Show belts by how full they are', onClick: () => { app.flowOverlay = !app.flowOverlay; } },
   ];
   // menus, from the right
@@ -709,13 +768,20 @@ function bottomBar(app: App, L: Layout) {
   // then the floor tabs' labels (the floor tabs themselves always show)
   const width = (it: BarItem, lab: boolean) => (lab ? 20 + textWidth(it.label) + 8 : 24);
   const need = (tl: boolean, ml: boolean, fw: number) => tools.reduce((s, it) => s + width(it, tl) + 3, 0) + menus.reduce((s, it) => s + width(it, ml) + 3, 0) + 10 + fw * 2 + 6;
-  const plans: [boolean, boolean, number][] = [[true, true, 64], [true, false, 64], [false, false, 64], [false, false, 28]];
+  const plans: [boolean, boolean, number][] = [[true, true, 66], [true, false, 66], [false, false, 66], [false, false, 28]];
   const [tl, ml, fw] = plans.find(([a, b, f]) => (L.wide || !a) && need(a, b, f) <= r.w) ?? plans[3];
-  const labels = fw > 28 && L.wide;
+  // the floor tabs keep their names whenever the name fits beside the icon (at 1024 wide they
+  // were blank icons: the QA pass)
+  const labels = fw > 28 && 20 + textWidth('Workshop') + 4 <= fw;
   let x = r.x + 5;
   for (const it of tools) {
     const w = width(it, tl);
     if (button(ui, it.id, x, by, w, bh, tl ? it.label : '', { icon: it.icon, active: it.active, tip: it.key ? `${it.tip} (${it.key})` : it.tip, ...it.opts })) it.onClick();
+    // the Fold tool wears the audit count, gold when one is graded
+    if (it.id === 'fold' && g.s.audits.length) {
+      const graded = g.s.audits.some((a) => a.result);
+      badge(ui, x + w - 18, by - 5, `${g.s.audits.length}/${RULES.maxAudits.value}`, graded ? C.copper1 : C.teal0);
+    }
     x += w + 3;
   }
   let rx = r.x + r.w - 5;
@@ -1058,7 +1124,7 @@ function celebrations(app: App, L: Layout, dt: number) {
   const h = app.hud;
   const ctx = ui.ctx;
   for (const c of h.celebs) c.t += dt;
-  h.celebs = h.celebs.filter((c) => c.t < (c.kind === 'megaDone' ? 4.5 : 1.6));
+  h.celebs = h.celebs.filter((c) => c.t < (c.kind === 'megaDone' ? 4.5 : c.kind === 'splus' ? 3.2 : 1.6));
   // confetti rain
   if (h.rain.length) {
     const s = sheet('fx_confetti');
@@ -1068,7 +1134,13 @@ function celebrations(app: App, L: Layout, dt: number) {
       p.y += p.vy * dt;
       p.spin += dt * 8;
       const f = (p.f + Math.floor(p.spin)) % 8;
-      if (!s.placeholder) ctx.drawImage(s.frames[f % s.frames.length], Math.round(p.x), Math.round(p.y));
+      if (p.gold) {
+        // S+ rain: gold leaf that flips (wide, then thin) as it falls
+        const thin = Math.floor(p.spin) % 2 === 0;
+        ctx.fillStyle = p.f % 3 === 0 ? C.hot : C.gold;
+        ctx.fillRect(Math.round(p.x), Math.round(p.y), thin ? 1 : 3, 2);
+        if (!thin && p.f % 2) { ctx.fillStyle = C.bone; ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1); }
+      } else if (!s.placeholder) ctx.drawImage(s.frames[f % s.frames.length], Math.round(p.x), Math.round(p.y));
       else { ctx.fillStyle = [C.gold, C.pipRed, C.teal1, C.leaf][p.f % 4]; ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2); }
     }
     h.rain = h.rain.filter((p) => p.y < ui.h + 8);
@@ -1092,6 +1164,40 @@ function celebrations(app: App, L: Layout, dt: number) {
       const glow = Math.floor(ui.time * 6) % 2 ? C.gold : C.hot;
       drawText(ctx, title, Math.floor(ui.w / 2 - (textWidth(title) * sc) / 2), by + 8, glow, sc, C.copper0);
       drawText(ctx, sub, Math.floor(ui.w / 2 - textWidth(sub) / 2), by + 12 + 9 * sc, C.bone, 1, C.ink);
+    } else if (c.kind === 'splus') {
+      // S+: a gold flash, then "S+ FLAWLESS!" drops in over the floor, bounces, and lifts away
+      if (c.t < 0.25) { ctx.fillStyle = rgba(C.gold, (0.25 - c.t) * 1.4); ctx.fillRect(0, 0, ui.w, ui.h); }
+      const k = Math.min(1, c.t * 4);
+      const drop = c.t < 0.25 ? (1 - k) * -50 : c.t > 2.7 ? (c.t - 2.7) * -140 : Math.round(Math.sin(Math.min(1, (c.t - 0.25) * 4) * Math.PI) * 3);
+      const title = c.id === 'fold' ? 'S+ MODULE!' : 'S+  FLAWLESS!';
+      const sub = c.id === 'fold' ? 'The best fold there is: x1.35, in one tile.' : 'The top grade: every part at full marks.';
+      const sc = textWidth(title) * 3 + 40 <= ui.w ? 3 : 2;
+      const bw = Math.max(textWidth(title) * sc, textWidth(sub)) + 30, bh = 9 * sc + 26;
+      // on the grade card it sits right of the stamp's column (the art director's check: it
+      // covered the S+ emblem's plus), else centred
+      const O = L.overlay, cw = Math.min(380, O.w - 12), cardX = O.x + Math.floor((O.w - cw) / 2);
+      const stampRight = cardX + 8 + (cw >= 340 ? 96 : 48) + 14;
+      const cx0 = Math.floor(ui.w / 2 - bw / 2);
+      const bx = app.panel === 'grade' && stampRight + bw <= ui.w - 4 ? Math.max(cx0, stampRight) : cx0;
+      const by = Math.round(L.overlay.y + 34 + drop);
+      ctx.globalAlpha = c.t > 2.7 ? Math.max(0, 1 - (c.t - 2.7) * 2) : 1;
+      ctx.fillStyle = rgba(C.ink, 0.5);
+      ctx.fillRect(bx + 3, by + 3, bw, bh);
+      if (hasArt('ui_panel')) nine(ctx, sheet('ui_panel'), 0, bx, by, bw, bh);
+      else { ctx.fillStyle = C.brass0; ctx.fillRect(bx, by, bw, bh); }
+      ctx.fillStyle = Math.floor(ui.time * 8) % 2 ? C.gold : C.hot;
+      ctx.fillRect(bx + 4, by + 4, bw - 8, 1);
+      ctx.fillRect(bx + 4, by + bh - 5, bw - 8, 1);
+      const mid = bx + bw / 2;
+      drawText(ctx, title, Math.floor(mid - (textWidth(title) * sc) / 2), by + 8, Math.floor(ui.time * 6) % 2 ? C.gold : C.hot, sc, C.copper0);
+      drawText(ctx, sub, Math.floor(mid - textWidth(sub) / 2), by + 12 + 9 * sc, C.bone, 1, C.ink);
+      // sparkles orbiting the banner
+      for (let i = 0; i < 10; i++) {
+        const a = c.t * 3 + (i * Math.PI) / 5;
+        ctx.fillStyle = i % 2 ? C.gold : C.bone;
+        ctx.fillRect(Math.round(mid + Math.cos(a) * (bw / 2 + 8)), Math.round(by + bh / 2 + Math.sin(a) * (bh / 2 + 6)), 2, 2);
+      }
+      ctx.globalAlpha = 1;
     } else if (c.kind === 'claim') {
       // a flag on a stake pops up and waves, with "+4 claims"
       const k = Math.min(1, c.t * 6);

@@ -25,7 +25,7 @@ export const RULES = {
   sparkMax: r(360, '§6 Sparks: one every 3-6 min (uniform)'),
   sparkLife: r(20, '§6 Sparks: visible for 20 s'),
   /** Lucky Vein: miners on that patch run this much faster for this long */
-  veinMult: r(3, '§6 Lucky Vein: 3x for 60 s'),
+  veinMult: r(3, '§6 Lucky Vein: its line runs 3x for 60 s'),
   veinSeconds: r(60, '§6 Lucky Vein: 3x for 60 s'),
   /** Inspector: pays this many seconds of the line's measured output value x the grade multiplier */
   inspectorSeconds: r(60, '§6 Inspector: 60 s of that line\'s measured output value'),
@@ -33,6 +33,8 @@ export const RULES = {
   foldMax: r(8, '§10 the Fold box is at most 8x8 in the slice'),
   auditWarmup: r(10, '§10 Audit: 10 s warm-up'),
   auditWindow: r(60, '§10 Audit: a 60 s window'),
+  /** Workshop lines audited at once */
+  maxAudits: r(3, '§10 Audit: up to three lines at once, so the slice\'s folds are not three waits in a row (the Milestone 3 gate review)'),
   /** compactness: machine tiles / box tiles at which C = 1 */
   compactFull: r(0.6, '§10 Grade: C = min(1, (machine tiles / box tiles) / 0.6)'),
   /** stamp cost growth per copy already made */
@@ -66,7 +68,7 @@ export const RULES = {
   overdriveSeconds: r(10, '§18 Machines: Overdrive runs a machine 3x for 10 s, then it cools 30 s'),
   overdriveCool: r(30, '§18 Machines: Overdrive runs a machine 3x for 10 s, then it cools 30 s'),
   /** Machine Kits per stamp of a design with Act II buildings: 1 + floor(bill / this) */
-  kitDivisor: r(1500, '§18 Machine Kits: 1 + floor(bill / 1,500)'),
+  kitDivisor: r(500, '§18 Machine Kits: 1 + floor(bill / 500); at 1,500 a stamp took 2-3 kits, about 3% of its price in goods, a chore with no weight (the Milestone 3 gate review)'),
   /** deposit claims: the start, per Workshop deposit owned, per Survey Office block, block growth */
   claimsBase: r(3, '§18 Land and deposits: 3 claims per ore plus 2 per Workshop deposit'),
   claimsPerDeposit: r(2, '§18 Land and deposits: 3 claims per ore plus 2 per Workshop deposit'),
@@ -77,15 +79,18 @@ export const RULES = {
   /** reputation rewards (Act II customers) */
   voltaireSteam: r(0.25, '§18 Customers: Dame Voltaire rep 2, Steam Engines +25%'),
   unit7Precision: r(0.1, '§18 Customers: Unit 7 rep 3 adds +10% to Precision'),
-  codexMult: r(100, '§18 Customers: Unit 7 rep 1, the Codex pays 100x a first delivery'),
+  codexMult: r(30, '§18 Customers: Unit 7 rep 1, the Codex pays 30x a first delivery (100x paid ~71K in one burst, a motor 42K: the Milestone 3 gate audit)'),
   /** nested folds: the box limit on the Factory floor */
   nestedMax: r(6, '§18 Nested folds: a box up to 6x6 of modules and trunks'),
+  /** Reorganize (§15): patents = floor((lifetime coin / this) ^ 0.4) */
+  patentDivisor: r(2500, '§15 Reorganize, §16 rule 6: the Act II bot (tests/pace-act2-run.test.ts) has earned about 2.5M lifetime coin by 5 h; 2.5M / 2,500 = 1,000 and 1,000 ^ 0.4 = 15.8, so a 5 h first run gives 15 Patents (12-20), 4 h about 14, and doubling lifetime coin adds about 6'),
 };
 
 export type RuleId = keyof typeof RULES;
 
 /** The fold grades (§10): score floor, letter and rate multiplier. */
 export const GRADES = [
+  { letter: 'S+', min: 0.97, mult: 1.35, derivation: '§10 Grade S+ >= 0.97 x1.35: above S, so a balanced, compact, zero-waste line still has something to reach (the Milestone 3 gate review)' },
   { letter: 'S', min: 0.9, mult: 1.25, derivation: '§10 Grade S >= 0.90 x1.25' },
   { letter: 'A', min: 0.8, mult: 1.1, derivation: '§10 Grade A >= 0.80 x1.10' },
   { letter: 'B', min: 0.65, mult: 1.0, derivation: '§10 Grade B >= 0.65 x1.00' },

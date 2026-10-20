@@ -7,7 +7,7 @@ import { RULES } from '../../data/rules';
 import { TICK_RATE } from '../../engine/time';
 import { offer } from '../transfer';
 import { note } from './stats';
-import { overdriveTick } from './machines';
+import { overdriveTick, veinBoost } from './machines';
 
 export function runMiners(g: Game) {
   const cap = RULES.outputCap.value;
@@ -16,9 +16,8 @@ export function runMiners(g: Game) {
     const out = r.outputs[0].item;
     const pi = g.patchOf[m.y * g.W + m.x];
     // a Lucky Vein, Overdrive and the Great Drill's stage 1 (§18) multiply
-    // (a miner being audited runs at its own speed: a boost would be folded in for good)
-    const audited = !!g.s.audit && !g.s.audit.result && g.s.audit.ids.includes(m.id);
-    const speed = ((g.s.veins[pi] ?? 0) > 0 && !audited ? RULES.veinMult.value : 1)
+    // a Lucky Vein boosts its line (veinBoost: never while audited, or it would be folded in)
+    const speed = veinBoost(g, m)
       * ((m.od ?? 0) > 0 ? RULES.overdriveMult.value : 1)
       * (g.s.mega.stage >= 1 ? 1 + RULES.drillBoost.value : 1);
     if (m.out < cap) {

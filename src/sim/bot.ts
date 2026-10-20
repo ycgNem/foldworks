@@ -9,21 +9,23 @@
 //
 // planner : the competent player. Follows PLAN for the slice map, buys each step as soon as it is
 //           affordable, sends a line to the Hopper while research still needs what it carries,
-//           otherwise to the Dock (or into the Gizmo assembler).
+//           otherwise to the Dock (or into the Gizmo assembler). After Folding it folds four
+//           products and builds two Gizmo chains on the Factory floor for the Gizmo Festival.
 // greedy  : the impatient player. The same layout, but it skips ahead to later steps when the next
 //           one is locked behind land or a build unlock, researches any node its bank already pays
-//           for, accepts every order the moment it is offered, and after the slice stamps more
-//           copper wire while its claims last. §13 check 10 (dead air) uses it.
+//           for, accepts every order the moment it is offered and sends L1's gears to it before
+//           research. §13 check 10 (dead air) uses it.
 // dockOnly: sends everything to the Dock. It builds no Hopper-only line, and turns a line to the
 //           Hopper only while the plan is stuck on research, for that one node (§13 check 11).
 import type { Game, Cmd } from './Game';
-import type { Dir, Ent } from './world';
+import type { Box, Dir, Ent } from './world';
 import { isMachine, type BuildKind, type UpgradeId } from '../data/machines';
 import { RESEARCH, RESEARCH_IDS, type ResearchId } from '../data/research';
 import { BUILD, UPGRADES } from '../data/machines';
 import { CHUNKS, FACTORY } from '../data/land';
-import { foldRefusal } from './systems/audits';
-import { stampCost } from './systems/modules';
+import { foldRefusal, entsIn } from './systems/audits';
+import { ORDER } from '../data/orders';
+import { stampCost, stampRefusal } from './systems/modules';
 import { RECIPE } from '../data/recipes';
 import type { ItemId } from '../data/items';
 import { RULES } from '../data/rules';
@@ -43,12 +45,12 @@ export type Step =
   | { k: 'land'; id: string; only?: Policy[] }
   | { k: 'order'; id: string; only?: Policy[] }
   | { k: 'need'; research: ResearchId; only?: Policy[] }
-  // folding (DESIGN.md §10): audit the box, wait for the grade, fold; `design` below is the index
-  // of a fold in the order this bot folded them
+  // folding (DESIGN.md §10): audit the box (several at once, up to RULES.maxAudits), wait for the
+  // grade, fold; `design` below is a design's name, given at its fold
   | { k: 'fold'; x: number; y: number; w: number; h: number; name: string; only?: Policy[] }
-  | { k: 'stamp'; design: number; copies: number; only?: Policy[] }
+  | { k: 'stamp'; design: string; copies: number; only?: Policy[] }
   // the Factory floor (DESIGN.md §11)
-  | { k: 'fplace'; design: number; x: number; y: number; rot: Dir; only?: Policy[] }
+  | { k: 'fplace'; design: string; x: number; y: number; rot: Dir; only?: Policy[] }
   | { k: 'ftrunk'; x: number; y: number; rot: Dir; only?: Policy[] };
 
 const P = (kind: BuildKind, x: number, y: number, rot: Dir): Step => ({ k: 'place', kind, x, y, rot });
@@ -57,7 +59,7 @@ const belts = (pts: [number, number, Dir][]): Step[] => pts.map(([x, y, r]) => P
 const need = (research: ResearchId): Step => ({ k: 'need', research });
 const order = (id: string): Step => ({ k: 'order', id });
 const fold = (x: number, y: number, w: number, h: number, name: string): Step => ({ k: 'fold', x, y, w, h, name });
-const fplace = (design: number, x: number, y: number, rot: Dir): Step => ({ k: 'fplace', design, x, y, rot });
+const fplace = (design: string, x: number, y: number, rot: Dir): Step => ({ k: 'fplace', design, x, y, rot });
 const trunks = (pts: [number, number, Dir][]): Step[] => pts.map(([x, y, rot]) => ({ k: 'ftrunk', x, y, rot }));
 const not = (policies: Policy[], steps: Step[]): Step[] => {
   const all: Policy[] = ['planner', 'greedy', 'dockOnly'];
@@ -87,20 +89,24 @@ const not = (policies: Policy[], steps: Step[]): Step[] => {
  * (0,0); the copper heaps chain to (10,5), (9,1) and (11,1).
  *
  * After Gizmo Theory, chunk C (rows 9-14) gets four gear lines on its iron patch, up columns 6 and 7
- * into the Hopper's south side. After Folding (DESIGN.md §13 check 9) every bot folds three products
- * and chains two of them on the Factory floor (F the Factory Dock, rows 0-2 of the floor):
+ * into the Hopper's south side. After Folding (DESIGN.md §11, §13 check 9) every bot audits three
+ * lines at once and folds them: "Copper wire" (C4, box 12,0 1x3), "Iron ingots" (miners and
+ * smelters: chunk C's CA pair, box 3,11 2x2, or for the Dock-only player L3's, box 1,1 1x2) and
+ * "Gizmo works" (L1's press, gear assembler and router and the Gizmo assembler, box 4,3 4x1: ingots
+ * and wire in), rebuilds L1's tail in the Workshop, and builds Gizmo chains on the Factory floor
+ * for Bramble's Gizmo Festival (400 Gizmos at the Factory Dock), one folded and four stamped, each
+ * an ingot module and a wire module into a Gizmo module, their slag by side trunks into the Dock.
+ * The floor at the end (F Dock, H Hopper, I ingots, W wire, Z Gizmo works, arrows trunks):
  *
- *      89AB
- *    0 >>vC     C: more "Copper wire" (greedy, past the slice end)
- *    1 ^cFF     c: "Copper wire" (C4) into the Dock
- *    2 igFF     i: "Iron ingots" (miners + smelters) into g's back; its slag up the side trunk (8,1)
- *                  and along row 0 into the Dock, which scraps it (g refuses slag)
- *               g: "Gear works" (presses + assembler, ingots in) into the Dock
- *
- * The planner and greedy fold chunk C's CA pair as "Iron ingots" (box 3,11 2x2), rebuild its miners
- * and smelters (200 coin), and fold the presses and assembler left behind as "Gear works" (box 5,11
- * 2x2); the Dock-only player folds L3's miner and smelter (box 1,1 1x2) and L1's press and
- * assembler fed by the Hand Furnace (box 4,3 2x1).
+ *      0123456789AB
+ *    0 ........W>v.
+ *    1 .......I>ZFF
+ *    2 .....W>v>>FF
+ *    3 ....I>Z>^..Z
+ *    4 ....v..^I>>^
+ *    5 ...>>>>^<WHH
+ *    6 ...^Z^^Z^.HH
+ *    7 ...I^WI^W...
  */
 export const PLAN: Step[] = [
   { k: 'upgrade', id: 'bellows' },
@@ -140,9 +146,11 @@ export const PLAN: Step[] = [
   need('gizmoTheory'),
   // the Gizmo assembler between the Dock and the Hopper: gears from L1 (west), wire from C1 (east)
   P('assembler', 7, 3, S),
-  order('lampPosts'),
-  order('gizmoFestival'),
+  // orders: the Boardwalk now, the Gizmo Festival once Folding offers it, then Lamp Posts (whose
+  // gears would hold the Festival up: L1's gears are research's until Folding)
   order('boardwalk'),
+  order('gizmoFestival'),
+  order('lampPosts'),
   // C4: the last copper tile, wire along row 0 into the Dock's east side
   P('miner', 12, 2, N), P('smelter', 12, 1, N), P('heap', 13, 1, W), P('heap', 11, 1, E), P('press', 12, 0, W),
   ...belts([[11, 0, W], [10, 0, W], [9, 0, W], [8, 0, S], [8, 1, W]]),
@@ -161,35 +169,49 @@ export const PLAN: Step[] = [
     ...belts([[4, 14, E], [5, 14, E], [6, 14, E], [7, 14, N], [7, 13, N], [7, 12, N], [7, 11, N], [7, 10, N], [7, 9, N], [7, 8, N], [7, 7, N], [7, 6, N]]),
   ]),
   need('folding'),
-  // The Factory floor (DESIGN.md §11, §13 check 9): three products, one module feeding another.
-  // Design 0, "Copper wire": C4 (box 12,0 1x3: miner, smelter, press; slag leaves by its heaps,
-  // outside the box), put beside the Factory Dock.
-  fold(12, 0, 1, 3, 'Copper wire'),
-  fplace(0, 9, 1, E),
-  // Design 1, "Iron ingots": miners and smelters only (planner, greedy: chunk C's CA pair, box 3,11
-  // 2x2; dock-only: L3's, box 1,1 1x2). On the floor it feeds the gear works from behind, and its
-  // slag leaves by a side trunk north, along row 0 and down into the Dock (which scraps it): the
-  // gear works refuses slag, so without the side trunk the source would block.
+  // The Factory floor (DESIGN.md §11, §13 check 9): the slice ends when the Gizmo Festival (400
+  // Gizmos, Factory Dock deliveries only) is filled. Three folds, audited at once: "Copper wire"
+  // (C4: miner, smelter, press), "Iron ingots" (miners and smelters only: chunk C's CA pair, or
+  // the Dock-only player's L3) and "Gizmo works" (L1's press, gear assembler, router and the Gizmo
+  // assembler, box 4,3 4x1: ingots and wire in, Gizmos out). Each line is audited once it runs.
   ...not(['dockOnly'], [fold(3, 11, 2, 2, 'Iron ingots')]),
   ...not(['planner', 'greedy'], [fold(1, 1, 1, 2, 'Iron ingots')]),
-  fplace(1, 8, 2, E), ...trunks([[8, 1, N], [8, 0, E], [9, 0, E], [10, 0, S]]),
-  // the source half is rebuilt (200 coin) so the presses and assembler left behind have ingots
-  // for their own audit
-  ...not(['dockOnly'], [P('miner', 3, 11, E), P('smelter', 4, 11, E), P('miner', 3, 12, E), P('smelter', 4, 12, E)]),
-  ...not(['planner', 'greedy'], [P('miner', 1, 2, N), P('smelter', 1, 1, N)]),
-  // Design 2, "Gear works": presses and the assembler, ingots in (planner, greedy: box 5,11 2x2;
-  // dock-only: L1's press and assembler, box 4,3 2x1, fed by the Hand Furnace), into the Dock.
-  // Ingots -> gear works -> Factory Dock is the chain; copper wire is the third product.
-  ...not(['dockOnly'], [fold(5, 11, 2, 2, 'Gear works')]),
-  ...not(['planner', 'greedy'], [fold(4, 3, 2, 1, 'Gear works')]),
-  fplace(2, 9, 2, E),
-  // past the slice end (greedy): more copper wire, into the Dock from above and below, while the
-  // copper claims last (3 + 2 for chunk B's deposit, §18)
-  ...not(['planner', 'dockOnly'], [
-    { k: 'stamp', design: 0, copies: 1 }, fplace(0, 11, 0, S),
-    { k: 'stamp', design: 0, copies: 2 }, fplace(0, 10, 3, N),
-    { k: 'stamp', design: 0, copies: 3 }, fplace(0, 11, 3, N),
-  ]),
+  fold(12, 0, 1, 3, 'Copper wire'),
+  fold(4, 3, 4, 1, 'Gizmo works'),
+  // the Workshop gets L1's tail back (Gizmos for coin at the Workshop Dock)
+  P('press', 4, 3, E), P('assembler', 5, 3, E), P('belt', 6, 3, N), P('assembler', 7, 3, N),
+  // On the floor (F the Factory Dock at 10-11, 1-2; I ingots, W wire, Z Gizmo works; arrows are
+  // trunks):
+  //
+  //      789AB
+  //    0  W>v.     chain A: I (7,1) -> (8,1) -> Z (9,1) -> Dock; W (8,0) south into (8,1), its slag
+  //    1 I>ZFF              east along row 0 into the Dock; I's slag (7,2) S, (7,3) E, (8,3) N,
+  //    2 v>>FF              (8,2) E, (9,2) E into the Dock
+  //    3 >^..Z     chain B (stamped copies): I (8,4) -> (9,4) -> (10,4) -> (11,4) -> Z (11,3) north
+  //    4 ^I>>^              into the Dock; W (9,5) north into (9,4), its slag (8,5) W, (7,5) N,
+  //    5 ^<W..              (7,4) N into (7,3); I's slag north into (8,3); chain C (below) west of it
+  fplace('Gizmo works', 9, 1, E), fplace('Iron ingots', 7, 1, E), fplace('Copper wire', 8, 0, S),
+  ...trunks([[8, 1, E], [9, 0, E], [10, 0, S], [7, 2, S], [7, 3, E], [8, 3, N], [8, 2, E], [9, 2, E]]),
+  // chain B: one stamped copy of each
+  { k: 'stamp', design: 'Gizmo works', copies: 1 }, fplace('Gizmo works', 11, 3, N), ...trunks([[11, 4, N], [10, 4, E], [9, 4, E]]),
+  { k: 'stamp', design: 'Iron ingots', copies: 1 }, fplace('Iron ingots', 8, 4, E),
+  { k: 'stamp', design: 'Copper wire', copies: 1 }, fplace('Copper wire', 9, 5, N), ...trunks([[8, 5, W], [7, 5, N], [7, 4, N]]),
+  // chain C: I (4,3) -> (5,3) -> Z (6,3) -> (7,3), into the slag trunk's tail to the Dock; W (5,2)
+  // south into (5,3), its slag east at (6,2) into I's slag trunk; I's slag (4,4) S, then row 5 east
+  // into (7,5)
+  { k: 'stamp', design: 'Gizmo works', copies: 2 }, fplace('Gizmo works', 6, 3, E), ...trunks([[5, 3, E]]),
+  { k: 'stamp', design: 'Iron ingots', copies: 2 }, fplace('Iron ingots', 4, 3, E), ...trunks([[4, 4, S], [4, 5, E], [5, 5, E], [6, 5, E]]),
+  { k: 'stamp', design: 'Copper wire', copies: 2 }, fplace('Copper wire', 5, 2, S), ...trunks([[6, 2, E]]),
+  // chain D: I (6,7) and W (8,7) into (7,7) -> Z (7,6) north into (7,5), up the slag trunk to the
+  // Dock; I's slag (6,6) N into (6,5), W's (8,6) N into (8,5)
+  { k: 'stamp', design: 'Gizmo works', copies: 3 }, fplace('Gizmo works', 7, 6, N), ...trunks([[7, 7, N]]),
+  { k: 'stamp', design: 'Iron ingots', copies: 3 }, fplace('Iron ingots', 6, 7, E), ...trunks([[6, 6, N]]),
+  { k: 'stamp', design: 'Copper wire', copies: 3 }, fplace('Copper wire', 8, 7, W), ...trunks([[8, 6, N]]),
+  // chain E (the last copper claim): I (3,7) and W (5,7) into (4,7) -> Z (4,6) north into (4,5);
+  // I's slag (3,6) N, (3,5) E into (4,5), W's (5,6) N into (5,5)
+  { k: 'stamp', design: 'Gizmo works', copies: 4 }, fplace('Gizmo works', 4, 6, N), ...trunks([[4, 7, N]]),
+  { k: 'stamp', design: 'Iron ingots', copies: 4 }, fplace('Iron ingots', 3, 7, E), ...trunks([[3, 6, N], [3, 5, E]]),
+  { k: 'stamp', design: 'Copper wire', copies: 4 }, fplace('Copper wire', 5, 7, W), ...trunks([[5, 6, N]]),
 ];
 
 /** The research nodes a plan waits on, in plan order (a `need`, or what unlocks a build). */
@@ -429,7 +451,10 @@ export class Bot {
     const g = this.g;
     if (!this.handReady || g.s.orders.active) return;
     const offered = offeredOrders(g);
-    const id = this.policy === 'greedy' ? offered[0]?.id : this.pendingOrders.find((p) => offered.some((q) => q.id === p));
+    // greedy takes whatever is offered; the others take the plan's orders in turn (the next one
+    // waits until it is offered: Lamp Posts would hold the Festival up)
+    const next = this.pendingOrders.find((p) => !g.s.orders.done.includes(p));
+    const id = this.policy === 'greedy' ? offered[0]?.id : next && offered.some((q) => q.id === next) ? next : undefined;
     if (id) this.act({ k: 'order', id });
   }
 
@@ -495,12 +520,12 @@ export class Bot {
       case 'fold':
         return g.s.designs.some((d) => d.box.x === s.x && d.box.y === s.y && d.box.w === s.w && d.box.h === s.h);
       case 'stamp': {
-        const d = g.s.designs[s.design];
+        const d = this.design(s.design);
         return !!d && d.stamped >= s.copies;
       }
       case 'fplace': {
         const e = g.fentAt(s.x, s.y);
-        return !!e && e.kind === 'module';
+        return !!e && e.kind === 'module' && e.design === this.design(s.design)?.id;
       }
       case 'ftrunk': {
         const e = g.fentAt(s.x, s.y);
@@ -525,24 +550,22 @@ export class Bot {
       case 'need':
         return false;
       case 'fold': {
-        const a = g.s.audit;
-        if (!a) {
-          if (foldRefusal(g, s)) return false;
-          return this.buy({ k: 'audit', x: s.x, y: s.y, w: s.w, h: s.h }, 'audit');
-        }
-        // the grade is in: fold (a different box being audited would be cancelled first)
-        if (a.box.x !== s.x || a.box.y !== s.y || a.box.w !== s.w || a.box.h !== s.h) return this.act({ k: 'auditCancel' }) !== null;
-        if (!a.result) return false;
+        const a = this.auditOf(s);
+        // audit this box and the next fold steps' boxes too, while there is a free audit
+        if (!a || !a.result) return this.startAudits();
+        // fold once every running audit is graded: a fold takes machines away, and another audit
+        // may be measuring them (the Gear works' ingots come from the Iron ingots' box)
+        if (g.s.audits.some((q) => !q.result)) return false;
         if (!this.log.at['grade']) this.log.at['grade'] = a.result.grade.score;
-        return this.buy({ k: 'fold', name: s.name }, 'fold:' + a.result.grade.letter);
+        return this.buy({ k: 'fold', name: s.name, id: a.id }, 'fold:' + a.result.grade.letter);
       }
       case 'stamp': {
-        const d = g.s.designs[s.design];
-        if (!d || g.s.coin.lt(stampCost(g, d))) return false;
+        const d = this.design(s.design);
+        if (!d || stampRefusal(g, d) || g.s.coin.lt(stampCost(g, d))) return false;
         return this.buy({ k: 'stamp', id: d.id }, 'stamp');
       }
       case 'fplace': {
-        const d = g.s.designs[s.design];
+        const d = this.design(s.design);
         if (!d || d.spare < 1 || g.fentAt(s.x, s.y)) return false;
         return this.buy({ k: 'fplace', design: d.id, x: s.x, y: s.y, rot: s.rot }, 'module');
       }
@@ -569,6 +592,57 @@ export class Bot {
         return this.buy({ k: 'place', kind: s.kind, x: s.x, y: s.y, rot: s.rot }, s.kind);
       }
     }
+  }
+
+  /** A design by the name this bot gave it at its fold. */
+  private design(name: string) {
+    return this.g.s.designs.find((d) => d.name === name);
+  }
+
+  /** The audit running (or graded) on a fold step's box. */
+  private auditOf(s: { x: number; y: number; w: number; h: number }) {
+    return this.g.s.audits.find((a) => a.box.x === s.x && a.box.y === s.y && a.box.w === s.w && a.box.h === s.h);
+  }
+
+  /** Start an audit on the first of the coming fold steps (from this one on, until a step that
+   * isn't a fold) that has none yet, if one is free; true if a command was sent. */
+  private startAudits(): boolean {
+    const g = this.g;
+    if (g.s.audits.length >= RULES.maxAudits.value) return false;
+    for (let i = this.step; i < this.plan.length; i++) {
+      const s = this.plan[i];
+      if (s.k !== 'fold') break;
+      if (this.isDone(s) || this.auditOf(s) || foldRefusal(g, s) || !this.running(s)) continue;
+      return this.buy({ k: 'audit', x: s.x, y: s.y, w: s.w, h: s.h }, 'audit');
+    }
+    return false;
+  }
+
+  /** A person audits a line that runs: every machine in the box worked in the last 10 s (the
+   * Gizmo works waits while its gears are going to an order). */
+  private running(b: Box): boolean {
+    for (const e of entsIn(this.g, b)) if (isMachine(e.kind) && !e.hist.slice(-10).includes('w')) return false;
+    return true;
+  }
+
+  /** Is a fold the plan has yet to make waiting on this tile (the coming run of fold steps)? */
+  private foldAhead(x: number, y: number): boolean {
+    for (let i = this.step; i < this.plan.length; i++) {
+      const s = this.plan[i];
+      if (s.k !== 'fold') break;
+      if (!this.isDone(s) && x >= s.x && y >= s.y && x < s.x + s.w && y < s.y + s.h) return true;
+    }
+    return false;
+  }
+
+  /** Does the active order still want this item (at the Workshop Dock)? */
+  private orderWants(item: ItemId | null): boolean {
+    const o = this.g.s.orders;
+    if (!item || !o.active) return false;
+    const d = ORDER[o.active];
+    const want = d.wants[item];
+    if (d.at === 'factory' || !want) return false;
+    return (o.progress[o.active]?.[item]?.toNumber() ?? 0) < want;
   }
 
   private buy(c: Cmd, what: string): boolean {
@@ -624,12 +698,16 @@ export class Bot {
     const l2 = this.carries([[4, 2], [3, 2]]);
     const g1 = g.entAt(5, 3);
     if (g.entAt(5, 2)?.kind === 'belt') this.turn(5, 2, l2 === 'ironPlate' && g1?.kind === 'assembler' && this.wants('gear') ? S : E);
-    // L1 at (6,3): research first (Gizmos, then gears), then Gizmos for coin, else the Dock
+    // L1 at (6,3): research first (Gizmos, then gears), then the active order, then Gizmos for
+    // coin, else the Dock
     const l1 = this.carries([[5, 3], [4, 3], [3, 3]]);
     let r1: Dir = N;
     if (!g.miners.length) r1 = N; // hand-made ingots pay for the first miner
     else if (ga && l1 === 'gear' && this.wants('gizmo')) r1 = E;
+    else if (this.policy === 'greedy' && this.orderWants(l1)) r1 = N; // the impatient player: the order first
     else if (this.wants(l1)) r1 = S;
+    else if (ga && l1 === 'gear' && this.foldAhead(6, 3)) r1 = E; // its audit is coming: keep it running
+    else if (this.orderWants(l1)) r1 = N;
     else if (ga && l1 === 'gear') r1 = E;
     this.turn(6, 3, r1);
     // C1 at (8,3), C2 at (8,2): research, else wire into G while it gets gears, else the Dock

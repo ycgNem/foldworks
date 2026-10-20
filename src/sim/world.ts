@@ -92,6 +92,8 @@ export interface Ent {
   cool?: number;
   /** Precision's extra output, a fraction of an item carried between crafts */
   bonus?: number;
+  /** a Lucky Vein's boost on every machine of its line: ticks left (DESIGN.md §6) */
+  boost?: number;
 }
 
 /** A box on the Workshop, in tiles. */
@@ -119,6 +121,7 @@ export interface GradeCard {
 
 /** A fold audit under way, then its result until the player folds or cancels. */
 export interface AuditState {
+  id: number;
   box: Box;
   /** ticks since it began (warm-up, then the window) */
   t: number;
@@ -136,6 +139,8 @@ export interface AuditState {
   result: AuditResult | null;
   /** ticks each machine spent not working, by "state:why" (absent on older saves) */
   stall?: Record<string, Record<string, number>>;
+  /** items held inside the box when the window opened (a counted measurement, not a stock) */
+  stock0?: Record<string, number>;
 }
 
 export interface AuditResult {
@@ -210,6 +215,9 @@ export interface FEnt {
   /** this second's summed run fraction, and seconds in a row at half speed or better */
   fsum?: number;
   ok?: number;
+  /** Overdrive on a module (DESIGN.md §18): ticks left at 3x, then ticks cooling */
+  od?: number;
+  cool?: number;
 }
 
 export interface FactoryState {
@@ -283,8 +291,9 @@ export interface State {
   flags: string[];
   /** event counts for statistics and trophies (clicks, cranks, shovels, sparks...), not amounts */
   counters: Record<string, number>;
-  /** the fold audit under way or awaiting a decision (DESIGN.md §10) */
-  audit: AuditState | null;
+  /** fold audits under way or awaiting a decision (DESIGN.md §10), up to RULES.maxAudits */
+  audits: AuditState[];
+  nextAudit: number;
   /** module designs (the inventory) */
   designs: ModuleDesign[];
   nextDesign: number;
@@ -372,7 +381,8 @@ export function newState(seed: number): State {
     delivered: {},
     flags: [],
     counters: {},
-    audit: null,
+    audits: [],
+    nextAudit: 1,
     designs: [],
     nextDesign: 1,
     factory: newFactory(),

@@ -49,8 +49,11 @@ export async function act2Setup(state) {
     D(6, 'Copper wire', [P('miner', 0, 'mineCopper'), P('smelter', 1), P('press', 2)], {}, { copperWire: 1, slag: 0.12 }, gr('C', 0.55, 0.9), 250, 1, 2),
     D(7, 'Gravel from slag', [P('press', 0), P('press', 1)], { slag: 0.5 }, { gravel: 0.25 }, gr('B', 0.68, 1), 300, 0, 1),
     D(8, 'Concrete x20/min', [P('miner', 0, 'mineSand'), P('press', 1), P('mixer', 2), P('generator', 3), P('pole', 4)], {}, { concrete: 0.33 }, gr('A', 0.86, 1.1), 1210, 0, 1),
+    D(9, 'Gear cutter', [P('press', 0), P('press', 1)], { ironPlate: 0.6 }, { gear: 0.3 }, gr('A', 0.84, 1.1), 200, 0, 2),
+    D(10, 'Gizmo works', [P('press', 0), P('assembler', 1), P('assembler', 2)], { ironIngot: 0.4, copperWire: 0.8 }, { gizmo: 0.4 }, gr('A', 0.88, 1.1), 1150, 0, 1),
+    D(11, 'Iron ingots', [P('miner', 0, 'mineIron'), P('smelter', 1), P('heap', 2)], {}, { ironIngot: 0.5, slag: 0.12 }, gr('S', 0.92, 1.25), 125, 0, 1),
   ];
-  g.s.nextDesign = 9;
+  g.s.nextDesign = 12;
   g.s.mega = { stage: 0, progress: { drillBit: N.of(14), concrete: N.of(620), steel: N.of(410) } };
   if (state === 'megaDone') g.s.mega = { stage: 1, progress: {} };
   a.renderer.ground = null;
@@ -59,9 +62,36 @@ export async function act2Setup(state) {
   a.setFloor('factory', true);
   const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
   const row = (design, y, x1 = 9) => { act({ k: 'fplace', design, x: 2, y, rot: 0 }); for (let x = 3; x <= x1; x++) act({ k: 'ftrunk', x, y, rot: 0 }); };
+  const festival = state === 'festival' || state === 'festivalFloor';
+  if (festival) {
+    // the slice's last stretch: Bramble's Gizmo Festival, only Factory Dock deliveries count
+    g.s.research.done = act1.slice();
+    g.s.land = ['A', 'B', 'C', 'D'];
+    g.s.flags = g.s.flags.filter((f) => f !== 'sliceEnd');
+    g.s.orders.done = ['boardwalk', 'lampPosts'];
+    g.s.orders.rep = { bramble: 2, unit7: 0, voltaire: 0 };
+    g.s.orders.active = 'gizmoFestival';
+    g.s.orders.progress = { gizmoFestival: { gizmo: N.of(137) } };
+    // their slag handled inside (a heap in the box), so the chain runs clean
+    g.s.designs = g.s.designs.filter((d) => [6, 10, 11].includes(d.id)).map((d) => ({ ...d, outs: Object.fromEntries(Object.entries(d.outs).filter(([k]) => k !== 'slag')) }));
+    g.s.coin = N.of(18400);
+  }
   if (state === 'fgrade' || state === 'faudit') {
-    row(1, 1);
+    // a nested fold needs a chain inside its box: plates feeding a gear cutter
+    act({ k: 'fplace', design: 1, x: 2, y: 1, rot: 0 });
+    act({ k: 'ftrunk', x: 3, y: 1, rot: 0 });
+    act({ k: 'fplace', design: 9, x: 4, y: 1, rot: 0 });
+    for (let x = 5; x <= 9; x++) act({ k: 'ftrunk', x, y: 1, rot: 0 });
     row(6, 2);
+  } else if (festival) {
+    // ingots -> the Gizmo works, wire joining from below, Gizmos into the Factory Dock
+    act({ k: 'fplace', design: 11, x: 1, y: 1, rot: 0 });
+    for (let x = 2; x <= 5; x++) act({ k: 'ftrunk', x, y: 1, rot: 0 });
+    act({ k: 'fplace', design: 10, x: 6, y: 1, rot: 0 });
+    for (let x = 7; x <= 9; x++) act({ k: 'ftrunk', x, y: 1, rot: 0 });
+    act({ k: 'fplace', design: 6, x: 1, y: 2, rot: 0 });
+    for (let x = 2; x <= 4; x++) act({ k: 'ftrunk', x, y: 2, rot: 0 });
+    act({ k: 'ftrunk', x: 5, y: 2, rot: 3 });
   } else {
     row(1, 1);
     row(5, 2);
@@ -96,6 +126,21 @@ export async function act2Setup(state) {
     g.s.orders.rep.unit7 = 2;
     g.s.orders.rep.voltaire = 1;
   }
+  if (state === 'festival') a.panel = 'orders';
+  if (state === 'research2') {
+    g.s.research.done = g.s.research.done.filter((r) => !['circuits', 'heavyMachines', 'tuning', 'motors', 'nestedFolds', 'greatDrill', 'machineKits'].includes(r));
+    g.s.research.selected = 'circuits';
+    g.s.research.progress = { circuits: { copperWire: N.of(310), glass: N.of(44) } };
+    a.hud.treePage = 2;
+    a.panel = 'research';
+  }
+  if (state === 'factoryOD') {
+    // Overdrive on the Factory floor: one trunk group running hot, another cooling down
+    a.act({ k: 'fclick', x: 2, y: 3 });
+    const cooling = g.s.factory.ents.find((e) => e.kind === 'module' && e.x === 2 && e.y === 1);
+    if (cooling) { cooling.od = 0; cooling.cool = 20 * 18; }
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  }
   if (state === 'codex') a.panel = 'codex';
   if (state === 'survey') a.panel = 'survey';
   if (state === 'mega') a.panel = 'mega';
@@ -110,7 +155,72 @@ export async function act2Setup(state) {
   return null;
 }
 
-export const ACT2 = ['orders2', 'codex', 'survey', 'mega', 'megaDone', 'fgrade', 'faudit', 'factory2', 'fbox', 'modules2', 'sliceEnd2'];
+export const ACT2 = ['orders2', 'codex', 'survey', 'mega', 'megaDone', 'fgrade', 'faudit', 'factory2', 'fbox', 'modules2', 'sliceEnd2', 'festival', 'festivalFloor', 'research2', 'factoryOD'];
+
+/** Runs in the page: the Workshop with fold audits. audits3: three audits, the iron line in
+ * chunk C graded and two smelter/press lines in chunk D still measuring. gradeSplus: the iron
+ * line's grade card, its grade pushed to S+ (the art and the card at the top grade). */
+export async function workshopSetup(state) {
+  const a = window.__app;
+  a.newGame(5);
+  a.freeze();
+  a.grant(1e6);
+  const g = a.game;
+  g.s.land = ['A', 'B', 'C', 'D'];
+  g.s.research.done = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding'];
+  g.s.upgrades.push('bellows');
+  g.s.flags.push('ordersSeen');
+  g.s.ents = g.s.ents.filter((e) => e.kind === 'dock' || e.kind === 'hopper' || e.kind === 'furnace');
+  g.rebuild();
+  a.renderer.ground = null;
+  const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
+  act({ k: 'place', kind: 'miner', x: 2, y: 11, rot: 0 });
+  act({ k: 'place', kind: 'smelter', x: 3, y: 11, rot: 0 });
+  act({ k: 'place', kind: 'belt', x: 3, y: 12, rot: 1 });
+  act({ k: 'place', kind: 'heap', x: 3, y: 13, rot: 1 });
+  act({ k: 'place', kind: 'belt', x: 4, y: 11, rot: 0 });
+  for (let y = 11; y > 2; y--) act({ k: 'place', kind: 'belt', x: 5, y, rot: 3 });
+  act({ k: 'place', kind: 'belt', x: 5, y: 2, rot: 0 });
+  if (state === 'audits3') {
+    // two more lines in chunk D: a smelter into a press, out to a belt
+    for (const y of [10, 13]) {
+      act({ k: 'place', kind: 'smelter', x: 10, y, rot: 0 });
+      act({ k: 'place', kind: 'press', x: 11, y, rot: 0 });
+      act({ k: 'place', kind: 'belt', x: 12, y, rot: 0 });
+    }
+  }
+  a.step(30 * 20);
+  act({ k: 'audit', x: 2, y: 11, w: 2, h: 2 });
+  if (state === 'audits3') {
+    a.step(20 * 40);
+    act({ k: 'audit', x: 10, y: 10, w: 2, h: 1 });
+    a.step(20 * 18);
+    act({ k: 'audit', x: 10, y: 13, w: 2, h: 1 });
+    a.step(20 * 13);
+    a.game.events.drain();
+    a.panel = null;
+    a.fitCamera(true);
+  } else {
+    a.step(20 * 71);
+    a.game.events.drain();
+    const au = g.s.audits[0];
+    const r = au.result;
+    r.grade = { ...r.grade, letter: 'S+', score: 0.98, u: 0.99, w: 1, c: 0.95, mult: 1.35 };
+    r.advice = ['Flawless: every machine busy, waste handled, nothing wasted on space.'];
+    a.gradeId = au.id;
+    a.panel = 'grade';
+    // the stamp has landed: the card at rest, its burst and confetti under way
+    a.gradeAt = a.ui.time - 0.5;
+    a.hud.stamped = false;
+    a.nameDraft = null;
+  }
+  a.toasts = [];
+  a.trophyPops = [];
+  a.refusal = null;
+  return null;
+}
+
+export const WORKSHOP = ['audits3', 'gradeSplus'];
 
 /** Hold the mouse down from one tile to another (a drag left unfinished for the screenshot). */
 export async function dragTiles(page, [[x0, y0], [x1, y1]]) {
@@ -158,6 +268,7 @@ const STATES = {
   huge: () => { const a = window.__app; const g = a.game; g.s.coin = g.s.coin.constructor.parse('4.56e123'); },
 };
 for (const s of ACT2) STATES[s] = s;
+for (const s of WORKSHOP) STATES[s] = { ws: s };
 
 async function main() {
   const only = process.argv.slice(2);
@@ -175,7 +286,7 @@ async function main() {
     for (const [state, fn] of Object.entries(STATES)) {
       if (only.length && !only.includes(state)) continue;
       const name = `${w}x${h}-${state}`;
-      const r = typeof fn === 'string' ? await page.evaluate(act2Setup, fn) : await page.evaluate(fn);
+      const r = typeof fn === 'string' ? await page.evaluate(act2Setup, fn) : fn.ws ? await page.evaluate(workshopSetup, fn.ws) : await page.evaluate(fn);
       if (r?.drag) await dragTiles(page, r.drag);
       else if (r?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), r.hover); await page.mouse.move(p.x, p.y); }
       else await page.mouse.move(Math.floor(w / 2), Math.floor(h / 2) + 40);

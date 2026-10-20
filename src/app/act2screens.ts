@@ -1,5 +1,5 @@
 // Act II's screens (DESIGN.md §18): Unit 7's Codex (every item with its story; a first delivery
-// pays 100x its value once Unit 7 likes you), the Survey Office (deposit claims by ore, what holds
+// pays 30x its value once Unit 7 likes you), the Survey Office (deposit claims by ore, what holds
 // them, and blocks of 4 to buy) and the Megaproject (the Great Drill's Bay drawn large, what its
 // stage still wants, and a celebration when a stage is done). Reads the Game; acts through App.act.
 import { C } from '../data/palette';
@@ -295,24 +295,35 @@ export function megaScreen(app: App, r: Rect) {
   const celebrate = g.s.mega.stage >= 1 && t < 12 && t >= 0;
   // ---- the Bay, large, on the left
   const artH = bottom - y0;
-  const k = Math.max(2, Math.min(6, Math.floor((Math.min(artH - 34, r.w * 0.42) - 8) / 32)));
-  const aw = 32 * k + 16;
+  // the art director's 48x48 stage art (mega_stage1) at a whole scale, else the 32x32 Bay frame;
+  // room is kept under it for the stage track and the Factory floor map
+  const big = hasArt('mega_stage1');
+  const S0 = big ? 48 : 32;
+  const k = Math.max(big ? 1 : 2, Math.min(6, Math.floor((Math.min(artH - 34 - (big ? 50 : 0), r.w * 0.42) - 8) / S0)));
+  const P = S0 * k;
+  const aw = P + 16;
   frame(ui, r.x + 8, y0, aw, artH, 'inset');
   const ctx = ui.ctx;
   const ax = r.x + 16, ay = y0 + 8;
   // a night sky over the pad; rays once the drill runs
   ui.clip(r.x + 9, y0 + 1, aw - 2, artH - 2);
-  ui.fill(r.x + 9, y0 + 1, aw - 2, 32 * k + 8, C.shadow);
+  ui.fill(r.x + 9, y0 + 1, aw - 2, P + 8, C.shadow);
   for (let i = 0; i < 24; i++) {
-    const sx = r.x + 10 + ((i * 53) % (aw - 4)), sy = y0 + 3 + ((i * 29) % (16 * k));
+    const sx = r.x + 10 + ((i * 53) % (aw - 4)), sy = y0 + 3 + ((i * 29) % Math.max(1, P / 2));
     if (Math.sin(ui.time * 2 + i) > 0.3) ui.fill(sx, sy, 1, 1, i % 3 ? C.hull2 : C.hot);
   }
-  if (g.s.mega.stage >= 1) rays(app, ax + 16 * k, ay + 16 * k, 32 * k, C.gold, 14);
+  if (g.s.mega.stage >= 1) rays(app, ax + P / 2, ay + P / 2, P, C.gold, 14);
   ui.unclip();
-  const bay = sheet('mega_bay');
-  ctx.drawImage(bay.frames[bayFrame(g, ui.time)], ax, ay, 32 * k, 32 * k);
-  // the stage track under the art
-  let ty = ay + 32 * k + 8;
+  if (big) {
+    const st = sheet('mega_stage1');
+    const flip = Math.floor(ui.time * (st.fps || 4)) % 2;
+    const fi = g.s.mega.stage >= 1 ? 8 + flip : 2 * Math.min(3, Math.floor(megaFrac(g) * 4)) + flip;
+    ctx.drawImage(st.frames[fi], ax, ay, P, P);
+  } else {
+    const bay = sheet('mega_bay');
+    ctx.drawImage(bay.frames[bayFrame(g, ui.time)], ax, ay, P, P);
+  }
+  let ty = ay + P + 8;
   const sw = Math.floor((aw - 16 - 8) / 3);
   for (let s = 1; s <= 3; s++) {
     const sx = ax + (s - 1) * (sw + 4);
@@ -323,7 +334,9 @@ export function megaScreen(app: App, r: Rect) {
     ui.hint(sx, ty, sw, 14, s === 1 ? (MEGA[0]?.reward ?? '') : `Stage ${s} arrives with a later floor.`, 160);
   }
   ty += 18;
-  if (ty + 9 < bottom) ui.para(g.s.mega.stage >= 1 ? 'The drill runs. Its progress survives every reset.' : 'Progress here survives every reset.', ax, ty, aw - 16, C.hull2);
+  if (ty + 9 < bottom) ty += ui.para(g.s.mega.stage >= 1 ? 'The drill runs. Its progress survives every reset.' : 'Progress here survives every reset.', ax, ty, aw - 16, C.hull2) + 6;
+  // the Factory floor in miniature, the Bay lit in its corner
+  if (bottom - 6 - ty >= 12 + FACTORY.h * 3) bayMap(app, ax, ty, aw - 16, bottom - 6 - ty);
   // ---- what the stage wants, on the right
   const px = r.x + 8 + aw + 6, pw = r.x + r.w - 8 - px;
   if (stage) wants(app, stage, px, y0, pw, bottom - y0);
@@ -348,45 +361,72 @@ function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, x: nu
   const inner = card(ui, x, y, w, h, 'Wanted, by trunk into the Bay', C.gold, 'mega');
   const bay = g.s.factory.ents.find((e) => e.kind === 'fbay');
   const feeds = bayFeeds(app);
+  const end = inner.y + inner.h - 17;
   let yy = inner.y + 2;
   const ents = Object.entries(stage.wants) as [ItemId, number][];
-  const rowH = Math.min(34, Math.floor((inner.h - 84) / ents.length));
+  const rowH = Math.max(24, Math.min(30, Math.floor((inner.h - 150) / ents.length)));
+  let slowest = 0;
   for (const [it, want] of ents) {
     const have = Math.min(want, Math.floor(g.s.mega.progress[it]?.toNumber() ?? 0));
     const f = have / want;
     ui.fill(inner.x, yy, 20, 20, C.ink);
+    ui.fill(inner.x + 1, yy + 1, 18, 18, f >= 1 ? C.moss : C.shadow);
     ui.ctx.drawImage(itemIcon(it), inner.x + 2, yy + 2, 16, 16);
-    ui.text(ITEMS[it].name, inner.x + 25, yy, C.bone);
+    ui.text(ITEMS[it].name, inner.x + 25, yy, f >= 1 ? C.leaf : C.bone);
     const rate = feeds[it];
     if (rate) ui.text(`+${perMin(rate)}/min`, inner.x + 25 + textWidth(ITEMS[it].name) + 6, yy, C.leaf);
+    else if (f < 1) ui.text('not arriving', inner.x + 25 + textWidth(ITEMS[it].name) + 6, yy, C.pipYellow);
     ui.text(`${fmt(have)} / ${fmt(want)}`, inner.x + inner.w, yy, f >= 1 ? C.leaf : C.gold, { align: 'right' });
     bar(ui, inner.x + 25, yy + 10, inner.w - 25 - 28, 8, f, f >= 1 ? C.leaf : C.gold);
-    ui.text(`${Math.floor(f * 100)}%`, inner.x + inner.w, yy + 10, C.hull3, { align: 'right' });
-    if (rate && f < 1) {
-      const secs = (want - have) / rate;
-      ui.hint(inner.x, yy, inner.w, rowH, `${perMin(rate)} a minute arriving: about ${secs >= 3600 ? `${(secs / 3600).toFixed(1)} h` : `${Math.ceil(secs / 60)} min`} to go.`, 170);
-    }
+    ui.text(f >= 1 ? ICON.check : `${Math.floor(f * 100)}%`, inner.x + inner.w, yy + 10, f >= 1 ? C.leaf : C.hull3, { align: 'right' });
+    if (f < 1) slowest = Math.max(slowest, rate ? (want - have) / rate : Infinity);
+    ui.hint(inner.x, yy, inner.w, rowH, rate && f < 1 ? `${perMin(rate)} a minute arriving: about ${eta((want - have) / rate)} to go.` : f >= 1 ? 'Enough of this one.' : `Nothing brings ${ITEMS[it].name.toLowerCase()} to the Bay yet: trunk a module making it into the Bay.`, 170);
     yy += rowH;
   }
-  // the whole stage
+  // the whole stage: a big meter with quarter ticks
   const tf = megaFrac(g);
-  yy += 2;
-  ui.text('Stage 1 in all', inner.x, yy, C.hull2);
-  ui.text(`${Math.floor(tf * 100)}%`, inner.x + inner.w, yy, C.gold, { align: 'right' });
-  bar(ui, inner.x, yy + 10, inner.w, 10, tf, C.hot);
-  yy += 26;
-  // the reward
-  const rlines = wrapText(stage.reward + '.', inner.w - 12).length;
-  const rh = 16 + rlines * 10;
-  if (yy + rh <= inner.y + inner.h - 16) {
+  ui.text('Stage 1 in all', inner.x, yy + 4, C.hull2);
+  ui.text(`${Math.floor(tf * 100)}%`, inner.x + inner.w, yy, C.gold, { align: 'right', scale: 2, shadow: C.brass0 });
+  yy += 19;
+  bar(ui, inner.x, yy, inner.w, 12, tf, C.hot);
+  for (const q of [0.25, 0.5, 0.75]) ui.fill(inner.x + Math.round(inner.w * q), yy + 1, 1, 10, tf >= q ? C.gold : C.hull0);
+  // a glint running along the filled part
+  const gl = (ui.time * 0.7) % 1.5;
+  if (gl < 1 && tf > 0.02) ui.fill(inner.x + 1 + Math.floor(gl * Math.max(1, inner.w * tf - 3)), yy + 1, 2, 10, C.bone, 0.5);
+  yy += 15;
+  if (yy + 10 <= end) {
+    ui.text(slowest === 0 ? 'Everything is in: the drill is about to wake.' : isFinite(slowest) ? `At these rates, done in about ${eta(slowest)}.` : 'Not everything is arriving: trunk the missing items in.', inner.x, yy, isFinite(slowest) ? C.leaf : C.pipYellow);
+    yy += 12;
+  }
+  // the reward: what it pays, with what you have that it would boost
+  const miners = g.miners.length;
+  const srcMods = g.s.factory.ents.filter((e) => e.kind === 'module' && Object.keys(oresOf(g, g.design(e.design)!)).length).length;
+  const rh = 36;
+  if (yy + rh <= end) {
     frame(ui, inner.x, yy, inner.w, rh, 'paper');
-    ui.text('Reward', inner.x + 6, yy + 4, C.brass0);
-    ui.para(stage.reward + '.', inner.x + 6, yy + 13, inner.w - 12, C.ink);
-    yy += rh + 5;
+    ui.text('Reward: +50% to miners', inner.x + 6, yy + 4, C.brass0);
+    ui.text('and modules with miners inside', inner.x + 6, yy + 13, C.brass0);
+    const minerS = sheet('miner'), modS = sheet('module');
+    const half = Math.floor(inner.w / 2);
+    const rx = inner.x + 6, ry = yy + 23;
+    ui.ctx.drawImage(minerS.frames[Math.floor(ui.time * 6) % minerS.frames.length], rx, ry - 2, 10, 10);
+    ui.text(`${miners} Miner${miners === 1 ? '' : 's'}`, rx + 13, ry, C.ink);
+    ui.ctx.drawImage(modS.frames[0], rx + half - 6, ry - 2, 10, 10);
+    ui.clip(rx + half + 7, yy, inner.w - half - 14, rh);
+    ui.text(`${srcMods} source module${srcMods === 1 ? '' : 's'}`, rx + half + 7, ry, C.ink);
+    ui.unclip();
+    // a big +50% stamp on the right while there is room
+    const st = '+50%';
+    if (inner.w >= 230) {
+      const sx = inner.x + inner.w - textWidth(st) * 2 - 12;
+      ui.text(st, sx, yy + 5, Math.floor(ui.time * 2) % 2 ? C.copper1 : C.pipRed, { scale: 2 });
+    }
+    ui.hint(inner.x, yy, inner.w, rh, `${stage.reward}. Right now that is ${miners} Miner${miners === 1 ? '' : 's'} on the Workshop and ${srcMods} module${srcMods === 1 ? '' : 's'} on the Factory floor with miners folded inside.`, 190);
+    yy += rh + 4;
   }
   // how a Drill Bit is made, and what is flowing in right now
   const bit = RECIPE.forgeDrillBit;
-  if (bit && yy + 10 <= inner.y + inner.h - 18) {
+  if (bit && yy + 10 <= end) {
     ui.text('Drill Bit:', inner.x, yy, C.hull2);
     let xx = inner.x + textWidth('Drill Bit:') + 5;
     for (const inp of bit.inputs) {
@@ -398,13 +438,34 @@ function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, x: nu
     yy += 11;
   }
   const flowing = Object.entries(feeds) as [ItemId, number][];
-  if (yy + 10 <= inner.y + inner.h - 18) {
+  if (yy + 10 <= end) {
     ui.text(flowing.length ? 'Arriving:' : 'Nothing is trunked into the Bay yet.', inner.x, yy, flowing.length ? C.hull2 : C.pipYellow);
     let xx = inner.x + textWidth('Arriving:') + 5;
     for (const [it, r2] of flowing) {
       const s2 = `${perMin(r2)}/min`;
       ui.ctx.drawImage(itemIcon(it), xx, yy);
       xx += 14 + ui.text(s2, xx + 10, yy, C.leaf);
+    }
+  }
+  yy += 14;
+  // the modules feeding it, each with its product and rate
+  const feeders = g.routes.filter((rt) => rt.to?.kind === 'fbay' && !rt.by);
+  if (feeders.length && yy + 22 <= end) {
+    ui.text('Feeding the Bay', inner.x, yy, C.gold);
+    yy += 11;
+    for (const rt of feeders) {
+      if (yy + 11 > end) break;
+      const d = g.design(rt.from.design);
+      const it = mainOutput(g, rt.from.design);
+      const last = rt.tiles[rt.tiles.length - 1];
+      ui.ctx.drawImage(sheet('module').frames[0], inner.x, yy - 3, 12, 12);
+      if (it) ui.ctx.drawImage(itemIcon(it), inner.x + 15, yy);
+      ui.clip(inner.x + 26, yy, inner.w - 90, 10);
+      ui.text(d?.name ?? 'module', inner.x + 26, yy, C.bone);
+      ui.unclip();
+      const st = rt.from.state;
+      ui.text(last ? `${perMin(last.flow)}/min` : '-', inner.x + inner.w, yy, st === 'work' ? C.leaf : C.pipYellow, { align: 'right' });
+      yy += 12;
     }
   }
   // where it is, or why it isn't there yet
@@ -418,6 +479,47 @@ function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, x: nu
   } else if (g.done('greatDrill')) {
     ui.para(`Clear the Factory floor's corner (tiles ${FACTORY.bay.x}-${FACTORY.bay.x + 1}, ${FACTORY.bay.y}-${FACTORY.bay.y + 1}): the Bay lands there.`, inner.x, by - 8, inner.w, C.pipRed);
   } else ui.para(`Research ${RESEARCH.greatDrill.name} to bring the Bay.`, inner.x, by, inner.w, C.hull2);
+}
+
+function eta(secs: number): string {
+  if (!isFinite(secs)) return 'forever';
+  return secs >= 3600 ? `${(secs / 3600).toFixed(1)} h` : `${Math.max(1, Math.ceil(secs / 60))} min`;
+}
+
+/** The Factory floor in miniature with the Bay lit: where it stands, and the trunks into it. */
+function bayMap(app: App, x: number, y: number, w: number, h: number) {
+  const ui = app.ui;
+  const g = app.game;
+  const t = Math.max(2, Math.min(8, Math.floor(Math.min((w - 4) / FACTORY.w, (h - 14) / FACTORY.h))));
+  const mw = FACTORY.w * t, mh = FACTORY.h * t;
+  const mx = x + Math.floor((w - mw) / 2), my = y + 12;
+  ui.text('Where the Bay stands', x, y, C.hull2);
+  ui.fill(mx - 2, my - 2, mw + 4, mh + 4, C.ink);
+  ui.fill(mx - 1, my - 1, mw + 2, mh + 2, C.brass0);
+  for (let ty = 0; ty < FACTORY.h; ty++) for (let tx = 0; tx < FACTORY.w; tx++) ui.fill(mx + tx * t, my + ty * t, t, t, (tx + ty) % 2 ? C.hull1 : C.hull0);
+  const flowsIn = new Set<number>();
+  for (const r of g.routes) if (r.to?.kind === 'fbay') for (const q of r.tiles) flowsIn.add(q.id);
+  for (const e of g.s.factory.ents) {
+    const ex = mx + e.x * t, ey = my + e.y * t;
+    if (e.kind === 'trunk') {
+      const lit = flowsIn.has(e.id);
+      ui.fill(ex + Math.floor(t / 2) - 1, ey + Math.floor(t / 2) - 1, 2, 2, lit ? (Math.floor(ui.time * 4 + e.x) % 2 ? C.gold : C.hot) : C.shadow);
+    } else if (e.kind === 'module') {
+      ui.fill(ex, ey, t, t, C.ink);
+      ui.fill(ex + 1, ey + 1, t - 2, t - 2, C.brass1);
+    } else if (e.kind === 'fdock' || e.kind === 'fhopper') {
+      ui.fill(ex, ey, e.w * t, e.h * t, C.ink);
+      ui.fill(ex + 1, ey + 1, e.w * t - 2, e.h * t - 2, e.kind === 'fdock' ? C.leaf : C.teal0);
+    }
+  }
+  // the Bay: lit gold and breathing, or hazard corners where it will land
+  const b = FACTORY.bay;
+  const bx = mx + b.x * t, by = my + b.y * t;
+  const on = Math.floor(ui.time * 3) % 2 === 0;
+  ui.fill(bx - 1, by - 1, 2 * t + 2, 2 * t + 2, on ? C.gold : C.hot);
+  ui.fill(bx + 1, by + 1, 2 * t - 2, 2 * t - 2, C.iron0);
+  ui.fill(bx + 2, by + 2, 2 * t - 4, 2 * t - 4, C.iron1);
+  ui.hint(mx, my, mw, mh, `The Megaproject Bay: the Factory floor's bottom-left corner, tiles ${b.x}-${b.x + 1}, ${b.y}-${b.y + 1}. Lit dots are trunks carrying into it.`, 180);
 }
 
 function complete(app: App, x: number, y: number, w: number, h: number, celebrate: boolean, t: number) {

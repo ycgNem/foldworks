@@ -107,7 +107,7 @@ await page.mouse.move(p1.x, p1.y, { steps: 4 });
 await frames(page, 2);
 await page.mouse.up();
 await frames(page, 2);
-const box = await page.evaluate(() => window.__app.game.s.audit?.box ?? null);
+const box = await page.evaluate(() => window.__app.game.s.audits[0]?.box ?? null);
 check(!!box && box.w === 2 && box.h === 2, `dragging a box starts an audit (${JSON.stringify(box)})`);
 await page.evaluate(() => window.__app.step(20 * 71));
 await frames(page, 4);

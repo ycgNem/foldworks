@@ -8,11 +8,13 @@
 import type { Game, ActResult } from '../Game';
 import { DX, DY, ccw, cw, faceTiles, opposite, type Dir, type Ent } from '../world';
 import { RECIPE, type RecipeDef } from '../../data/recipes';
-import { BUILD } from '../../data/machines';
+import { BUILD, isMachine } from '../../data/machines';
+import { lineOf } from '../analysis';
 import { RULES } from '../../data/rules';
 import { TICK_RATE } from '../../engine/time';
 import { offer, accepts } from '../transfer';
 import { powerFactor } from './power';
+import { isAudited } from './audits';
 import { note } from './stats';
 
 const OK: ActResult = { ok: true };
@@ -27,17 +29,27 @@ export function modeSpeed(m: Ent): number {
   }
 }
 
+/** A Lucky Vein's boost (DESIGN.md §6) for this machine now: 1 when none, or while it is being
+ * audited (a boost would be folded in for good). */
+export function veinBoost(g: Game, m: Ent): number {
+  if (!(m.boost ?? 0)) return 1;
+  if (isAudited(g, m.id)) return 1;
+  return RULES.veinMult.value;
+}
+
 /** Crafting speed this tick, before power: kind x mode x Overdrive. */
 export function baseSpeed(m: Ent): number {
   return (BUILD[m.kind].speed ?? 1) * modeSpeed(m) * ((m.od ?? 0) > 0 ? RULES.overdriveMult.value : 1);
 }
 
-/** Count down Overdrive, then its cooling (both systems that run machines call it). */
+/** Count down Overdrive, then its cooling, and a Lucky Vein's boost (both systems that run
+ * machines call it). */
 export function overdriveTick(m: Ent) {
   if (m.od) {
     m.od--;
     if (!m.od) m.cool = Math.round(RULES.overdriveCool.value * TICK_RATE);
   } else if (m.cool) m.cool--;
+  if (m.boost) m.boost--;
 }
 
 export function runMachines(g: Game) {
@@ -53,7 +65,7 @@ export function runMachines(g: Game) {
       const hand = m.kind === 'furnace' && !bellows;
       if (!hand) {
         const pf = powerFactor(g, m);
-        const sp = baseSpeed(m) * pf;
+        const sp = baseSpeed(m) * veinBoost(g, m) * pf;
         if (sp > 0) {
           m.prog += sp;
           progressed = true;
@@ -186,13 +198,22 @@ function pushByproduct(g: Game, m: Ent): boolean {
   return false;
 }
 
-/** Overdrive (DESIGN.md §18): a click runs a machine 3x for 10 s, then it cools for 30 s. */
+/** Overdrive (DESIGN.md §18): a click runs a machine and every machine of its line 3x for 10 s,
+ * then each cools for 30 s. The whole line, because one machine at 3x only starves or backs up
+ * its neighbours (the Milestone 3 gate review measured 1.03x idle with single machines). */
 export function overdrive(g: Game, m: Ent): ActResult {
   if ((m.od ?? 0) > 0) return { ok: false, why: 'Overdriven already' };
   if ((m.cool ?? 0) > 0) return { ok: false, why: `Cooling down: ${Math.ceil((m.cool ?? 0) / TICK_RATE)} s` };
-  m.od = Math.round(RULES.overdriveSeconds.value * TICK_RATE);
+  const ticks = Math.round(RULES.overdriveSeconds.value * TICK_RATE);
+  let n = 0;
+  for (const e of lineOf(g, m)) {
+    if (!isMachine(e.kind) || (e.od ?? 0) > 0 || (e.cool ?? 0) > 0 || isAudited(g, e.id)) continue;
+    e.od = ticks;
+    n++;
+    if (e !== m) g.emit({ type: 'overdriveLine', x: e.x + (e.w - 1) / 2, y: e.y + (e.h - 1) / 2, value: e.id });
+  }
   g.bump('overdrives');
-  g.emit({ type: 'overdrive', x: m.x + (m.w - 1) / 2, y: m.y + (m.h - 1) / 2, value: m.id });
+  g.emit({ type: 'overdrive', x: m.x + (m.w - 1) / 2, y: m.y + (m.h - 1) / 2, value: m.id, d: n });
   return OK;
 }
 
