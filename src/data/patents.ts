@@ -11,9 +11,9 @@ export const PATENT_IDS = [
   'bellows', 'starterLine', 'notebooks', 'copperDeeds', 'gearPatterns', 'gizmoPatent', 'foldingPatent', 'grant',
   'overdriveHabit', 'coalRights', 'steelCharter', 'glassNotes', 'circuitPatent',
   // rules
-  'surveyCharter', 'widerBox', 'quickAudit', 'moreAuditors', 'sideIntake', 'deepHeaps', 'nestedBoxes', 'coolHands', 'stampDies',
+  'surveyCharter', 'widerBox', 'quickAudit', 'moreAuditors', 'sideIntake', 'nestedBoxes', 'freshDies',
   // automation
-  'shovelFrog', 'labAssistant', 'orderClerk', 'stampPress', 'dragonfly', 'dragonflies',
+  'shovelFrog', 'labAssistant', 'orderClerk', 'stampPress', 'draughtsman', 'drawerSpace',
   // offline
   'nightShift', 'nightWatch', 'lightsOn',
 ] as const;
@@ -29,16 +29,15 @@ export type PatentEffect =
   | { k: 'audit'; warmup: number; span: number }
   | { k: 'maxAudits'; value: number }
   | { k: 'sideIntake' }
-  | { k: 'heapCap'; value: number }
-  | { k: 'claims'; value: number }
+  | { k: 'halfClaims' }
   | { k: 'nestedMax'; value: number }
-  | { k: 'overdriveCool'; value: number }
-  | { k: 'stampGrowth'; value: number }
+  | { k: 'freshDies' }
   | { k: 'shovel'; every: number }
   | { k: 'lab' }
   | { k: 'clerk' }
   | { k: 'stampPress'; every: number }
-  | { k: 'drone'; n: number }
+  | { k: 'draughtsman'; every: number }
+  | { k: 'drawer'; add: number }
   | { k: 'offline'; add: number };
 
 export interface PatentDef {
@@ -61,121 +60,124 @@ const P = (d: PatentDef) => d;
 
 export const PATENTS: Record<PatentId, PatentDef> = {
   // ---------------------------------------------------------------- head starts
+  // Each is priced at about a Patent per 5-8 minutes of the first run it saves (1 at the least):
+  // the designed first run files about 3.5 Patents an hour (§19), so a node pays back its price in
+  // the minutes it saves over two or three runs.
   bellows: P({
     id: 'bellows', name: 'Bellows on the Bench', branch: 'head', cost: 1, requires: [], pos: [0, 0],
     effect: { k: 'head', upgrades: ['bellows'] },
     text: 'Every run starts with the Bellows: the Hand Furnace runs itself.',
     flavor: 'You kept the bellows. Of course you kept the bellows.',
-    derivation: '§19 Patent tree: head starts; 1 Patent, the 20 s of cranking §6 measures (§13 check 1)',
+    derivation: '§19 Patent tree: head starts; 1 Patent (the least), the 20 s of cranking §6 measures (§13 check 1)',
   }),
   starterLine: P({
     id: 'starterLine', name: 'A Miner on the Patch', branch: 'head', cost: 1, requires: ['bellows'], pos: [1, 0],
     effect: { k: 'head', place: [{ kind: 'miner', x: 2, y: 3, rot: 0 }] },
     text: 'Every run starts with a Miner feeding the Hand Furnace: hands-free from the first second.',
     flavor: 'It was still warm when you came back.',
-    derivation: '§19 Patent tree: head starts; 1 Patent, the first 47 s of hand-mining (§13 check 2)',
+    derivation: '§19 Patent tree: head starts; 1 Patent (the least), the first 47 s of hand-mining (§13 check 2)',
   }),
   notebooks: P({
     id: 'notebooks', name: 'Old Notebooks', branch: 'head', cost: 1, requires: ['starterLine'], pos: [2, 0],
     effect: { k: 'head', research: ['pressing', 'surveyEast'] },
     text: 'Pressing and Survey East are known from the start.',
     flavor: 'Smudged, dog-eared, mostly correct.',
-    derivation: '§19 Patent tree: head starts; 1 Patent, about 5 min of the first run (§13 check 3)',
+    derivation: '§19 Patent tree: head starts; 1 Patent, about 5 min of the first run (§13 checks 3-4)',
   }),
   copperDeeds: P({
-    id: 'copperDeeds', name: 'Copper Deeds', branch: 'head', cost: 2, requires: ['notebooks'], pos: [3, 0],
+    id: 'copperDeeds', name: 'Copper Deeds', branch: 'head', cost: 1, requires: ['notebooks'], pos: [3, 0],
     effect: { k: 'head', land: ['B'], research: ['copperSmelting', 'wireDrawing'] },
     text: 'Chunk B is yours from the start, and copper smelting and wire drawing are known.',
     flavor: 'The frogs never asked for the land back. Frogs are like that.',
-    derivation: '§19 Patent tree: head starts; 2 Patents, chunk B (1,000) and two nodes, about 8 min of the first run (§13 check 4)',
+    derivation: '§19 Patent tree: head starts; 1 Patent, chunk B (1,000) and two nodes, about 6 min of the first run (§13 check 4)',
   }),
   gearPatterns: P({
-    id: 'gearPatterns', name: 'Gear Patterns', branch: 'head', cost: 2, requires: ['notebooks'], pos: [3, 1],
+    id: 'gearPatterns', name: 'Gear Patterns', branch: 'head', cost: 1, requires: ['notebooks'], pos: [3, 1],
     effect: { k: 'head', research: ['gearcutting', 'splitters', 'buffers'] },
     text: 'Gearcutting, Splitters & Mergers and Buffers are known from the start.',
     flavor: 'Teeth drawn to scale, on a napkin.',
-    derivation: '§19 Patent tree: head starts; 2 Patents, three nodes (about 500 plates and gears of deliveries; Slag Bricks stays a choice: a press set to nothing would pick bricks from the first slag it met)',
+    derivation: '§19 Patent tree: head starts; 1 Patent, three nodes (about 500 plates and gears of deliveries, 5-6 min; Slag Bricks stays a choice: a press set to nothing would pick bricks from the first slag it met)',
   }),
   gizmoPatent: P({
-    id: 'gizmoPatent', name: 'The Gizmo Patent', branch: 'head', cost: 2, requires: ['copperDeeds', 'gearPatterns'], pos: [4, 0],
+    id: 'gizmoPatent', name: 'The Gizmo Patent', branch: 'head', cost: 1, requires: ['copperDeeds', 'gearPatterns'], pos: [4, 0],
     effect: { k: 'head', research: ['gizmoTheory'] },
     text: 'Gizmo Theory is known from the start (and chunk C can be bought at once).',
     flavor: 'Nobody knows what it does. Now nobody else is allowed to make one.',
-    derivation: '§19 Patent tree: head starts; 2 Patents, 120 gears and 300 wire of deliveries',
+    derivation: '§19 Patent tree: head starts; 1 Patent, 120 gears and 300 wire of deliveries, about 5 min',
   }),
   foldingPatent: P({
-    id: 'foldingPatent', name: 'Folding, Remembered', branch: 'head', cost: 3, requires: ['gizmoPatent'], pos: [5, 0],
+    id: 'foldingPatent', name: 'Folding, Remembered', branch: 'head', cost: 2, requires: ['gizmoPatent'], pos: [5, 0],
     effect: { k: 'head', research: ['folding'] },
     text: 'Folding is known from the start: fold the first line the moment it runs.',
     flavor: 'Your hands know the creases.',
-    derivation: '§19 Patent tree: head starts; 3 Patents, the dearest Act I node (50 Gizmos, 500 gears: §13 check 6)',
+    derivation: '§19 Patent tree: head starts; 2 Patents, the dearest Act I node (50 Gizmos, 500 gears: §13 check 6), about 10 min',
   }),
   grant: P({
-    id: 'grant', name: "Founders' Grant", branch: 'head', cost: 2, requires: ['bellows'], pos: [1, 1],
+    id: 'grant', name: "Founders' Grant", branch: 'head', cost: 1, requires: ['bellows'], pos: [1, 1],
     effect: { k: 'head', coin: 2000 },
     text: 'Every run starts with 2,000 coin.',
     flavor: 'Bramble insists it is a loan. Bramble has no ledger.',
-    derivation: '§19 Patent tree: head starts; 2,000 coin is the Act I factory of the first 20 min (§13 measured), a flat sum, never scaled by anything',
+    derivation: '§19 Patent tree: head starts; 1 Patent, 2,000 coin, about what the Act I planner has earned by chunk B (1,000 at 9:20, §13 measured) and the gear lines after it, some 5 min; a flat sum, never scaled by anything (flagged derivative: DECISIONS.md)',
   }),
   overdriveHabit: P({
-    id: 'overdriveHabit', name: 'Overdrive by Habit', branch: 'head', cost: 2, requires: ['bellows'], pos: [2, 1],
+    id: 'overdriveHabit', name: 'Overdrive by Habit', branch: 'head', cost: 1, requires: ['bellows'], pos: [2, 1],
     effect: { k: 'head', research: ['overdrive'] },
     text: 'Overdrive is known from the start: click any machine (or module) to run its line 3x for 10 s.',
     flavor: 'Your finger twitches toward the big red lever.',
-    derivation: '§19 Patent tree: head starts; 2 Patents, Act II active play (§18 Overdrive) from the first minute, the click lever of §16 rule 4',
+    derivation: '§19 Patent tree: head starts; 1 Patent, Act II active play (§18 Overdrive) from the first minute, the click lever of §16 rule 4',
   }),
   coalRights: P({
-    id: 'coalRights', name: 'Coal Rights', branch: 'head', cost: 4, requires: ['foldingPatent'], pos: [6, 0],
+    id: 'coalRights', name: 'Coal Rights', branch: 'head', cost: 2, requires: ['foldingPatent'], pos: [6, 0],
     effect: { k: 'head', research: ['coalSeams'], land: ['E'] },
     text: 'Coal Seams is known and chunk E (coal, sand) is yours from the start.',
     flavor: 'Signed in coal dust, witnessed by a heron.',
-    derivation: '§19 Patent tree: head starts; 4 Patents, chunk E (60,000) and 600 gears of research, about 15 min of Act II',
+    derivation: '§19 Patent tree: head starts; 2 Patents, chunk E (60,000) and 600 gears of research, about 10-15 min of early Act II',
   }),
   steelCharter: P({
-    id: 'steelCharter', name: 'Steel Charter', branch: 'head', cost: 4, requires: ['coalRights'], pos: [7, 0],
+    id: 'steelCharter', name: 'Steel Charter', branch: 'head', cost: 2, requires: ['coalRights'], pos: [7, 0],
     effect: { k: 'head', research: ['steelmaking', 'steamPower'], land: ['F'] },
     text: 'Steelmaking and Steam Power are known and chunk F is yours from the start.',
     flavor: 'Dame Voltaire framed her copy.',
-    derivation: '§19 Patent tree: head starts; 4 Patents, chunk F (120,000) and two nodes, about 25 min of Act II (§18 targets: power by S+35)',
+    derivation: '§19 Patent tree: head starts; 2 Patents, chunk F (120,000) and two nodes: 9-12 min of the first run, measured (the Milestone 5 review; it was priced at 4 for 25 min)',
   }),
   glassNotes: P({
-    id: 'glassNotes', name: 'Glass and Gravel Notes', branch: 'head', cost: 4, requires: ['steelCharter'], pos: [8, 0],
+    id: 'glassNotes', name: 'Glass and Gravel Notes', branch: 'head', cost: 3, requires: ['steelCharter'], pos: [8, 0],
     effect: { k: 'head', research: ['glassworks', 'crushing', 'refining', 'machineKits'] },
     text: 'Glassworks, Crushing, Refining and Machine Kits are known from the start.',
     flavor: 'The pages are stuck together with something. Possibly plastic.',
-    derivation: '§19 Patent tree: head starts; 4 Patents, four Act II nodes (about 30 min of the first run between them, §18 targets)',
+    derivation: '§19 Patent tree: head starts; 3 Patents, four Act II nodes, about 15-20 min of the first run between them (§18 targets)',
   }),
   circuitPatent: P({
-    id: 'circuitPatent', name: 'Circuit Patent', branch: 'head', cost: 5, requires: ['glassNotes'], pos: [9, 0],
+    id: 'circuitPatent', name: 'Circuit Patent', branch: 'head', cost: 3, requires: ['glassNotes'], pos: [9, 0],
     effect: { k: 'head', research: ['circuits', 'concrete'] },
     text: 'Circuits and Concrete are known from the start.',
     flavor: 'It thinks, therefore you own it.',
-    derivation: '§19 Patent tree: head starts; 5 Patents, the two nodes that gate Act II goods (§18 targets: circuits by S+60)',
+    derivation: '§19 Patent tree: head starts; 3 Patents, the two nodes that gate Act II goods (§18 targets: circuits by S+60, concrete after), about 15-20 min',
   }),
-  // ---------------------------------------------------------------- rules
+  // ---------------------------------------------------------------- rules: each one a rule a player plans around
   surveyCharter: P({
     id: 'surveyCharter', name: "Surveyor's Charter", branch: 'rule', cost: 3, requires: [], pos: [0, 0],
-    effect: { k: 'claims', value: 2 },
-    text: 'Every ore has 2 more deposit claims: two more copies of every source module.',
-    flavor: 'The map now says "probably yours" in more places.',
-    derivation: '§19 Patent tree: rules; +2 claims on each ore (§18 Land and deposits: 3 plus 2 a deposit), two more Gizmo chains on a slice floor: a rule a player plans the Factory floor around',
+    effect: { k: 'halfClaims' },
+    text: 'A copy of a source design graded S or S+ holds half a claim on each ore it digs.',
+    flavor: 'A clean dig is a small dig. The map agrees.',
+    derivation: '§19 Patent tree: rules; §18 claims (one per ore per copy) -> half for a design graded S or better: twice the copies of a well-folded source line, none more of a sloppy one, so the audit grade decides the floor. It was +2 claims on every ore, a multiplier in disguise (the Milestone 5 review)',
   }),
   widerBox: P({
     id: 'widerBox', name: 'Wider Fold Box', branch: 'rule', cost: 2, requires: [], pos: [0, 1],
     effect: { k: 'foldMax', value: 10 },
     text: 'The fold box is up to 10x10 (was 8x8): longer lines fold into one module.',
     flavor: 'Bigger paper. Same creases.',
-    derivation: '§19 Patent tree: rules; §10 fold box 8 -> 10, a line with its power plant inside (§18: power never crosses a box) fits',
+    derivation: '§19 Patent tree: rules; §10 fold box 8 -> 10, a line with its power plant inside (§18: power never crosses a box) fits, so a deeper line folds whole (more steps filed)',
   }),
   quickAudit: P({
     id: 'quickAudit', name: 'Quick Audits', branch: 'rule', cost: 2, requires: [], pos: [1, 0],
     effect: { k: 'audit', warmup: 5, span: 40 },
     text: 'An audit takes 45 s (5 s warm-up, a 40 s window) instead of 70 s.',
     flavor: 'The auditors learned to count faster. Or skip.',
-    derivation: '§19 Patent tree: rules; §10 audit 10 + 60 s -> 5 + 40 s: a run folds the same lines again, and waiting is the chore of this layer',
+    derivation: '§19 Patent tree: rules; §10 audit 10 + 60 s -> 5 + 40 s: a later run folds its lines again to file better ones, and the wait is this layer\'s chore',
   }),
   moreAuditors: P({
-    id: 'moreAuditors', name: 'More Auditors', branch: 'rule', cost: 3, requires: ['quickAudit'], pos: [2, 0],
+    id: 'moreAuditors', name: 'More Auditors', branch: 'rule', cost: 2, requires: ['quickAudit'], pos: [2, 0],
     effect: { k: 'maxAudits', value: 5 },
     text: 'Up to 5 Workshop lines audited at once (was 3).',
     flavor: 'Two more clipboards. Same frog.',
@@ -188,33 +190,19 @@ export const PATENTS: Record<PatentId, PatentDef> = {
     flavor: 'A second door. Do knock.',
     derivation: '§19 Patent tree: rules; §11 one input side -> two (ROADMAP Milestone 5: +1 port per module)',
   }),
-  deepHeaps: P({
-    id: 'deepHeaps', name: 'Deep Heaps', branch: 'rule', cost: 1, requires: [], pos: [0, 2],
-    effect: { k: 'heapCap', value: 800 },
-    text: 'A Slag Heap holds 800 slag (was 400): about 1 h 47 min of one smelter.',
-    flavor: 'Dig down. The swamp does not mind. Much.',
-    derivation: '§19 Patent tree: rules; §4 Slag Heap 400 -> 800 (7.5 slag/min a smelter)',
-  }),
   nestedBoxes: P({
     id: 'nestedBoxes', name: 'Nested Boxes', branch: 'rule', cost: 3, requires: ['widerBox'], pos: [2, 1],
     effect: { k: 'nestedMax', value: 8 },
     text: 'A nested fold on the Factory floor boxes up to 8x8 (was 6x6).',
     flavor: 'A box in a box in a slightly bigger box.',
-    derivation: '§19 Patent tree: rules; §18 Nested folds 6 -> 8, a whole Bay floor group (BAY_PLAN is 8x8)',
+    derivation: '§19 Patent tree: rules; §18 Nested folds 6 -> 8, a whole Bay floor group (BAY_PLAN is 8x8): a deeper fold, more steps filed',
   }),
-  coolHands: P({
-    id: 'coolHands', name: 'Cool Hands', branch: 'rule', cost: 2, requires: [], pos: [1, 2],
-    effect: { k: 'overdriveCool', value: 20 },
-    text: 'Overdrive cools in 20 s (was 30): a line clicked in step runs 1.67x, not 1.5x.',
-    flavor: 'Blow on it. It helps.',
-    derivation: '§19 Patent tree: rules; §18 Overdrive (10 x 3 + 20) / 30 = 1.67 at most while clicked: active play only (§16 rule 4 stays under 4)',
-  }),
-  stampDies: P({
-    id: 'stampDies', name: 'Stamping Dies', branch: 'rule', cost: 4, requires: ['surveyCharter'], pos: [2, 2],
-    effect: { k: 'stampGrowth', value: 0.3 },
-    text: 'Each copy of a product costs 0.3 more of its bill (was 0.5): bill x (1 + 0.3 n), still linear.',
-    flavor: 'Hardened steel, softened prices.',
-    derivation: '§19 Patent tree: rules; §10 Stamp bill x (1 + 0.5 n) -> (1 + 0.3 n), linear (no geometric curve: CLAUDE.md)',
+  freshDies: P({
+    id: 'freshDies', name: 'Fresh Dies', branch: 'rule', cost: 2, requires: [], pos: [0, 2],
+    effect: { k: 'freshDies' },
+    text: 'A line refolded at a better grade than every earlier design of its product starts its stamp price over.',
+    flavor: 'New dies, sharp edges, first-copy prices.',
+    derivation: '§19 Patent tree: rules; §10 Stamp counts every copy of a product; with this, only the designs graded as well as the one stamped, so a better refold is cheap to copy (still bill x (1 + 0.5 n), linear). It was Stamping Dies, a lower growth (0.3): a number, not a rule (the Milestone 5 review)',
   }),
   // ---------------------------------------------------------------- automation (pillar 2)
   shovelFrog: P({
@@ -225,61 +213,61 @@ export const PATENTS: Record<PatentId, PatentDef> = {
     derivation: '§19 Patent tree: automation; the shovel click of §6, one a second (a player at 4 clicks/s keeps a few lines clear)',
   }),
   labAssistant: P({
-    id: 'labAssistant', name: 'Lab Assistant', branch: 'auto', cost: 2, requires: [], pos: [0, 1],
+    id: 'labAssistant', name: 'Lab Assistant', branch: 'auto', cost: 1, requires: [], pos: [0, 1],
     effect: { k: 'lab' },
     text: 'With no research selected, the node the Hopper bank pays most of is picked for you.',
     flavor: 'Wears goggles. Has never needed them.',
     derivation: '§19 Patent tree: automation; selecting research (§8), checked once a second',
   }),
   orderClerk: P({
-    id: 'orderClerk', name: 'Order Clerk', branch: 'auto', cost: 2, requires: [], pos: [1, 1],
+    id: 'orderClerk', name: 'Order Clerk', branch: 'auto', cost: 1, requires: [], pos: [1, 1],
     effect: { k: 'clerk' },
     text: 'With no special order active, the first one offered is accepted for you.',
     flavor: 'Stamps everything APPROVED. Has a stamp for that.',
     derivation: '§19 Patent tree: automation; accepting orders (§7), checked once a second',
   }),
   stampPress: P({
-    id: 'stampPress', name: 'Stamp Press', branch: 'auto', cost: 4, requires: ['orderClerk'], pos: [2, 1],
+    id: 'stampPress', name: 'Stamp Press', branch: 'auto', cost: 3, requires: ['orderClerk'], pos: [2, 1],
     effect: { k: 'stampPress', every: 5 },
     text: 'Designs you mark "keep one spare" are stamped for you, the cheapest first, every 5 s while affordable.',
     flavor: 'Ka-chunk. Ka-chunk. Ka-chunk.',
     derivation: '§19 Patent tree: automation; the stamp of §10 at its full price, one every 5 s at most',
   }),
-  dragonfly: P({
-    id: 'dragonfly', name: 'Builder Dragonfly', branch: 'auto', cost: 3, requires: ['shovelFrog'], pos: [1, 0],
-    effect: { k: 'drone', n: 1 },
-    text: 'A clockwork dragonfly builds your blueprint ghosts on its own, one every 2 s, as coin allows.',
-    flavor: 'It hums. It carries a smelter. Do not ask how.',
-    derivation: '§19 Blueprints: one building every 2 s, half a player placing by hand (4 commands a second, half of them belts); the layer-1 reward of pillar 2',
+  draughtsman: P({
+    id: 'draughtsman', name: 'The Draughtsman', branch: 'auto', cost: 3, requires: ['shovelFrog'], pos: [1, 0],
+    effect: { k: 'draughtsman', every: 5 },
+    text: 'Designs you queue in the Patent Drawer are unfolded for you, in your order, as land, research and coin allow.',
+    flavor: 'A heron with a pencil behind its ear. It never smudges.',
+    derivation: '§19 The Patent Drawer: rebuilding a kept line each run is this layer\'s chore (pillar 2); one unfold every 5 s at most, at the full bill, in the order the player set, each where it was folded',
   }),
-  dragonflies: P({
-    id: 'dragonflies', name: 'A Swarm of Dragonflies', branch: 'auto', cost: 5, requires: ['dragonfly'], pos: [2, 0],
-    effect: { k: 'drone', n: 3 },
-    text: 'Three dragonflies: three ghosts built every 2 s.',
-    flavor: 'The hum is now a chord.',
-    derivation: '§19 Blueprints: three dragonflies, 1.5 buildings a second, about a player building flat out',
+  drawerSpace: P({
+    id: 'drawerSpace', name: 'A Deeper Drawer', branch: 'auto', cost: 2, requires: ['draughtsman'], pos: [2, 0],
+    effect: { k: 'drawer', add: 4 },
+    text: 'The Patent Drawer keeps 4 more designs (12 in all).',
+    flavor: 'It sticks. Jiggle it.',
+    derivation: '§19 The Patent Drawer: 8 -> 12 kept designs, room for every Act II product line (the Act II bot folds nine products)',
   }),
-  // ---------------------------------------------------------------- offline (DESIGN.md §12)
+  // ---------------------------------------------------------------- offline (DESIGN.md §12, §20)
   nightShift: P({
     id: 'nightShift', name: 'Graveyard Shift', branch: 'offline', cost: 2, requires: [], pos: [0, 0],
-    effect: { k: 'offline', add: 0.1 },
-    text: 'Offline efficiency 0.6 (was 0.5).',
+    effect: { k: 'offline', add: 0.05 },
+    text: 'Offline efficiency +5% (on top of 0.5 and the Night Shift you buy with coin).',
     flavor: 'The owls clock in.',
-    derivation: '§19 Patent tree: offline; §12 0.5 -> 0.6',
+    derivation: '§19 Patent tree: offline; §20: 0.5, the Night Shift bought with coin (+0.1), and three nodes of +0.05 make 0.75 exactly, the ceiling',
   }),
   nightWatch: P({
-    id: 'nightWatch', name: 'Night Watch', branch: 'offline', cost: 3, requires: ['nightShift'], pos: [1, 0],
-    effect: { k: 'offline', add: 0.08 },
-    text: 'Offline efficiency 0.68.',
+    id: 'nightWatch', name: 'Night Watch', branch: 'offline', cost: 2, requires: ['nightShift'], pos: [1, 0],
+    effect: { k: 'offline', add: 0.05 },
+    text: 'Offline efficiency +5% more.',
     flavor: 'A lantern on every line.',
-    derivation: '§19 Patent tree: offline; 0.6 -> 0.68',
+    derivation: '§19 Patent tree: offline; the second of three +0.05 steps to the 0.75 ceiling (§20)',
   }),
   lightsOn: P({
-    id: 'lightsOn', name: 'Lights Left On', branch: 'offline', cost: 4, requires: ['nightWatch'], pos: [2, 0],
-    effect: { k: 'offline', add: 0.07 },
-    text: 'Offline efficiency 0.75, the ceiling (ROADMAP Milestone 5).',
+    id: 'lightsOn', name: 'Lights Left On', branch: 'offline', cost: 3, requires: ['nightWatch'], pos: [2, 0],
+    effect: { k: 'offline', add: 0.05 },
+    text: 'Offline efficiency +5% more: 0.75 with the Night Shift, the ceiling.',
     flavor: 'Voltaire sends the bill. You pay it gladly.',
-    derivation: '§19 Patent tree: offline; 0.68 -> 0.75, the 75% ceiling: offline never pays as much as being there (§13 check 12)',
+    derivation: '§19 Patent tree: offline; the last +0.05: 0.5 + 0.1 (coin) + 0.15 (Patents) = 0.75, the ceiling: offline never pays as much as being there (§13 check 12, §20)',
   }),
 };
 

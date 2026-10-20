@@ -28,19 +28,19 @@ import { offlineReportCard } from './offlinereport';
 import { overnightScreen } from './overnight';
 import { cycleNotation, NOTATION_LABEL } from './settings';
 import { getNotation } from '../engine/num';
-// Milestone 5: Reorganize, the Patent Office and the Blueprint Book
+// Milestone 5: Reorganize, the Patent Office and the Patent Drawer
 import { reorganizeCard } from './reorganize';
 import { patentsScreen } from './patents';
-import { blueprintsScreen } from './blueprints';
-import './m5bar'; // Patents and Reorganize on the top bar, the Book and the Office as menus
+import { drawerScreen } from './drawer';
+import './m5bar'; // Patents and Reorganize on the top bar, the Drawer and the Office as menus
 
 export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options' | 'modules' | 'grade' | 'offline' | 'sliceEnd'
   // Act II (Milestone 4): the Factory floor's grade card, the Codex, the Survey Office, the Megaproject
   | 'fgrade' | 'codex' | 'survey' | 'mega'
   // Milestone 6: "safe for overnight" (src/app/overnight.ts)
   | 'overnight'
-  // Milestone 5: Reorganize, the Patent Office, the Blueprint Book
-  | 'reorganize' | 'patents' | 'blueprints';
+  // Milestone 5: Reorganize, the Patent Office, the Patent Drawer
+  | 'reorganize' | 'patents' | 'drawer';
 
 /** Screens added from other files (Milestones 5 and 6): drawn in the overlay rect like the rest. */
 const EXTRA = new Map<string, (app: App, r: Rect, L: Layout) => void>();
@@ -73,7 +73,7 @@ export function drawScreen(app: App, L: Layout) {
     case 'overnight': return overnightScreen(app, r);
     case 'reorganize': return reorganizeCard(app, r);
     case 'patents': return patentsScreen(app, r);
-    case 'blueprints': return blueprintsScreen(app, r);
+    case 'drawer': return drawerScreen(app, r);
   }
 }
 

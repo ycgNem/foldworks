@@ -1,5 +1,6 @@
 // The Reorganize card (DESIGN.md §19, Milestone 5): what a reset gives (the Patents now, term by
-// term, and the goals that raise them, the next step first), what it keeps and what it loses, the
+// term: each product new, better than the design on file, or already filed; then the goals that
+// raise it, the next step first), what it keeps and what it loses, the
 // runs so far, and a confirm that takes two clicks. Pillar 4: the reset is always the player's
 // choice, and the card says exactly what it costs. Presentation only: the reset itself is the
 // `reorganize` command (src/sim/reorganize.ts).
@@ -44,10 +45,17 @@ export function reorganizeCard(app: App, r: Rect) {
     ui.text(right, gin.x + gin.w - 2, yy, col, { align: 'right' });
     yy += 10;
   };
-  for (const l of p.lines) line(`${ITEMS[l.item].name}: ${l.steps} steps x ${l.grade}`, `+${p1(l.patents)}`, C.bone, l.item);
+  // the Milestone 5-6 review round: Patents are filed, so each product says whether it is new, an
+  // improvement on the design on file, or already filed (files nothing)
+  const order: Record<string, number> = { new: 0, improved: 1, filed: 2 };
+  for (const l of [...p.lines].sort((a, b) => order[a.status] - order[b.status] || b.patents - a.patents)) {
+    const tag = l.status === 'new' ? 'new' : l.status === 'improved' ? 'better' : 'on file';
+    const col = l.status === 'new' ? C.gold : l.status === 'improved' ? C.teal1 : C.hull1;
+    line(`${ITEMS[l.item].name}: ${l.steps} step${l.steps === 1 ? '' : 's'} x ${l.grade}${l.tier ? ` x tier ${l.tier}` : ''} (${tag})`, l.status === 'filed' ? '0' : `+${p1(l.patents)}`, col, l.item);
+  }
   if (!p.lines.length) line('No modules folded this run', '+0', C.hull1);
   if (p.mega > 0.01) line('The Great Drill, delivered this run', `+${p1(p.mega)}`, C.gold);
-  line(`Works: ${Num.of(Math.floor(p.invested)).format()} coin put in`, `+${p1(p.works)}`, C.hull3);
+  line(`Running: ${Num.of(Math.floor(p.billValue)).format()} coin of buildings`, `+${p1(p.bills)}`, C.hull3);
   ui.fill(gin.x + 2, yy, gin.w - 4, 1, C.hull0);
   yy += 3;
   line('Total (rounded down)', `${p1(p.total)}`, C.gold);

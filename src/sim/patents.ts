@@ -1,7 +1,8 @@
 // The Patent tree's effects (DESIGN.md §19): buying a node, and every rule the sim reads through
 // it. Systems call these instead of reading the RULES a node can change (the fold box, audits,
-// heaps, claims, nested folds, Overdrive's cooldown, the stamp growth, module buffers), so a node
-// bought is applied everywhere at once. The Committee's reputation rewards are read here too.
+// claims, nested folds, stamp counting, module buffers), so a node bought is applied everywhere at
+// once. The Committee's reputation rewards are read here too. `heapCap` and `overdriveCool` stay
+// for their readers (no node changes them since the Milestone 5 review: they were numbers).
 // prules(g).offline is the Patents' part of offlineEfficiency(g) (src/sim/offline.ts).
 import type { Game, ActResult } from './Game';
 import { OK, no } from './Game';
@@ -11,6 +12,8 @@ import { BUILD } from '../data/machines';
 import { PATENTS, PATENT_IDS, type PatentEffect, type PatentId } from '../data/patents';
 import type { State } from './world';
 import { applyHeadStarts } from './reorganize';
+import { offlineEfficiency } from './offline';
+import { IDLE } from '../data/idle';
 
 export interface PatentRules {
   foldMax: number;
@@ -19,16 +22,21 @@ export interface PatentRules {
   maxAudits: number;
   sideIntake: boolean;
   heapCap: number;
-  extraClaims: number;
+  /** the Surveyor's Charter: an S or S+ source design holds half a claim a copy */
+  halfClaims: boolean;
   nestedMax: number;
   overdriveCool: number;
-  stampGrowth: number;
+  /** Fresh Dies: a better-graded refold starts its stamp price over */
+  freshDies: boolean;
   moduleBuffer: number;
   shovelEvery: number;
   lab: boolean;
   clerk: boolean;
   stampPressEvery: number;
-  drones: number;
+  /** the Draughtsman: seconds between two queued unfolds (0: none) */
+  draughtsmanEvery: number;
+  /** the Patent Drawer's slots */
+  drawerSlots: number;
   offline: number;
   /** the Committee's rewards (reputation, kept across runs) */
   nightCrew: boolean;
@@ -51,16 +59,17 @@ export function prules(g: Game): PatentRules {
     maxAudits: RULES.maxAudits.value,
     sideIntake: false,
     heapCap: BUILD.heap.capacity ?? 400,
-    extraClaims: 0,
+    halfClaims: false,
     nestedMax: RULES.nestedMax.value,
     overdriveCool: RULES.overdriveCool.value,
-    stampGrowth: RULES.stampGrowth.value,
+    freshDies: false,
     moduleBuffer: rep >= 1 ? RULES.coatBuffer.value : RULES.moduleBuffer.value,
     shovelEvery: 0,
     lab: false,
     clerk: false,
     stampPressEvery: 0,
-    drones: 0,
+    draughtsmanEvery: 0,
+    drawerSlots: RULES.drawerSlots.value,
     offline: RULES.offlineEff.value,
     nightCrew: rep >= 2,
     kitsOff: rep >= 3 ? RULES.pocketedKits.value : 0,
@@ -73,29 +82,28 @@ export function prules(g: Game): PatentRules {
       case 'audit': r.auditWarmup = Math.min(r.auditWarmup, e.warmup); r.auditWindow = Math.min(r.auditWindow, e.span); break;
       case 'maxAudits': r.maxAudits = Math.max(r.maxAudits, e.value); break;
       case 'sideIntake': r.sideIntake = true; break;
-      case 'heapCap': r.heapCap = Math.max(r.heapCap, e.value); break;
-      case 'claims': r.extraClaims += e.value; break;
+      case 'halfClaims': r.halfClaims = true; break;
       case 'nestedMax': r.nestedMax = Math.max(r.nestedMax, e.value); break;
-      case 'overdriveCool': r.overdriveCool = Math.min(r.overdriveCool, e.value); break;
-      case 'stampGrowth': r.stampGrowth = Math.min(r.stampGrowth, e.value); break;
+      case 'freshDies': r.freshDies = true; break;
       case 'shovel': r.shovelEvery = r.shovelEvery ? Math.min(r.shovelEvery, e.every) : e.every; break;
       case 'lab': r.lab = true; break;
       case 'clerk': r.clerk = true; break;
       case 'stampPress': r.stampPressEvery = r.stampPressEvery ? Math.min(r.stampPressEvery, e.every) : e.every; break;
-      case 'drone': r.drones = Math.max(r.drones, e.n); break;
+      case 'draughtsman': r.draughtsmanEvery = r.draughtsmanEvery ? Math.min(r.draughtsmanEvery, e.every) : e.every; break;
+      case 'drawer': r.drawerSlots += e.add; break;
       case 'offline': r.offline += e.add; break;
       case 'head': break;
     }
   }
-  // the ceiling of ROADMAP Milestone 5 (rounding: 0.5 + 0.1 + 0.08 + 0.07)
+  // the ceiling of ROADMAP Milestone 5 (rounding: 0.5 + 0.05 x 3; the Night Shift's 0.1 is added
+  // in offlineEfficiency, src/sim/offline.ts, which caps the sum at 0.75)
   r.offline = Math.min(0.75, Math.round(r.offline * 1000) / 1000);
   cache.set(s, { key, r });
   return r;
 }
 
-/** Offline efficiency (DESIGN.md §12, §19): 0.5, raised by the Night Shift nodes to 0.75. */
 /** The offline efficiency with every source counted (Patents, the Night Shift) lives in
- * src/sim/offline.ts, `offlineEfficiency(g)`; `prules(g).offline` is the Patents' part. */
+ * src/sim/offline.ts, `offlineEfficiency(g)`; `prules(g).offline` is 0.5 and the Patents' part. */
 
 export function hasPatent(g: Game, id: PatentId): boolean {
   return g.s.meta.nodes.includes(id);
@@ -108,6 +116,8 @@ export function patentRefusal(g: Game, id: PatentId): string | null {
   if (hasPatent(g, id)) return 'Already yours';
   const missing = d.requires.filter((q) => !hasPatent(g, q));
   if (missing.length) return `Needs ${missing.map((q) => PATENTS[q].name).join(' and ')} first`;
+  // an offline node past the 0.75 ceiling would buy nothing (the coin Night Shift may have got there)
+  if (d.effect.k === 'offline' && offlineEfficiency(g) >= IDLE.offlineEffMax.value - 1e-9) return `Offline efficiency is at its ${Math.round(IDLE.offlineEffMax.value * 100)}% ceiling already`;
   if (g.s.meta.patents.lt(d.cost)) return `Costs ${d.cost} Patent${d.cost > 1 ? 's' : ''}: you have ${g.s.meta.patents.format()}`;
   return null;
 }

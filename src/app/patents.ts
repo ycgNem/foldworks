@@ -22,9 +22,10 @@ const NODE_ICON: Record<PatentId, ItemId | UIconName> = {
   bellows: 'ironIngot', starterLine: 'ironOre', notebooks: 'research', copperDeeds: 'copperIngot', gearPatterns: 'gear',
   gizmoPatent: 'gizmo', foldingPatent: 'fold', grant: 'coin', overdriveHabit: 'overdrive', coalRights: 'coal',
   steelCharter: 'steel', glassNotes: 'glass', circuitPatent: 'circuit',
-  surveyCharter: 'claim', widerBox: 'fold', quickAudit: 'clock', moreAuditors: 'stats', sideIntake: 'flow', deepHeaps: 'slag',
-  nestedBoxes: 'heavy', coolHands: 'overdrive', stampDies: 'kit',
-  shovelFrog: 'slag', labAssistant: 'research', orderClerk: 'orders', stampPress: 'kit', dragonfly: 'build', dragonflies: 'build',
+  // Milestone 5-6 review round (the reset layer agent): the re-derived rules and the Draughtsman
+  surveyCharter: 'claim', widerBox: 'fold', quickAudit: 'clock', moreAuditors: 'stats', sideIntake: 'flow',
+  nestedBoxes: 'heavy', freshDies: 'kit',
+  shovelFrog: 'slag', labAssistant: 'research', orderClerk: 'orders', stampPress: 'kit', draughtsman: 'build', drawerSpace: 'factory',
   nightShift: 'clock', nightWatch: 'clock', lightsOn: 'star',
 };
 

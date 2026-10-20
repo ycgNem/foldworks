@@ -42,7 +42,7 @@ export function ffoldRefusal(g: Game, b: Box): string | null {
   const max = prules(g).nestedMax;
   if (b.w > max || b.h > max) return `Too big: a nested fold is at most ${max}x${max}`;
   if (b.w < 1 || b.h < 1) return 'Drag a box over a group of modules';
-  if (b.x < 0 || b.y < 0 || b.x + b.w > FACTORY.w || b.y + b.h > FACTORY.h) return 'The box is off the floor';
+  if (b.x < 0 || b.y < 0 || b.x + b.w > g.fw || b.y + b.h > g.fh) return 'The box is off the floor';
   const ents = fentsIn(g, b);
   for (const e of ents) {
     if (e.kind === 'fdock' || e.kind === 'fhopper' || e.kind === 'fbay') return `The box holds the ${fname(g, e)}, which stays on the floor`;

@@ -14,19 +14,20 @@ import type { PatentId } from '../data/patents';
 import { ORDER } from '../data/orders';
 import { orderFrac } from './systems/orders';
 
-/** The order a sensible player buys in: the two rules that raise income at once (two more source
- * module copies; Overdrive from the first minute), then every Act I head start, then Act II's, then
- * quality of life. A node waits for its prerequisites and the Patents to buy it. */
+/** The order a sensible player buys in: the rule that raises income at once (half a claim a copy
+ * of its S-graded ingot and wire lines: more source copies) and Overdrive from the first minute,
+ * then every Act I head start, then Act II's, then quality of life. A node waits for its
+ * prerequisites and the Patents to buy it. */
 export const PATENT_PRIORITY: PatentId[] = [
   'surveyCharter', 'bellows', 'overdriveHabit', 'starterLine', 'notebooks', 'copperDeeds', 'gearPatterns', 'gizmoPatent', 'foldingPatent',
-  'shovelFrog', 'coolHands', 'grant', 'quickAudit', 'coalRights', 'steelCharter', 'moreAuditors', 'deepHeaps', 'nightShift',
-  'glassNotes', 'circuitPatent', 'widerBox', 'nightWatch', 'dragonfly', 'lightsOn', 'stampDies', 'nestedBoxes', 'sideIntake',
-  'labAssistant', 'orderClerk', 'stampPress', 'dragonflies',
+  'shovelFrog', 'grant', 'quickAudit', 'coalRights', 'steelCharter', 'moreAuditors', 'nightShift',
+  'glassNotes', 'circuitPatent', 'widerBox', 'nightWatch', 'draughtsman', 'lightsOn', 'freshDies', 'nestedBoxes', 'sideIntake',
+  'labAssistant', 'orderClerk', 'stampPress', 'drawerSpace',
 ];
 
-/** Two more Gizmo chains for the Factory floor, once the Surveyor's Charter gives the claims: the
- * Act II bot places them by search before its own plan (a Gizmo works feeding the Dock, an ingot
- * and a wire module feeding it, their slag to the Dock). */
+/** Two more Gizmo chains for the Factory floor, once the Surveyor's Charter halves the claims of
+ * its S-graded ingot and wire designs: the Act II bot places them by search before its own plan
+ * (a Gizmo works feeding the Dock, an ingot and a wire module feeding it, their slag to the Dock). */
 export const EXTRA_CHAINS: Step2[] = ['F', 'G'].flatMap((c): Step2[] => [
   { k: 'fmod', id: 'giz' + c, design: 'Gizmo works', to: { k: 'dock' }, hub: true },
   { k: 'fmod', id: 'ing' + c, design: 'Iron ingots', to: { k: 'mod', id: 'giz' + c }, by: { k: 'dock' } },

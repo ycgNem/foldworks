@@ -92,3 +92,18 @@ export const FACTORY = {
   trunkCost: 2,
   derivation: '§11 12x8; trunk belts 8 items/s (480/min), 2 coin per tile',
 };
+
+/** The Factory annex (DESIGN.md §19): blocks of floor bought with coin east of the 12x8, beside
+ * the Factory Dock, land like the Workshop's chunks (lost at a Reorganize). Each block is 2 columns
+ * of 8 tiles; the n-th costs base x n, linear in blocks bought. */
+export const ANNEX = {
+  blocks: 3,
+  cols: 2,
+  base: 150000,
+  requires: 'steamPower' as ResearchId,
+  derivation: '§19 The Factory annex: up to 3 blocks of 2x8 tiles east of the floor (18x8 at most, half again its tiles), the n-th block base x n, linear (CLAUDE.md: no geometric curves): 150K, 300K, 450K, 900K in all, about half of the 1.8-2.3M an Act II run piles up by 4-5 h; the first block is 12 min of Act II income (12,500/min) for room for a Gizmo chain or two right at the Factory Dock\'s east face, so the Bay floor no longer pushes the coin chains out. After Steam Power, when Act II coin starts. East, not south, so the Floating City\'s +1 row (§15, Milestone 7) stays a row nobody can buy: the two never meet',
+};
+
+/** The widest the Factory floor gets (the 12 and the annex) and the most rows (the 8 and the Floating City's). */
+export const FACTORY_MAX_W = FACTORY.w + ANNEX.blocks * ANNEX.cols;
+export const FACTORY_MAX_H = FACTORY.h + 1;

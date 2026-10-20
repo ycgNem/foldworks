@@ -42,8 +42,7 @@ import { Gazette } from './gazette';
 import type { ScreenName } from './screens';
 import { TROPHY } from '../data/trophies';
 import { Bot, type Policy } from '../sim/bot';
-// Milestone 5: Reorganize, the Patent tree and blueprints (src/app/reorganize.ts, patents.ts, blueprints.ts)
-import { blueprintInput, blueprintPreview, blueprintHud, bpBoxOk, ghostClick } from './blueprints';
+// Milestone 5: Reorganize, the Patent tree and the Patent Drawer (src/app/reorganize.ts, patents.ts, drawer.ts)
 import { prules } from '../sim/patents';
 
 export type Mode =
@@ -54,10 +53,7 @@ export type Mode =
   | { k: 'fold' }
   /** the Factory floor: laying trunk belts, or placing a module design */
   | { k: 'ftrunk' }
-  | { k: 'fmodule'; design: number }
-  /** Milestone 5: dragging a box to save a blueprint; placing one as ghosts */
-  | { k: 'bpsave' }
-  | { k: 'bpplace'; id: number };
+  | { k: 'fmodule'; design: number };
 
 export type Panel = ScreenName | null;
 
@@ -397,7 +393,6 @@ export class App {
     this.renderer.drawScreenFx(ctx, this.uiScale);
     this.ui.begin(ctx, this.input, this.uiScale, dt, false);
     drawHud(this, dt);
-    blueprintHud(this); // Milestone 5
     this.ui.end();
     this.worldInput();
     this.audio.update(this.busyShare());
@@ -432,7 +427,7 @@ export class App {
         case 'place': {
           a.sfx(e.id === 'belt' ? 'belt' : 'place');
           // the first Miner: the first thing that works without a click (the first automation)
-          if (e.id === 'miner' && (e.floor ?? 'workshop') === 'workshop' && this.game.miners.length === 1 && !this.hud.firstMiner) {
+          if (e.id === 'miner' && (e.floor ?? 'workshop') === 'workshop' && this.game.miners.length === 1 && !this.hud.firstMiner && this.game.s.meta.runs === 0) { // first run only (M5-6 review round)
             this.hud.firstMiner = true;
             a.sfx('fanfare', 0.7);
             a.sfx('codex', 0.6, 1.2);
@@ -456,6 +451,9 @@ export class App {
           this.toast('Bellows bought!', 'The Hand Furnace runs itself now: an ingot every 2 s. Keep it fed with ore.', C.amber);
           break;
         case 'land': a.sfx('land'); this.toast('Land bought', `${CHUNKS.find((c) => c.id === e.id)?.name ?? 'New land'} is yours. Build on it.`, C.gold); break;
+        // the Milestone 5-6 review round: the Factory annex and the Patent Drawer
+        case 'annex': a.sfx('land'); this.toast('Annex block bought', `Block ${e.value ?? 1} of the Factory annex: 16 more tiles beside the Factory Dock, yours until the next Reorganize.`, C.gold, 'factory'); break;
+        case 'keep': a.sfx('stamp'); this.toast('Kept in the Patent Drawer', `${e.id ?? 'The design'}: it waits there through every Reorganize, ready to unfold whole onto its box.`, C.violet); break;
         case 'research': {
           a.sfx('research');
           const d = RESEARCH[e.id as keyof typeof RESEARCH];
@@ -482,8 +480,8 @@ export class App {
         case 'spark': a.sfx('spark'); break;
         case 'sparkGet': a.sfx('sparkGet'); if (e.id === 'vein') this.toast('Lucky Vein!', "This patch's miners run 3x for 60 s.", C.gold); break;
         case 'inspected': this.toast(`Inspector: grade ${e.id}`, `Score ${(e.d ?? 0).toFixed(2)}. Handed ${Num.of(e.value ?? 0).format()} items, a minute of this line's output, to research.`, C.gold); break;
-        case 'firstSlagJam': a.sfx('jam'); this.toast('Blocked: slag!', 'Smelting leaves slag, and it has nowhere to go. Click the machine to shovel it, or build a Slag Heap beside it.', C.pipRed); break;
-        case 'firstSale': this.toast('First sale!', 'The Dock buys what you make. Coin buys machines.', C.gold); break;
+        case 'firstSlagJam': a.sfx('jam'); if (this.game.s.meta.runs === 0) this.toast('Blocked: slag!', 'Smelting leaves slag, and it has nowhere to go. Click the machine to shovel it, or build a Slag Heap beside it.', C.pipRed); break;
+        case 'firstSale': if (this.game.s.meta.runs === 0) this.toast('First sale!', 'The Dock buys what you make. Coin buys machines.', C.gold); break;
         case 'orderAccept': a.sfx('open'); break;
         case 'trophy': {
           a.sfx('milestone', 0.7);
@@ -549,7 +547,7 @@ export class App {
           } else this.toast('Folded!', 'The line is a module now: one tile with its rates. Open Modules (I) or the Factory floor (Tab) to place it.', C.gold, 'module');
           break;
         case 'firstFold':
-          this.toast('The Factory floor is open', 'Press Tab or the Factory tab to go there. Modules run as rates; trunk belts carry 480 a minute.', C.gold, 'factory');
+          if (this.game.s.meta.runs === 0) this.toast('The Factory floor is open', 'Press Tab or the Factory tab to go there. Modules run as rates; trunk belts carry 480 a minute.', C.gold, 'factory');
           break;
         case 'stamp': a.sfx('stamp'); break;
         case 'unfold': a.sfx('place'); break;
@@ -815,8 +813,7 @@ export class App {
       drag: this.floor === 'workshop' && this.drag ? this.drag.path : null,
       remove: this.mode.k === 'remove',
       selected: this.selected,
-      box: this.foldDrag && this.floor === 'workshop' ? { ...this.foldDrag, ok: this.mode.k === 'bpsave' ? bpBoxOk(this) : !foldRefusal(this.game, this.dragBox()!) } : null,
-      bp: blueprintPreview(this), // Milestone 5
+      box: this.foldDrag && this.floor === 'workshop' ? { ...this.foldDrag, ok: !foldRefusal(this.game, this.dragBox()!) } : null,
       flow: this.flowOverlay,
       floor: this.floor,
       factory: {
@@ -874,7 +871,6 @@ export class App {
 
     if (this.floor === 'factory') return this.factoryInput(t, overUI, pt);
     if (this.mode.k === 'fold') return this.foldInput(t, overUI, pt);
-    if (blueprintInput(this, t, overUI, pt)) return; // Milestone 5: the blueprint tools
     if (this.mode.k === 'build' && this.mode.kind === 'belt') return this.beltDrag(t, overUI, pt);
     if (!inp.mouse.pressed[0] || overUI) return;
     if (!g.inb(t.x, t.y)) {
@@ -895,7 +891,6 @@ export class App {
       if (ch) this.act({ k: 'land', id: ch.id });
       return;
     }
-    if (ghostClick(this, t.x, t.y)) return; // Milestone 5: a click on a ghost builds it
     const e = g.entAt(t.x, t.y);
     const r = g.act({ k: 'click', x: t.x, y: t.y });
     if (r.ok) return;

@@ -3,6 +3,7 @@
 // cheers when one of their orders has just been filled, their reputation and its rewards (reached
 // ones lit, the next one with what it takes), their orders, and the Dock's standing prices below.
 import { C } from '../data/palette';
+import { MEGA } from '../data/megaprojects';
 import { RESEARCH } from '../data/research';
 import { ORDERS, CUSTOMERS, ORDER, type CustomerId, type OrderDef } from '../data/orders';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
@@ -181,8 +182,8 @@ export function ordersScreen(app: App, r: Rect) {
   // what the customer has paid, and their perks working right now
   const paid = mine.filter((q) => o.done.includes(q.id)).reduce((n, q) => n + q.pays, 0);
   const perks: [string, string][] = [['Paid you', Num.of(paid).format()]];
-  // Milestone 5: the Committee pays in Raccoon Bearings, not coin
-  if (who === 'committee') perks.splice(0, 1, ['Bearings in the stash', g.s.meta.bearings.format()]);
+  // the Milestone 5-6 review round: the Committee's reputation opens the Great Drill's stages
+  if (who === 'committee') for (const m of MEGA) if (m.rep) perks.push([`Drill stage ${m.stage} (reputation ${m.rep})`, rep >= m.rep ? 'open' : `${m.rep - rep} more`]);
   if (who === 'bramble') {
     if (rep >= 1) perks.push(['Iron plates sell for', `${fmt(saleValue(g, 'ironPlate'))} each`]);
     if (rep >= 2) perks.push(['Free crates waiting', `${g.s.freeCrates}/${RULES.repCrateMax.value}`]);
@@ -253,7 +254,7 @@ function orderCard(app: App, d: OrderDef, x: number, y: number, w: number, h: nu
     if (Math.floor(ui.time * 2) % 2 === 0) ui.fill(x + 2, y + 2, w - 4, 1, C.gold);
   }
   ui.text(d.name, x + 9, y + 5, C.ink);
-  const pay = `${d.bearings ? `${ICON.cog} ${d.bearings} bearings` : `${ICON.coin} ${Num.of(d.pays).format()}`}  +${d.rep}${ICON.heart}`; // Milestone 5: bearings
+  const pay = `${ICON.coin} ${Num.of(d.pays).format()}  +${d.rep}${ICON.heart}`;
   ui.text(pay, x + w - 8, y + 5, C.brass0, { align: 'right' });
   if (active) ui.text('ACTIVE', x + 13 + textWidth(d.name), y + 5, C.moss);
   let wx = x + w - 8;
@@ -279,7 +280,7 @@ function lockedCard(app: App, d: OrderDef, x: number, y: number, w: number) {
   const g = app.game;
   frame(ui, x, y, w, 28, 'inset');
   ui.text(`${ICON.lock} ${d.name}`, x + 8, y + 5, C.hull2);
-  ui.text(d.bearings ? `${ICON.cog} ${d.bearings} bearings` : `${ICON.coin} ${Num.of(d.pays).format()}`, x + w - 8, y + 5, C.brass1, { align: 'right' }); // Milestone 5
+  ui.text(`${ICON.coin} ${Num.of(d.pays).format()}`, x + w - 8, y + 5, C.brass1, { align: 'right' });
   let ix = x + 8;
   for (const [item, n] of Object.entries(d.wants) as [ItemId, number][]) {
     if (ix + 30 > x + w / 2) break;
@@ -310,7 +311,7 @@ function doneRow(app: App, d: OrderDef, x: number, y: number, w: number) {
   ui.fill(sx, y + 3, 36, 12, C.leaf);
   ui.fill(sx + 1, y + 4, 34, 10, C.shadow);
   ui.text('FILLED', sx + 18, y + 5, C.leaf, { align: 'center' });
-  ui.text(d.bearings ? `+${d.bearings} ${ICON.cog}` : `+${Num.of(d.pays).format()}`, x + w - 6, y + 5, C.gold, { align: 'right' }); // Milestone 5
+  ui.text(`+${Num.of(d.pays).format()}`, x + w - 6, y + 5, C.gold, { align: 'right' });
 }
 
 /** The standing order: what the Dock pays for each item, lit for the ones you have delivered. */

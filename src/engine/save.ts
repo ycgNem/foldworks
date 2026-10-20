@@ -5,7 +5,7 @@
 // snapshot and the commands since it (src/sim/snapshot.ts).
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -80,6 +80,29 @@ export const MIGRATIONS: Record<number, Migration> = {
     const st = JSON.parse(d.snap);
     st.inspire ??= {};
     return { ...d, snap: JSON.stringify(st), v: 6 };
+  },
+  // v7 (the Milestone 5-6 review round, DESIGN.md §19): Patents are filed (`meta.patented`), the
+  // Patent Drawer replaces blueprints (`meta.drawer`, the Draughtsman's `queue`), the Raccoon
+  // Bearings and ghosts are gone, the Factory annex starts at no blocks. Old blueprints had no place
+  // on the map to unfold onto, so they become nothing; the record on file starts empty (the run
+  // under way files what it folded at its next Reorganize). Removed commands leave the log.
+  6: (d) => {
+    const st = JSON.parse(d.snap);
+    const m = st.meta ?? {};
+    delete m.blueprints;
+    delete m.nextBlueprint;
+    delete m.bearings;
+    m.patented ??= {};
+    m.drawer ??= [];
+    m.nextKept ??= 1;
+    m.queue ??= [];
+    st.meta = m;
+    delete st.ghosts;
+    if (st.mega) delete st.mega.bearings;
+    st.annex ??= 0;
+    const gone = new Set(['bpSave', 'bpDelete', 'bpRename', 'bpImport', 'bpPlace', 'ghostBuild', 'ghostBuildAll', 'ghostClear']);
+    const log = Array.isArray(d.log) ? d.log.filter((l: { c?: { k?: string } }) => !gone.has(l?.c?.k ?? '')) : d.log;
+    return { ...d, snap: JSON.stringify(st), log, v: 7 };
   },
 };
 
