@@ -86,10 +86,10 @@ export const CUSTOMERS: Record<CustomerId, CustomerDef> = {
       'A pleasure doing business. We were never here. Any of us. Him.',
     ],
     rewards: [
-      { rep: 1, text: 'Coat Pockets: modules hold 6 s of each input and output (was 2), so a hiccup in a feed is ridden out' },
-      { rep: 2, text: 'The Night Crew: while you are away, every Slag Heap loses 1 slag every 10 s to the coat' },
+      { rep: 1, text: 'Coat Pockets: modules hold 6 s of each input and output (was 2)' },
+      { rep: 2, text: 'The Night Crew: while you are away, each Slag Heap loses a slag every 10 s' },
       { rep: 3, text: 'The Great Drill\'s stage 2 opens' },
-      { rep: 4, text: 'Pocketed Kits: every stamp needs 1 Machine Kit fewer' },
+      { rep: 4, text: 'Pocketed Kits: a stamp needs 1 Machine Kit fewer' },
       { rep: 5, text: 'The Great Drill\'s stage 3 opens' },
     ],
     derivation: '§19 The Committee: met with the Great Drill research in the first run, or after the first Reorganize once Folding is done; its reputation (kept through every reset) opens the Great Drill\'s stages 2 and 3 at 3 and 5, two orders a run, so stage 2 is the second run\'s and stage 3 the third\'s; every reputation reward is a rule',

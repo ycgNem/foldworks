@@ -63,9 +63,9 @@ const SHORT: Partial<Record<string, string>> = {
   bellows: 'Bellows', starterLine: 'Miner', notebooks: 'Notes', copperDeeds: 'Copper', gearPatterns: 'Gears', gizmoPatent: 'Gizmo',
   foldingPatent: 'Folding', grant: 'Grant', overdriveHabit: 'Overdrv', coalRights: 'Coal', steelCharter: 'Steel', glassNotes: 'Glass',
   circuitPatent: 'Circuit',
-  surveyCharter: 'Claims', widerBox: 'Wider', quickAudit: 'Quick', moreAuditors: 'Auditors', sideIntake: 'Intake', deepHeaps: 'Heaps',
-  nestedBoxes: 'Nesting', coolHands: 'Cooling', stampDies: 'Dies',
-  shovelFrog: 'Shovel', labAssistant: 'Lab', orderClerk: 'Clerk', stampPress: 'Press', dragonfly: 'Drone', dragonflies: 'Swarm',
+  surveyCharter: 'Claims', widerBox: 'Wider', quickAudit: 'Quick', moreAuditors: 'Auditors', sideIntake: 'Intake',
+  nestedBoxes: 'Nesting', freshDies: 'Dies',
+  shovelFrog: 'Shovel', labAssistant: 'Lab', orderClerk: 'Clerk', stampPress: 'Press', draughtsman: 'Drafter', drawerSpace: 'Drawer',
   nightShift: 'Shift', nightWatch: 'Watch', lightsOn: 'Lights',
 };
 

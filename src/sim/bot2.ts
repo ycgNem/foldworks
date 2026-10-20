@@ -268,7 +268,8 @@ export type Step =
   /** a module placed by search; `annex`: east of the 12x8 only; `opt`: skipped when it can't go */
   | { k: 'fmod'; id: string; design: string; to: Dest; by?: Dest; hub?: boolean; annex?: boolean; opt?: boolean }
   /** buy the annex up to `n` blocks (DESIGN.md §19), once coin is `spare` times the price */
-  | { k: 'annex'; n: number; spare?: number; for?: string[] }
+  /** `opt`: only if affordable now (with `spare`), else skipped: the plan never waits on it */
+  | { k: 'annex'; n: number; spare?: number; for?: string[]; opt?: boolean }
   /** a nested fold of a group on the Factory floor (skipped when the box can't be folded) */
   | { k: 'ffold'; box: Box; name: string }
   | { k: 'order'; id: string }
@@ -837,7 +838,7 @@ export class Act2Bot {
         if (!price) return 'done';
         const why = annexRefusal(g);
         if (why && !g.s.coin.lt(price)) return 'done';
-        if (g.s.coin.lt(price.mul(s.spare ?? 1))) return `coin for annex block ${(g.s.annex ?? 0) + 1}`;
+        if (g.s.coin.lt(price.mul(s.spare ?? 1))) return s.opt ? 'done' : `coin for annex block ${(g.s.annex ?? 0) + 1}`;
         this.buy({ k: 'annex' }, 'annex');
         return 'annex';
       }
