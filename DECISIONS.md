@@ -553,3 +553,122 @@ Findings for the sim and design (not changed here):
 - Open: rule 1 (a goal within reach every 3 min) fails for ~40 min while the Megaproject Bay
   fills (Act II pacing, the bot); coin piles up (~1.8M at 5 h) with too few sinks; the bot doesn't
   use nested folds yet. Carried to Milestone 5's planning.
+
+## The UI redesign (2026-10-20)
+
+The owner, after the Milestone 4 build: "Redo UI, it's crowded but not in a good way,
+cross-reference successful games and cook up for me." The full, dense, dopamine-rich direction
+(Cookie Clicker, Clicker Heroes) stands; the *kind* of density changes. The brief, the
+cross-referenced games and what was built: `docs/ui-redesign.md`. This replaces the HUD layout
+of the owner's earlier full-screen direction (above, Milestone 0) and of the Act II Workshop UI
+notes (Milestone 4); each superseded note is named below.
+
+- 2026-10-20: **Two panel weights.** Every HUD piece is a *plate* drawn in code from the palette
+  (ink at 90%, a 1 px outline, a lighter or accent top edge, notched corners; `plate()` in
+  `src/app/chrome.ts`). The ornate wood-and-brass 9-slice (`frame()`, the art's `ui_panel`) is
+  kept for full-screen menus and celebration cards only. Why: thirteen identical heavy frames
+  gave the eye nowhere to land; rare ornament makes opening a menu feel like opening something.
+  Inside menus, `card()` is now a flat section (no wood inside wood).
+- 2026-10-20: **The floor is the star.** The camera frames the area right of the card rail,
+  between the top bar and the build bar (`layout.ts` `center`); the water and town draw across
+  the whole canvas behind the HUD. At 1280x720 the floor view is ~80% of the width (it was
+  ~53%). Supersedes "the floor in the frame between" the two columns.
+- 2026-10-20: **A thin top bar (20 px) carries the global state**: the coin counter (the one
+  loud thing: big gold digits that roll, bump, glint and sweep; the rate beside it), Machine
+  Kits and power once they exist, the line-health chip, the floor tabs and the menus. Why: a
+  resource bar at the top is where every player of the genre looks first.
+- 2026-10-20: **Shipping moved into the coin counter's drop-down** (hover the counter: the whole
+  number, the rate, the income sparkline, earnings, and every item shipped with its per-minute
+  rate). Why: a list of sales on screen all the time at the same weight as the counter was the
+  brief's "static text in prime space". Stats keeps the full delivered list.
+- 2026-10-20: **The status strip became the line-health chip** (green/yellow/red/blue counts,
+  red edge blinking while anything struggles; a click jumps to the worst problem and opens its
+  report, the old "find"). Hidden until the first Miner: the first minute has one goal.
+- 2026-10-20: **Power reads demand/supply** ("380/300 kW", amber in a brownout, a bar when there
+  is room). Why: "used of available" is the convention players read without a legend; the
+  tooltip names both. Supersedes the readout under the status strip.
+- 2026-10-20: **Floor tabs appear once Folding is researched.** Before that there is one floor
+  and nothing to choose; the floor's name plate went (the tab says it).
+- 2026-10-20: **The menus are icon keys on the right of the top bar**, with a dot when something
+  waits inside (blinking gold until first opened, steady red for news); the name and key are in
+  the tooltip. Game screens first, then Stats, Trophies, Options after a divider. Supersedes the
+  bottom bar of fifteen equal buttons and its label-dropping rule.
+- 2026-10-20: **Floating cards on the left rail**, 4 px apart, each a plate with its accent edge
+  and a small-caps title: Goal, Order, Research, Megaproject. A click on the title folds a card
+  to that line; a click on its body opens its screen. Nothing else lives in the rail.
+- 2026-10-20: **The Goal card is the old "Next"**, and at the start it carries the Bellows (a bar
+  to 25 coin, then a gold Buy button). When the goal changes (its text without its live
+  numbers) the card slides in, flashes and chimes. A goal that names a screen, a floor or a
+  tool opens it from its card. Supersedes the Bellows card at the top of the store.
+- 2026-10-20: **The Order card** shows the customer's portrait, the order's name and one bar per
+  item ("Factory Dock only" when it counts there alone); with no active order, a one-line pill
+  "N orders offered" instead. **The Research card** shows the node and its bar; with none
+  selected, a "Pick research (T)" pill. Pills are plates in their accent colour, not gold
+  buttons (gold is for buying), and give way when the goal already names their screen. The
+  Research card waits for the Bellows: the first minute has one goal.
+- 2026-10-20: **The build bar** is centred at the bottom: category tabs over one row of square
+  slots (sprite at 1x, hotkey, price), a gold edge when affordable, a red dot when new, a
+  padlock over a dark silhouette when locked; the rich detail (sprite at 2x, price, rate,
+  description, what you own) in a hover card above the slot. Left of it the tools: Rotate,
+  Remove, Fold (with its audit count) and Flow, with their keys. Supersedes the store column of
+  54 px rows and the "???" locked rows.
+- 2026-10-20: **The build bar's categories are the store's tabs (Build, Power, Heavy) plus
+  Upgrades** (the Bellows and land), not the brief's Logistics/Production split. Why: keys 1-9
+  pick from the open tab and the goal texts name them ("a Miner (2)", "a Boiler (Power tab)");
+  splitting Build would renumber the keys the first minute teaches. The nine basic buildings fit
+  one row. Changes the brief.
+- 2026-10-20: **On the Factory floor the build bar has one tab, Modules**: the trunk belt (1) and
+  the designs (2-9), each slot with its spare count and grade; a shift-click stamps a copy, and a
+  last slot opens the Modules screen when there are more than eight. Supersedes the Factory
+  store column and its quick links (the Survey Office, Codex and Drill are top-bar menus).
+- 2026-10-20: **Prices on slots are gold when affordable and grey when not** (they were red).
+  Why: at the start nothing is affordable, and a row of red read as an error.
+- 2026-10-20: **Toasts stack from the top-right corner, newest on top**, sliding in with a colour
+  flash and fading out; trophies just earned stack under them. No column behind them; they
+  float (the overlap audit treats them as transient). Supersedes "toasts live at the bottom of
+  the left column".
+- 2026-10-20: **The pinned report anchors bottom-right above the build bar**, its top edge in its
+  status pip's colour, and moves left of the floor when it would cover what it reports on.
+  Hover reports stay tooltips at the mouse, in the plate style.
+- 2026-10-20: **The Swamp Gazette is a crawl along the bottom edge** (10 px: the brief said 9,
+  but the font's descenders need 10), dim, with no frame; breaking news (the town growing, an
+  order filled: a new "EXTRA!" headline) runs bright for its first pass. Supersedes the ticker
+  across the top.
+- 2026-10-20: **Diegetic touches on the map**: the active order's flag over the Dock it fills at
+  (the customer's colour, waving, with a small progress bar), and a progress ring with the
+  node's icon over the Hopper for the selected research. Drawn under the HUD, outside the overlap
+  audit (they are world markers, like the goal arrow).
+- 2026-10-20: **Three text sizes**: the big digits (the counter, grades), the normal font, and a
+  new 5 px small font (capitals and figures) for card titles, keys, prices, units and secondary
+  numbers. Spacing on a 4 px grid: 4 px between cards, 6 px inside them.
+- 2026-10-20: **Accent colours carry meaning**: gold is coin and "you can buy this", teal research
+  (and a tool that is on), leaf orders and customers (each customer has their own colour on
+  their card and flag), copper heat and jams, violet Patents and resets, blue power.
+- 2026-10-20: **Every full-screen menu uses one template** (`menuTemplate()` in `widgets.ts`): the
+  ornate frame, a header bar (icon, title in the accent colour, the menu's tabs, Esc and a close
+  key), the content, and an optional detail panel on the right (the research tree's node card is
+  the model). The header's tabs are the screen's group (Orders, Modules, Codex, Survey, Drill;
+  Stats, Trophies, Options; the research tree's Workshop and Act II pages). Menus cover the
+  floor and the build bar; the top bar stays, so the coin keeps counting.
+- 2026-10-20: **Buttons and tabs are code-drawn in the plate language** (a dark key with a lighter
+  top edge; gold for buy-or-do, teal for on). The art's `ui_button`, `ui_tab`, `ui_row`,
+  `ui_toast`, `ui_tip` and `ui_ticker` are no longer drawn; `ui_panel`, `ui_panel_light`,
+  `ui_inset`, the icons, the coin, portraits, grades and nodes are. Why: the HUD must restyle with
+  the palette (the art revamp may change it) and stay calm under the juice.
+- 2026-10-20: **Other files can add menus, counters and screens** (`registerMenu`,
+  `registerCounter` in `topbar.ts`, `registerScreen` in `screens.ts`), so Milestones 5 and 6 add
+  Patents, Blueprints and the rest without editing the HUD.
+- 2026-10-20: **All the juice stays**: coin pops and coins flying into the counter, its roll,
+  bump, glints and sweep; confetti, banners (now centred between the rail and the toasts), the
+  S+ card, the fold animation, Overdrive glows, the town growing.
+
+### Flagged as derivative (the UI redesign)
+
+- **A top resource bar, a numbered hotbar under category tabs, floating objective cards, tabbed
+  full-screen menus and a news crawl are genre conventions** (shapez, Timberborn, Factorio,
+  Cookie Clicker, Mindustry, Against the Storm and Melvor Idle all use variants). No layout, art
+  or wording is copied from any one of them.
+- Closer to one game: **the line-health chip's click-to-jump is Factorio's alert behaviour**, and
+  **the order flag over the Dock echoes Dorfromantik's quest flags**. Kept: the chip counts this
+  game's own status pips and opens this game's plain-English report; the flag shows an order's
+  progress on the Dock that fills it, which nothing else on the map did.
