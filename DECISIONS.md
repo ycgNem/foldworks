@@ -988,6 +988,57 @@ behaviour, number or data file changed.
 
 Nothing here is derivative of a shipped game beyond what the UI redesign already lists.
 
+## The art revamp: Lantern Bayou (2026-10-20)
+
+- 2026-10-20: **The owner picked direction B, "Lantern Bayou", from the three-way style test**
+  (`pixel-art/revamp-test/`, commit faa0736), and **3/4-view machines with four facings**. This
+  supersedes the Milestone 0 entry "Palette A, Foundry, picked" and "Machine art turns with its
+  rotation, light included" for every machine sheet that ships facings. Why: the bayou at dusk
+  gives the game a place (the frog town, the water round each floor) where A was a floor in a
+  void; the lantern light makes the warm cues (fire, coin, windows) carry the scene; 3/4 view
+  gives machines a front face for their family cue (the mouth, the ram, the drill, the arms).
+- 2026-10-20: **The palette changed (the owner's ask-first item, answered by the pick).**
+  `src/data/palette.ts` is B: 51 art colours (phase 1's 48 plus `wood5` for the lit deck board,
+  `violet` for Patents and plastic, `teal` for glass and research) and the five pip colours,
+  unchanged from A so their lightness order holds. **Every palette-A slot name in `C` is kept**,
+  mapped to the B colour that plays its role (`ground0-2` → `wood0-2`, `hull0-3` → `steel1-4`,
+  `glow` → `lamp1`, `hot` → `lamp3`, `gold` → `lamp2`, `teal0` → `water3`, and so on; the table
+  is `pixel-art/revamp/pal.py` `ROLES`), so code and the HUD plates needed no edit. Sprites not
+  redrawn were recoloured A → B role by role (`recolor_old.py`), so nothing in `src/art` uses A.
+- 2026-10-20: **Machine sheets may ship four facings** (`"facings": 4` in the JSON; rows east,
+  south, west, north; frames left to right). `src/render/sprites.ts` draws the row for the
+  entity's rotation without rotating it, so the 3/4 view and the top-left light hold in all four.
+  Sheets without `facings` (belts, splitter, merger, modules) still turn by code.
+- 2026-10-20: **PixelLab drafted, the scripts finished.** PixelLab drafted the machines (eleven
+  8-direction objects at 32 px, five working animations), the docks, hoppers, crate, pole and
+  town buildings (one 64-candidate review pack), and the Bramble and Committee portraits
+  (img2img over the hand-drawn ones). Every draft is finished in `pixel-art/revamp/*.py`: dark
+  rim stripped, fitted to the footprint, outline cleaned, 1 px shadow baked, snapped to the
+  palette, fire flicker and blinks animated by hand. Terrain, belts, the 22 item icons, the module
+  tile, the heap and the new UI icons are hand-drawn. **Phase 2 used 157 generations** (balance
+  2,178.90 → 2,021.90; the phase-1 style test used 81); no USD credit spent. Every job is in
+  `pixel-art/revamp/prompts.md`. Unit 7's and Voltaire's img2img portraits lost their identity
+  (the screen face, the skin tone) and were dropped for their recoloured hand-drawn ones.
+- 2026-10-20: **Phase 3: the whole revamp and a readability pass.** Every machine (Mk1, Mk2, the
+  crate and the slag heap) stands on a dark steel skid with a deck-dark shadow, because brown and
+  orange bodies vanished on the brown plank deck at 1x (DESIGN.md §17); the kiln became pale fired
+  clay so it is told from the smelter and the hand furnace by silhouette and value. The Dock and
+  Hopper were redrawn by hand as *destinations*, not machines: the Dock a slip of water with a
+  moored skiff and a coin pennant, the Hopper a research-teal funnel (it had read as a grey robot).
+  The splitter and merger ship four facings like every other machine; only belts and trunks still
+  turn by code. Everything that was only recoloured was redrawn: effects and Sparks by hand in a
+  stepped lantern light (the Inspector Spark became a frog inspector with a lantern), and the
+  Milestone 1-5 recipes (Unit 7, Voltaire, the town pieces, the pictures, the logo, the UI frames,
+  coins, grades, icon atlases) run again through `pixel-art/revamp/recipes.py` with B colours
+  chosen by role per piece. Phase 3 used **0 PixelLab generations** (balance 2,021.90 before and
+  after).
+- 2026-10-20: **The title screen is a key-art scene** (`title_scene`, 320x180 x8 at 8 fps): a
+  PixelLab dusk-bayou backdrop regraded into B, with the game's own sprites composed over it by
+  hand (the deck with a line into the Dock, a glowing module, Bramble on the boardwalk) and
+  animated by hand (shimmer, lantern flicker, the belt). `drawTitle` draws it at the smallest whole
+  scale that covers the screen and places the logo, tagline and buttons in scene coordinates on
+  its calm areas. 3 PixelLab generations (balance 2,021.90 → 2,018.90).
+
 ## The Milestone 5–6 review round: the reset layer (2026-10-20)
 
 The idle-critic and the pacing auditor found that Milestone 5's reset paid again, every run, for

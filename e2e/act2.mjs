@@ -143,7 +143,7 @@ await shot('11-cooling-hover');
 await page.evaluate(() => {
   const a = window.__app;
   a.toast('Research complete: Steam Power', 'Unlocked Boilers, Steam Engines, Generators and Poles; land chunk F; Dame Voltaire.', '#96a9c6', 'flask');
-  a.toast('Codex entry!', 'Unit 7 catalogues glass: 800 coin for the first one.', '#ffcc3d', 'codex');
+  a.toast('Codex entry!', 'Unit 7 catalogues glass: 800 coin for the first one.', '#ffbe48', 'codex');
   a.unfreeze();
 });
 await page.mouse.move(Math.floor(w / 2), Math.floor(h / 2));

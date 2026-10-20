@@ -1,7 +1,8 @@
 // Sprites: the art director's PNG strips from src/art/ (<name>.png + <name>.json, see
 // .claude/agents/art-director.md) when they exist, otherwise a code-drawn placeholder in the
 // palette. Frames are cut once into their own small canvases; every draw is on whole pixels.
-// Machines face right; drawRot turns them in 90 degree steps about the tile's centre.
+// Machines face right; drawRot turns them in 90 degree steps about the tile's centre, unless the
+// sheet has "facings": 4 (rows east, south, west, north, drawn in 3/4 view), when it picks the row.
 // (The loading pattern is Trotline's; every placeholder is Foldworks'.)
 import { C } from '../data/palette';
 import { ITEM_IDS, type ItemId } from '../data/items';
@@ -20,9 +21,12 @@ export interface SpriteSheet {
   slice?: [number, number, number, number];
   /** frame names, when the sidecar lists them (town_house: hut, gable...) */
   order?: string[];
+  /** 3/4-view art drawn in four directions: rows[rot] are that facing's frames (east, south,
+   *  west, north); `frames` is then the east row, so frameAt cycles one facing's animation */
+  rows?: HTMLCanvasElement[][];
 }
 
-interface Meta { frame: [number, number]; frames: number; anchor: [number, number]; fps?: number; slice?: [number, number, number, number]; order?: string[]; names?: string[] }
+interface Meta { frame: [number, number]; frames: number; anchor: [number, number]; fps?: number; slice?: [number, number, number, number]; order?: string[]; names?: string[]; facings?: number }
 
 const PNG = import.meta.glob('../art/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const JSON_META = import.meta.glob('../art/*.json', { eager: true, import: 'default' }) as Record<string, Meta>;
@@ -54,7 +58,13 @@ export function loadArt(): Promise<void> {
           c.getContext('2d')!.drawImage(img, (i % perRow) * w, Math.floor(i / perRow) * h, w, h, 0, 0, w, h);
           frames.push(c);
         }
-        sheets.set(name, { frames, w, h, ax: meta.anchor[0], ay: meta.anchor[1], fps: meta.fps ?? 4, placeholder: false, slice: meta.slice, order: meta.order ?? meta.names });
+        let rows: HTMLCanvasElement[][] | undefined;
+        if (meta.facings && meta.facings > 1) {
+          const n = Math.floor(meta.frames / meta.facings);
+          rows = [];
+          for (let r = 0; r < meta.facings; r++) rows.push(frames.slice(r * n, r * n + n));
+        }
+        sheets.set(name, { frames: rows ? rows[0] : frames, rows, w, h, ax: meta.anchor[0], ay: meta.anchor[1], fps: meta.fps ?? 4, placeholder: false, slice: meta.slice, order: meta.order ?? meta.names });
         res();
       };
       img.onerror = () => { console.error('sprite failed to load', url); res(); };
@@ -105,8 +115,14 @@ export function drawSprite(ctx: CanvasRenderingContext2D, s: SpriteSheet, f: num
   ctx.restore();
 }
 
-/** Draw a 16x16 tile sprite at tile pixel (x, y) turned `rot` quarter turns clockwise (0 = facing right). */
+/** Draw a tile sprite at tile pixel (x, y) turned `rot` quarter turns clockwise (0 = facing
+ *  right). A sheet with facings is not turned: its row for that direction is drawn instead. */
 export function drawRot(ctx: CanvasRenderingContext2D, s: SpriteSheet, f: number, x: number, y: number, rot: number, flipY = false) {
+  if (s.rows) {
+    const row = s.rows[(((rot % 4) + 4) % 4) % s.rows.length];
+    ctx.drawImage(row[((f % row.length) + row.length) % row.length], x - s.ax, y - s.ay);
+    return;
+  }
   const img = s.frames[((f % s.frames.length) + s.frames.length) % s.frames.length];
   if (!rot && !flipY) {
     ctx.drawImage(img, x, y);

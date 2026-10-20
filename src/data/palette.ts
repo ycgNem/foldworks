@@ -1,42 +1,65 @@
-// The game palette: candidate A, "Foundry", picked at the Milestone 0 palette test (DECISIONS.md,
-// STYLE.md). PALETTE is the ordered list the art scripts snap to (scripts/lib/pixel.mjs reads it
-// from this file); C names each colour for code: first the palette's own slot names (what the art
-// director's build scripts use), then the semantic aliases the UI and placeholders use.
+// The game palette: "Lantern Bayou", picked at the art revamp's style test (DECISIONS.md, the art
+// revamp, 2026-10-20; STYLE.md). It replaced palette A ("Foundry", Milestone 0). PALETTE is the
+// ordered list the art scripts snap to (scripts/lib/pixel.mjs and scripts/art-import.mjs read it
+// from this file; pixel-art/revamp/pal.py is its source). C names each colour for code: the Lantern
+// Bayou slot names, then palette A's slot names (kept so code never changed, each mapped to the
+// colour that plays that role now), then the semantic aliases the UI and placeholders use.
 
 export const PALETTE = [
-  '#1d1420', '#3a2532', '#f2e6cf',
-  '#4a3431', '#62473b', '#7e624c',
-  '#463f50', '#847f87', '#b4ada9', '#dccfb8',
-  '#333a5a', '#5c6d93', '#96a9c6',
-  '#722d2a', '#c4633b', '#ec9e78',
-  '#74586e',
-  '#7a5418', '#c99a3a', '#f5952a', '#ffeca0',
-  '#2a6566', '#6fc1ae',
-  '#5a6a2e', '#9cb446',
-  '#9a4a88',
+  '#130e1c', '#211a30', '#322944',
+  '#0e2629', '#143638', '#1c4a49', '#2a625c', '#4a8a78',
+  '#1d2f22', '#2b4628', '#3d5f2d', '#587b34', '#7e9b3e', '#a8bf55',
+  '#3a221f', '#583428', '#7a4b33', '#9e6a42', '#c28f5a', '#dcb07a',
+  '#3e302d', '#56433a', '#705847', '#8c7258',
+  '#2c3042', '#464c65', '#6b7290', '#98a0b8', '#cbd0de',
+  '#273a68', '#4066a8', '#76a3dc',
+  '#6a2723', '#aa472d', '#de7a44', '#f4ac74',
+  '#b4561c', '#ee8a26', '#ffbe48', '#fff0a6',
+  '#5b4016', '#91701f', '#c8a13a', '#ecd27c',
+  '#4f3658', '#83568a', '#b45aa0', '#7ccdb4',
+  '#eee2c6', '#c2db74', '#c43a32',
+  // status pips: code-only, never in sprite art (unchanged from palette A)
   '#66cc50', '#ffe466', '#c8362e', '#3d3c42', '#4a8fe2',
-  '#ffcc3d',
 ] as const;
 
+/** Lantern Bayou's own slots (what the art scripts use): ramps dark to light. */
+const LB = {
+  ink: '#130e1c', ink1: '#211a30', ink2: '#322944',
+  water0: '#0e2629', water1: '#143638', water2: '#1c4a49', water3: '#2a625c', water4: '#4a8a78',
+  moss0: '#1d2f22', moss1: '#2b4628', moss2: '#3d5f2d', moss3: '#587b34', moss4: '#7e9b3e', moss5: '#a8bf55',
+  wood0: '#3a221f', wood1: '#583428', wood2: '#7a4b33', wood3: '#9e6a42', wood4: '#c28f5a', wood5: '#dcb07a',
+  earth0: '#3e302d', earth1: '#56433a', earth2: '#705847', earth3: '#8c7258',
+  steel0: '#2c3042', steel1: '#464c65', steel2: '#6b7290', steel3: '#98a0b8', steel4: '#cbd0de',
+  iron0: '#273a68', iron1: '#4066a8', iron2: '#76a3dc',
+  copper0: '#6a2723', copper1: '#aa472d', copper2: '#de7a44', copper3: '#f4ac74',
+  lamp0: '#b4561c', lamp1: '#ee8a26', lamp2: '#ffbe48', lamp3: '#fff0a6',
+  brass0: '#5b4016', brass1: '#91701f', brass2: '#c8a13a', brass3: '#ecd27c',
+  slag0: '#4f3658', slag1: '#83568a', violet: '#b45aa0', teal: '#7ccdb4',
+  bone: '#eee2c6', lily: '#c2db74', red: '#c43a32',
+} as const;
+
+/** Palette A's slot names, each now the Lantern Bayou colour that plays its role. */
 const A = {
-  ink: '#1d1420', shadow: '#3a2532', bone: '#f2e6cf',
-  ground0: '#4a3431', ground1: '#62473b', ground2: '#7e624c',
-  // hull1 and hull2 lifted one step after the palette test (art director's note)
-  hull0: '#463f50', hull1: '#847f87', hull2: '#b4ada9', hull3: '#dccfb8',
-  iron0: '#333a5a', iron1: '#5c6d93', iron2: '#96a9c6',
-  copper0: '#722d2a', copper1: '#c4633b', copper2: '#ec9e78',
-  slag: '#74586e',
-  brass0: '#7a5418', brass1: '#c99a3a', glow: '#f5952a', hot: '#ffeca0',
-  teal0: '#2a6566', teal1: '#6fc1ae',
-  moss: '#5a6a2e', leaf: '#9cb446',
-  violet: '#9a4a88',
+  ink: LB.ink, shadow: LB.ink1, bone: LB.bone,
+  // the old ground ramp is wood now: the Workshop is a deck, and wood frames the ornate UI
+  ground0: LB.wood0, ground1: LB.wood1, ground2: LB.wood2,
+  hull0: LB.steel1, hull1: LB.steel2, hull2: LB.steel3, hull3: LB.steel4,
+  iron0: LB.iron0, iron1: LB.iron1, iron2: LB.iron2,
+  copper0: LB.copper0, copper1: LB.copper1, copper2: LB.copper2,
+  slag: LB.slag1,
+  // brass0/brass1 keep their meaning (frame and rivet); the darkest brass is LB.brass0
+  brass0: LB.brass1, brass1: LB.brass2, glow: LB.lamp1, hot: LB.lamp3,
+  teal0: LB.water3, teal1: LB.teal,
+  moss: LB.moss3, leaf: LB.moss5,
+  violet: LB.violet,
   // status pips (DESIGN.md §4, §17): apart by lightness as well as hue
   pipGreen: '#66cc50', pipYellow: '#ffe466', pipRed: '#c8362e', pipGrey: '#3d3c42', pipBlue: '#4a8fe2',
-  // the 32nd slot: bright coin gold for the numbers that matter
-  gold: '#ffcc3d',
+  // coin gold for the numbers that matter: the lantern's own gold
+  gold: LB.lamp2,
 } as const;
 
 export const C = {
+  ...LB,
   ...A,
   // semantic aliases (UI, placeholders), darkest neutral first
   night: A.shadow, slate: A.hull0, iron: A.hull1, steel: A.hull1, fog: A.hull2, mist: A.hull3,

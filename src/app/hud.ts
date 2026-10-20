@@ -15,7 +15,7 @@ import { MEGA } from '../data/megaprojects';
 import { TICK_RATE } from '../engine/time';
 import { TITLE } from '../game-info';
 import { ICON, textWidth, drawText, ellipsize } from '../ui/font';
-import { sheet, itemIcon, hasArt, spriteName } from '../render/sprites';
+import { sheet, itemIcon, hasArt, spriteName, frameAt } from '../render/sprites';
 import { report, nominal, lineReport, entName } from '../sim/analysis';
 import { poleReach, drawKw } from '../sim/systems/power';
 import { modeSpeed } from '../sim/systems/machines';
@@ -770,6 +770,7 @@ function hoverReport(app: App) {
 // ------------------------------------------------------------------ title
 
 export function drawTitle(app: App) {
+  if (hasArt('title_scene') && hasArt('logo')) return drawTitleScene(app);
   const ui = app.ui;
   const t = ui.time;
   // a slow belt of items crossing the screen under the title, and a dark floor
@@ -806,4 +807,39 @@ export function drawTitle(app: App) {
   }
   if (button(ui, 'new', bx, y, bw, 20, app.titleInfo.hasSave ? 'New game' : 'Start', { gold: !app.titleInfo.hasSave })) { app.audio.unlock(); app.newGame(); }
   ui.text('A frog mayor wants Gizmos. Nobody knows what they do.', Math.floor(ui.w / 2), ui.h - 16, C.hull1, { align: 'center' });
+}
+
+/** The title over the art director's key art ('title_scene', 320x180, STYLE.md): the scene at
+ *  the smallest whole-number scale that covers the screen, centred and cropped, never smoothed.
+ *  Everything is placed in scene coordinates so it lands on the scene's calm areas: the logo and
+ *  tagline on the sky band (scene y 14-66), the buttons on the open water (y 104+), the last
+ *  line on the dark water along the bottom. */
+function drawTitleScene(app: App) {
+  const ui = app.ui;
+  const t = ui.time;
+  const sc = sheet('title_scene');
+  const SW = sc.w, SH = sc.h;
+  const k = Math.max(1, Math.ceil(Math.max(ui.w / SW, ui.h / SH)));
+  const ox = Math.floor((ui.w - SW * k) / 2), oy = Math.floor((ui.h - SH * k) / 2);
+  ui.ctx.drawImage(sc.frames[frameAt(sc, t)], ox, oy, SW * k, SH * k);
+  const at = (sy: number) => oy + sy * k;
+  const s = sheet('logo');
+  const lk = Math.max(1, Math.min(3, Math.floor(ui.w / (s.w + 24))));
+  const lx = Math.floor(ui.w / 2 - (s.w * lk) / 2);
+  const ly = Math.max(4, at(14));
+  ui.ctx.drawImage(s.frames[0], lx, ly, s.w * lk, s.h * lk);
+  if (hasArt('logo_glint')) {
+    const gl = sheet('logo_glint');
+    ui.ctx.drawImage(gl.frames[Math.floor(t * 10) % gl.frames.length], lx, ly, s.w * lk, s.h * lk);
+  }
+  ui.text('Build a line. Fold it into a tile. Build with what you folded.', Math.floor(ui.w / 2), ly + s.h * lk + 6, C.copper2, { align: 'center', shadow: C.ink });
+  const bw = 130, bx = Math.floor(ui.w / 2 - bw / 2);
+  let y = Math.min(ui.h - 70, at(104));
+  if (app.titleInfo.hasSave) {
+    if (button(ui, 'continue', bx, y, bw, 20, 'Continue', { gold: true })) { app.audio.unlock(); app.continueGame(); }
+    ui.text(`${ICON.coin} ${app.titleInfo.coin}`, bx + bw + 8, y + 6, C.gold, { shadow: C.ink });
+    y += 24;
+  }
+  if (button(ui, 'new', bx, y, bw, 20, app.titleInfo.hasSave ? 'New game' : 'Start', { gold: !app.titleInfo.hasSave })) { app.audio.unlock(); app.newGame(); }
+  ui.text('A frog mayor wants Gizmos. Nobody knows what they do.', Math.floor(ui.w / 2), ui.h - 16, C.hull2, { align: 'center', shadow: C.ink });
 }
