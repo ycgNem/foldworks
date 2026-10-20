@@ -33,6 +33,10 @@ export const RULES = {
   foldMax: r(8, '§10 the Fold box is at most 8x8 in the slice'),
   auditWarmup: r(10, '§10 Audit: 10 s warm-up'),
   auditWindow: r(60, '§10 Audit: a 60 s window'),
+  /** a kept design unfolded unchanged refolds after this check instead of a full audit */
+  refoldCheck: r(10, '§19 The Patent Drawer, refolding: a kept layout already graded refolds at its kept grade after a 10 s check that it runs with its ports fed (every machine about as busy as its audit found it, its product leaving the box): two crafts of the slowest slice machine, the same length as the warm-up of a full audit, so a check that fails has lost nothing (the full audit goes on)'),
+  /** how much less busy than its kept audit a line may run in the check */
+  refoldSlack: r(0.1, '§19 The Patent Drawer, refolding: the check passes when the machines run at least their kept U less 0.1 (a line just unfolded fills its belts in the first seconds; one starved of an input or power runs far below)'),
   /** Workshop lines audited at once */
   /** S+ needs at least this share of the byproducts made used inside the box */
   splusUsedInside: r(0.8, '§10 Grade S+: a zero-waste line uses its byproducts inside the box (80%: slag on belts at the window edges); routed out to a heap or a Dock it caps at S (the Milestone 4 review)'),

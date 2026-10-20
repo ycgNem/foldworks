@@ -9,6 +9,8 @@ import { CHUNKS } from '../src/data/land';
 import { TICK_RATE } from '../src/engine/time';
 import { auditTicks } from '../src/sim/systems/audits';
 import { billsStanding, billsTerm, designValue } from '../src/sim/reorganize';
+import { encodeDesign } from '../src/sim/drawer';
+import { RULES } from '../src/data/rules';
 import type { Dir, Ent, ModuleDesign } from '../src/sim/world';
 
 function sandbox(seed = 1) {
@@ -186,5 +188,71 @@ describe('Overdrive never reaches an audited line (DESIGN.md §10 Select)', () =
     const plain = run(false), hot = run(true);
     expect(plain).toBeGreaterThan(0.4);
     expect(hot).toBeLessThanOrEqual(plain * 1.02);
+  });
+});
+
+describe('a kept design unfolded unchanged refolds after a short check (DESIGN.md §19 The Patent Drawer)', () => {
+  /** Fold the iron line, keep it, unfold it whole, and let it run. */
+  function kept() {
+    const g = sandbox();
+    ironLine(g);
+    g.step(60 * TICK_RATE);
+    must(g, { k: 'audit', x: 2, y: 11, w: 2, h: 2 });
+    g.step(auditTicks(g) + 1);
+    must(g, { k: 'fold', name: 'Ingots' });
+    const d = g.s.designs[g.s.designs.length - 1];
+    must(g, { k: 'keep', id: d.id });
+    const k = g.s.meta.drawer[g.s.meta.drawer.length - 1];
+    expect(k.card?.grade.letter).toBe(d.grade.letter);
+    must(g, { k: 'unfoldKept', id: k.id });
+    g.step(30 * TICK_RATE);
+    return { g, d, k };
+  }
+  const check = RULES.refoldCheck.value * TICK_RATE;
+
+  it('an unchanged layout running with its ports fed refolds at its kept grade and rates after the check', () => {
+    const { g, d } = kept();
+    must(g, { k: 'audit', x: 2, y: 11, w: 2, h: 2 });
+    g.step(check + 1);
+    const a = g.s.audits[0];
+    expect(a.result).toBeTruthy();
+    expect(a.result!.grade.letter).toBe(d.grade.letter);
+    must(g, { k: 'fold', name: 'Ingots again' });
+    const d2 = g.s.designs[g.s.designs.length - 1];
+    expect(d2.grade).toEqual(d.grade);
+    for (const [it, v] of Object.entries(d.outs)) expect(d2.outs[it as keyof typeof d2.outs]).toBeCloseTo(v as number, 9);
+    expect(d2.ins).toEqual(d.ins);
+  });
+
+  it('a changed layout, a stopped input or a machine out of its normal mode gets a full audit', () => {
+    // a belt inside the box turned another way
+    let { g } = kept();
+    must(g, { k: 'place', kind: 'belt', x: 3, y: 12, rot: 0 });
+    must(g, { k: 'audit', x: 2, y: 11, w: 2, h: 2 });
+    g.step(check + 1);
+    expect(g.s.audits[0].result).toBeNull();
+    g.step(auditTicks(g));
+    expect(g.s.audits[0].result).toBeTruthy();
+    // the miner stopped: the smelter starves in the check, and the full audit goes on
+    ({ g } = kept());
+    must(g, { k: 'pause', x: 2, y: 11, on: true });
+    g.step(10 * TICK_RATE);
+    must(g, { k: 'audit', x: 2, y: 11, w: 2, h: 2 });
+    g.step(check + 1);
+    expect(g.s.audits[0].result).toBeNull();
+    g.step(auditTicks(g));
+    expect(g.s.audits[0].result).toBeTruthy();
+    // a machine in another mode (set straight on the state: a test of the rule, not of the mode UI)
+    ({ g } = kept());
+    g.entAt(3, 11)!.mode = 'overclock';
+    must(g, { k: 'audit', x: 2, y: 11, w: 2, h: 2 });
+    g.step(check + 1);
+    expect(g.s.audits[0].result).toBeNull();
+  });
+
+  it('an imported string keeps no card: it refolds after a full audit', () => {
+    const { g, k } = kept();
+    must(g, { k: 'importDesign', code: encodeDesign(k) });
+    expect(g.s.meta.drawer[g.s.meta.drawer.length - 1].card).toBeUndefined();
   });
 });

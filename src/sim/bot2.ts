@@ -23,7 +23,7 @@
 // machines, capped), `sparks` and `build`. With everything off the bot does nothing: idle play.
 import type { Game, Cmd } from './Game';
 import type { Bot } from './bot';
-import { DX, DY, ccw, cw, opposite, type Box, type Dir, type Ent, type FEnt, type ModuleDesign } from './world';
+import { DX, DY, ccw, cw, opposite, type Box, type Dir, type Ent, type FEnt, type KeptDesign, type ModuleDesign } from './world';
 import { BUILD, isMachine, type BuildKind } from '../data/machines';
 import { RESEARCH, type ResearchId } from '../data/research';
 import { CHUNKS, FACTORY, FACTORY_MAX_H, FACTORY_MAX_W } from '../data/land';
@@ -38,11 +38,18 @@ import { BYPRODUCTS, buildRoutes, kitsFor, mainItem, stampCost, stampRefusal } f
 import { fauditLock, ffoldRefusal } from './systems/nested';
 import { shares } from './systems/stats';
 import { accepts, recipeKnown } from './transfer';
-import { placeClaimRefusal } from './systems/claims';
+import { claimLoad, claimPrice, claimsHeld, claimsUsed, placeClaimRefusal, placedClaims } from './systems/claims';
 import { annexPrice, annexRefusal } from './systems/annex';
+import { keepRefusal, unfoldKeptRefusal } from './drawer';
+import { hasPatent } from './patents';
+import { entsIn } from './systems/audits';
 
 /** E S W N */
 const E: Dir = 0, S: Dir = 1, W: Dir = 2, N: Dir = 3;
+
+/** An optional step's answer when it waits for coin, claims or room it may get later: it leaves the
+ * plan and is tried again beside it (Act2Bot.later). */
+const DEFER = 'defer';
 
 const HAND_TICKS = TICK_RATE / 4;
 const CLICK_TICKS = TICK_RATE / 4;
@@ -241,6 +248,15 @@ export const PARTS: Record<string, Pl[]> = {
   // ---- once the Drill works is folded the lab's last job is research (Tuning, Nested Folds):
   // circuits east into the loop and out to the Hopper with the concrete
   circuitZ: [...draw(15, 2, ['a>'], { '15,2': 'etchCircuit' }), ...belts([[15, 5, S]])],
+  // ---- standing once Slag Bricks is researched (the final round): slag bricks for Surveying (the
+  // Survey Office's claims). The Act I planner's copper slag heap (10,5) empties east into a brick
+  // press (11,5), which hands its bricks south onto the corridor (11,6) and so into the Workshop
+  // Hopper (banked until Surveying is selected); the copper lines' slag drains instead of backing up
+  // into their smelters. (Turning the heap west would face it south onto the corridor for a moment
+  // on the way, and one slag on the corridor jams it at the Hopper, which refuses slag.)
+  // It is turned away (north, onto nothing) once the bank holds the bricks Surveying needs: on a
+  // full corridor every brick is a gap the spine's research items wait for.
+  brick: [{ kind: 'press', x: 11, y: 5, rot: S, recipe: 'pressBrick', on: (b) => b.needOf('slagBrick') > 0, off: N }],
 };
 
 /** The lab once research needs only motors and concrete (§18 Motors, Megaproject). */
@@ -280,12 +296,19 @@ export type Step =
   | { k: 'mark'; name: string };
 
 /** Research the plan wants, in order (a node already paid for by the bank goes first). */
+// Slag Bricks and Surveying (the Survey Office's deposit claims, the final round): the Act I
+// planner's last slag heap (5,4) pays Slag Bricks into the Hopper as soon as Act II begins;
+// Surveying's bricks come from the standing brick press and bank in the Hopper, its coal rides the
+// spine with the rest; it is taken as soon as the bank covers it (last in turn, so slow bricks
+// never hold the plan's research up)
 export const WISH: ResearchId[] = [
-  'coalSeams', 'steelmaking', 'steamPower', 'overdrive', 'glassworks', 'crushing', 'refining', 'circuits', 'splitters', 'concrete',
-  'motors', 'greatDrill', 'machineKits', 'heavyMachines', 'tuning', 'nestedFolds',
+  'coalSeams', 'slagBricks', 'steelmaking', 'steamPower', 'overdrive', 'glassworks', 'crushing', 'refining', 'circuits', 'splitters', 'concrete',
+  'motors', 'greatDrill', 'machineKits', 'heavyMachines', 'tuning', 'nestedFolds', 'surveying',
 ];
 
 const BASE = ['spine', 'corridor', 'coalFeed'];
+/** Parts every layout keeps (the brick press for Surveying). */
+const STANDING = ['brick', 'brickOut'];
 
 /** One tile of a hand-laid Factory-floor layout: a trunk, or a copy of a design (by name). */
 export interface FPl { kind: 'module' | 'trunk'; x: number; y: number; rot: Dir; design?: string }
@@ -392,7 +415,10 @@ export const PLAN2: Step[] = [
   { k: 'parts', parts: [...BASE, 'sandFeed', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitAsm', 'gp', 'gravel', 'g18', 'gravelOut', 'refinery', 'oilSplit'] },
   { k: 'need', r: 'concrete' },
   { k: 'parts', parts: [...BASE, 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitAsm', 'gp', 'gravel', 'g18', 'refinery', 'oilSplit', 'concrete'] },
-  { k: 'fold', box: { x: 19, y: 6, w: 4, h: 4 }, name: 'Concrete', ready: (g, b) => b.concreteGo && working(g, 21, 8, 30, 0.9), bg: true },
+  // (pure, the final round: a line whose own buffer of an item it makes drains in the window measures
+  // that item as an input, and a module wanting gravel or wire from outside starves on the Bay floor:
+  // a player who sees "takes gravel" on the grade card audits it again once the buffers settle)
+  { k: 'fold', box: { x: 19, y: 6, w: 4, h: 4 }, name: 'Concrete', ready: (g, b) => b.concreteGo && working(g, 21, 8, 30, 0.9), bg: true, pure: ['gravel', 'sand'] },
   // the glass and plastic halves are folded one at a time, after Circuits (its audit needs both);
   // Glass after Concrete too (with the refinery stopped there is no oil for the concrete boiler)
   { k: 'folded', names: ['Circuits'] },
@@ -405,7 +431,7 @@ export const PLAN2: Step[] = [
   { k: 'parts', parts: PHASE_M },
   { k: 'need', r: 'greatDrill' },
   { k: 'parts', parts: PHASE_X },
-  { k: 'fold', box: { x: 12, y: 3, w: 4, h: 3 }, name: 'Drill works', ready: (g, b) => b.drillGo && working(g, 15, 5, 30, 0.8) },
+  { k: 'fold', box: { x: 12, y: 3, w: 4, h: 3 }, name: 'Drill works', ready: (g, b) => b.drillGo && working(g, 15, 5, 30, 0.8), pure: ['copperWire'] },
   // the Megaproject Bay: drill bits from the Drill works, steel from a Steel copy
   { k: 'fplan', name: 'bay', items: BAY_PLAN },
   { k: 'parts', parts: PHASE_Z },
@@ -564,6 +590,12 @@ export class Act2Bot {
 
   private observe() {
     const g = this.g;
+    // kept designs the Draughtsman unfolded: this bot's to manage, like the parts it placed
+    const drafted = g.s.drafted ?? [];
+    for (; this.seenDrafted < drafted.length; this.seenDrafted++) {
+      const k = g.s.meta.drawer.find((q) => q.id === drafted[this.seenDrafted]);
+      if (k) this.adopt(k);
+    }
     const done = g.s.research.done;
     for (; this.seenDone < done.length; this.seenDone++) {
       this.mark('research:' + done[this.seenDone]);
@@ -633,8 +665,11 @@ export class Act2Bot {
     // jams the line: a player learns that once)
     const ms = g.machines.filter((m) => m.kind !== 'furnace' && !(m.od ?? 0) && !(m.cool ?? 0) && m.state === 'work' && !!m.recipe && !RECIPE[m.recipe].byproduct);
     if (!ms.length) return;
+    // nor a line it is about to fold (the final round: Overdrive never reaches an audited machine, so
+    // buffers filled at 3x just before the audit drained in the window and were measured as inputs)
+    const folding = [...this.bgFolds, ...(this.plan[this.step]?.k === 'fold' ? [this.plan[this.step] as Extract<Step, { k: 'fold' }>] : [])].map((f) => f.box);
     const pick = ms
-      .filter((m) => !auditLock(g, m.x, m.y))
+      .filter((m) => !auditLock(g, m.x, m.y) && !folding.some((b) => inside(b, m.x, m.y)))
       .filter((m) => shares(m).work >= 0.8)
       .sort((a, b) => a.id - b.id);
     if (!pick.length) return;
@@ -765,15 +800,31 @@ export class Act2Bot {
     // a person looks at the plan now and then, not 20 times a second
     if (this.g.s.tick < this.lookAt) return;
     this.lookAt = this.g.s.tick + TICK_RATE / 2;
+    if (this.drawer()) return;
     // folds under way beside the plan: each is audited once its line runs well
     for (const f of [...this.bgFolds]) {
       if (this.fold(f) === 'done') this.bgFolds = this.bgFolds.filter((q) => q !== f);
       if (!this.handReady || this.fq.length) return;
     }
+    // optional steps that waited for coin, claims or an annex block: tried again beside the plan,
+    // in their order, before it (a copy whose destination still waits, waits with it; one waiting
+    // on room lets the next block's purchase behind it go first)
+    // (looked at every 10 s while nothing in it moves: a player glances at the coin now and then)
+    if (this.later.length && this.g.s.tick >= this.laterAt) {
+      let moved = false;
+      for (let i = 0; i < this.later.length; ) {
+        const res = this.tryStep(this.later[i]);
+        if (res === 'done') { this.later.splice(i, 1); moved = true; continue; }
+        if (res === DEFER) { i++; continue; }
+        return;
+      }
+      if (!moved) this.laterAt = this.g.s.tick + 10 * TICK_RATE;
+    }
     for (let guard = 0; guard < 20 && this.step < this.plan.length; guard++) {
       const s = this.plan[this.step];
       const res = this.tryStep(s);
-      if (res === 'done') {
+      if (res === 'done' || res === DEFER) {
+        if (res === DEFER) this.later.push(s);
         this.step++;
         continue;
       }
@@ -781,6 +832,10 @@ export class Act2Bot {
       return;
     }
   }
+
+  /** Optional steps waiting beside the plan (DEFER), in plan order. */
+  later: Step[] = [];
+  private laterAt = 0;
 
   /** 'done', or what the step waits on. */
   private tryStep(s: Step): string {
@@ -832,13 +887,23 @@ export class Act2Bot {
         return this.fplan(s);
       case 'annex': {
         if ((g.s.annex ?? 0) >= s.n) return 'done';
-        // a block for a copy of a design: only when that copy could dig (claims)
-        if (s.for && s.for.some((n) => { const d = this.designNamed(n); return !d || !!placeClaimRefusal(g, d); })) return 'done';
+        // a block for a copy of a design: only when that copy could dig (claims, bought first when
+        // a block of them costs at most half the coin on hand)
+        for (const n of s.for ?? []) {
+          const d = this.designNamed(n);
+          if (!d) return 'done';
+          const c = this.claimFor(d, true);
+          if (c === 'short') return s.opt ? DEFER : 'done';
+          if (c) return c;
+        }
         const price = annexPrice(g);
         if (!price) return 'done';
         const why = annexRefusal(g);
-        if (why && !g.s.coin.lt(price)) return 'done';
-        if (g.s.coin.lt(price.mul(s.spare ?? 1))) return s.opt ? 'done' : `coin for annex block ${(g.s.annex ?? 0) + 1}`;
+        // (refused for research or the floor: an optional block waits beside the plan for it)
+        if (why && !g.s.coin.lt(price)) return s.opt ? DEFER : 'done';
+        // an optional block waits beside the plan for the coin (the final round: in a later run the
+        // campaign's annex blocks were skipped for good when the plan passed them before the coin came)
+        if (g.s.coin.lt(price.mul(s.spare ?? 1))) return s.opt ? DEFER : `coin for annex block ${(g.s.annex ?? 0) + 1}`;
         this.buy({ k: 'annex' }, 'annex');
         return 'annex';
       }
@@ -875,7 +940,24 @@ export class Act2Bot {
   }
 
   wanted(): Pl[] {
-    return this.layout.flatMap((n) => this.part(n));
+    return [...this.layout, ...this.standing()].flatMap((n) => this.part(n));
+  }
+
+  /** The standing parts, once Slag Bricks is researched and the corridor found: the brick press, and
+   * a belt from its front to the Hopper when the corridor does not pass in front of it (found once,
+   * joining any belt that leads to the Hopper). */
+  private standing(): string[] {
+    const g = this.g;
+    if (!g.done('slagBricks') || !this.found.corridor) return [];
+    if (!this.found.brickOut) {
+      // (once the corridor is laid, so the path can join it)
+      if (this.found.corridor.some((p) => g.entAt(p.x, p.y)?.kind !== 'belt')) return [];
+      const t = g.entAt(11, 6);
+      const res = this.reserved();
+      for (const p of this.found.corridor) res.add(`${p.x},${p.y}`);
+      this.found.brickOut = t ? [] : corridor(g, [11, 6], S, 'hopper', res, true) ?? [];
+    }
+    return STANDING;
   }
 
   private reserved(): Set<string> {
@@ -922,6 +1004,9 @@ export class Act2Bot {
   }
 
   concreteOut(): boolean {
+    // (and while the Concrete line waits for its fold: turned away mid-audit, its concrete backed up
+    // and the line folded at D, the final round)
+    if (this.layout.includes('concrete') && !this.designNamed('Concrete')) return true;
     return this.looping() || (['gravel', 'sand', 'concrete'] as ItemId[]).some((i) => this.needOf(i) > 0);
   }
 
@@ -1004,6 +1089,17 @@ export class Act2Bot {
         }
         continue;
       }
+      // a kept design of exactly what the layout wants in its box: unfolded whole (the Patent
+      // Drawer); while it waits on coin or research nothing else is built in its box
+      const k = this.keptFor(p.x, p.y, want);
+      if (k) {
+        const why = unfoldKeptRefusal(g, k);
+        if (!why) {
+          if (this.buy({ k: 'unfoldKept', id: k.id }, 'unfold') && (g.s.drafted ?? []).includes(k.id)) { this.adopt(k); this.unfolds++; }
+          return;
+        }
+        if (why.waits === 'coin' || why.waits === 'research') continue;
+      }
       if (g.canPlace(p.kind, p.x, p.y)) continue;
       // a machine whose recipe is not known yet waits (it would pick the wrong one)
       if (p.recipe && !recipeKnown(g, RECIPE[p.recipe])) continue;
@@ -1075,6 +1171,8 @@ export class Act2Bot {
     if (r) {
       this.decide('fold:' + a.result.grade.letter);
       this.mark('fold:' + s.name);
+      // the Patent Drawer (DESIGN.md §19): a lab line is kept for the next run
+      this.toKeep.push(s.name);
       // what was in the box is gone: forget it
       for (const id of [...this.mine]) if (!g.byId.has(id)) this.mine.delete(id);
     }
@@ -1087,32 +1185,133 @@ export class Act2Bot {
     return this.g.s.designs.find((d) => d.name === name);
   }
 
+  /** Claims bought (the final round: the bot never went to the Survey Office), by ore. */
+  claimsBought: Partial<Record<ItemId, number>> = {};
+
+  /**
+   * A block of claims for the ore a copy of `d` lacks (stamping it: `place` false; placing it on the
+   * floor: true), bought at the Survey Office when the block costs at most half the coin on hand: a
+   * player buys claims before clearing a chain or leaving a copy out. A status while buying (or the
+   * hand is busy), 'short' when a claim is missing and not affordable now, null when none is missing.
+   */
+  private claimFor(d: ModuleDesign, place: boolean): string | null {
+    const g = this.g;
+    let short = false;
+    for (const [ore, n] of Object.entries(claimLoad(g, d)) as [ItemId, number][]) {
+      const used = place ? placedClaims(g, ore) : claimsUsed(g, ore);
+      if (used + n <= claimsHeld(g, ore) + 1e-9) continue;
+      const price = claimPrice(g, ore);
+      if (!g.done('surveying') || !price || g.s.coin.lt(price.mul(2))) { short = true; continue; }
+      const r = this.act({ k: 'claim', item: ore });
+      if (r) {
+        this.decide('claim:' + ore);
+        this.claimsBought[ore] = (this.claimsBought[ore] ?? 0) + 1;
+      }
+      return `buying ${ore} claims`;
+    }
+    return short ? 'short' : null;
+  }
+
+  // ---------------------------------------------------------------- the Patent Drawer
+
+  /** designs folded this run to keep, by name */
+  private toKeep: string[] = [];
+  private seenDrafted = 0;
+  private queued = new Set<number>();
+  /** kept designs unfolded by hand, and by the Draughtsman, this run (the logs) */
+  unfolds = 0;
+
+  /** The ents of a kept design's box are this bot's now (it turns its valves, lifts what the plan
+   * no longer wants). */
+  private adopt(k: KeptDesign) {
+    for (const e of entsIn(this.g, { x: k.x, y: k.y, w: k.w, h: k.h })) this.mine.add(e.id);
+  }
+
+  /** Keep the lab lines folded this run (one a hand-beat, while the drawer has room), and with the
+   * Draughtsman queue the kept designs the plan folds again, in the plan's order. True when the
+   * hand was used. */
+  private drawer(): boolean {
+    const g = this.g;
+    while (this.toKeep.length) {
+      const name = this.toKeep[0];
+      const d = this.designNamed(name);
+      if (!d || g.s.meta.drawer.some((k) => k.name === name) || keepRefusal(g, d.id)) { this.toKeep.shift(); continue; }
+      const r = this.act({ k: 'keep', id: d.id });
+      if (r === null) return true;
+      this.toKeep.shift();
+      if (r) this.decide('keep');
+      return true;
+    }
+    if (!hasPatent(g, 'draughtsman')) return false;
+    for (const s of this.plan) {
+      if (s.k !== 'fold') continue;
+      const k = g.s.meta.drawer.find((q) => q.name === s.name && q.x === s.box.x && q.y === s.box.y);
+      if (!k || this.queued.has(k.id) || g.s.meta.queue.includes(k.id) || (g.s.drafted ?? []).includes(k.id)) continue;
+      const r = this.act({ k: 'queueKept', id: k.id });
+      if (r === null) return true;
+      this.queued.add(k.id);
+      if (r) this.decide('queue');
+      return true;
+    }
+    return false;
+  }
+
+  /** A kept design to unfold whole for the part at (x, y): not unfolded yet this run, its box empty,
+   * and the parts the layout wants in its box exactly its parts (unfolding it builds what the plan
+   * would build piece by piece, in one action, and its audit is then the short refold check). */
+  private keptFor(x: number, y: number, want: Pl[]): KeptDesign | null {
+    const g = this.g;
+    const drafted = g.s.drafted ?? [];
+    for (const k of g.s.meta.drawer) {
+      const box = { x: k.x, y: k.y, w: k.w, h: k.h };
+      if (drafted.includes(k.id) || !inside(box, x, y) || entsIn(g, box).length) continue;
+      const here = want.filter((p) => inside(box, p.x, p.y));
+      if (here.length !== k.parts.length) continue;
+      const same = k.parts.every((q) => here.some((p) => p.kind === q.kind && p.x === k.x + q.dx && p.y === k.y + q.dy && this.rotOf(p) === q.rot && (!q.recipe || p.recipe === q.recipe)));
+      if (same) return k;
+    }
+    return null;
+  }
+
   private fmod(s: Extract<Step, { k: 'fmod' }>): string {
     const g = this.g;
     if (this.mods[s.id] !== undefined && g.s.factory.ents.some((e) => e.id === this.mods[s.id])) return 'done';
     const d = this.designNamed(s.design);
     if (!d) return `no design ${s.design}`;
     if (d.spare < 1) {
+      // a claim short for the copy: a block from the Survey Office first (the final round)
+      const c = this.claimFor(d, false);
+      if (c && c !== 'short') return c;
       const why = stampRefusal(g, d);
+      // an optional copy short of claims waits for the coin to buy them (DEFER); one refused for
+      // anything but coin (Machine Kits) is left out
+      if (why && s.opt && c === 'short') return DEFER;
       if (why && s.opt && !g.s.coin.lt(stampCost(g, d))) return 'done';
       if (why) return `stamp ${s.design}: ${why}`;
       this.buy({ k: 'stamp', id: d.id }, 'stamp');
       return 'stamping';
     }
     if (g.s.tick < this.placeAt) return `no room for ${s.id}`;
-    // an optional copy that can't dig (claims) or has no annex to stand in is skipped
-    if (s.opt && (placeClaimRefusal(g, d) || (s.annex && g.fw <= FACTORY.w))) return 'done';
-    // out of claims for another copy digging: clear the newest Act I chain (its miners stop)
-    if (placeClaimRefusal(g, d)) return this.clearChain(`claims for ${s.id}`);
+    // a copy that can't dig: buy a block of claims when it costs at most half the coin on hand
+    const c = this.claimFor(d, true);
+    if (c && c !== 'short') return c;
+    // an optional copy that still can't dig, or has no annex block to stand in yet, waits for the
+    // coin (it is tried again beside the plan)
+    if (s.opt && (c === 'short' || (s.annex && g.fw <= FACTORY.w))) return DEFER;
+    // out of claims for another copy digging, and none affordable: clear the newest Act I chain
+    if (c === 'short') return this.clearChain(`claims for ${s.id}`);
     // a destination module that does not take these goods: no room to clear would help
     for (const [dest, items] of [[s.to, mainOuts(d, !!s.by)], [s.by, byOuts(d)]] as [Dest | undefined, ItemId[]][]) {
       if (dest?.k !== 'mod' || !items.length) continue;
       const m = g.s.factory.ents.find((e) => e.id === this.mods[dest.id]);
       const dd = m && g.design(m.design);
+      // (a destination copy still waiting beside the plan: this one waits with it)
+      if (!dd && s.opt && this.later.some((q) => q.k === 'fmod' && q.id === dest.id)) return DEFER;
       if (!dd || !items.every((i) => (dd.ins[i] ?? 0) > 0)) return s.opt ? 'done' : `${dest.id} does not take ${items.join(', ')}`;
     }
     const plan = placeModule(g, d, s.to, s.by, this.mods, s.hub, s.annex ? { x0: FACTORY.w + 2, tx0: FACTORY.w } : undefined);
-    if (!plan && s.opt) return 'done';
+    // an annex copy with no room waits while a block is still to buy
+    if (!plan && s.opt) return s.annex && annexPrice(g) ? DEFER : 'done';
     if (!plan) {
       // no room: clear the newest Act I chain (modules back to the inventory, trunks refunded)
       if (nextChainToClear(g, new Set(Object.values(this.mods)))) return this.clearChain(`room for ${s.id}`);
@@ -1181,12 +1380,17 @@ export class Act2Bot {
     const d = this.designNamed(m.design!);
     if (!d) return skipIt(m, `no design ${m.design}`);
     if (d.spare < 1) {
+      // claims short for the copy: a block first, when it costs at most half the coin on hand
+      const c = this.claimFor(d, false);
+      if (c && c !== 'short') return c;
       const why = stampRefusal(g, d);
       if (why && !g.s.coin.lt(stampCost(g, d))) return skipIt(m, `stamp ${d.name}: ${why}`);
       if (why) return `stamp ${d.name}: ${why}`;
       this.buy({ k: 'stamp', id: d.id }, 'stamp');
       return 'stamping';
     }
+    const c = this.claimFor(d, true);
+    if (c && c !== 'short') return c;
     const why = placeClaimRefusal(g, d);
     if (why) return skipIt(m, `place ${d.name}: ${why}`);
     if (this.buy({ k: 'fplace', design: d.id, x: m.x, y: m.y, rot: m.rot }, 'module')) this.mark('module:' + d.name);
@@ -1266,7 +1470,7 @@ function feedsInto(g: Game, x: number, y: number, d: Dir, prev: [number, number]
 
 /** A belt path from `from` (entered travelling `enter`) to a free face of the Workshop Hopper or
  * Dock, over free owned tiles that nothing else hands items onto. */
-export function corridor(g: Game, from: [number, number], enter: Dir, to: 'hopper' | 'dock', reserved: Set<string>): Pl[] | null {
+export function corridor(g: Game, from: [number, number], enter: Dir, to: 'hopper' | 'dock', reserved: Set<string>, join = false): Pl[] | null {
   const sink = g.s.ents.find((e) => e.kind === to);
   if (!sink) return null;
   const W_ = g.W;
@@ -1278,7 +1482,19 @@ export function corridor(g: Game, from: [number, number], enter: Dir, to: 'hoppe
   const start = key(from[0], from[1]);
   prev.set(start, -1);
   const q: number[] = [start];
-  const isSink = (x: number, y: number) => x >= sink.x && y >= sink.y && x < sink.x + sink.w && y < sink.y + sink.h;
+  const inSink = (x: number, y: number) => x >= sink.x && y >= sink.y && x < sink.x + sink.w && y < sink.y + sink.h;
+  // `join`: a belt already leading to the sink ends the path too (from its side or its back)
+  const leads = (x: number, y: number, d: Dir) => {
+    let b = g.entAt(x, y);
+    if (!b || b.kind !== 'belt' || b.rot === opposite(d)) return false;
+    for (let n = 0; n < 64 && b && b.kind === 'belt'; n++) {
+      const nx = b.x + DX[b.rot], ny = b.y + DY[b.rot];
+      if (inSink(nx, ny)) return true;
+      b = g.entAt(nx, ny);
+    }
+    return false;
+  };
+  const isSink = (x: number, y: number, d: Dir) => inSink(x, y) || (join && leads(x, y, d));
   let end = -1, endDir: Dir = E;
   while (q.length && end < 0) {
     const cur = q.shift()!;
@@ -1290,7 +1506,7 @@ export function corridor(g: Game, from: [number, number], enter: Dir, to: 'hoppe
       if (d === opposite(inDir)) continue;
       const nx = x + DX[d], ny = y + DY[d];
       if (feedsInto(g, x, y, d, pp ?? [x - DX[enter], y - DY[enter]])) continue;
-      if (isSink(nx, ny)) { end = cur; endDir = d; break; }
+      if (isSink(nx, ny, d)) { end = cur; endDir = d; break; }
       const nk = key(nx, ny);
       if (prev.has(nk) || !free(nx, ny)) continue;
       prev.set(nk, cur);

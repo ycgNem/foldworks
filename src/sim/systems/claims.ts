@@ -96,7 +96,7 @@ export function claimRefusal(g: Game, d: ModuleDesign): string | null {
 }
 
 /** Claims the modules placed on the Factory floor dig with. */
-function placedClaims(g: Game, ore: ItemId): number {
+export function placedClaims(g: Game, ore: ItemId): number {
   let n = 0;
   for (const e of g.s.factory.ents) {
     if (e.kind !== 'module') continue;

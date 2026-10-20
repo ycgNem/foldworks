@@ -370,8 +370,8 @@ describe('the Megaproject Bay and the Great Drill (DESIGN.md §18 Megaproject #1
     g.step(20 * TICK_RATE);
     expect(g.s.mega.stage).toBe(0);
     expect(g.s.mega.progress.steel?.toNumber() ?? 0).toBeGreaterThan(0);
-    // the stage's 450 Drill Bits at 1/s need 7.5 minutes (2,000 steel at 8/s about 4)
-    g.step(480 * TICK_RATE);
+    // the stage's 650 Drill Bits at 1/s need 11 minutes (2,800 steel at 8/s about 6)
+    g.step(680 * TICK_RATE);
     expect(g.s.mega.stage).toBe(1);
     // miners run 1.5x now
     must(g, { k: 'place', kind: 'miner', x: 2, y: 11, rot: 0 });

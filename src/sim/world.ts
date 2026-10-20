@@ -155,6 +155,11 @@ export interface AuditState {
   stall?: Record<string, Record<string, number>>;
   /** items held inside the box when the window opened (a counted measurement, not a stock) */
   stock0?: Record<string, number>;
+  /** the refold check (DESIGN.md §19, the final round): the kept design this box is unchanged from,
+   * each machine's work during the check, and its product's items out of the box during it */
+  kept?: number;
+  chk?: Record<string, number>;
+  chkOut?: number;
 }
 
 export interface AuditResult {
@@ -197,6 +202,9 @@ export interface ModuleDesign {
   spare: number;
   /** the Stamp Press keeps one spare copy of it (DESIGN.md §19, a Patent node) */
   auto?: boolean;
+  /** every machine in the box ran in its normal mode when it was folded (a kept design refolds
+   * after a short check only then: the final round); absent on designs from before */
+  normal?: boolean;
 }
 
 export type FKind = 'module' | 'trunk' | 'fdock' | 'fhopper' | 'fbay';
@@ -306,6 +314,11 @@ export interface KeptDesign {
   run: number;
   /** the design it was kept from (absent for an imported string) */
   src?: number;
+  /** the audit it was folded with, before the grade multiplier (rates through its ports, and the
+   * grade card): an unchanged layout refolds at it after a short check (DESIGN.md §19, the final
+   * round). Absent for an imported string, a design kept before the final round, or one folded
+   * with a machine out of its normal mode: those refold after a full audit */
+  card?: { grade: GradeCard; ins: Partial<Record<ItemId, number>>; outs: Partial<Record<ItemId, number>> };
 }
 
 /** What the Patent Office has on file for a product (DESIGN.md §19): the best value filed so far,

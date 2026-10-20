@@ -87,6 +87,9 @@ export function foldAudited(g: Game, name: string | null, id?: number): ActResul
     bill,
     stamped: 0,
     spare: 1,
+    // a kept design refolds after a short check only if its machines ran in their normal modes
+    // (the parts list keeps no mode, so an overclocked line unfolds slower than it was graded)
+    normal: ents.every((e) => !isMachine(e.kind) || (e.mode ?? 'normal') === 'normal'),
   };
   g.s.designs.push(d);
   // the machines go into the module; the belts and the rest are refunded; the box empties

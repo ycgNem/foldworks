@@ -61,6 +61,15 @@ export function keepDesign(g: Game, designId: number): ActResult {
     run: m.runs + 1,
     src: d.id,
   };
+  // the audit it was folded with, before the grade (the refold check, DESIGN.md §19)
+  if (d.normal && d.grade.mult > 0) {
+    const raw = (t: Partial<Record<ItemId, number>>) => {
+      const o: Partial<Record<ItemId, number>> = {};
+      for (const [it, v] of Object.entries(t) as [ItemId, number][]) o[it] = v / d.grade.mult;
+      return o;
+    };
+    k.card = { grade: { ...d.grade }, ins: raw(d.ins), outs: raw(d.outs) };
+  }
   m.drawer.push(k);
   g.bump('designsKept');
   g.emit({ type: 'keep', id: k.name, value: k.id });
