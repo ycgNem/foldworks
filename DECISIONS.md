@@ -1032,3 +1032,9 @@ Nothing here is derivative of a shipped game beyond what the UI redesign already
   coins, grades, icon atlases) run again through `pixel-art/revamp/recipes.py` with B colours
   chosen by role per piece. Phase 3 used **0 PixelLab generations** (balance 2,021.90 before and
   after).
+- 2026-10-20: **The title screen is a key-art scene** (`title_scene`, 320x180 x8 at 8 fps): a
+  PixelLab dusk-bayou backdrop regraded into B, with the game's own sprites composed over it by
+  hand (the deck with a line into the Dock, a glowing module, Bramble on the boardwalk) and
+  animated by hand (shimmer, lantern flicker, the belt). `drawTitle` draws it at the smallest whole
+  scale that covers the screen and places the logo, tagline and buttons in scene coordinates on
+  its calm areas. 3 PixelLab generations (balance 2,021.90 → 2,018.90).

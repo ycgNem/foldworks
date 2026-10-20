@@ -115,7 +115,8 @@ def pennant(img, f, lily=False):
     face on the Lily Pad Dock). The flag's tail flutters."""
     rect(img, 1, 0, 3, 13, INK)
     rect(img, 2, 1, 2, 12, P["wood4"])
-    fl, fd = (P["moss5"], P["moss3"])
+    # the Lily Pad Dock's frog flag on a darker field (moss2/moss1) so its bone eyes read at 1x
+    fl, fd = (P["moss2"], P["moss1"]) if lily else (P["moss5"], P["moss3"])
     w = 9 if f == 0 else 8
     for y in range(1, 7):
         for x in range(3, 3 + w):
@@ -127,7 +128,8 @@ def pennant(img, f, lily=False):
     if lily:
         draw(img, [(5, 2), (8, 2)], P["bone"])
         draw(img, [(5, 3), (8, 3)], INK)
-        draw(img, [(5, 5), (6, 5), (7, 5), (8, 5)], P["moss1"])
+        draw(img, [(4, 2), (4, 3), (9, 2), (9, 3), (6, 4), (7, 4)], P["moss5"])   # the frog's face
+        draw(img, [(5, 5), (6, 5), (7, 5), (8, 5)], P["moss5"])
     else:
         draw(img, [(6, 2), (7, 2), (5, 3), (8, 3), (5, 4), (8, 4), (6, 5), (7, 5)], P["brass1"])
         draw(img, [(6, 3), (7, 3), (6, 4), (7, 4)], P["lamp2"])
