@@ -125,6 +125,7 @@ else if (state === 'audit') { await foldSetup(true); await page.evaluate(() => w
 else if (state === 'grade' || state === 'gradeC') { await foldSetup(state === 'grade'); await page.evaluate(() => window.__app.step(20 * 70)); }
 else if (['factory', 'modules', 'sliceEnd', 'offline'].includes(state)) {
   await foldSetup(true);
+  await page.evaluate(async () => { window.__offline = await import('/src/sim/offline.ts'); });
   await page.evaluate((st) => {
     const a = window.__app;
     a.step(20 * 70);
@@ -145,7 +146,8 @@ else if (['factory', 'modules', 'sliceEnd', 'offline'].includes(state)) {
     if (st === 'modules') a.togglePanel('modules');
     if (st === 'offline') {
       a.setFloor('workshop', true);
-      a.offline = { away: 3 * 3600 + 720, counted: 3 * 3600 + 720, replayed: 600, extrapolated: 3 * 3600 + 120, coin: a.game.s.coin.constructor.of(48210), hopper: a.game.s.coin.constructor.of(320), research: ['buffers'], orders: ['boardwalk'], firstJam: { t: 214, x: 3, y: 3, floor: 'workshop', name: 'Hand Furnace', why: 'slag' } };
+      // a real offline run (Milestone 6's report needs its timeline and totals)
+      a.offline = window.__offline.runOffline(a.game, 3 * 3600 + 720);
       a.panel = 'offline';
     }
   }, state);

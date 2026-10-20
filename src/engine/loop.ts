@@ -15,6 +15,13 @@ export class GameLoop {
   fastForward: (() => boolean) | null = null;
   ffBudgetMs = 12;
   paused = false;
+  /** Ticks owed after a background tab comes back (DESIGN.md §20): run a few extra a frame, on top
+   * of the normal ones, so the catch-up never stutters. */
+  catchUp = 0;
+  catchUpPerFrame = 40;
+  /** Work spread over frames in place of ticks (an offline run, DESIGN.md §20): called once a
+   * frame while set; the sim does not tick until it returns true. */
+  job: (() => boolean) | null = null;
   /** Smoothed ms spent in ticks per frame (for the debug overlay and npm run perf). */
   tickMs = 0;
   frameMs = 0;
@@ -38,7 +45,10 @@ export class GameLoop {
       if (!(realDt > 0)) realDt = 0;
       this.fps = this.fps * 0.95 + (1 / Math.max(realDt, 0.001)) * 0.05;
       const t0 = performance.now();
-      if (this.fastForward) {
+      if (this.job) {
+        if (this.job()) this.job = null;
+        this.acc = 0;
+      } else if (this.fastForward) {
         const ff = this.fastForward;
         while (ff() && performance.now() - t0 < this.ffBudgetMs) this.tick();
         if (!ff()) this.fastForward = null;
@@ -55,6 +65,11 @@ export class GameLoop {
           if ((steps & 63) === 0 && performance.now() - t0 > this.ffBudgetMs) break;
         }
         if (steps >= maxSteps || this.acc > DT * 4 * Math.max(1, this.speed)) this.acc = 0;
+        if (this.catchUp > 0) {
+          const n = Math.min(this.catchUp, this.catchUpPerFrame);
+          for (let i = 0; i < n; i++) this.tick();
+          this.catchUp -= n;
+        }
       }
       const t1 = performance.now();
       this.tickMs = this.tickMs * 0.9 + (t1 - t0) * 0.1;

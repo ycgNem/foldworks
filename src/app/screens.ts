@@ -17,15 +17,22 @@ import { Num } from '../engine/num';
 import { frame, card, button, bar, badge, portrait, uiIcon, type UIconName } from './chrome';
 import { fmt } from './widgets';
 import type { Layout } from './layout';
-import { modulesScreen, gradeCard, fgradeCard, offlineCard, sliceEndCard } from './fold';
+import { modulesScreen, gradeCard, fgradeCard, sliceEndCard } from './fold';
 import { ordersScreen } from './orders';
 import { codexScreen, surveyScreen, megaScreen } from './act2screens';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
+// ---- Milestone 6 (idle and offline): the offline report, the overnight forecast, notation
+import { offlineReportCard } from './offlinereport';
+import { overnightScreen } from './overnight';
+import { cycleNotation, NOTATION_LABEL } from './settings';
+import { getNotation } from '../engine/num';
 
 export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options' | 'modules' | 'grade' | 'offline' | 'sliceEnd'
   // Act II (Milestone 4): the Factory floor's grade card, the Codex, the Survey Office, the Megaproject
-  | 'fgrade' | 'codex' | 'survey' | 'mega';
+  | 'fgrade' | 'codex' | 'survey' | 'mega'
+  // Milestone 6: "safe for overnight" (src/app/overnight.ts)
+  | 'overnight';
 
 export function drawScreen(app: App, L: Layout) {
   const r = L.overlay;
@@ -37,12 +44,13 @@ export function drawScreen(app: App, L: Layout) {
     case 'options': return optionsScreen(app, r);
     case 'modules': return modulesScreen(app, r);
     case 'grade': return gradeCard(app, L);
-    case 'offline': return offlineCard(app, L);
+    case 'offline': return offlineReportCard(app, L); // Milestone 6 (was fold.ts offlineCard)
     case 'sliceEnd': return sliceEndCard(app, L);
     case 'fgrade': return fgradeCard(app, L);
     case 'codex': return codexScreen(app, r);
     case 'survey': return surveyScreen(app, r);
     case 'mega': return megaScreen(app, r);
+    case 'overnight': return overnightScreen(app, r);
   }
 }
 
@@ -491,7 +499,10 @@ function optionsScreen(app: App, r: Rect) {
     y += 16;
   };
   row('Sound', !app.muted, () => { app.muted = !app.muted; app.audio.setMuted(app.muted); });
-  row('Scientific notation', app.notation === 'scientific', () => { app.notation = app.notation === 'scientific' ? 'standard' : 'scientific'; });
+  // Milestone 6: the notation, a player setting (src/app/settings.ts), cycled by one button
+  ui.text('Numbers', a.x, y + 3, C.bone);
+  if (button(ui, 'opt:notation', a.x + 44, y, a.w - 44, 13, NOTATION_LABEL[getNotation()], { tip: 'How big numbers are written: standard, scientific, engineering or letters' })) cycleNotation();
+  y += 16;
   row('Reduced motion', app.renderer.fx.calm, () => { app.renderer.fx.calm = !app.renderer.fx.calm; });
   y += 4;
   if (button(ui, 'save', a.x, y, a.w, 14, 'Save now')) { app.save(); app.toast('Saved', 'Autosave runs every 30 s and when you leave.', C.leaf); }
@@ -500,6 +511,14 @@ function optionsScreen(app: App, r: Rect) {
   y += 17;
   if (button(ui, 'import', a.x, y, a.w, 14, 'Import save (paste)')) app.promptImport();
   y += 17;
+  // Milestone 6: the overnight forecast, and the damaged save kept aside by a failed load
+  if (button(ui, 'overnight', a.x, y, a.w, 14, 'Safe for overnight...', { tip: 'Look ahead before you leave: which lines would jam, and stop them' })) app.panel = 'overnight';
+  y += 17;
+  const bad = app.damagedSave();
+  if (bad) {
+    if (button(ui, 'copyBad', a.x, y, a.w, 14, 'Copy the damaged save', { tip: 'A save that would not load is kept aside: copy it to send in' })) void navigator.clipboard?.writeText(bad);
+    y += 17;
+  }
   if (button(ui, 'title', a.x, y, a.w, 14, 'Back to the title')) { app.save(); app.toTitle(); }
   const b = card(ui, r.x + 16 + colW, r.y + 26, colW, r.h - 32, 'Keys', C.bone, 'build');
   y = b.y;
