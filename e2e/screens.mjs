@@ -285,6 +285,11 @@ export async function idleSetup(kind) {
       st.result = st.job.report;
       st.job = null;
       act({ k: 'pause', x: 12, y: 3, line: true, on: true });
+      // a stop re-runs the forecast (the screen does it on its next frame): run that one out too
+      m.startForecast(a, 8);
+      while (!st.job.step(5000)) { /* run it out */ }
+      st.result = st.job.report;
+      st.job = null;
       a.panel = 'overnight';
     }
     // the trophies the setup earned slide in over everything: not part of these screens
