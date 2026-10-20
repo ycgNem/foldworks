@@ -81,7 +81,9 @@ def frames_for(spec, d):
     if anim == "fire":
         return [flicker(base, f) for f in range(4)]
     if anim and (RAW / anim / f"{d}_0.png").exists():
-        out = [base]
+        # the animation's own frames only: its canvas may sit differently from the rotation's,
+        # and frame 0 (the stopped pose) is its first frame
+        out = []
         i = 0
         while (RAW / anim / f"{d}_{i}.png").exists():
             out.append(Image.open(RAW / anim / f"{d}_{i}.png").convert("RGBA"))

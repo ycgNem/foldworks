@@ -57,6 +57,25 @@ if __name__ == "__main__":
             files.append(p)
         sheet_of(name, files)
         print("ok", name)
+    elif kind == "zip":
+        # python fetch.py zip <anim-name> <object_id>: the object's download (rotations and every
+        # animation) -> raw/<anim-name>/<dir>_<i>.png from its (newest) animation
+        import io
+        import zipfile
+        name, oid = sys.argv[2], sys.argv[3]
+        z = zipfile.ZipFile(io.BytesIO(get(f"{API}/objects/{oid}/download")))
+        d = RAW / name
+        d.mkdir(exist_ok=True)
+        files = []
+        for n in sorted(z.namelist()):
+            parts = n.split("/")
+            if parts[0] == "animations" and len(parts) == 4 and parts[2] in DIRS:
+                i = int(parts[3].split("_")[1].split(".")[0])
+                p = d / f"{parts[2]}_{i}.png"
+                p.write_bytes(z.read(n))
+                files.append(p)
+        sheet_of(name, sorted(files))
+        print("ok", name, len(files))
     elif kind == "animurls":
         # python fetch.py animurls <name> <json-file with {dir: [urls]}>
         name, jf = sys.argv[2], sys.argv[3]
