@@ -75,3 +75,13 @@ untouched ($2.00).
 
 No PixelLab jobs: every phase-3 sprite is hand-drawn by code or redrawn from its own
 Milestone 1-5 recipe (recipes.py). Balance before and after phase 3: **2,021.90**.
+
+## The title scene (create_image_pixflux 320x180, 1 generation each, palette B forced)
+
+| Backdrop | Seed | Id | Cost | Used |
+|---|---|---|---|---|
+| dusk bayou, a row of stilt houses with lantern windows, moonlit teal water, reeds at the corners | 11 | `c7ae06e9-cd94-4cac-b53e-6326c4d46149` | 1 | yes (raw/title/bg_a.png) |
+| the same prompt | 42 | `5b1c2330-6bdf-42e1-81a9-cf22de7c5b7b` | 1 | no (a canal in perspective) |
+| a title-screen dusk swamp with strings of lanterns | 7 | `5fbd10e7-75bb-464b-a19e-db8db1c7a3a1` | 1 | no (no town) |
+
+Balance after the title scene: **2,018.90** (2,021.90 − 3).

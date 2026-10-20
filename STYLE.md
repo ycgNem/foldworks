@@ -147,6 +147,17 @@ terracotta (`copper3` over `copper2`), Unit 7 keeps its screen face in five-step
 on darks, `lamp1` on mids, `lamp2` on lights).
 **Cheer portraits** keep the body and costume; the face turns to joy and frame 1 bounces 1 px.
 
+## The title scene
+
+`title_scene` (320×180, 8 frames, `title_scene.py`) is the revamp's showcase: the bayou at dusk
+(sky to dusk violet, far hills in blue-grey haze, a row of stilt houses with lantern windows, the
+moon and its streak on teal water), the Workshop deck at the bottom left with a miner on ore, a
+smelter and a belt running into the Dock and a brass module glowing, and Bramble in his top hat
+on the boardwalk at the right. Reflections shimmer row by row, lanterns flicker, the belt runs.
+Composition rule: the sky band (scene y 14–66) carries the logo and tagline, the open water in
+the middle (y 104+) the buttons, the dark water along the bottom the last line; the game places
+them in scene coordinates at a whole-number cover scale.
+
 ## Pictures and UI art
 
 The Megaproject and research scenes sit under the bayou's night (ink violets falling to slag and

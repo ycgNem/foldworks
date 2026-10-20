@@ -199,12 +199,15 @@ def overdrive(f, n):
 # ---------------------------------------------------------------- modules
 def module_glow(f):
     img = new(16, 16)
-    light = [L0, L1, L2, L1][f]
-    for (x, y) in ((7, 1), (8, 1), (1, 7), (1, 8), (14, 7), (14, 8), (7, 14), (8, 14), (1, 1), (1, 14),
-                   (14, 14)):
+    # a step brighter than first drawn (phase 3 follow-up): the dimmest frame is lamp1, the peak
+    # lamp3 hearts with lamp2 haloes one pixel into the band
+    light = [L1, L2, L3, L2][f]
+    lamps = ((7, 1), (8, 1), (1, 7), (1, 8), (14, 7), (14, 8), (7, 14), (8, 14), (1, 1), (1, 14), (14, 14))
+    for (x, y) in lamps:
         put(img, x, y, light)
-    if f == 2:
-        draw(img, [(7, 1), (1, 7), (14, 8), (8, 14)], L3)
+    if f in (1, 2, 3):
+        halo = L2 if f == 2 else L1
+        draw(img, [(7, 2), (8, 2), (2, 7), (2, 8), (13, 7), (13, 8), (7, 13), (8, 13)], halo)
     return img
 
 
