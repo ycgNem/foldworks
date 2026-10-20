@@ -21,6 +21,7 @@ import { sheet, drawRot, frameAt, itemIcon, hasArt, spriteName } from './sprites
 import { Fx, FOLD_DUR, FOLD_FLASH } from './fx';
 import { onGridKind, powered, gridIndex, cheb, wirePairs, reached, capacity } from './powerview';
 import { Town, TOWN_ROWS } from './town';
+import { drawGhosts, type BlueprintPreview } from './ghosts'; // Milestone 5: blueprint ghosts
 
 export class Camera {
   /** centre, in world pixels */
@@ -47,6 +48,8 @@ export interface Overlay {
   /** which floor is on screen, and the Factory floor's own overlay */
   floor: Floor;
   factory: FactoryOverlay;
+  /** Milestone 5: a blueprint being placed, following the mouse (ghosts already placed are in the Game) */
+  bp?: BlueprintPreview | null;
 }
 
 /** screen-space labels collected during the world pass, drawn on top at UI scale */
@@ -972,6 +975,7 @@ export class Renderer {
     if (ov.flow) this.flow(g);
     this.audit(g);
     this.reachOverlay(g, ov);
+    drawGhosts(ctx, g, this.time, ov.bp); // Milestone 5: blueprint ghosts (src/render/ghosts.ts)
     if (ov.box) {
       const x0 = Math.min(ov.box.x0, ov.box.x1), y0 = Math.min(ov.box.y0, ov.box.y1);
       const w = Math.abs(ov.box.x1 - ov.box.x0) + 1, h = Math.abs(ov.box.y1 - ov.box.y0) + 1;

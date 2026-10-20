@@ -38,6 +38,9 @@ import { Gazette } from './gazette';
 import type { ScreenName } from './screens';
 import { TROPHY } from '../data/trophies';
 import { Bot, type Policy } from '../sim/bot';
+// Milestone 5: Reorganize, the Patent tree and blueprints (src/app/reorganize.ts, patents.ts, blueprints.ts)
+import { blueprintInput, blueprintPreview, blueprintHud, bpBoxOk, ghostClick } from './blueprints';
+import { prules } from '../sim/patents';
 
 export type Mode =
   | { k: 'idle' }
@@ -47,7 +50,10 @@ export type Mode =
   | { k: 'fold' }
   /** the Factory floor: laying trunk belts, or placing a module design */
   | { k: 'ftrunk' }
-  | { k: 'fmodule'; design: number };
+  | { k: 'fmodule'; design: number }
+  /** Milestone 5: dragging a box to save a blueprint; placing one as ghosts */
+  | { k: 'bpsave' }
+  | { k: 'bpplace'; id: number };
 
 export type Panel = ScreenName | null;
 
@@ -335,6 +341,7 @@ export class App {
     this.renderer.drawScreenFx(ctx, this.uiScale);
     this.ui.begin(ctx, this.input, this.uiScale, dt, false);
     drawHud(this, dt);
+    blueprintHud(this); // Milestone 5
     this.ui.end();
     this.worldInput();
     this.audio.update(this.busyShare());
@@ -637,11 +644,12 @@ export class App {
       return;
     }
     if (this.floor !== 'workshop') this.setFloor('workshop', true);
-    if (this.game.s.audits.length >= RULES.maxAudits.value) {
+    const maxAudits = prules(this.game).maxAudits; // Milestone 5: More Auditors raises it
+    if (this.game.s.audits.length >= maxAudits) {
       const ga = gradedAudit(this.game);
       this.panel = ga ? 'grade' : null;
       if (ga) { this.gradeId = ga.id; this.gradeAt = this.ui.time; this.hud.stamped = false; this.nameDraft = null; }
-      return this.refuse(ga ? 'Fold or cancel a graded line first' : `${RULES.maxAudits.value} audits are running: wait for a grade`);
+      return this.refuse(ga ? 'Fold or cancel a graded line first' : `${maxAudits} audits are running: wait for a grade`);
     }
     this.setMode(this.mode.k === 'fold' ? { k: 'idle' } : { k: 'fold' });
   }
@@ -743,7 +751,8 @@ export class App {
       drag: this.floor === 'workshop' && this.drag ? this.drag.path : null,
       remove: this.mode.k === 'remove',
       selected: this.selected,
-      box: this.foldDrag && this.floor === 'workshop' ? { ...this.foldDrag, ok: !foldRefusal(this.game, this.dragBox()!) } : null,
+      box: this.foldDrag && this.floor === 'workshop' ? { ...this.foldDrag, ok: this.mode.k === 'bpsave' ? bpBoxOk(this) : !foldRefusal(this.game, this.dragBox()!) } : null,
+      bp: blueprintPreview(this), // Milestone 5
       flow: this.flowOverlay,
       floor: this.floor,
       factory: {
@@ -801,6 +810,7 @@ export class App {
 
     if (this.floor === 'factory') return this.factoryInput(t, overUI, pt);
     if (this.mode.k === 'fold') return this.foldInput(t, overUI, pt);
+    if (blueprintInput(this, t, overUI, pt)) return; // Milestone 5: the blueprint tools
     if (this.mode.k === 'build' && this.mode.kind === 'belt') return this.beltDrag(t, overUI, pt);
     if (!inp.mouse.pressed[0] || overUI) return;
     if (!g.inb(t.x, t.y)) {
@@ -821,6 +831,7 @@ export class App {
       if (ch) this.act({ k: 'land', id: ch.id });
       return;
     }
+    if (ghostClick(this, t.x, t.y)) return; // Milestone 5: a click on a ghost builds it
     const e = g.entAt(t.x, t.y);
     const r = g.act({ k: 'click', x: t.x, y: t.y });
     if (r.ok) return;

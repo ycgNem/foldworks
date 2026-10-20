@@ -331,7 +331,7 @@ export function megaScreen(app: App, r: Rect) {
     ui.fill(sx, ty, sw, 14, C.ink);
     ui.fill(sx + 1, ty + 1, sw - 2, 12, done ? C.brass1 : cur ? C.ground1 : C.shadow);
     ui.text(done ? `${ICON.check} ${s}` : cur ? `Stage ${s}` : `${ICON.lock} ${s}`, sx + sw / 2, ty + 4, done ? C.ink : cur ? C.gold : C.hull1, { align: 'center' });
-    ui.hint(sx, ty, sw, 14, s === 1 ? (MEGA[0]?.reward ?? '') : `Stage ${s} arrives with a later floor.`, 160);
+    ui.hint(sx, ty, sw, 14, MEGA[s - 1]?.reward ?? '', 160); // Milestone 5: stages 2 and 3
   }
   ty += 18;
   if (ty + 9 < bottom) ty += ui.para(g.s.mega.stage >= 1 ? 'The drill runs. Its progress survives every reset.' : 'Progress here survives every reset.', ax, ty, aw - 16, C.hull2) + 6;
@@ -383,9 +383,21 @@ function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, x: nu
     ui.hint(inner.x, yy, inner.w, rowH, rate && f < 1 ? `${perMin(rate)} a minute arriving: about ${eta((want - have) / rate)} to go.` : f >= 1 ? 'Enough of this one.' : `Nothing brings ${ITEMS[it].name.toLowerCase()} to the Bay yet: trunk a module making it into the Bay.`, 170);
     yy += rowH;
   }
+  // Milestone 5: stages 2 and 3 want the Committee's Raccoon Bearings first, from the stash
+  if (stage.bearings) {
+    const have = g.s.mega.bearings ?? 0, f = have / stage.bearings;
+    ui.fill(inner.x, yy, 20, 20, C.ink);
+    ui.fill(inner.x + 1, yy + 1, 18, 18, f >= 1 ? C.moss : C.violet);
+    ui.text(ICON.cog, inner.x + 7, yy + 6, C.bone);
+    ui.text('Raccoon Bearings', inner.x + 25, yy, f >= 1 ? C.leaf : C.bone);
+    ui.text(`${have} / ${stage.bearings}`, inner.x + inner.w, yy, f >= 1 ? C.leaf : C.gold, { align: 'right' });
+    bar(ui, inner.x + 25, yy + 10, inner.w - 25 - 28, 8, f, f >= 1 ? C.leaf : C.violet);
+    ui.hint(inner.x, yy, inner.w, rowH, f >= 1 ? 'The bore head is in.' : `The Committee pays bearings for its odd orders (${g.s.meta.bearings.format()} in the stash). The Bay takes nothing else until they are in.`, 170);
+    yy += rowH;
+  }
   // the whole stage: a big meter with quarter ticks
   const tf = megaFrac(g);
-  ui.text('Stage 1 in all', inner.x, yy + 4, C.hull2);
+  ui.text(`Stage ${stage.stage} in all`, inner.x, yy + 4, C.hull2);
   ui.text(`${Math.floor(tf * 100)}%`, inner.x + inner.w, yy, C.gold, { align: 'right', scale: 2, shadow: C.brass0 });
   yy += 19;
   bar(ui, inner.x, yy, inner.w, 12, tf, C.hot);
@@ -402,7 +414,8 @@ function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, x: nu
   const miners = g.miners.length;
   const srcMods = g.s.factory.ents.filter((e) => e.kind === 'module' && Object.keys(oresOf(g, g.design(e.design)!)).length).length;
   const rh = 36;
-  if (yy + rh <= end) {
+  if (stage.stage > 1 && yy + 10 <= end) yy += ui.para(`Reward: ${stage.reward}`, inner.x, yy, inner.w, C.gold) + 4; // Milestone 5
+  if (stage.stage === 1 && yy + rh <= end) {
     frame(ui, inner.x, yy, inner.w, rh, 'paper');
     ui.text('Reward: +50% to miners', inner.x + 6, yy + 4, C.brass0);
     ui.text('and modules with miners inside', inner.x + 6, yy + 13, C.brass0);

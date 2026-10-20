@@ -257,6 +257,68 @@ export async function dragTiles(page, [[x0, y0], [x1, y1]]) {
   await page.mouse.move(p1.x, p1.y, { steps: 4 });
 }
 
+/** Runs in the page (Milestone 5): the Reorganize card, the Patent Office, the Blueprint Book,
+ * ghosts on the Workshop, the Committee's tab and the Great Drill's stage 2. */
+export async function m5Setup(state) {
+  const a = window.__app;
+  a.newGame(13);
+  a.freeze();
+  const g = a.game;
+  const N = g.s.coin.constructor;
+  g.s.coin = N.of(312000);
+  g.s.earned = N.of(1.62e6);
+  g.s.land = ['A', 'B', 'C', 'D', 'E'];
+  g.s.upgrades.push('bellows');
+  g.s.research.done = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding', 'coalSeams', 'steelmaking', 'steamPower', 'refining', 'greatDrill'];
+  g.s.flags.push('factoryOpen', 'factorySeen', 'sliceEnd', 'ordersSeen');
+  const gr = (letter, mult) => ({ letter, score: 0.8, u: 0.85, w: 1, c: 0.8, mult });
+  const D = (id, name, outs, grade) => ({ id, name, box: { x: 16, y: 1, w: 4, h: 3 }, parts: [], ins: {}, outs, grade, bill: 300, stamped: 0, spare: 1 });
+  g.s.designs = [
+    D(1, 'Iron plates', { ironPlate: 0.6 }, gr('S', 1.25)), D(2, 'Gizmo works', { gizmo: 0.3 }, gr('A', 1.1)),
+    D(3, 'Copper wire', { copperWire: 1 }, gr('B', 1)), D(4, 'Steel', { steel: 0.4 }, gr('A', 1.1)), D(5, 'Gears', { gear: 0.5 }, gr('C', 0.9)),
+  ];
+  g.s.nextDesign = 6;
+  g.s.megaPatents = 2.4;
+  g.s.mega = { stage: 1, progress: { drillBit: N.of(40), steel: N.of(210) }, bearings: 3 };
+  const m = g.s.meta;
+  m.history = [{ run: 1, ticks: 20 * 3600 * 4.6, patents: 19, earned: N.of(2.1e6), peakPerMin: 13300 }];
+  m.runs = 1;
+  m.patents = N.of(9);
+  m.patentsEarned = N.of(19);
+  m.nodes = ['bellows', 'starterLine', 'notebooks', 'surveyCharter', 'shovelFrog', 'overdriveHabit'];
+  m.bearings = N.of(2);
+  const P = (kind, dx, dy, rot = 0, recipe = null) => ({ kind, dx, dy, rot, recipe });
+  m.blueprints = [
+    { id: 1, name: 'Iron plate line', w: 5, h: 3, parts: [P('miner', 0, 0), P('smelter', 1, 0, 0, 'smeltIron'), P('press', 2, 0, 0, 'pressPlate'), P('belt', 3, 0), P('belt', 4, 0), P('belt', 1, 1, 1), P('heap', 1, 2)] },
+    { id: 2, name: 'Gizmo works with a very long name indeed', w: 7, h: 4, parts: [P('assembler', 0, 0, 0, 'gizmo'), P('assembler', 0, 2, 0, 'gizmo'), ...[1, 2, 3, 4, 5, 6].map((x) => P('belt', x, 1))] },
+    { id: 3, name: 'Wire', w: 4, h: 1, parts: [P('miner', 0, 0), P('smelter', 1, 0, 0, 'smeltCopper'), P('press', 2, 0, 0, 'drawWire'), P('belt', 3, 0)] },
+  ];
+  m.nextBlueprint = 4;
+  a.renderer.ground = null;
+  a.setFloor('workshop', true);
+  a.fitCamera(true);
+  a.toasts = [];
+  a.trophyPops = [];
+  if (state === 'reorg') a.panel = 'reorganize';
+  if (state === 'patents') a.panel = 'patents';
+  if (state === 'blueprints') { g.s.ghosts = [{ kind: 'press', x: 9, y: 4, rot: 0, recipe: null }]; a.panel = 'blueprints'; }
+  if (state === 'ghosts') {
+    // ghosts already laid (one ready, two waiting for coin) and a blueprint following the mouse
+    g.s.coin = N.of(60);
+    for (const [kind, x, y] of [['smelter', 8, 6], ['press', 9, 6], ['belt', 10, 6]]) g.s.ghosts.push({ kind, x, y, rot: 0, recipe: null });
+    a.setMode({ k: 'bpplace', id: 3 });
+    return { hover: [8, 9] };
+  }
+  if (state === 'committee') {
+    a.panel = 'orders';
+    (await import('/src/app/orders.ts')).cheerFor(a, 'committee', 0);
+  }
+  if (state === 'mega2') { a.panel = 'mega'; a.gradeAt = a.ui.time - 30; }
+  return null;
+}
+
+export const M5 = ['reorg', 'patents', 'blueprints', 'ghosts', 'committee', 'mega2'];
+
 const SIZES = [[1280, 720], [1920, 1080], [1024, 640]];
 // each state: a function run in the page that puts the app there (frozen); it may return
 // { hover: [x, y] } to put the mouse over that tile instead of the board's top edge
@@ -293,6 +355,7 @@ const STATES = {
 };
 for (const s of ACT2) STATES[s] = s;
 for (const s of WORKSHOP) STATES[s] = { ws: s };
+for (const s of M5) STATES[s] = { m5: s };
 
 async function main() {
   const only = process.argv.slice(2);
@@ -310,7 +373,7 @@ async function main() {
     for (const [state, fn] of Object.entries(STATES)) {
       if (only.length && !only.includes(state)) continue;
       const name = `${w}x${h}-${state}`;
-      const r = typeof fn === 'string' ? await page.evaluate(act2Setup, fn) : fn.ws ? await page.evaluate(workshopSetup, fn.ws) : await page.evaluate(fn);
+      const r = typeof fn === 'string' ? await page.evaluate(act2Setup, fn) : fn.ws ? await page.evaluate(workshopSetup, fn.ws) : fn.m5 ? await page.evaluate(m5Setup, fn.m5) : await page.evaluate(fn);
       if (r?.drag) await dragTiles(page, r.drag);
       else if (r?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), r.hover); await page.mouse.move(p.x, p.y); }
       else await page.mouse.move(Math.floor(w / 2), Math.floor(h / 2) + 40);

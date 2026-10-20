@@ -32,6 +32,9 @@ import { drawScreen } from './screens';
 import { auditBadge, factoryStore, factoryReport } from './fold';
 import { gridIndex, capacity, powered, burnerOf, fuelCount, engineOf, producerKw, powerTotals, kw } from '../render/powerview';
 import type { App } from './app';
+// Milestone 5: Reorganize's preview on the bar, and the Patent rules
+import { previewPatents } from '../sim/reorganize';
+import { prules } from '../sim/patents';
 
 export interface HudState {
   /** the coin number shown, counting up toward the real value */
@@ -763,6 +766,13 @@ function bottomBar(app: App, L: Layout) {
   menu('options', 'options', 'Options', '/', 'options', 'Sound, saves, keys');
   menu('trophies', 'trophies', `${trophyCount}/${TROPHIES.length}`, '', 'trophies', 'The Trophy Shelf');
   menu('stats', 'stats', 'Stats', '', 'stats', 'Statistics');
+  // Milestone 5: the Blueprint Book, the Patent Office and Reorganize (src/app/blueprints.ts, patents.ts, reorganize.ts)
+  if (g.done('folding') || g.s.meta.blueprints.length) menu('blueprints', 'build', 'Blueprints', '', 'blueprints', 'The Blueprint Book: save a layout from a box, place it again as ghosts', !h.opened.has('blueprints') && g.s.meta.runs > 0);
+  if (g.s.meta.runs > 0) menu('patents', 'star', 'Patents', '', 'patents', 'The Patent Office: head starts, rules, automation, offline', g.s.meta.patents.gte(1) && app.panel !== 'patents' && Math.floor(ui.time / 6) % 2 === 0);
+  if (g.s.designs.length || g.s.meta.runs > 0) {
+    const pv = previewPatents(g).now;
+    menu('reorganize', 'star', `Reset +${pv}`, '', 'reorganize', `Reorganize: start a new run for ${pv} ${pv === 1 ? 'Patent' : 'Patents'} (a card says what it keeps and loses first)`);
+  }
   // Act II screens, as they open
   if (g.done('greatDrill')) menu('mega', 'mega', 'Mega', '', 'mega', `The Megaproject: ${MEGA.find((m) => m.stage === g.s.mega.stage + 1)?.name ?? 'the Great Drill'}`, !h.opened.has('mega'));
   if (g.done('surveying')) {
@@ -790,7 +800,7 @@ function bottomBar(app: App, L: Layout) {
     // the Fold tool wears the audit count, gold when one is graded
     if (it.id === 'fold' && g.s.audits.length) {
       const graded = g.s.audits.some((a) => a.result);
-      badge(ui, x + w - 18, by - 5, `${g.s.audits.length}/${RULES.maxAudits.value}`, graded ? C.copper1 : C.teal0);
+      badge(ui, x + w - 18, by - 5, `${g.s.audits.length}/${prules(g).maxAudits}`, graded ? C.copper1 : C.teal0); // Milestone 5: prules
     }
     x += w + 3;
   }

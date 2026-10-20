@@ -22,10 +22,16 @@ import { ordersScreen } from './orders';
 import { codexScreen, surveyScreen, megaScreen } from './act2screens';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
+// Milestone 5: Reorganize, the Patent Office and the Blueprint Book
+import { reorganizeCard } from './reorganize';
+import { patentsScreen } from './patents';
+import { blueprintsScreen } from './blueprints';
 
 export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options' | 'modules' | 'grade' | 'offline' | 'sliceEnd'
   // Act II (Milestone 4): the Factory floor's grade card, the Codex, the Survey Office, the Megaproject
-  | 'fgrade' | 'codex' | 'survey' | 'mega';
+  | 'fgrade' | 'codex' | 'survey' | 'mega'
+  // Milestone 5
+  | 'reorganize' | 'patents' | 'blueprints';
 
 export function drawScreen(app: App, L: Layout) {
   const r = L.overlay;
@@ -43,6 +49,9 @@ export function drawScreen(app: App, L: Layout) {
     case 'codex': return codexScreen(app, r);
     case 'survey': return surveyScreen(app, r);
     case 'mega': return megaScreen(app, r);
+    case 'reorganize': return reorganizeCard(app, r);
+    case 'patents': return patentsScreen(app, r);
+    case 'blueprints': return blueprintsScreen(app, r);
   }
 }
 

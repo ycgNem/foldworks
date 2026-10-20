@@ -10,22 +10,26 @@ import { RULES } from '../data/rules';
 import { ICON, textWidth, ellipsize } from '../ui/font';
 import { itemIcon, sheet, hasArt } from '../render/sprites';
 import { orderFrac } from '../sim/systems/orders';
+import { customerMet } from '../sim/reorganize';
 import { saleValue } from '../sim/systems/docks';
 import { Num } from '../engine/num';
 import { frame, card, button, bar, portrait } from './chrome';
 import { screenHeader, tab, icon, fmt } from './widgets';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
+import { committeeFallback } from './reorganize';
 
-const CUSTOMER_IDS: CustomerId[] = ['bramble', 'unit7', 'voltaire'];
-const ACCENT: Record<CustomerId, string> = { bramble: C.leaf, unit7: C.teal1, voltaire: C.hot };
+// Milestone 5: the Committee joins as a fourth tab (met through src/sim/reorganize.ts customerMet)
+const CUSTOMER_IDS: CustomerId[] = ['bramble', 'unit7', 'voltaire', 'committee'];
+const ACCENT: Record<CustomerId, string> = { bramble: C.leaf, unit7: C.teal1, voltaire: C.hot, committee: C.violet };
+/** When a customer not yet met turns up, in words (Milestone 5) */
+const arrives = (c: CustomerId) => (CUSTOMERS[c].afterReset ? 'with the Great Drill, or after your first Reorganize' : `with ${RESEARCH[CUSTOMERS[c].meets!].name}`);
 
 /** the open tab, and the customer cheering after a fill (until when, in UI seconds) */
 const st = { tab: 'bramble' as CustomerId, seen: -1, cheer: null as null | { who: CustomerId; until: number } };
 
 export function met(app: App, c: CustomerId): boolean {
-  const m = CUSTOMERS[c].meets;
-  return !m || app.game.done(m);
+  return customerMet(app.game, c);
 }
 
 /** Make a customer cheer on the Orders screen (an order of theirs was just filled). */
@@ -39,6 +43,11 @@ export function customerPortrait(app: App, who: CustomerId, x: number, y: number
   const ui = app.ui;
   const base = `portrait_${who}`;
   if (!hasArt(base) && who === 'bramble') return portrait(ui, who, x, y, size);
+  // Milestone 5: the Committee's code-drawn stand-in until portrait_committee lands
+  if (!hasArt(base) && who === 'committee') {
+    frame(ui, x - 2, y - 2, size + 4, size + 4, 'inset', false);
+    return committeeFallback(ui, x, y, size);
+  }
   frame(ui, x - 2, y - 2, size + 4, size + 4, 'inset', false);
   const ctx = ui.ctx;
   if (cheer && hasArt(base + '_cheer')) {
@@ -86,14 +95,14 @@ export function ordersScreen(app: App, r: Rect) {
   screenHeader(app, r, `Orders: ${cu.name}`, accent, 'orders');
   // ---- the customer tabs
   const y0 = r.y + 22;
-  const tw = Math.floor((r.w - 16 - 8) / 3);
+  const tw = Math.floor((r.w - 16 - 4 * (CUSTOMER_IDS.length - 1)) / CUSTOMER_IDS.length);
   CUSTOMER_IDS.forEach((c, i) => {
     const x = r.x + 8 + i * (tw + 4);
     const isMet = met(app, c);
     const active = c === who;
     const d = CUSTOMERS[c];
     const open = ORDERS.filter((q) => q.customer === c && !o.done.includes(q.id) && q.requires.every((rq) => g.done(rq))).length;
-    if (tab(app, 'cust:' + c, x, y0, tw, 30, '', { active, disabled: !isMet, tip: isMet ? `${d.name}: ${d.title}` : `Not met yet: arrives with ${RESEARCH[d.meets!].name}` })) st.tab = c;
+    if (tab(app, 'cust:' + c, x, y0, tw, 30, '', { active, disabled: !isMet, tip: isMet ? `${d.name}: ${d.title}` : `Not met yet: arrives ${arrives(c)}` })) st.tab = c;
     const cheer = st.cheer?.who === c && ui.time < st.cheer.until;
     if (isMet) customerPortrait(app, c, x + 4, y0 + 3, 24, cheer);
     else {
@@ -105,7 +114,7 @@ export function ordersScreen(app: App, r: Rect) {
     ui.text(isMet ? d.name : '???', tx, y0 + 4, isMet ? (active ? ACCENT[c] : C.bone) : C.hull1, { shadow: C.ink });
     ui.unclip();
     // the title gets the tab's whole width ("Baroness of the swamp's wires" was cut by the badge)
-    const title = isMet ? d.title : `After ${RESEARCH[d.meets!].name}`;
+    const title = isMet ? d.title : d.afterReset ? 'With the Great Drill' : `After ${RESEARCH[d.meets!].name}`;
     ui.clip(tx, y0 + 14, x + tw - tx - 4, 14);
     ui.text(textWidth(title) <= x + tw - tx - 4 ? title : ellipsize(title, x + tw - tx - 4), tx, y0 + 18, C.hull2);
     ui.unclip();
@@ -172,6 +181,8 @@ export function ordersScreen(app: App, r: Rect) {
   // what the customer has paid, and their perks working right now
   const paid = mine.filter((q) => o.done.includes(q.id)).reduce((n, q) => n + q.pays, 0);
   const perks: [string, string][] = [['Paid you', Num.of(paid).format()]];
+  // Milestone 5: the Committee pays in Raccoon Bearings, not coin
+  if (who === 'committee') perks.splice(0, 1, ['Bearings in the stash', g.s.meta.bearings.format()]);
   if (who === 'bramble') {
     if (rep >= 1) perks.push(['Iron plates sell for', `${fmt(saleValue(g, 'ironPlate'))} each`]);
     if (rep >= 2) perks.push(['Free crates waiting', `${g.s.freeCrates}/${RULES.repCrateMax.value}`]);
@@ -242,7 +253,7 @@ function orderCard(app: App, d: OrderDef, x: number, y: number, w: number, h: nu
     if (Math.floor(ui.time * 2) % 2 === 0) ui.fill(x + 2, y + 2, w - 4, 1, C.gold);
   }
   ui.text(d.name, x + 9, y + 5, C.ink);
-  const pay = `${ICON.coin} ${Num.of(d.pays).format()}  +${d.rep}${ICON.heart}`;
+  const pay = `${d.bearings ? `${ICON.cog} ${d.bearings} bearings` : `${ICON.coin} ${Num.of(d.pays).format()}`}  +${d.rep}${ICON.heart}`; // Milestone 5: bearings
   ui.text(pay, x + w - 8, y + 5, C.brass0, { align: 'right' });
   if (active) ui.text('ACTIVE', x + 13 + textWidth(d.name), y + 5, C.moss);
   let wx = x + w - 8;
@@ -268,7 +279,7 @@ function lockedCard(app: App, d: OrderDef, x: number, y: number, w: number) {
   const g = app.game;
   frame(ui, x, y, w, 28, 'inset');
   ui.text(`${ICON.lock} ${d.name}`, x + 8, y + 5, C.hull2);
-  ui.text(`${ICON.coin} ${Num.of(d.pays).format()}`, x + w - 8, y + 5, C.brass1, { align: 'right' });
+  ui.text(d.bearings ? `${ICON.cog} ${d.bearings} bearings` : `${ICON.coin} ${Num.of(d.pays).format()}`, x + w - 8, y + 5, C.brass1, { align: 'right' }); // Milestone 5
   let ix = x + 8;
   for (const [item, n] of Object.entries(d.wants) as [ItemId, number][]) {
     if (ix + 30 > x + w / 2) break;
@@ -299,7 +310,7 @@ function doneRow(app: App, d: OrderDef, x: number, y: number, w: number) {
   ui.fill(sx, y + 3, 36, 12, C.leaf);
   ui.fill(sx + 1, y + 4, 34, 10, C.shadow);
   ui.text('FILLED', sx + 18, y + 5, C.leaf, { align: 'center' });
-  ui.text(`+${Num.of(d.pays).format()}`, x + w - 6, y + 5, C.gold, { align: 'right' });
+  ui.text(d.bearings ? `+${d.bearings} ${ICON.cog}` : `+${Num.of(d.pays).format()}`, x + w - 6, y + 5, C.gold, { align: 'right' }); // Milestone 5
 }
 
 /** The standing order: what the Dock pays for each item, lit for the ones you have delivered. */
