@@ -121,3 +121,114 @@ chrome out of the way so these read; it removes none of them.
 - The active order's flag over the Dock: the customer's colour, a small progress bar.
 - A progress ring over the Hopper for the selected research node.
 - Jams: the red pip already blinks; the line health chip's click pans to it.
+
+---
+
+## What was built (2026-10-20)
+
+The brief above, as implemented on the UI redesign branch. Decisions and their reasons are in
+`DECISIONS.md` ("The UI redesign"); this section is the reference for STYLE.md's UI section.
+
+### The regions (`src/app/layout.ts`)
+
+All sizes in UI px. The UI scale is `floor(min(w/480, h/300))`: 640x360 at 1280x720 and
+1920x1080, 512x320 at 1024x640. "Wide" is 600 UI px and up.
+
+| Region | Where | Size |
+|---|---|---|
+| top bar | `top` | full width, 20 tall |
+| card rail | `rail` | x 4, from y 24 to 4 above the band; 128 wide (116 narrow) |
+| toasts and pinned report | `side` | right edge, 4 in; 156 wide (136 narrow) |
+| build bar band | `band` | full width, 46 tall, above the crawl; the bar is centred in it |
+| Gazette crawl | `crawl` | full width, 10 tall, at the bottom |
+| floor view (camera) | `center` | right of the rail, between the top bar and the band |
+| full-screen menus | `overlay` | 2 in from the sides, from the top bar to the crawl |
+
+The old names (`ticker`, `left`, `right`, `bottom`) remain as aliases of crawl, rail, side and
+band, so code written against them still runs.
+
+### Top bar (`src/app/topbar.ts`)
+
+Left to right: the spinning coin and the counter in 2x digits (1x when the number is too wide),
+the rate (`+7.0K/min`, leaf); then, once each exists, Machine Kits (kit icon, count), power
+(bolt, demand/supply kW in green/amber/blue, a bar when there is room), counters registered by
+other files; the line-health chip (hidden until the first Miner). The floor tabs (Workshop,
+Factory; icons alone when short of room; hidden until Folding is researched) are centred in the
+room left. The menus are 18x16 icon keys from the right: Research, Orders, Modules, Codex,
+Survey, Megaproject as they open, a divider, Stats, Trophies, Options. Hovering the counter drops
+down the coin card (number, rate, sparkline, earnings, Shipping per minute).
+
+### Card rail (`src/app/rail.ts`)
+
+Goal (gold), Order (the customer's colour), Research (teal), Megaproject (glow). A card is a
+plate with its accent top edge, a 13 px title row (an 8 px icon, the title in small capitals,
+`-`/`+` to fold) and its body 6 px in. The Goal card holds the Bellows bar and Buy button at the
+start and slides in, flashes and chimes (`codex` at 0.35 volume, pitch 1.5) when the goal
+changes. "N orders offered" and "Pick research (T)" are one-line pills (accent plates with a
+blinking dot). The order flag and research ring are drawn on the map by `diegetic()`.
+
+### Build bar (`src/app/buildbar.ts`)
+
+Tabs (11 tall, the store's: Build, Power, Heavy as they unlock, Upgrades; on the Factory floor,
+Modules) sit on the slot plate's top edge. Slots are 24x25: the sprite at 1x (2x2 machines at
+half size), the hotkey top-left and the price under it in the small font. Edge colours: gold
+(brass1, gold on hover) affordable, hull0 not, teal1 in your hand; a 1 px pulsing gold ring
+around the slot the goal names. The hover card (184 wide, above the slot): the sprite at 2x in
+a well, name and key, price, rate, then the description lines. The tools plate (Rotate, Remove,
+Fold, Flow; 22 px keys with their letter) sits left of it, under a small "TOOLS" label.
+
+### Panels, type and colour
+
+- `plate(ui, x, y, w, h, { accent, hover, kind, blocking, alpha, fill })`: the HUD panel.
+  `plateRaw(ctx, ...)` draws the same without UI bookkeeping (tooltips, floating cards).
+- `frame(ui, x, y, w, h)`: the ornate panel, for full-screen menus and celebration cards only.
+- `section(ui, ...)` and `card(ui, ..., title, accent, icon)`: flat wells inside menus.
+- Text: big digits (`ui.text(s, x, y, c, { scale: 2 })`), the normal 7 px font, and the 5 px small
+  font (`ui.small(s, x, y, c)` or `ui.text(..., { small: true })`; capitals and figures,
+  lowercase drawn as capitals). Secondary text in `hull2`, tertiary in `hull1`.
+- Accents: gold coin and buy; teal research and "on"; leaf orders (Bramble), teal Unit 7, hot
+  Voltaire; copper heat and jams; violet Patents and resets; blue power.
+- Spacing: a 4 px grid; 4 px between plates; 6 px padding inside cards.
+
+### The menu template (`src/app/widgets.ts`)
+
+`menuTemplate(app, r, { title, accent, icon, tabs?, detail? })` draws the ornate frame and the
+header bar (a 16 px icon, the title in the accent, the menu's tabs, "ESC" and a close key) and
+returns `{ body, detail, free }`: the content rect, the detail panel's rect on the right when
+`detail` (px) is given, and the header's free width. With no `tabs` the header shows the screen's
+group (Orders/Modules/Codex/Survey/Drill; Stats/Trophies/Options). `screenHeader(app, r, title,
+accent, icon)` keeps its signature and draws the same header (content starts at r.y + 22).
+
+### For new screens (Milestones 5 and 6)
+
+    import { menuTemplate } from './widgets';
+    import { registerScreen } from './screens';          // the name must be in ScreenName
+    import { registerMenu, registerCounter } from './topbar';
+    registerScreen('patents', (app, r) => { const { body, detail } = menuTemplate(app, r, { title: 'Patents', accent: C.violet, icon: 'star', detail: 170 }); /* ... */ });
+    registerMenu({ id: 'patents', icon: 'star', name: 'Patents', key: 'P', panel: 'patents', tip: 'Spend Patents', show: (app) => app.game.done('...') });
+    registerCounter({ id: 'patents', show: (app) => ..., draw: (app, x, y) => app.ui.text(`${n}`, x, y, C.violet) });
+    plate(ui, x, y, w, h, { accent: C.violet });   // any HUD panel
+    label(ui, 'patents', x, y, C.violet);          // a small-caps title
+    ui.small('+3', x, y, C.violet);                // a small figure
+    ui.later(() => { /* a floating card, drawn last on the tooltip layer */ });
+
+### Deviations from the brief
+
+- The build bar's categories are the store's tabs plus Upgrades, not Logistics/Production (keys
+  1-9 and the goal texts stay stable).
+- The crawl is 10 px tall, not 9 (descenders).
+- Power reads demand/supply, not supply/demand.
+- The floor tabs and the line-health chip appear only when there is something to show (Folding;
+  the first Miner), and the Research card after the Bellows: the first screen has one goal.
+- A goal that names a screen opens it from its card, and the matching pill gives way.
+- The Factory floor's store became a Modules tab in the build bar; stamping from it is a
+  shift-click on a design's slot (the Modules screen has the full controls).
+- Menus cover the build bar too (only the top bar and the crawl stay).
+- Patents is not on the top bar yet: Milestone 5 registers it with `registerCounter`/`registerMenu`.
+
+### Screenshots
+
+`npm run screens` (e2e/out/screens/) covers every state at three sizes, now with `jam` (a slag
+jam's hover report), `act2power` (a busy Act II Workshop with a brownout and a pinned report),
+`slotHover` (a build slot's hover card) and `coinHover` (the coin drop-down). Before/after
+pairs worth comparing: `1280x720-start`, `-act2ws`, `-factory2`, `-research2`, `-orders2`.

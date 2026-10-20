@@ -56,7 +56,8 @@ for (const key of ['KeyT', 'KeyO', 'Slash']) {
 }
 
 // run a minute at speed, then save, reload and continue
-await page.evaluate(() => window.__app.step(20 * 60));
+// (frozen, so no tick runs between the reading and the save on unload)
+await page.evaluate(() => { window.__app.freeze(); window.__app.step(20 * 60); });
 const before = await page.evaluate(() => ({ tick: window.__app.game.s.tick, coin: window.__app.game.s.coin.toString(), ents: window.__app.game.s.ents.length }));
 check(await page.evaluate(() => window.__app.save()), 'saves to localStorage');
 const exported = await page.evaluate(() => window.__app.exportSave());
@@ -65,11 +66,10 @@ await page.reload();
 await page.waitForFunction(() => window.__app && window.__app.ready);
 await frames(page, 4);
 check(await page.evaluate(() => window.__app.titleInfo.hasSave), 'the title offers Continue');
-await page.evaluate(() => window.__app.continueGame());
-const after = await page.evaluate(() => ({ tick: window.__app.game.s.tick, coin: window.__app.game.s.coin.toString(), ents: window.__app.game.s.ents.length }));
-check(after.tick === before.tick && after.ents === before.ents && after.coin === before.coin, `continue restores the run (tick ${after.tick}, ${after.ents} ents)`);
-const imp = await page.evaluate((s) => { window.__app.newGame(5); return window.__app.importSave(s); }, exported);
-check(imp.ok && (await page.evaluate(() => window.__app.game.s.tick)) === before.tick, 'the export string imports');
+const after = await page.evaluate(() => { window.__app.continueGame(); return { tick: window.__app.game.s.tick, coin: window.__app.game.s.coin.toString(), ents: window.__app.game.s.ents.length }; });
+check(after.tick === before.tick && after.ents === before.ents && after.coin === before.coin, `continue restores the run (tick ${after.tick} of ${before.tick}, ${after.ents} of ${before.ents} ents, coin ${after.coin} of ${before.coin})`);
+const imp = await page.evaluate((s) => { window.__app.newGame(5); const r = window.__app.importSave(s); return { ...r, tick: window.__app.game.s.tick }; }, exported);
+check(imp.ok && imp.tick === before.tick, `the export string imports (tick ${imp.tick} of ${before.tick})`);
 await frames(page, 6);
 
 // the fold, through the real UI: F, drag a box over a line, wait, Fold it!, Tab, place, lay a trunk

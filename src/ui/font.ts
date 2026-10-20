@@ -132,6 +132,55 @@ export const ICON = {
 export const FONT_H = 9; // cell height incl. descenders
 export const LINE_H = 10;
 
+// ---- the small font (the UI redesign's third text size, docs/ui-redesign.md): 5 px capitals and
+// figures for labels, keys, prices and secondary numbers. Lowercase draws as capitals; anything
+// without a small glyph draws in the normal font's place as '?'.
+const S: Record<string, string> = {
+  A: '.#.|#.#|###|#.#|#.#', B: '##.|#.#|##.|#.#|##.', C: '.##|#..|#..|#..|.##', D: '##.|#.#|#.#|#.#|##.',
+  E: '###|#..|##.|#..|###', F: '###|#..|##.|#..|#..', G: '.##|#..|#.#|#.#|.##', H: '#.#|#.#|###|#.#|#.#',
+  I: '###|.#.|.#.|.#.|###', J: '..#|..#|..#|#.#|.#.', K: '#.#|#.#|##.|#.#|#.#', L: '#..|#..|#..|#..|###',
+  M: '#...#|##.##|#.#.#|#...#|#...#', N: '#..#|##.#|#.##|#..#|#..#', O: '.#.|#.#|#.#|#.#|.#.', P: '##.|#.#|##.|#..|#..',
+  Q: '.#.|#.#|#.#|##.|.##', R: '##.|#.#|##.|#.#|#.#', S: '.##|#..|.#.|..#|##.', T: '###|.#.|.#.|.#.|.#.',
+  U: '#.#|#.#|#.#|#.#|###', V: '#.#|#.#|#.#|#.#|.#.', W: '#...#|#...#|#.#.#|##.##|#...#', X: '#.#|#.#|.#.|#.#|#.#',
+  Y: '#.#|#.#|.#.|.#.|.#.', Z: '###|..#|.#.|#..|###',
+  '0': '###|#.#|#.#|#.#|###', '1': '.#.|##.|.#.|.#.|###', '2': '##.|..#|.#.|#..|###', '3': '##.|..#|.#.|..#|##.',
+  '4': '#.#|#.#|###|..#|..#', '5': '###|#..|##.|..#|##.', '6': '.##|#..|###|#.#|###', '7': '###|..#|.#.|.#.|.#.',
+  '8': '###|#.#|###|#.#|###', '9': '###|#.#|###|..#|##.',
+  ' ': '..|..|..|..|..', '.': '.|.|.|.|#', ',': '.|.|.|#|#', ':': '.|#|.|#|.', '/': '..#|..#|.#.|#..|#..',
+  '+': '...|.#.|###|.#.|...', '-': '...|...|###|...|...', '%': '#.#|..#|.#.|#..|#.#', '×': '...|#.#|.#.|#.#|...',
+  '(': '.#|#.|#.|#.|.#', ')': '#.|.#|.#|.#|#.', '!': '#|#|#|.|#', '?': '##.|..#|.#.|...|.#.', "'": '#|#|.|.|.',
+  '#': '#.#|###|#.#|###|#.#', '=': '...|###|...|###|...', '&': '.#.|#.#|.#.|#.#|.##', '<': '..#|.#.|#..|.#.|..#', '>': '#..|.#.|..#|.#.|#..',
+  '\u0002': '.#.|###|#.#|###|.#.', // coin
+  '\u0003': '..#|.#.|###|.#.|#..', // bolt
+  '\u0004': '.#.|###|.#.|#.#|...', // star
+  '\u0001': '#.#|###|###|.#.|...', // heart
+  '\u0014': '.#.|#.#|###|###|###', // lock
+  '\u0012': '...|..#|#.#|.#.|...', // check
+  '\u0013': '...|#.#|.#.|#.#|...', // cross
+  '\u0006': '.#.|###|.#.|.#.|...', // up
+  '\u0007': '...|.#.|.#.|###|.#.', // down
+};
+export const SMALL_H = 5;
+export const SMALL_LINE = 7;
+const small = new Map<string, Glyph>();
+for (const [ch, def] of Object.entries(S)) {
+  const rows = def.split('|');
+  small.set(ch, { w: rows[0].length, rows, ax: 0, ay: 0 });
+}
+const smallOf = (ch: string) => small.get(ch) ?? small.get(ch.toUpperCase()) ?? small.get('?')!;
+
+/** Is there a small-font glyph for this character (lowercase counts as its capital)? */
+export function hasSmallGlyph(ch: string): boolean {
+  return small.has(ch) || small.has(ch.toUpperCase());
+}
+
+/** Width of a string in the small font. */
+export function smallWidth(s: string): number {
+  let w = 0;
+  for (let i = 0; i < s.length; i++) w += smallOf(s[i]).w + 1;
+  return Math.max(0, w - 1);
+}
+
 interface Glyph { w: number; rows: string[]; ax: number; ay: number }
 const glyphs = new Map<string, Glyph>();
 for (const [ch, def] of Object.entries(G)) {
@@ -238,6 +287,58 @@ export function drawText(
 ): number {
   if (shadow) drawRaw(ctx, s, x + scale, y + scale, shadow, scale);
   return drawRaw(ctx, s, x, y, color, scale);
+}
+
+let smallWhite: HTMLCanvasElement | null = null;
+const smallTinted = new Map<string, HTMLCanvasElement>();
+
+function smallAtlasFor(color: string): HTMLCanvasElement {
+  if (!smallWhite) {
+    const chars = [...small.keys()];
+    const c = document.createElement('canvas');
+    c.width = ATLAS_COLS * CELL_W;
+    c.height = Math.ceil(chars.length / ATLAS_COLS) * SMALL_H;
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = '#fff';
+    chars.forEach((ch, i) => {
+      const g = small.get(ch)!;
+      g.ax = (i % ATLAS_COLS) * CELL_W;
+      g.ay = Math.floor(i / ATLAS_COLS) * SMALL_H;
+      g.rows.forEach((row, y) => {
+        for (let x = 0; x < row.length; x++) if (row[x] === '#') ctx.fillRect(g.ax + x, g.ay + y, 1, 1);
+      });
+    });
+    smallWhite = c;
+  }
+  let a = smallTinted.get(color);
+  if (!a) {
+    a = document.createElement('canvas');
+    a.width = smallWhite.width;
+    a.height = smallWhite.height;
+    const ctx = a.getContext('2d')!;
+    ctx.drawImage(smallWhite, 0, 0);
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, a.width, a.height);
+    smallTinted.set(color, a);
+  }
+  return a;
+}
+
+/** Draw small-font text (5 px capitals). Returns the width drawn. */
+export function drawSmall(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, color: string, shadow: string | null = null): number {
+  const raw = (col: string, ox: number, oy: number) => {
+    const atlas = smallAtlasFor(col);
+    let cx = ox;
+    for (let i = 0; i < s.length; i++) {
+      const g = smallOf(s[i]);
+      if (s[i] !== ' ') ctx.drawImage(atlas, g.ax, g.ay, g.w, SMALL_H, cx, oy, g.w, SMALL_H);
+      cx += g.w + 1;
+    }
+    return cx - ox;
+  };
+  if (shadow) raw(shadow, x + 1, y + 1);
+  return raw(color, x, y);
 }
 
 function drawRaw(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, color: string, scale: number): number {

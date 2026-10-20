@@ -14,7 +14,7 @@ import { itemIcon, sheet, hasArt } from '../render/sprites';
 import { bayFrame, megaFrac, mainOutput } from '../render/factory';
 import { claimsHeld, claimsUsed, claimPrice, copiesOf, oresOf } from '../sim/systems/claims';
 import { Num } from '../engine/num';
-import { frame, card, button, bar } from './chrome';
+import { frame, card, button, bar, section } from './chrome';
 import { screenHeader, icon, fmt, perMin, slamScale, rays, cells } from './widgets';
 import { customerPortrait } from './orders';
 import { confetti } from './fold';
@@ -165,7 +165,7 @@ export function surveyScreen(app: App, r: Rect) {
 function oreRow(app: App, ore: ItemId, x: number, y: number, w: number, h: number) {
   const ui = app.ui;
   const g = app.game;
-  frame(ui, x, y, w, h);
+  section(ui, x, y, w, h);
   const ctx = ui.ctx;
   // the ore's deposit tile, large
   ui.fill(x + 5, y + 5, 36, 36, C.ink);

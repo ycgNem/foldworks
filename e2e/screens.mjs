@@ -290,6 +290,81 @@ const STATES = {
     a.renderer.ground = null; a.fitCamera(true);
   },
   huge: () => { const a = window.__app; const g = a.game; g.s.coin = g.s.coin.constructor.parse('4.56e123'); },
+  // the redesign's floating cards: a build slot's hover card, and the coin counter's drop-down
+  slotHover: () => { const a = window.__app; const g = a.game; g.s.coin = g.s.coin.constructor.of(1234); a.panel = null; return { hoverId: 'store_smelter' }; },
+  coinHover: () => { const a = window.__app; a.panel = null; return { hoverId: '@coin' }; },
+  // the first slag jam: a Miner feeding the Hand Furnace, no Slag Heap; the furnace hovered
+  jam: () => {
+    const a = window.__app;
+    a.newGame(7);
+    a.freeze();
+    const g = a.game;
+    a.grant(70);
+    a.act({ k: 'upgrade', id: 'bellows' });
+    const f = g.machines.find((m) => m.kind === 'furnace');
+    a.act({ k: 'place', kind: 'miner', x: f.x - 1, y: f.y, rot: 0 });
+    a.step(20 * 60);
+    // the jam itself, held for the shot (the frozen game keeps it): slag backed up in the furnace
+    f.state = 'blocked';
+    f.why = 'slag';
+    f.hist = 'w'.repeat(20) + 'b'.repeat(40);
+    a.game.events.drain();
+    a.renderer.fx.flyers = [];
+    a.renderer.fx.pops = [];
+    a.toasts = [];
+    a.trophyPops = [];
+    a.selected = null;
+    a.toast('Blocked: slag!', 'Smelting leaves slag, and it has nowhere to go. Click the machine to shovel it, or build a Slag Heap beside it.', '#c8362e');
+    return { hover: [f.x, f.y] };
+  },
+  // a busy Act II Workshop: a boiler and engine, Poles, five kilns and a mixer browning the grid
+  // out, a research node and an order under way, a kiln's report pinned
+  act2power: () => {
+    const a = window.__app;
+    a.newGame(1);
+    a.freeze();
+    const g = a.game;
+    a.grant(2.4e6);
+    g.s.land = ['A', 'B', 'C', 'D', 'E', 'F'];
+    g.s.upgrades.push('bellows');
+    g.s.research.done = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding', 'coalSeams', 'steelmaking', 'overdrive', 'steamPower', 'glassworks', 'crushing', 'concrete', 'refining', 'machineKits'];
+    g.s.research.selected = 'circuits';
+    g.s.research.progress = { circuits: { copperWire: g.s.coin.constructor.of(310), glass: g.s.coin.constructor.of(44) } };
+    g.s.flags.push('factoryOpen', 'factorySeen', 'sliceEnd', 'ordersSeen');
+    g.s.orders.done = ['boardwalk', 'lampPosts', 'gizmoFestival', 'calibration'];
+    g.s.orders.rep = { bramble: 3, unit7: 1, voltaire: 1 };
+    g.s.orders.active = 'lensArray';
+    g.s.orders.progress = { lensArray: { glass: g.s.coin.constructor.of(212), circuit: g.s.coin.constructor.of(18) } };
+    g.s.parts = g.s.coin.constructor.of(14);
+    g.s.income = Array(60).fill(140);
+    a.renderer.ground = null;
+    g.rebuild();
+    const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
+    act({ k: 'place', kind: 'boiler', x: 16, y: 4, rot: 0 });
+    act({ k: 'place', kind: 'steamEngine', x: 17, y: 4, rot: 0 });
+    act({ k: 'place', kind: 'pole', x: 18, y: 3, rot: 0 });
+    act({ k: 'place', kind: 'pole', x: 22, y: 3, rot: 0 });
+    for (const x of [19, 20, 21, 22, 23]) act({ k: 'place', kind: 'kiln', x, y: 1, rot: 3 });
+    act({ k: 'place', kind: 'mixer', x: 23, y: 4, rot: 0 });
+    act({ k: 'recipe', x: 23, y: 4, recipe: 'mixConcrete' });
+    for (const x of [19, 20, 21, 22, 23]) { act({ k: 'recipe', x, y: 1, recipe: 'fireGlass' }); g.entAt(x, 1).inBuf.sand = 4; }
+    act({ k: 'place', kind: 'miner', x: 1, y: 2, rot: 0 });
+    g.entAt(16, 4).inBuf.coal = 8;
+    const m = g.entAt(23, 4);
+    m.inBuf.gravel = 4; m.inBuf.sand = 2;
+    a.step(20 * 3);
+    g.entAt(16, 4).inBuf.coal = 8;
+    for (const x of [19, 20, 21, 22, 23]) g.entAt(x, 1).inBuf.sand = 4;
+    a.step(10);
+    a.game.events.drain();
+    a.toasts = [];
+    a.panel = null;
+    a.setFloor('workshop', true);
+    a.fitCamera(true);
+    a.selected = g.entAt(21, 1).id;
+    a.renderer.fx.flyers = [];
+    a.renderer.fx.pops = [];
+  },
 };
 for (const s of ACT2) STATES[s] = s;
 for (const s of WORKSHOP) STATES[s] = { ws: s };
@@ -311,10 +386,17 @@ async function main() {
       if (only.length && !only.includes(state)) continue;
       const name = `${w}x${h}-${state}`;
       const r = typeof fn === 'string' ? await page.evaluate(act2Setup, fn) : fn.ws ? await page.evaluate(workshopSetup, fn.ws) : await page.evaluate(fn);
+      // the goal card slides in when its goal changes: a state set from scratch shows it at rest
+      await page.evaluate(() => { window.__app.hud.goalKey = null; });
       if (r?.drag) await dragTiles(page, r.drag);
-      else if (r?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), r.hover); await page.mouse.move(p.x, p.y); }
+      else if (r?.hoverId) {
+        // a HUD element by its button id (drawn last frame), or the coin counter
+        await frames(page, 2);
+        const p = await page.evaluate((id) => { const a = window.__app; const q = id === '@coin' ? { x: 4, y: 2, w: 16, h: 16 } : a.ui.ids.get(id); return q ? a.uiToCss(q.x + q.w / 2, q.y + q.h / 2) : null; }, r.hoverId);
+        if (p) await page.mouse.move(p.x, p.y);
+      } else if (r?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), r.hover); await page.mouse.move(p.x, p.y); }
       else await page.mouse.move(Math.floor(w / 2), Math.floor(h / 2) + 40);
-      await frames(page, state === 'megaDone' ? 40 : state === 'gradeSplus' ? 36 : 4);
+      await frames(page, state === 'megaDone' ? 40 : state === 'gradeSplus' ? 36 : state === 'toasts' ? 40 : 4);
       await page.screenshot({ path: `${out}/${name}.png` });
       if (r?.drag) await page.mouse.up();
       const { issues, k } = await page.evaluate(() => {
