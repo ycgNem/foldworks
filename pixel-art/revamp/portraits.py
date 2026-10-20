@@ -66,8 +66,15 @@ def committee_extras(im, peek_at, tail_at):
     return out
 
 
-def small(im):
-    return halve(im, 1, 1)
+def small(im, ox=1, oy=1):
+    """48 -> 24: one pixel of each 2x2 block, (ox, oy) inside it (lower-right by default; the
+    Committee reads best from the lower-left, which keeps the raccoon's mask and eyes)."""
+    out = new(24, 24)
+    a = im.load()
+    for y in range(24):
+        for x in range(24):
+            out.putpixel((x, y), a[2 * x + ox, 2 * y + oy])
+    return out
 
 
 def old(name):
@@ -91,7 +98,7 @@ def build():
     export("portrait_committee", [c, c_blink])
     cc = committee_extras(load(PR / "committee_cheer.png"), (19, 35), (1, 39))
     export("portrait_committee_cheer", [cc, bounce(cc)])
-    export("portrait_committee_small", [small(c)])
+    export("portrait_committee_small", [small(c, 0, 1)])
     # Unit 7 and Dame Voltaire: their own portraits (recoloured), plus small versions
     for who in ("unit7", "voltaire"):
         fr = old(f"portrait_{who}")
