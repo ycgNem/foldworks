@@ -310,28 +310,41 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
   2. **Extrapolate the rest in segments.** Rates come from what reached each Dock, Hopper and the
      Megaproject Bay over the last 5 minutes of live ticks, and from each rising Slag Heap's fill
      rate. A segment runs until the next thing that would change those rates: **a heap filling**,
-     or **the Bay getting all it wants of an item**. Then that heap is set full (or the want met),
-     **4 minutes are replayed live** (60 s for the jam to spread, 3 min to measure the new rates),
-     and the next segment starts. Lines run at the same physical speed as live, so heaps fill and
+     **the Bay getting all it wants of an item**, **the active order filling** (the Dock stops
+     taking what it took only for that order: the Committee's slag or oil) or **the selected
+     research finishing** (the Hopper stops taking slag for it). Then that heap is set full (or the
+     want met, the order or node topped up by the last fraction of an item), **4 minutes are
+     replayed live** (60 s for the jam to spread, 3 min to measure the new rates), and the next
+     segment starts. A jam inside a measuring window opens it again from that moment (at most 8
+     times in one live stretch), so a line that stopped while being measured is not paid on. Lines run at the same physical speed as live, so heaps fill and
      lines jam at the same times whether the game was open or closed; what they deliver while
      extrapolated counts at the **offline efficiency**, paid through the same functions as live
      (orders first, then sales; research credit; Machine Kits to the parts bank; the Bay's stage),
      in 15-minute slices so an order or a node lands on the timeline near its time.
   3. **Efficiency**: `offlineEfficiency(g)` (`src/sim/offline.ts`): **0.5**, plus the Night Shift
-     bought with coin (+0.05 twice, §20), plus Milestone 5's Patent nodes, never past **0.75**.
+     bought with coin (+0.05 twice, §20), plus Milestone 5's Patent nodes, never past **0.75**. The
+     replayed hour and the re-measures pay in full, as open: a closed game pays **100% for the
+     first hour and e for the rest**, which every screen says in those words.
 - **No Sparks while away** (§6): the run tells the sim the tab is hidden.
-- **The report** is a timeline: every **jam** (a machine or module blocked **10 s straight**, so
-  belt traffic is not a jam) with its time, machine and the item it is blocked by and a button that
-  jumps to it; each **heap filling**; **orders filled**; **research finished**; the **Megaproject**'s
-  stages and its wants met. A `~` marks a time worked out from the rates rather than replayed.
-  Then the totals: coin, items into the Hopper, Machine Kits banked, what the Bay was given, what
-  sold most. Its footer says how the number was made ("1h 12m ran tick by tick; the other 6h 48m
-  from measured rates at 50%"), so it is a number the player can check (pillar 4).
+- **The report** is a timeline: **one row per line that stopped** (a jam is a machine or module
+  blocked **10 s straight**, so belt traffic is not a jam; a cascade is one line: the Workshop's
+  item-flow lines, the Factory's trunk-joined modules), naming the **root cause** (the first
+  machine to block and why: "its Slag Heap filled", "its copper ingots had nowhere to go", "the
+  Dock stopped taking slag (The Pile filled)"), **how many machines it stopped** and **a fix the
+  player can build** ("9 more Slag Heaps keep it running 8h", "a belt taking copper ingots to the
+  Dock"), with a button that jumps to the root; each **heap filling** that stopped nothing; **orders
+  filled**; **research finished**; the **Megaproject**'s stages and its wants met. A `~` marks a time
+  worked out from the rates rather than replayed. Then the totals: coin, items into the Hopper,
+  Machine Kits banked, what the Bay was given, what sold most. Its footer says how the number was
+  made ("Paid: the first 1h 04m at 100% (as if open), the other 6h 56m at 50%"), so it is a number
+  the player can check (pillar 4).
 - **The forecast** (§20, "safe for overnight") is this same run on a copy of the game.
-- *Measured* (§13 check 12 and §20's stage table): at the slice end, 8 h offline pays 0.59 of 8 h
-  open and idle; from 1 h to 5 h of the Act II bot, 0.56–0.58 at 0.5 and 0.78–0.79 at the 0.75
-  ceiling. Open and idle the factory earns less every hour as heaps fill (the slice factory: 126K
-  in its first hour, then 48K, then 40.5K an hour once 11 of 23 Workshop machines have jammed).
+- *Measured* (§13 check 12 and §20's stage table): at every stage measured (the slice end, run 1
+  at 1–5 h, the campaign's runs 2 and 3, seeds 1000 and 8919), 8 h offline pays 0.56–0.59 of 8 h
+  open and idle at 0.5 and 0.78–0.80 at the 0.75 ceiling; the 7 h after the first pay 0.50–0.53 and
+  0.75–0.77 of what open idle pays in them. Open and idle the factory earns less every hour as
+  heaps fill (the slice factory: 126K in its first hour, then 48K, then 40.5K an hour once 11 of 23
+  Workshop machines have jammed).
 
 ## 13. Derived checks (these become pace tests)
 
@@ -357,10 +370,18 @@ part of the slice) and asserts the mean, with the spread logged.
 11. **Hopper versus Dock**: a player who sends everything to the Dock still reaches Folding by
     **60 min** (the Hopper is a choice, not a trap), but at least **5 min** behind the planner.
 12. **Offline** (rewritten in round 3: §12's ×0.5 and the old "less than 2 h of active" contradicted
-    each other, since 8 h at ×0.5 is already 4 h): 8 h offline after the slice end pays no more
-    than (a) leaving the game open and idle for the same 8 h, measured by a live run of the bot's
-    state with no inputs, and (b) **4.5 h** of the planner's measured active rate (its coin per hour
-    over the 10 minutes after its slice end): the first hour replayed in full plus 7 h at ×0.5.
+    each other, since 8 h at ×0.5 is already 4 h; restated for any efficiency e in the Milestone
+    5–6 review round): 8 h offline, at e = 0.5 and at the 0.75 ceiling, (a) pays no more than
+    leaving the game open and idle for the same 8 h (a live run of the state with no inputs) and at
+    least e of it, and (b) pays the first hour as open idle pays it and **the other 7 h at e − 0.03
+    to e + 0.05 of what open idle pays in them** (the re-measures pay in full: the + 0.05; whole
+    items floored per credit slice: the − 0.03). At e = 0.5 this is the old bound, 1 h + 7 h × 0.5 =
+    4.5 h, with the factory's own idle hours in place of the planner's active rate; at 0.75 the old
+    form read 5.52 h of active and meant nothing. A second form, "at most (1 + 7e) h of the first
+    idle hour", was tried and is wrong: where the factory is still settling, open idle earns more
+    in later hours than in the first (60K in the first hour at run 1's 3 h stage, 67K an hour
+    after), so it fails by up to 13% while offline pays exactly what the model says. Checked at the
+    slice end (`tests/pace-offline.test.ts`) and at every stage of §20's table.
 
 **Measured** (round 4, 2026-10-20, `tests/pace-*.test.ts`, 50 seeds unless noted, mean (range)):
 Bellows 0:21; first Miner 0:47; Pressing 1:47 (Dock-only 3:13); chunk B 9:20 (7:38–10:28); first
@@ -370,7 +391,7 @@ Gizmo 16:13 (14:41–17:50); Folding 23:19 (21:03–26:03); first fold 24:35 (22
 (36:19–44:23) (10 seeds each); check 7: balanced A 0.873 (U 1.00, W 1.00, C 0.37), wrong ratio D
 0.474 (U 0.34), slag backing up D 0.073 (U 0, W 0); check 8: jam 38 s after the line starts; check
 10: greedy's longest stretch 171 s (104–244); check 11: Dock-only Folding 32:26 (29:30–38:01), 9.1
-min behind; check 12 (2 seeds): 8 h offline = 3.97 h of active earning, 0.59 of 8 h open and idle (Milestone 6's segmented model: 3.94 h, 0.58–0.59, §20).
+min behind; check 12 (2 seeds): 8 h offline = 3.97 h of active earning, 0.59 of 8 h open and idle (Milestone 6's segmented model: 3.94 h, 0.58–0.59, §20; the review round's restatement: see §20's slice-end row).
 Every check holds; no test is `it.fails`.
 
 **Round 4: the Festival ends the slice** (2026-10-20, after the Milestone 3 gate). The gate found
@@ -483,8 +504,13 @@ If any answer is no, change the model here before building more.
 3. **Resets get faster**: each reset's run passes the previous run's peak income in ≤ ⅓ of
    that run's length.
 4. **Active over idle**: active play (building, Overdrive, Sparks, special orders) earns 2–3×
-   idle play. Never more than 4×, so idling is never punished; never less than 1.5×, so
-   playing is always worth it.
+   idle play **with the game open**. Never more than 4×, so idling is never punished; never less
+   than 1.5×, so playing is always worth it. *Restated in the Milestone 5–6 review round:* the
+   band is active against **open** idle. A closed game is bounded apart (§12, §13 check 12):
+   **offline never pays more than open idle** for the same time, and at efficiency e pays at least
+   about e of it. The 4× ceiling does not apply to a closed game: at e = 0.5 a closed game is
+   inherently ~2× below open idle, so active ÷ closed passes 4 whenever active ÷ open idle passes 2,
+   which is the band's own middle.
 5. **New thinking per act**: each act adds at least one problem the last act didn't have
    (routing → ratios and power → composing modules → biome rules → bending rules). Adding
    an ore with a bigger number doesn't count.
@@ -868,16 +894,26 @@ derivation here.
 - **The cap: 7 days** (the slice had 24 h). A holiday week is paid; a month away is not.
 - **Efficiency** is one function, `offlineEfficiency(g)` in `src/sim/offline.ts`: **0.5** (PLAN.md),
   plus the **Night Shift** (below), plus Milestone 5's Patent nodes, never past **0.75**. The
-  ceiling is checked by the pace test: 8 h offline at 0.75 still pays no more than 8 h open and
-  idle at every stage (0.78–0.79 of it, below).
+  sources overlap (the Patent offline nodes alone can reach the ceiling), so a Night Shift purchase
+  that would add nothing is refused with the reason, and the screen shows what each would add now.
+  The ceiling is checked by the pace tests: 8 h offline at 0.75 still pays no more than 8 h open
+  and idle at every stage measured (0.78–0.80 of it, below).
+- **What "efficiency" means to the player**: the first hour away runs as if open and pays 100%;
+  only the time after it pays e. Every screen says it in those words ("the first 1h 04m at 100% (as
+  if open), the other 6h 56m at 50%"); an absence under an hour pays 100% throughout.
 - **The Night Shift** (one-off coin purchases, flat prices, an Act II coin sink):
 
   | Upgrade | Price | Efficiency | Offered with | Derivation |
   |---|---|---|---|---|
-  | Night Foreman | 150,000 | +0.05 | Steam Power (S+25 min) | the slice-end factory idles at ~7,200 coin/min (§18): +0.05 of 7 extrapolated hours is 0.05 × 7,200 × 420 = 151K, one night's pay; 12 min of early Act II income (12,500/min) |
-  | Night Shift Rota | 400,000 | +0.05 (0.6 in all) | Circuits (S+55 min) | the factory then idles at ~12,500/min: 262K a night, paid back in 1.5 nights; 32 min of Act II income, against the 1.8M that piles up by 4 h |
+  | Night Foreman | 150,000 | +0.05 | Steam Power (done by 1 h) | a night pays +0.05 × the 7 h of open idle after the first: at 1 h the factory idles 3.22M in 8 h, 446K of it the first hour, so 0.05 × 2.77M = 139K a night, paid back in 1.1 nights |
+  | Night Shift Rota | 250,000 | +0.05 | Circuits (done by 2 h) | at 2 h, 3.17M in 8 h, 396K the first hour: 139K a night, paid back in 1.8 nights (400,000 took 2.9) |
 
-  Two steps and 0.6 at most, so the Patents keep the rest of the road to 0.75 (Milestone 5).
+  *Re-derived in the review round* from measured open idle (6,600–8,000 coin/min before the Bay
+  floor, 1,100–1,400 after it), not the 7,200–12,500/min the first prices assumed (that was active
+  income). `tests/pace-idle-early.test.ts` checks a payback of at most 2 nights at the first stage
+  each is offered. Bought after the Bay floor they pay ~59K a night (runs 2–3 idle 1.35M in 8 h):
+  the reset agent's Factory annex, which keeps coin chains running there, should raise that, and
+  the test re-measures it on the merged build.
 
 ### The model and the report (§12)
 - **Lines run at live speed offline; deliveries count at the efficiency.** So heaps fill and lines
@@ -885,15 +921,24 @@ derivation here.
   have seen. The replay (1 h) and every re-measure (4 min) pay in full, as live; only the
   extrapolated time is scaled. Every piece pays at most what live would, so offline ≤ open idle
   holds by construction, and the pace test checks it.
-- **Segments**: a segment ends when a heap fills or the Megaproject Bay is given all it wants of an
-  item, the two things that change a factory's rates while nobody touches it (crates fill in
-  minutes, inside the replay; module buffers in seconds). After it, **60 s** live for the jam to
-  spread (a belt of 8 tiles drains in 4 s, a machine buffer in a craft or two) and **3 min** to
-  measure the new rates. Segments are bounded by the heaps and Bay wants there are; the Act II bot's
-  factory needs 0–3 for 8 h.
+- **Segments**: a segment ends when a heap fills, the Megaproject Bay is given all it wants of an
+  item, the active order fills or the selected research finishes: the things that change a
+  factory's rates while nobody touches it (crates fill in minutes, inside the replay; module
+  buffers in seconds; an order or a node changes what the Dock or the Hopper takes). After it,
+  **60 s** live for the jam to spread (a belt of 8 tiles drains in 4 s, a machine buffer in a craft
+  or two) and **3 min** to measure the new rates; a jam inside those 3 minutes opens them again
+  (at most 8 times), so a stopped line's last deliveries are never paid on. Segments are bounded by
+  the heaps, Bay wants, orders and nodes there are; the bots' factories need 0–5 for 8 h at every
+  stage measured.
 - **A jam** is a machine or module blocked **10 s straight** (a full belt blocks a machine for a
   tick or two: traffic, not a jam). Machines already jammed when the player left are counted
-  apart ("already jammed"), not reported as news.
+  apart ("already jammed"), not reported as news. **A cascade is one row**: the jams of one line (a
+  Workshop item-flow line, or Factory modules joined by trunks) are reported together, naming the
+  first machine to block and why, how many machines the line lost, and a fix to build: for a heap,
+  how many more Slag Heaps keep it running the whole time away (its slag rate × the time, less the
+  room it had, over 400), or a gravel Press once Crushing is in; for an output with nowhere to go,
+  a belt to the Dock (a Crate for what the Dock refuses, a Hopper for Machine Kits); for the Dock
+  refusing an item after its order filled, a Crate or a machine that uses it.
 - **Credit slices of 15 min**: an order filled or a node finished while extrapolated lands on the
   timeline within 15 min of when it would have (`~` marks such a time).
 - **The timeline keeps 40 entries**, nearest the start (a week away fills it with the first
@@ -902,7 +947,9 @@ derivation here.
   progress bar, never a frozen page. Measured in Chrome on the Act II bot's 2 h factory (179
   Workshop buildings, 48 Factory pieces): an 8 h offline run takes **3.0–3.6 s** while the page
   draws (longest frame 54–58 ms, the same as an ordinary frame there); in node the same run is
-  2.5–3.1 s at every stage from 1 h to 5 h.
+  2.5–3.1 s at every stage from 1 h to 5 h (the review round, with the order and research
+  segments and the windows opened again: 3–6 s in node with eight test files running side by side,
+  across runs 1–3; Chrome not re-measured).
 
 ### Safe for overnight: the forecast and stopping a line
 - **The forecast is the offline model on a copy of the game** (`forecast(g, hours)`), for 1, 8
@@ -920,6 +967,10 @@ derivation here.
   morning starts with 53 minutes of running (one smelter's 400 slag) instead of a line to unjam
   first. It also takes a line out of the forecast's jams, so a "safe for overnight" factory is one
   the player chose, line by line. It earns nothing while stopped, and the forecast says so in coin.
+  **The overnight screen offers "Stop line" only where it keeps something** (a line stopped by its
+  heap filling; the tip says how long the kept room runs when you are back); a line that would stop
+  for any other reason keeps nothing by stopping, so its row offers the fix instead. A stop or a
+  start re-runs the forecast at once.
 
 ### Inspiration (§15)
 - From the slice end (Act II), a click on a Hopper (either floor) credits the selected node with
@@ -975,26 +1026,51 @@ derivation here.
 - **Saves v5**: the state gains `inspire` (Inspiration given per node); `paused` on machines and
   modules and the Night Shift in `upgrades` need no migration (absent means none).
 
-### Measured (pace tests, `tests/pace-idle-*.test.ts`, seed 1000)
-From the Act II bot's state at each whole hour: **active** is what the bot earned in the next 30
-min; **idle** is the same state open with no input (live, tick by tick) for 30 min and for 8 h;
-**offline** is the same state closed for 8 h (`runOffline`).
+### Measured (pace tests, `tests/pace-idle-*.test.ts` and `tests/pace-offline.test.ts`)
+Each stage is a saved state of a bot's factory. **Active** is what the bot earned in the next 30
+min; **idle** is the same state open with no input (live, tick by tick, Sparks off) for 30 min, 1 h
+and 8 h; **offline** is the same state closed for 8 h (`runOffline`) at e = 0.5 and at the 0.75
+ceiling. Run 1 is the Act II bot; runs 2 and 3 are the campaign bot after a Reorganize with its
+Patents spent (11 nodes bought for run 2, 5–6 more for run 3), so the stages span about 1 h to 12 h
+of play. "Share" is check 12 (b): what the 7 h after the first pay, as a fraction of what open
+idle pays in them (it must be e − 0.03 to e + 0.05). Seeds 1000 and 8919 read the same to two
+places wherever both were measured (Sparks are the only random part, and idle has none), so one
+row stands for both unless the seed is named.
 
-| Stage | active 30 min | idle 30 min | active / idle | 8 h idle | 8 h offline at 0.5 | at 0.75 | active rate / offline rate |
-|---|---|---|---|---|---|---|---|
-| 1 h | 365K | 239K | 1.53 | 3.22M | 1.87M (0.58) | 2.54M (0.79) | 3.1 |
-| 2 h | 353K | 198K | 1.78 | 3.17M | 1.78M (0.56) | 2.47M (0.78) | 3.2 |
-| 3 h | 118K | 30K | 3.94 | 530K | 300K (0.57) | 415K (0.78) | 6.3 |
-| 4 h | 133K | 34K | 3.90 | 540K | 309K (0.57) | 425K (0.79) | 6.9 |
-| 5 h | 123K | 34K | 3.61 | 540K | 306K (0.57) | 423K (0.78) | 6.4 |
+| Stage | active 30 min | idle 30 min | active / idle | idle 1 h | 8 h idle | offline at 0.5 (of idle, share) | at 0.75 (of idle, share) | segments |
+|---|---|---|---|---|---|---|---|---|
+| Slice end (+10 min) | 80K (10 min) | 73–82K (10 min) | 0.98–1.09 | 437–490K | 3.22–3.27M | 1.88–1.94M (0.58–0.59, 0.52) | 2.55–2.61M (0.79–0.80, 0.76) | (not logged) |
+| Run 1, 1 h | 365K (8919: 370K) | 239K | 1.53 (1.54) | 446K | 3.22M | 1.91M (0.59, 0.53) | 2.57M (0.80, 0.77) | 3–5 |
+| Run 1, 2 h | 353K | 198K | 1.78 | 396K | 3.17M | 1.78M (0.56, 0.50) | 2.47M (0.78, 0.75) | 0 |
+| Run 1, 3 h | 118K | 30K (8919: 29K) | 3.97 (8919: **4.01**) | 60K | 530K | 301K (0.57, 0.51) | 415K (0.78, 0.76) | 3 |
+| Run 1, 4 h | 133K | 34K | 3.90 | 68K | 540K | 309K (0.57, 0.51) | 425K (0.79, 0.75) | 2 |
+| Run 1, 5 h | 123K (126K) | 34K | 3.61 (3.70) | 68K | 540K | 307K (0.57, 0.51) | 424K (0.78, 0.75) | 1 |
+| Run 2, 1 h | 432K | 288K | 1.50 | 576K | 4.61M | 2.63M (0.57, 0.51) | 3.62M (0.79, 0.75) | 2 |
+| Run 2, 2 h | 182K (8919: 230K) | 335K | **0.54 (0.69)** | 654K | 5.10M | 2.92M (0.57, 0.51) | 4.01M (0.79, 0.75) | 2 |
+| Run 2, 3 h | 135K (126K) | 84K | 1.60 (1.50) | 169K | 1.35M | 758K (0.56, 0.50) | 1.05M (0.78, 0.75) | 0 |
+| Run 3, 1 h | 482K (486K) | 288K | 1.67 (1.69) | 576K | 4.61M | 2.61M (0.57, 0.50) | 3.61M (0.78, 0.75) | 1–3 |
+| Run 3, 3 h | 146K (143K) | 84K | 1.74 (1.70) | 168K | 1.35M | 757K (0.56, 0.50) | 1.05M (0.78, 0.75) | 0 |
 
-- **Rule 4 holds at every stage** (active 1.53–3.94× idle), and **offline pays 0.56–0.58 of open
-  idle at 0.5 and 0.78–0.79 at the 0.75 ceiling**: closing the game never pays more than leaving
-  it open. At the slice end (§13 check 12) offline is 0.58–0.59 of idle and 3.94 h of active.
-- **Two margins to watch**: rule 4's ratio is 1.53 at 1 h (the floor is 1.5) and 3.90–3.94 at
-  3–4 h (the ceiling is 4). At 3–5 h the bot has cleared the Gizmo chains for the Bay floor, so the
-  idle factory earns a fifth of what it did and the active bot's Overdrive is most of the
-  difference. Against a *closed* game the active rate is 6.3–6.9× at 3–5 h at 0.5 (4.2–4.6× at
-  0.75): Milestone 5's Patents toward 0.75 are what bring idling-while-closed back near rule 4's 4×.
-- The exit's "every stage to 15 h" is measured to 5 h (what the bots reach); the lead extends it
-  after Milestone 5.
+- **Offline is honest at every stage, both seeds, both efficiencies**: 0.56–0.59 of open idle at
+  0.5 and 0.78–0.80 at 0.75, never more than open idle and never less than e of it, and the 7 h
+  after the first pay 0.50–0.53 and 0.75–0.77 of open idle's (check 12, restated). An 8 h offline
+  run takes 3–6 s in node at every stage (0–5 segments).
+- **Rule 4 holds at 15 of the 18 stage readings** (active 1.50–3.97× open idle) and is **open** at
+  three, listed in `RULE4_OPEN` with the reason and logged, not failed (DECISIONS.md, the review
+  round): seed 8919 run 1 at 3 h (4.01×: the bot has cleared its Gizmo chains for the Bay floor,
+  so the idle factory earns a fifth of what it did and Overdrive is most of the difference), and
+  run 2 at 2 h on both seeds (0.54× and 0.69×: in that half hour the campaign bot clears 19
+  Workshop pieces and places 13 modules, so its coin goes into the floor and the untouched factory
+  out-earns it). Both sit in the economy and the bot (the reset layer's Factory annex is meant to
+  keep coin chains running past the Bay floor), not in the offline model; the lead re-reads them
+  on the merged build. Two margins are at the edge: 1.50 at run 2's 1 h (1.4996 read to two
+  places) and 3.97 at run 1's 3 h.
+- **At the slice end rule 4 reads 0.98–1.09**: the planner's ten minutes after the Festival build
+  nothing, so they earn what the untouched factory does. Logged, not tested: the slice's end is a
+  pause by design, and the measure that matters there is check 12.
+- **Open idle after the Bay floor** is 1,100–1,400 coin/min (runs 1–3 from 3 h): the Night Shift
+  bought then pays ~59K a night, so its prices are derived from the stages where it is offered
+  (above). The reset agent's Factory annex should raise it; the payback test re-measures it.
+- Stages measured to about 12 h of play (run 3 at 3 h after runs of 4.1–4.2 h and 2.9–3.3 h); the
+  exit's "15 h" is covered by run 3's settled factory (its 3 h reads like run 2's), and the next
+  run's stages come with the next milestone's bot.
