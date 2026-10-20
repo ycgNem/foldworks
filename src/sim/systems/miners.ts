@@ -13,6 +13,14 @@ import { isAudited } from './audits';
 export function runMiners(g: Game) {
   const cap = RULES.outputCap.value;
   for (const m of g.miners) {
+    // stopped by the player (DESIGN.md §20): digs nothing
+    if (m.paused) {
+      m.state = 'idle';
+      m.why = 'paused';
+      overdriveTick(m);
+      note(m);
+      continue;
+    }
     const r = RECIPE[m.recipe ?? 'mineIron'];
     const out = r.outputs[0].item;
     const pi = g.patchOf[m.y * g.W + m.x];

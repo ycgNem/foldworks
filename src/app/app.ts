@@ -5,16 +5,21 @@
 import { Input } from '../engine/input';
 import { GameLoop } from '../engine/loop';
 import { Audio } from '../engine/audio/audio';
-import { readSave, writeSave, exportString, importString, store } from '../engine/save';
+import { readSave, exportString, importString, store, loadSave, writeSaveSafe, badSave, AutoSave, type LoadResult } from '../engine/save';
 import { Num } from '../engine/num';
 import { TICK_RATE } from '../engine/time';
 import { UI } from '../ui/ui';
 import { C } from '../data/palette';
 import { Game, type Cmd, type ActResult } from '../sim/Game';
-import { savePayload, restore } from '../sim/snapshot';
+import { savePayload, restore, checkSave } from '../sim/snapshot';
 import { DX, DY, type Dir, type Floor } from '../sim/world';
 import { FACTORY } from '../data/land';
-import { runOffline, type OfflineReport } from '../sim/offline';
+import { OfflineRun, type OfflineReport } from '../sim/offline';
+// ---- Milestone 6 (idle and offline): the background tab, robust saves, settings
+import { Background } from './background';
+import { IDLE } from '../data/idle';
+import { loadSettings } from './settings';
+import { stepJob } from './offlinereport';
 import { foldRefusal, gradedAudit } from '../sim/systems/audits';
 import { RULES } from '../data/rules';
 import { ffoldRefusal } from '../sim/systems/nested';
@@ -53,7 +58,8 @@ export type Panel = ScreenName | null;
 export interface Toast { title: string; text: string; color: string; t: number; life: number; icon?: string }
 
 const SAVE_SLOT = 1;
-const AUTOSAVE_S = 30;
+/** a save loads only if the game rebuilds from it (DESIGN.md §20, corruption recovery) */
+const validSave = (d: unknown) => void checkSave(d as never);
 
 export class App {
   ctx: CanvasRenderingContext2D;
@@ -105,8 +111,16 @@ export class App {
   offline: OfflineReport | null = null;
   /** a bot playing this game (debug handle and the e2e scripts) */
   bot: Bot | null = null;
-  private sinceSave = 0;
   private hasSave = false;
+  // ---- Milestone 6 (DESIGN.md §20): autosave by the real clock, the background tab, offline runs
+  /** autosave every 30 s of real time (not sim time: fast-forward must not save every frame) */
+  autosave = new AutoSave(IDLE.autosaveSeconds.value * 1000, Date.now());
+  /** keeps the sim running on a coarse timer while the tab is hidden */
+  bg = new Background(() => this.tick());
+  /** an offline run spread over frames (the report card shows its progress) */
+  offlineJob: OfflineRun | null = null;
+  /** how the last load went: a damaged save and the backup used, in plain words */
+  loadNote: string | null = null;
   /** what the title screen offers */
   titleInfo: { hasSave: boolean; coin: string } = { hasSave: false, coin: '0' };
   /** the town piece under the mouse: its one-line label */
@@ -136,17 +150,38 @@ export class App {
     window.addEventListener('pointerdown', () => this.audio.unlock(), { once: false });
     window.addEventListener('keydown', () => this.audio.unlock(), { once: false });
     window.addEventListener('beforeunload', () => { if (this.screen === 'play') this.save(); });
+    // pagehide fires where beforeunload does not (mobile, bfcache): closing never loses more than
+    // the last 30 s, and usually nothing (DESIGN.md §20)
+    window.addEventListener('pagehide', () => { if (this.screen === 'play') this.save(); });
+    loadSettings();
     this.resize();
-    const d = readSave(SAVE_SLOT);
-    this.hasSave = !!d;
-    if (d) {
+    const r = this.readSlot();
+    this.hasSave = !!r.data;
+    if (r.data) {
       try {
-        const g = restore(d as never);
+        const g = restore(r.data as never);
         this.titleInfo = { hasSave: true, coin: g.s.coin.format() };
       } catch {
         this.hasSave = false;
       }
     }
+  }
+
+  /** Read the save slot, falling back to the newest good backup (DESIGN.md §20). */
+  private readSlot(): LoadResult {
+    const r = loadSave(SAVE_SLOT, validSave, IDLE.backups.value);
+    if (r.problem && r.data) {
+      const ago = Math.max(0, Date.now() - (r.data.saved ?? Date.now())) / 60000;
+      const when = ago < 1 ? 'less than a minute' : ago < 120 ? `${Math.round(ago)} minutes` : `${Math.round(ago / 60)} hours`;
+      this.loadNote = `Your last save could not be loaded (${r.problem}). Loaded the backup from ${when} ago; the damaged one is kept in Options.`;
+    } else if (r.problem) this.loadNote = `Your save could not be loaded (${r.problem}) and no backup loads. It is kept in Options.`;
+    else this.loadNote = null;
+    return r;
+  }
+
+  /** The damaged save kept aside by the last failed load, if any. */
+  damagedSave(): string | null {
+    return badSave(SAVE_SLOT);
   }
 
   start() {
@@ -173,7 +208,7 @@ export class App {
   }
 
   continueGame() {
-    const d = readSave(SAVE_SLOT);
+    const d = this.readSlot().data;
     if (!d) return this.newGame();
     try {
       this.game = restore(d as never);
@@ -185,14 +220,13 @@ export class App {
     this.renderer.ground = null;
     this.setFloor('workshop', true);
     this.fitCamera(true);
+    if (this.loadNote) {
+      this.toasts.push({ title: 'Save recovered', text: this.loadNote, color: C.amber, t: 0, life: 16 });
+      this.loadNote = null;
+    }
     // offline progress (DESIGN.md §12): the clock is read here, in the app, never in the sim
     const away = (Date.now() - (d.saved ?? Date.now())) / 1000;
-    if (away >= 60) {
-      this.offline = runOffline(this.game, away);
-      this.game.events.drain();
-      this.panel = 'offline';
-      this.save();
-    }
+    if (away >= 60) this.startOffline(away);
     this.hud = newHudState();
     this.hud.coinShown = this.game.s.coin.toNumber();
     // a saved game past its first Miner never celebrates it again
@@ -247,10 +281,31 @@ export class App {
 
   save(): boolean {
     if (this.screen !== 'play') return false;
-    const ok = writeSave(SAVE_SLOT, savePayload(this.game, Date.now()) as never);
-    this.sinceSave = 0;
-    this.hasSave = ok || this.hasSave;
-    return ok;
+    // mid offline run the state is between two moments: the save before it stands until it ends
+    if (this.offlineJob) return false;
+    const now = Date.now();
+    const r = writeSaveSafe(SAVE_SLOT, savePayload(this.game, now) as never, { now, backupMs: IDLE.backupMinutes.value * 60000, backups: IDLE.backups.value, validate: validSave });
+    this.autosave.mark(now);
+    this.hasSave = r.ok || this.hasSave;
+    return r.ok;
+  }
+
+  /** Offline progress for `away` seconds (DESIGN.md §12), spread over frames with the report card
+   * showing its progress, then the report. */
+  startOffline(away: number) {
+    const run = new OfflineRun(this.game, away);
+    this.offlineJob = run;
+    this.offline = null;
+    this.panel = 'offline';
+    this.loop.job = () => {
+      if (!stepJob(run)) return false;
+      this.offlineJob = null;
+      this.offline = run.report;
+      this.panel = 'offline';
+      this.game.events.drain();
+      this.save();
+      return true;
+    };
   }
 
   exportSave(): string {
@@ -277,32 +332,36 @@ export class App {
   private visibility() {
     if (this.screen !== 'play') return;
     const hidden = document.hidden;
-    this.game.act({ k: 'visible', v: !hidden });
     if (hidden) {
+      this.game.act({ k: 'visible', v: false });
       this.hiddenAt = Date.now();
       this.save();
+      // the sim keeps running on a coarse timer, Sparks paused (DESIGN.md §20); an offline run
+      // already going carries on when the tab is back
+      if (!this.offlineJob && !this.frozen) this.bg.hide(this.hiddenAt);
       return;
     }
-    // a background tab stops the frame loop: the time away is offline progress, like a reload
-    // (the critic's Milestone 1-2 review: it was lost)
-    const away = this.hiddenAt ? (Date.now() - this.hiddenAt) / 1000 : 0;
+    const back = this.bg.show();
     this.hiddenAt = 0;
-    if (away >= 60 && !this.bot) {
-      this.offline = runOffline(this.game, away);
-      this.game.events.drain();
-      this.panel = 'offline';
-      this.save();
-    }
+    this.game.act({ k: 'visible', v: true });
+    // what the pump could not run: a little is caught up live over the next frames; a long sleep
+    // (or a lot owed) is time away, through the offline path (DESIGN.md §20)
+    const live = back.owed <= IDLE.catchUpLiveSeconds.value;
+    const away = back.away + (live ? 0 : back.owed);
+    this.loop.catchUpPerFrame = IDLE.catchUpTicksPerFrame.value;
+    if (live) this.loop.catchUp += Math.round(back.owed * TICK_RATE);
+    if (away >= 60 && !this.bot) this.startOffline(away);
+    else if (away > 0) this.loop.catchUp += Math.round(away * TICK_RATE);
   }
 
   // ------------------------------------------------------------------ the loop
 
   private tick() {
-    if (this.screen !== 'play' || this.frozen) return;
+    if (this.screen !== 'play' || this.frozen || this.offlineJob) return;
     this.bot?.update();
     this.game.tick();
-    this.sinceSave += 1 / TICK_RATE;
-    if (this.sinceSave >= AUTOSAVE_S && store()) this.save();
+    // autosave by the real clock, checked once a game second (DESIGN.md §20)
+    if (this.game.s.tick % TICK_RATE === 0 && this.autosave.due(Date.now()) && store()) this.save();
   }
 
   private frame(dt: number, alpha: number) {

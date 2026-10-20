@@ -12,6 +12,7 @@ import { MEGA } from '../data/megaprojects';
 import { CLAIM_PRICE } from '../data/land';
 import { TICK_RATE } from '../engine/time';
 import { Num } from '../engine/num';
+import { plain } from '../engine/fmt';
 import { textWidth, smallWidth, ICON } from '../ui/font';
 import { itemIcon } from '../render/sprites';
 import { offeredOrders } from '../sim/systems/orders';
@@ -32,14 +33,11 @@ function badShare(hist: string, state: string): number {
 }
 
 export function fmtRate(v: number) {
-  if (v < 1000) return String(Math.round(v));
-  if (v < 1e6) return (v / 1000).toFixed(1) + 'K';
-  return (v / 1e6).toFixed(2) + 'M';
+  return plain(v, v < 10 ? 1 : 0); // Milestone 6: through the one number helper (DESIGN.md §20)
 }
 
 function fmtKw(v: number) {
-  if (v < 10000) return Math.round(v).toLocaleString('en-US');
-  return (v / 1000).toFixed(1) + 'K';
+  return plain(v, 0); // Milestone 6: through the one number helper, so the notation reaches it
 }
 
 interface Menu { id: string; icon: UIconName; name: string; key: string; panel: Parameters<App['togglePanel']>[0]; tip: string; dot: boolean }

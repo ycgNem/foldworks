@@ -1,6 +1,7 @@
 // Read-only views of the power grids for the renderer and the HUD (DESIGN.md §18 Power): which
 // grid a building is on, whether a footprint is in a Pole's reach, the wires to draw between
 // linked Poles, and plain-English status for the report card. Never writes the Game.
+import { kw as fmtKw } from '../engine/fmt';
 import type { Game } from '../sim/Game';
 import type { Grid } from '../sim/systems/power';
 import { poleReach } from '../sim/systems/power';
@@ -117,5 +118,5 @@ export function powerTotals(g: Game): { supply: number; demand: number; sat: num
 
 /** kW with thousands separators: "1,410 kW". */
 export function kw(n: number): string {
-  return `${Math.round(n).toLocaleString('en-US')} kW`;
+  return fmtKw(n); // Milestone 6: the one number helper (DESIGN.md §20): 300 kW, 1,200 kW, 12.5 MW
 }

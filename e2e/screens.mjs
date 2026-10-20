@@ -246,6 +246,54 @@ export async function workshopSetup(state) {
 
 export const WORKSHOP = ['audits3', 'gradeSplus'];
 
+/** Milestone 6 states (run in the page): a small factory that jams (the starting furnace and a
+ * Miner, two copper lines with heaps in chunk B), then a real offline run of 9 h 25 m (report),
+ * an offline run under way (running), or the overnight forecast done with one line stopped. */
+export async function idleSetup(kind) {
+  {
+    const a = window.__app;
+    a.newGame(7);
+    a.freeze();
+    a.toasts = [];
+    const g = a.game;
+    a.grant(1e6);
+    g.s.land = ['A', 'B'];
+    g.s.research.done = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'buffers', 'steamPower', 'circuits'];
+    g.s.upgrades.push('bellows');
+    const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
+    act({ k: 'place', kind: 'miner', x: 2, y: 3, rot: 0 });
+    // two copper lines: miner -> smelter -> belt to the Dock's east side, slag into a heap
+    for (const y of [2, 3]) {
+      act({ k: 'place', kind: 'miner', x: 12, y, rot: 0 });
+      act({ k: 'place', kind: 'smelter', x: 13, y, rot: 0 });
+      act({ k: 'place', kind: 'heap', x: 13, y: y === 2 ? 1 : 4, rot: 0 });
+    }
+    for (const y of [2, 3]) for (let x = 14; x < 16; x++) act({ k: 'place', kind: 'crate', x, y, rot: 0 });
+    a.step(20 * 30);
+    const off = await import('/src/sim/offline.ts');
+    if (kind === 'report') {
+      a.offline = off.runOffline(g, 9 * 3600 + 25 * 60);
+      a.panel = 'offline';
+    } else if (kind === 'running') {
+      a.startOffline(8 * 3600);
+      a.offlineJob.step(30000);
+    } else {
+      const m = await import('/src/app/overnight.ts');
+      m.startForecast(a, 8);
+      const st = m.overnightState();
+      while (!st.job.step(5000)) { /* run it out */ }
+      st.result = st.job.report;
+      st.job = null;
+      act({ k: 'pause', x: 12, y: 3, line: true, on: true });
+      a.panel = 'overnight';
+    }
+    // the trophies the setup earned slide in over everything: not part of these screens
+    g.events.drain();
+    a.trophyPops = [];
+    a.toasts = [];
+  }
+}
+
 /** Hold the mouse down from one tile to another (a drag left unfinished for the screenshot). */
 export async function dragTiles(page, [[x0, y0], [x1, y1]]) {
   const p0 = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), [x0, y0]);
@@ -365,6 +413,16 @@ const STATES = {
     a.renderer.fx.flyers = [];
     a.renderer.fx.pops = [];
   },
+  // Milestone 6: the offline report (a real 9 h run of a small factory), its progress card, the
+  // overnight forecast with a stopped line, and the letters notation
+  offline2: { idle: 'report' },
+  offlineRun: { idle: 'running' },
+  overnight: { idle: 'overnight' },
+  letters: async () => {
+    const a = window.__app; const g = a.game; const num = await import('/src/engine/num.ts');
+    num.setNotation('letters'); g.s.coin = g.s.coin.constructor.parse('3.21e41'); a.panel = null;
+  },
+  lettersOff: async () => { const num = await import('/src/engine/num.ts'); num.setNotation('standard'); window.__app.panel = null; },
 };
 for (const s of ACT2) STATES[s] = s;
 for (const s of WORKSHOP) STATES[s] = { ws: s };
@@ -385,7 +443,7 @@ async function main() {
     for (const [state, fn] of Object.entries(STATES)) {
       if (only.length && !only.includes(state)) continue;
       const name = `${w}x${h}-${state}`;
-      const r = typeof fn === 'string' ? await page.evaluate(act2Setup, fn) : fn.ws ? await page.evaluate(workshopSetup, fn.ws) : await page.evaluate(fn);
+      const r = typeof fn === 'string' ? await page.evaluate(act2Setup, fn) : fn.ws ? await page.evaluate(workshopSetup, fn.ws) : fn.idle ? await page.evaluate(idleSetup, fn.idle) : await page.evaluate(fn);
       // the goal card slides in when its goal changes: a state set from scratch shows it at rest
       await page.evaluate(() => { window.__app.hud.goalKey = null; });
       if (r?.drag) await dragTiles(page, r.drag);

@@ -425,6 +425,15 @@ export function runModules(g: Game) {
     const audited = !!g.s.faudit && !g.s.faudit.result && g.s.faudit.ids.includes(m.id);
     const k = (drill > 1 && !audited && Object.keys(oresOf(g, d)).length ? drill : 1) * ((m.od ?? 0) > 0 ? RULES.overdriveMult.value : 1);
     if (m.od) { m.od--; if (!m.od) m.cool = Math.round(RULES.overdriveCool.value * TICK_RATE); } else if (m.cool) m.cool--;
+    // stopped by the player (DESIGN.md §20): runs at 0, takes nothing, holds its buffers
+    if (m.paused) {
+      m.f = 0;
+      m.fAvg *= 0.98;
+      m.spill = null;
+      m.state = 'idle';
+      m.why = 'paused';
+      continue;
+    }
     let frac = 1;
     let why: string | null = null;
     let kind: 'starved' | 'blocked' | null = null;
@@ -568,11 +577,13 @@ function placeBay(g: Game) {
 }
 
 /** Count whole items into the Megaproject's current stage; complete it when everything is in. */
-function megaGive(g: Game, bay: FEnt, item: ItemId, n: number) {
+export function megaGive(g: Game, bay: FEnt, item: ItemId, n: number) {
   const st = megaStage(g.s.mega.stage);
   if (!st) return;
   const p = g.s.mega.progress;
   p[item] = (p[item] ?? Num.ZERO).add(n);
+  // offline progress measures the Bay's intake like the Docks' (DESIGN.md §12)
+  if (g.tally) g.tally.bay[item] = (g.tally.bay[item] ?? 0) + n;
   g.emit({ type: 'megaGive', x: bay.x + 1, y: bay.y + 1, id: item, value: n, floor: 'factory' });
   const done = (Object.entries(st.wants) as [ItemId, number][]).every(([k, want]) => (p[k] ?? Num.ZERO).gte(want));
   if (done) {
@@ -595,7 +606,7 @@ export function acceptRoom(g: Game, to: FEnt, item: string): number {
     if (!want) return 0;
     return Math.max(0, want - (g.s.mega.progress[item as ItemId]?.toNumber() ?? 0) - (to.inBuf[item] ?? 0));
   }
-  if (to.kind !== 'module') return 0;
+  if (to.kind !== 'module' || to.paused) return 0;
   const d = g.design(to.design);
   const r = d?.ins[item as ItemId];
   if (!r) return 0;

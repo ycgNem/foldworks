@@ -672,3 +672,94 @@ notes (Milestone 4); each superseded note is named below.
   **the order flag over the Dock echoes Dorfromantik's quest flags**. Kept: the chip counts this
   game's own status pips and opens this game's plain-English report; the flag shows an order's
   progress on the Dock that fills it, which nothing else on the map did.
+## Milestone 6 — Idle and offline (2026-10-20)
+
+Built in parallel with Milestone 5 (Reorganize, Patents) on the lead's instruction; the two meet
+at `offlineEfficiency(g)` and the save version, which the lead renumbers at the merge.
+
+- 2026-10-20: **Time away counts up to 7 days** (`RULES.offlineCapHours` 24 → 168, ROADMAP.md
+  Milestone 6). Why: a holiday week should be paid; a month away is not a factory left running.
+- 2026-10-20: **Offline efficiency is one function, `offlineEfficiency(g)`**: 0.5, plus the Night
+  Shift, plus Patents (Milestone 5), capped at 0.75 (`IDLE.offlineEffMax`). Why: one place that
+  every caller (the offline run, the forecast, the overnight screen) reads; the cap is the number
+  the pace test proves honest.
+- 2026-10-20: **The Night Shift: two coin upgrades, +0.05 each (150,000 after Steam Power, 400,000
+  after Circuits), flat prices.** Why: Act II coin piles up with too few sinks (1.8M at 4 h), and a
+  small, permanent offline gain is a sink that serves pillar 4; each pays back in one or two
+  nights (DESIGN.md §20). Kept to 0.6 so Patents own the rest of the road. A new command
+  (`idleUpgrade`), not the Bellows' `upgrade`, so the Bellows' toast and store row are untouched.
+- 2026-10-20: **Offline, lines run at live speed and deliveries count at the efficiency.** Why:
+  the jams and heap fills the report names happen at the times the player would have seen them,
+  and offline ≤ open idle holds piece by piece (replays pay as live, extrapolation pays less). The
+  alternative (lines at half speed) would put jams twice as late as live and make the forecast
+  wrong.
+- 2026-10-20: **Extrapolation runs in segments that end when a heap fills or the Megaproject Bay is
+  given all it wants of an item**, each followed by 4 minutes replayed live (60 s for the jam to
+  spread, 3 min to measure). Why: v1 extrapolated 23 h from the replay's last 5 minutes, so a line
+  that jammed in hour 2 was paid for 22 more hours; with a 7-day cap that error would have been
+  the whole report. The Bay's intake and the Factory Dock (Factory-only orders) are now measured
+  too. No cap on segments: they are bounded by the heaps and Bay wants on the floor.
+- 2026-10-20: **A jam is a machine or module blocked 10 s straight**; the timeline names every one
+  (not only the first), each heap filling, orders, research and the Megaproject, with a jump-to
+  per jam and heap. Why: a belt that is briefly full blocks a machine for a tick (traffic, not a
+  jam), and the slice's card named only the first jam.
+- 2026-10-20: **Offline runs and forecasts are spread over frames** (20 ms a frame, a progress
+  bar). Why: an Act II factory's hour-long replay is 3–5 s of ticks, and a frozen page on return
+  is the stutter the roadmap rules out.
+- 2026-10-20: **The forecast is the offline model on a copy of the game.** Why: the evening's
+  forecast and the morning's report must agree (pillar 4); one computation guarantees it, and a
+  copy keeps the live game deterministic.
+- 2026-10-20: **"Stop" (`pause`) is a logged sim command**: a stopped machine or Miner takes
+  nothing, makes nothing, draws no power and keeps its buffers; splitters route around it; a
+  stopped module runs at 0 and takes nothing; a whole line (by any machine or by its heap) or a
+  trunk-joined group at once. Why: the lead asked for a stop that is useful and real. Its use is
+  keeping a heap's room for when you are back and choosing, line by line, what runs overnight;
+  it earns nothing while stopped, and the forecast shows that in coin. Not built: a "bypass" mode
+  that passes inputs through unprocessed (it would make every machine a belt).
+- 2026-10-20: **Inspiration: a click on a Hopper, from the slice end on.** 0.1% of the selected
+  node's remaining cost per item, up to 30% of each item per node (`State.inspire`), under the
+  12 clicks/s cap. Why the Hopper: it is where research is paid, so the click is where the line
+  delivers, and it needs no new building. Why the slice end: PLAN.md and the roadmap put
+  Inspiration with Act II+. A capped click is quiet (ok, nothing given) so a fast clicker does
+  not toggle the research screen. The Factory Hopper takes it through `fclick`.
+- 2026-10-20: **Notation is a player setting outside the sim** (localStorage `foldworks_settings`,
+  `setNotation` in `num.ts`): standard, scientific, engineering, letters. Why: it changes how
+  numbers are written, never a number, so it must not ride in a save or an export string.
+- 2026-10-20: **One number helper, `src/engine/fmt.ts`**, for amounts, rates, kW, shares,
+  multipliers and durations; the HUD's counter and rates, the coin pops, kW and the hover report
+  go through it. Why: the readability pass; four copies of "K/M with toFixed" ignored the notation.
+- 2026-10-20: **The background tab keeps the sim running on a 1 s timer** (40 ms a pump, up to 4%
+  of the time since the last when throttled, at most 250 ms), a pump 2 min late counts the gap as
+  time away, and on return up to 60 s owed is caught up live at 40 ticks a frame, more through the
+  offline path. Why: a hidden tab is a game left open (pillar 4: it should pay as open, not at the
+  offline efficiency, which is what v1 did by running the offline model on every return), with
+  Sparks paused (§6). Measured at 0.10–0.14% of a core.
+- 2026-10-20: **Autosave by the real clock (30 s), plus `visibilitychange`, `pagehide` and
+  `beforeunload`; three rolling backups at most one per 10 min, only from a save that loads;
+  corruption recovery to the newest good backup with the bad string kept aside and a plain-words
+  toast.** Why: the roadmap's exit (never lose more than 30 s) and a save is the one thing an
+  incremental game must never lose. Autosave was counted in sim time, so fast-forward saved every
+  frame and a frozen game never.
+- 2026-10-20: **Saves v5**: `inspire` per research node; `paused` and the Night Shift need no
+  migration. Milestone 5 may add its own step; the lead renumbers.
+- 2026-10-20: **The pace test measures every stage from 1 h to 5 h** (`tests/pace-idle-*.test.ts`,
+  seed 1000, split in two files that run side by side): rule 4 holds (1.53–3.94) and 8 h offline
+  pays no more than 8 h open and idle at 0.5 and at 0.75. Two margins are close (1.53 at 1 h, 3.94
+  at 3 h) and are reported, not tuned: the Act II bot's own build decides them.
+
+### Flagged as derivative (Milestone 6; owner to decide)
+
+- **Letter notation (aa, ab … after the named suffixes)** is a convention of many idle games,
+  mobile ones above all. Kept as one of four settings because players of the genre expect it; it
+  is not the default.
+- **Offline progress at a reduced efficiency, raised by upgrades** is the genre's convention (Cookie
+  Clicker's "Twin Gates of Transcendence" heavenly upgrades raise offline production; many idle
+  games sell "offline earnings" boosts). Ours is re-derived from the model: offline is the same
+  sim (a replay and measured rates), the efficiency is a stated number on a report the player can
+  check, and the Night Shift is two flat purchases capped at 0.6, never a bought multiplier on
+  live production.
+- **Clicking a building to speed research** (Inspiration) resembles the genre's "click the big
+  thing" loop. Ours credits only the selected node, as items, with a falling share and a 30% cap,
+  and it is clicked at the Hopper the lines already feed.
+- **Autosave plus rolling backups and export strings** are common practice (Antimatter
+  Dimensions and others keep backups); kept because it is good practice, not a mechanic.

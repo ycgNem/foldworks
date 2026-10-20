@@ -11,6 +11,7 @@ import { RECIPE } from '../data/recipes';
 import { ITEMS, itemName, type ItemId } from '../data/items';
 import { RULES, SCORE_WEIGHTS, gradeFor } from '../data/rules';
 import { shares } from './systems/stats';
+import { plain, pct as fmtPct } from '../engine/fmt';
 
 const isSink = (e: Ent) => e.kind === 'dock' || e.kind === 'hopper';
 
@@ -225,8 +226,9 @@ function followToMachine(g: Game, e: Ent): Ent | null {
   return null;
 }
 
-const pct = (f: number) => Math.round(f * 100) + '%';
-const perMin = (n: number) => (Math.round(n * 10) / 10).toString().replace(/\.0$/, '') + '/min';
+// the one number helper (DESIGN.md §20): rates and shares read the same everywhere
+const pct = fmtPct;
+const perMin = (n: number) => plain(n, 1) + '/min';
 
 export function entName(g: Game, e: Ent): string {
   const same = g.s.ents.filter((q) => q.kind === e.kind);
@@ -250,7 +252,8 @@ export function report(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' |
   }
   const nom = nominal(m);
   // what it is doing now
-  if (m.state === 'work') out.push({ text: `Working${sh.n ? ': busy ' + pct(sh.work) + ' of the last minute' : ''}`, tone: 'good' });
+  if (m.paused) out.push({ text: 'Stopped by you: it takes nothing and makes nothing until you start it again', tone: 'dim' });
+  else if (m.state === 'work') out.push({ text: `Working${sh.n ? ': busy ' + pct(sh.work) + ' of the last minute' : ''}`, tone: 'good' });
   else if (m.state === 'starved') {
     if (m.why === 'crank') out.push({ text: 'Waiting for a crank: click it', tone: 'warn' });
     else out.push({ text: `Starved of ${m.why ? itemName(m.why).toLowerCase() : 'input'}${sh.n ? ' ' + pct(sh.starved) + ' of the last minute' : ''}`, tone: 'warn' });
@@ -297,7 +300,7 @@ export function report(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' |
  * the line has run long enough to measure.
  */
 /** a rate per minute as a bare number (the line report writes 'a minute' itself) */
-const pm = (n: number) => (Math.round(n * 10) / 10).toString().replace(/\.0$/, '');
+const pm = (n: number) => plain(n, 1);
 
 export function lineReport(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' | 'bad' | 'dim' | 'plain' }[] {
   const out: { text: string; tone: 'good' | 'warn' | 'bad' | 'dim' | 'plain' }[] = [];

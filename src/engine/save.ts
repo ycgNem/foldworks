@@ -5,7 +5,7 @@
 // snapshot and the commands since it (src/sim/snapshot.ts).
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -58,6 +58,14 @@ export const MIGRATIONS: Record<number, Migration> = {
     delete st.audit;
     return { ...d, snap: JSON.stringify(st), v: 4 };
   },
+  // v5 (Milestone 6, idle and offline): Inspiration credited per research node. Paused machines
+  // and modules (`paused`) and the Night Shift (in `upgrades`) need nothing: absent means none.
+  // (Milestone 5 may add its own step; the lead renumbers at the merge.)
+  4: (d) => {
+    const st = JSON.parse(d.snap);
+    st.inspire ??= {};
+    return { ...d, snap: JSON.stringify(st), v: 5 };
+  },
 };
 
 /** Bring any older save up to SAVE_VERSION; throws on a gap in the chain or a newer save. */
@@ -108,6 +116,160 @@ export function readSave(slot: number, s: Storage | null = store()): SaveData | 
 
 export function deleteSave(slot: number, s: Storage | null = store()) {
   s?.removeItem(PREFIX + slot);
+}
+
+// ---------------------------------------------------------------- robust saves (Milestone 6, DESIGN.md §20)
+// The main slot, plus rolling backups (_bak1 newest .. _bakN oldest) taken from the save being
+// replaced, at most one every `backupMs`, and only from a save that loads (a broken save never
+// pushes a good backup out). On load the main save is validated (parsed, migrated, and checked by
+// the game's own `validate`, which rebuilds the game from it); if it fails, the raw string is kept
+// aside in _bad, and the newest backup that loads is used, with the reason in plain words.
+
+export const bakKey = (slot: number, i: number) => `${PREFIX}${slot}_bak${i}`;
+export const badKey = (slot: number) => `${PREFIX}${slot}_bad`;
+const metaKey = (slot: number) => `${PREFIX}${slot}_meta`;
+
+export interface SafeWriteOpts {
+  /** ms since epoch now (the app's clock) */
+  now: number;
+  /** take a backup at most this often */
+  backupMs: number;
+  /** how many backups to keep */
+  backups: number;
+  /** throws when a save does not load (the game's own check) */
+  validate?: (d: SaveData) => void;
+}
+
+/** Parse, migrate and check a raw save string; throws an Error whose message is plain words. */
+export function parseSave(raw: string, validate?: (d: SaveData) => void): SaveData {
+  let d: any;
+  try {
+    d = JSON.parse(raw);
+  } catch {
+    throw new Error('it was cut short or garbled');
+  }
+  if (!d || typeof d !== 'object') throw new Error('it holds no game');
+  let m: SaveData;
+  try {
+    m = migrate(d);
+  } catch (err) {
+    const msg = (err as Error).message;
+    throw new Error(/newer/.test(msg) ? 'it comes from a newer version of Foldworks' : 'it is from an old version with no way to update it');
+  }
+  if (validate) {
+    try {
+      validate(m);
+    } catch {
+      throw new Error('its factory could not be rebuilt from it');
+    }
+  }
+  return m;
+}
+
+/** Write a save, first rotating the one it replaces into the backups when one is due. */
+export function writeSaveSafe(slot: number, payload: { seed: number; saved: number }, o: SafeWriteOpts, s: Storage | null = store()): { ok: boolean; rotated: boolean; why?: string } {
+  if (!s) return { ok: false, rotated: false, why: 'this browser keeps no saves (private window?)' };
+  let rotated = false;
+  try {
+    const meta = readMeta(slot, s);
+    const prev = s.getItem(PREFIX + slot);
+    if (prev && o.now - meta.lastBackup >= o.backupMs) {
+      let good = true;
+      try { parseSave(prev, o.validate); } catch { good = false; }
+      if (good) {
+        for (let i = o.backups; i > 1; i--) {
+          const v = s.getItem(bakKey(slot, i - 1));
+          if (v !== null) s.setItem(bakKey(slot, i), v);
+        }
+        s.setItem(bakKey(slot, 1), prev);
+        s.setItem(metaKey(slot), JSON.stringify({ lastBackup: o.now }));
+        rotated = true;
+      }
+    }
+  } catch (err) {
+    console.error('backup failed', err);
+  }
+  const body = JSON.stringify({ ...payload, v: SAVE_VERSION });
+  try {
+    s.setItem(PREFIX + slot, body);
+    return { ok: true, rotated };
+  } catch {
+    // out of room: give up the oldest backup and try once more
+    try {
+      s.removeItem(bakKey(slot, o.backups));
+      s.removeItem(badKey(slot));
+      s.setItem(PREFIX + slot, body);
+      return { ok: true, rotated };
+    } catch (err) {
+      console.error('save failed', err);
+      return { ok: false, rotated, why: 'the browser is out of room for saves' };
+    }
+  }
+}
+
+function readMeta(slot: number, s: Storage): { lastBackup: number } {
+  try {
+    const m = JSON.parse(s.getItem(metaKey(slot)) ?? '{}');
+    return { lastBackup: typeof m.lastBackup === 'number' ? m.lastBackup : 0 };
+  } catch {
+    return { lastBackup: 0 };
+  }
+}
+
+export interface LoadResult {
+  data: SaveData | null;
+  /** where it came from: 'main', or 'bak1' (newest backup) ... */
+  from: string | null;
+  /** what was wrong with the main save, in plain words (null when it loaded) */
+  problem: string | null;
+  /** the broken string was kept aside under _bad */
+  keptBad: boolean;
+}
+
+/** Load a slot: the main save if it validates, else the newest backup that does. */
+export function loadSave(slot: number, validate?: (d: SaveData) => void, backups = 3, s: Storage | null = store()): LoadResult {
+  if (!s) return { data: null, from: null, problem: null, keptBad: false };
+  const raw = s.getItem(PREFIX + slot);
+  let problem: string | null = null;
+  let keptBad = false;
+  if (raw) {
+    try {
+      return { data: parseSave(raw, validate), from: 'main', problem: null, keptBad: false };
+    } catch (err) {
+      problem = (err as Error).message;
+      try {
+        s.setItem(badKey(slot), raw);
+        keptBad = true;
+      } catch { /* no room: the backup still loads */ }
+    }
+  }
+  for (let i = 1; i <= backups; i++) {
+    const b = s.getItem(bakKey(slot, i));
+    if (!b) continue;
+    try {
+      return { data: parseSave(b, validate), from: 'bak' + i, problem: problem ?? 'the save was missing', keptBad };
+    } catch { /* try the next one */ }
+  }
+  return { data: null, from: null, problem, keptBad };
+}
+
+/** The broken save kept aside, if any (to export and send in). */
+export function badSave(slot: number, s: Storage | null = store()): string | null {
+  return s?.getItem(badKey(slot)) ?? null;
+}
+
+/** Autosave cadence (DESIGN.md §20): due every `everyMs` of real time since the last save. */
+export class AutoSave {
+  last: number;
+  constructor(public everyMs: number, now: number) {
+    this.last = now;
+  }
+  due(now: number): boolean {
+    return now - this.last >= this.everyMs;
+  }
+  mark(now: number) {
+    this.last = now;
+  }
 }
 
 export function listSlots(s: Storage | null = store()): number[] {

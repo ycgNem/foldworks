@@ -9,6 +9,7 @@ import { button, frame, label } from './chrome';
 import type { App } from './app';
 import type { ScreenName } from './screens';
 import type { Rect, TipLine } from '../ui/ui';
+import { perMin as fmtPerMin, amount } from '../engine/fmt'; // Milestone 6: one number helper (DESIGN.md §20)
 
 /** ui_icons.png / ui_icons_small.png names, in atlas order (append-only, STYLE.md). */
 export const ICON_NAMES = [
@@ -38,12 +39,11 @@ export function icon(app: App, name: IconName, x: number, y: number, small = fal
 
 /** Per-minute figures from a per-second rate: 480, 37.5, 0.75. */
 export function perMin(r: number): string {
-  const m = r * 60;
-  return m >= 100 ? Math.round(m).toLocaleString('en-US') : m >= 10 ? m.toFixed(1).replace(/\.0$/, '') : m.toFixed(2).replace(/0$/, '').replace(/\.0$/, '');
+  return fmtPerMin(r);
 }
 
 /** A whole number with separators. */
-export const fmt = (n: number) => Math.floor(n).toLocaleString('en-US');
+export const fmt = (n: number) => amount(Math.floor(n));
 
 /** A tab, code-drawn in the plate language: a dark key, lit with a gold underline when active.
  * An optional icon and a badge (a count or "!") on its corner. Returns true on click. */

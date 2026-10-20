@@ -13,8 +13,13 @@ import { RULES } from '../src/data/rules';
  * its ~60 s budget; the spread between them is logged. */
 export const SEEDS2 = [1000, 8919];
 
-/** How long a run plays (seconds): the Reorganize point is measured at 4 and 5 h. */
-export const HOURS = 5;
+/** How long a run plays (seconds): the Reorganize point is measured at 4 and 5 h; the run goes on
+ * half an hour past it so the idle and offline pace tests (Milestone 6) have an active half hour
+ * after the 5 h stage too. */
+export const HOURS = 5.5;
+
+/** The whole hours a snapshot is kept at, for the idle and offline pace tests (Milestone 6). */
+export const STAGES = [1, 2, 3, 4, 5];
 
 /** §15's Reorganize, with the divisor from src/data/rules.ts (its derivation holds the arithmetic). */
 export const PATENT_DIVISOR = RULES.patentDivisor.value;
@@ -36,6 +41,8 @@ export interface Act2Record {
   earnedByMin: number[];
   /** the game state at RULE4_AT, for the idle branch */
   snap: { snap: string; snapTick: number } | null;
+  /** the game state at each of STAGES (hours), for the idle and offline pace tests */
+  stages: Record<number, { snap: string; snapTick: number }>;
   overdrives: number;
   clicksPerSecMax: number;
   bot: Act2Bot;
@@ -51,9 +58,11 @@ export function act2Run(seed: number): Act2Record {
   const planner = new Bot(g, 'planner');
   const earnedByMin: number[] = [];
   let snap: Act2Record['snap'] = null;
+  const stages: Act2Record['stages'] = {};
   const run = playAct2(g, planner, HOURS * 3600, {}, undefined, (gg) => {
     if (gg.s.tick % (60 * TICK_RATE) === 0) earnedByMin.push(gg.s.earned.toNumber());
     if (gg.s.tick === RULE4_AT * TICK_RATE) snap = takeSnapshot(gg);
+    for (const h of STAGES) if (gg.s.tick === h * 3600 * TICK_RATE) stages[h] = takeSnapshot(gg);
   });
   const pd = planner.log.decisions.filter((t) => t <= run.handover);
   const pw = planner.log.what.slice(0, pd.length);
@@ -72,6 +81,7 @@ export function act2Run(seed: number): Act2Record {
     what: [...pw, ...run.bot.log.what],
     earnedByMin,
     snap,
+    stages,
     overdrives: run.bot.log.overdrives.length,
     clicksPerSecMax: maxRate,
     bot: run.bot,

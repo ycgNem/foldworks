@@ -44,6 +44,7 @@ export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
     default:
       // crafting machines (Mk1, Act II, Mk2); miners, engines and poles take nothing
       if (!isMachine(to.kind) || to.kind === 'miner') return false;
+      if (to.paused) return false; // stopped by the player (DESIGN.md §20): its inputs route on
       if (enterSide === to.rot) return false; // the front is the output
       return machineTakes(g, to, item);
   }
