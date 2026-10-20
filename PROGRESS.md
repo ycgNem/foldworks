@@ -105,3 +105,20 @@ longest gap between decisions 6 min; 14 Patents at 5 h (divisor 2,500, formula r
 The owner plays the slice and Act II and rules on the flagged items. Then Milestone 5
 (Reorganize): its Patents formula, coin sinks for Act II's late hour, and rule 1 while the Bay
 fills.
+
+### Start here next session
+
+- **Live build:** https://ycgnem.github.io/foldworks/ (deployed from `main` by the Pages
+  workflow on every push). Local: `Play.bat`, or the dev server on port 5210.
+- **Last commit:** "Milestone 4: the critic's review acted on, Act II's bot to the Great
+  Drill, Bramble's Town". Tests: 412 passed, 1 todo (rule 1 while the Bay fills, in
+  `tests/pace-act2-run.test.ts`). `npm run screens` is clean at all three sizes.
+- **Bots:** `src/sim/bot.ts` plays Act I to the Gizmo Festival (planner, greedy, Dock-only);
+  `src/sim/bot2.ts` takes over at the slice end and plays Act II to the Great Drill (its Bay floor
+  is hand-laid in `BAY_PLAN`).
+- **Waiting on the owner:** the evening of play (the Milestone 3 gate), and the derivative flags in
+  DECISIONS.md (power, machine modes, Machine Kits, the Megaproject).
+- **Proposed follow-up:** "Act II late hour: goals while the Bay fills" (rule 1, coin sinks, the
+  bot using nested folds). Milestone 5 waits for the owner's review.
+- **Art:** pixel-art-studio scripts in `pixel-art/` (`ui`, `m4`, `m5`, `town`, ...); PixelLab not
+  used yet (the owner's call); never SpriteCook.
