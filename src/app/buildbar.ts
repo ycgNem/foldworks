@@ -110,7 +110,9 @@ export function buildBar(app: App, L: Layout) {
   // ---- geometry: the tools plate and the build plate, centred together
   const plateY = B.y + TAB_H + 2, plateH = SLOT_H + 6;
   const toolW = 4 * 24 - 2 + 8;
-  const n = Math.max(SLOTS, slots.length);
+  // the Workshop keeps nine slots wide (switching tabs never moves it); the Factory's one tab
+  // fits its designs
+  const n = fac ? Math.max(4, slots.length) : Math.max(SLOTS, slots.length);
   const buildW = n * (SLOT_W + SLOT_GAP) - SLOT_GAP + 8;
   const total = toolW + 6 + buildW;
   const x0 = Math.max(2, Math.floor(ui.w / 2 - total / 2));

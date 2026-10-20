@@ -214,9 +214,13 @@ function centerOverlay(app: App, L: Layout) {
     }
 }
 
+/** where the toasts on the right must stop this frame (the pinned report's top, when it is there) */
+let sideFloor = Infinity;
+
 /** The pinned report, on its own floor: anchored bottom-right above the build bar, or left of the
  *  floor when it would sit on what it reports on. */
 function pinnedReport(app: App, L: Layout) {
+  sideFloor = Infinity;
   const g = app.game;
   const ui = app.ui;
   const w = Math.min(206, L.center.w - 8);
@@ -226,7 +230,10 @@ function pinnedReport(app: App, L: Layout) {
     const right = L.side.x + L.side.w - w, left = L.center.x + 4;
     const y = Math.max(L.top.h + 4, L.band.y - h - 6);
     const under = (x0: number) => sx > x0 - 12 && sx < x0 + w + 12 && sy > y - 12 && sy < y + h + 12;
-    return { x: under(right) && !under(left) ? left : right, y };
+    const x = under(right) && !under(left) ? left : right;
+    // the toasts above it on the right stop short of it
+    if (x === right) sideFloor = y - 3;
+    return { x, y };
   };
   if (app.floor === 'workshop' && app.selected) {
     const e = g.byId.get(app.selected);
@@ -419,7 +426,7 @@ function sideStack(app: App, L: Layout, dt: number) {
   const S = L.side;
   const w = S.w;
   let y = S.y;
-  const bottom = app.panel ? L.overlay.y + L.overlay.h : L.band.y - 4;
+  const bottom = app.panel ? L.overlay.y + L.overlay.h : Math.min(L.band.y - 4, sideFloor);
   for (const t of app.toasts.slice().reverse()) {
     const icon = t.icon ? (TOAST_ICON[t.icon] ?? (t.icon in UICON ? (t.icon as UIconName) : null)) : null;
     const tx = icon ? 24 : 8;

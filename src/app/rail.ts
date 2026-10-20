@@ -291,8 +291,9 @@ export function diegetic(app: App, L: Layout) {
   if (sel) {
     const hop = fac ? g.s.factory.ents.find((e) => e.kind === 'fhopper') : g.s.ents.find((e) => e.kind === 'hopper');
     if (hop) {
-      const p = at(hop.x + hop.w / 2, hop.y);
-      const cx = p.x, cy = p.y - 9;
+      // on the Hopper's own top-right corner, so it never sits on the belts feeding it
+      const p = at(hop.x + hop.w, hop.y);
+      const cx = p.x - 7, cy = p.y + 6;
       if (inView(cx, cy - 8)) {
         const f = researchFrac(g, sel);
         ctx.fillStyle = C.ink;
