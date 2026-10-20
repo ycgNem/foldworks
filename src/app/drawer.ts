@@ -25,6 +25,11 @@ import type { Rect } from '../ui/ui';
 /** the row selected (a kept design, or one of this run's designs), the scroll, a two-click Forget */
 const st = { sel: null as null | { k: 'kept' | 'run'; id: number }, scroll: 0, armForget: -1, armUntil: 0 };
 
+/** Select a row from outside (the screenshot harness, e2e/screens.mjs). */
+export function selectDrawer(sel: { k: 'kept' | 'run'; id: number } | null) {
+  st.sel = sel;
+}
+
 /** Kind colours for the pictures (belts dim, machines by family). */
 function partCol(kind: string): string {
   if (kind === 'belt') return C.hull1;
@@ -116,6 +121,8 @@ function keptRow(app: App, k: KeptDesign, x: number, y: number, w: number, h: nu
   const ui = app.ui;
   const g = app.game;
   const on = st.sel?.k === 'kept' && st.sel.id === k.id;
+  // the row's click region first, under its text, not over it (the overlap audit)
+  ui.region(x, y, w, h, 'button', false);
   frame(ui, x, y, w, h, 'inset', false);
   if (on) ui.fill(x + 1, y + 1, 2, h - 2, C.violet);
   const t = Math.max(1, Math.min(3, Math.floor((h - 6) / Math.max(k.w, k.h))));
@@ -124,12 +131,11 @@ function keptRow(app: App, k: KeptDesign, x: number, y: number, w: number, h: nu
   if (k.product) ui.ctx.drawImage(itemIcon(k.product), tx, y + 3);
   const queued = g.s.meta.queue.indexOf(k.id);
   const name = `${k.name}${queued >= 0 ? `  ${ICON.right}${queued + 1}` : ''}`;
-  ui.text(ellipsize(name, w - (tx - x) - 70), tx + 11, y + 4, C.gold);
   const facts = `${k.grade ? `${k.grade}, ` : 'imported, '}${k.rate ? `${perMin(k.rate)}/min, ` : ''}${Num.of(keptBill(k)).format()} coin`;
+  ui.text(ellipsize(name, w - (tx - x) - 11 - textWidth(facts) - 12), tx + 11, y + 4, C.gold);
   ui.text(facts, x + w - 6, y + 4, C.bone, { align: 'right' });
   const state = keptState(g, k);
   ui.text(ellipsize(state, w - (tx - x) - 8), tx, y + 15, state.startsWith('ready') ? C.leaf : state.startsWith('unfolded') ? C.hull2 : C.hull3);
-  ui.region(x, y, w, h, 'button', false);
   if (ui.hover(x, y, w, h) && ui.clicked) { ui.eat(); st.sel = { k: 'kept', id: k.id }; ui.sfx('click'); }
 }
 
@@ -138,12 +144,12 @@ function runRow(app: App, d: ModuleDesign, x: number, y: number, w: number, h: n
   const g = app.game;
   const it = mainItem(d);
   const on = st.sel?.k === 'run' && st.sel.id === d.id;
+  ui.region(x, y, w - 44, h, 'button', false);
   ui.fill(x, y, w, h, on ? C.hull0 : C.shadow);
   if (it) ui.ctx.drawImage(itemIcon(it), x + 2, y + 3);
   ui.text(ellipsize(`${d.name} (${d.grade.letter})`, w - 56), x + 13, y + 4, C.bone);
   const why = keepRefusal(g, d.id);
   if (button(ui, `keep${d.id}`, x + w - 40, y + 1, 38, 12, 'Keep', { disabled: !!why, tip: why ?? 'Keep it in the Patent Drawer: it survives every Reorganize' })) app.act({ k: 'keep', id: d.id });
-  ui.region(x, y, w - 44, h, 'button', false);
   if (ui.hover(x, y, w - 44, h) && ui.clicked) { ui.eat(); st.sel = { k: 'run', id: d.id }; ui.sfx('click'); }
 }
 
