@@ -25,6 +25,7 @@ import { poleReach, drawKw } from '../sim/systems/power';
 import { modeSpeed } from '../sim/systems/machines';
 import { MODES, type Ent, type FEnt, type Mode } from '../sim/world';
 import { Num } from '../engine/num';
+import { plain } from '../engine/fmt'; // Milestone 6: one number helper (DESIGN.md §20)
 import { nextGoal } from './goals';
 import { layout, type Layout } from './layout';
 import { frame, card, button, bar, sparkline, badge, coinIcon, portrait, uiIcon, nine, UICON, type UIconName } from './chrome';
@@ -412,8 +413,7 @@ function powerReadout(app: App, x: number, y: number, w: number) {
 }
 
 function fmtKw(v: number) {
-  if (v < 10000) return Math.round(v).toLocaleString('en-US');
-  return (v / 1000).toFixed(1) + 'K';
+  return plain(v, 0); // Milestone 6: through the one number helper, so the notation reaches it
 }
 
 function shipping(app: App, x: number, y: number, w: number, h: number) {
@@ -454,9 +454,7 @@ function shipping(app: App, x: number, y: number, w: number, h: number) {
 }
 
 function fmtRate(v: number) {
-  if (v < 1000) return String(Math.round(v));
-  if (v < 1e6) return (v / 1000).toFixed(1) + 'K';
-  return (v / 1e6).toFixed(2) + 'M';
+  return plain(v, v < 10 ? 1 : 0); // Milestone 6: through the one number helper (DESIGN.md §20)
 }
 
 // ------------------------------------------------------------------ the store
