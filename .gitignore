@@ -8,3 +8,4 @@ foldworks-web.zip
 __pycache__/
 *.pyc
 *.blend1
+.claude/worktrees/
