@@ -2,7 +2,8 @@
 // trunk. Their progress survives every reset (Reorganize keeps `mega`). Stage 1 of the Great Drill
 // is Act II's last goal; stages 2 and 3 (Milestone 5) are built across the next runs, and each one
 // changes a rule for good. Stages 2 and 3 open at a reputation with the Committee (kept through
-// every reset): until then the Bay takes nothing for them, and the Drill screen says what opens it.
+// every reset): until then the Bay counts nothing for them (it never jams: what it can't count goes
+// on to the Dock), and the Drill screen says what opens it.
 import type { ItemId } from './items';
 
 export interface MegaStage {
@@ -10,7 +11,7 @@ export interface MegaStage {
   name: string;
   /** what it wants delivered to the Bay */
   wants: Partial<Record<ItemId, number>>;
-  /** the Committee's reputation the stage opens at (the Bay takes nothing for it before) */
+  /** the Committee's reputation the stage opens at (the Bay counts nothing for it before) */
   rep?: number;
   /** what it gives, in words */
   reward: string;
@@ -32,19 +33,19 @@ export const MEGA: MegaStage[] = [
     stage: 2,
     name: 'The Great Drill, stage 2: the Bore',
     wants: { drillBit: 250, steel: 1000 },
-    rep: 2,
+    rep: 3,
     reward: 'Miners also dig from beside an ore patch (any tile touching it), for good: a patch feeds three times the miners',
     patents: 6,
-    derivation: '§19 Great Drill stage 2: 250 bits and 1,000 steel (4 steel a bit, under the 4.4 of stage 1, so the steel is in before the bits and the Bay floor never jams on slag once its bits are full) are about 50 min of the stage-1 Bay floor (5 bits/min), inside a second run; it opens at the Committee\'s reputation 2, two of its orders (one or two a run); worth 6 Patents',
+    derivation: '§19 Great Drill stage 2: 250 bits and 1,000 steel (4 steel a bit, under the 4.4 of stage 1) are about 50 min of the stage-1 Bay floor (5 bits/min), inside a second run; it opens at the Committee\'s reputation 3: two orders a run (The Pile and Shiny Things), so never in the first run, early in the second (the first reset comes after stage 1: the review round); worth 6 Patents',
   },
   {
     stage: 3,
     name: 'The Great Drill, stage 3: Breakthrough',
-    wants: { drillBit: 400, steel: 1600 },
-    rep: 4,
+    wants: { drillBit: 300, steel: 1200 },
+    rep: 5,
     reward: 'The Drill breaks into the deep seams: chunk D gains an iron and a copper deposit, for good',
     patents: 8,
-    derivation: '§19 Great Drill stage 3: 400 bits and 1,600 steel (4 steel a bit, as stage 2), about 80 min of the Bay floor; it opens at the Committee\'s reputation 4 (two more orders, the second run\'s or the third\'s), so it lands in the third run; worth 8 Patents',
+    derivation: '§19 Great Drill stage 3: 300 bits and 1,200 steel (4 steel a bit, as stage 2), about 60 min of the Bay floor, so the third run finishes it with time to spare (400 bits ran past the bot\'s 4 h on seed 8919: the review round); it opens at the Committee\'s reputation 5 (the third run\'s first order), so it lands in the third run and the Drill is done by its end; worth 8 Patents',
   },
 ];
 

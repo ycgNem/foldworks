@@ -7,7 +7,8 @@
 import { C, rgba } from '../data/palette';
 import type { Game } from '../sim/Game';
 import { DX, DY, ccw, cw, opposite, type Dir, type FEnt } from '../sim/world';
-import { FACTORY } from '../data/land';
+import { ANNEX, FACTORY } from '../data/land';
+import { annexPrice } from '../sim/systems/annex'; // the review round: the Factory annex
 import { RULES } from '../data/rules';
 import { prules } from '../sim/patents'; // Milestone 5: the Patent rules (More Auditors, Quick Audits)
 import { megaStage } from '../data/megaprojects';
@@ -83,7 +84,8 @@ function feedsInto(a: FEnt, b: FEnt): boolean {
 }
 
 export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number, ov: FactoryOverlay) {
-  const W = FACTORY.w, H = FACTORY.h;
+  // the annex (DESIGN.md §19, the Milestone 5-6 review round): the hall grows east by the blocks bought
+  const W = g.fw, H = g.fh;
   // the hall: a shadow, a riveted wall, then the floor plates
   ctx.fillStyle = rgba(C.ink, 0.6);
   ctx.fillRect(4, 4, W * TILE, H * TILE);
@@ -101,6 +103,19 @@ export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number
         ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
       }
     }
+  // the annex: a brass seam where the bought blocks meet the 12x8, and the next block for sale
+  // outlined beyond the wall with its price (Upgrades sells it)
+  if (W > FACTORY.w) {
+    ctx.fillStyle = rgba(C.brass0, 0.5);
+    for (let y = 0; y < H * TILE; y += 4) ctx.fillRect(FACTORY.w * TILE, y, 1, 2);
+  }
+  const next = annexPrice(g);
+  if (next && g.done(ANNEX.requires)) {
+    const ax = W * TILE + 4, aw = ANNEX.cols * TILE;
+    antsBox(ctx, W + 4 / TILE, 0, ANNEX.cols, H, rgba(C.bone, 0.45), rgba(C.bone, 0.04), time);
+    label(ctx, 'annex', ax + aw / 2, H * TILE / 2 - 12, C.bone);
+    label(ctx, next.format(), ax + aw / 2, H * TILE / 2 + 2, C.brass0);
+  }
   // the Bay's corner, marked on the floor until the Bay stands there
   if (g.done('greatDrill') && !g.s.factory.ents.some((e) => e.kind === 'fbay')) bayMarks(ctx, time);
   const ents = g.s.factory.ents;
@@ -426,7 +441,7 @@ function overlays(ctx: CanvasRenderingContext2D, g: Game, ov: FactoryOverlay, ti
   }
   const ghost = (x: number, y: number, rot: Dir, kind: 'trunk' | 'module', design = 0) => {
     const e = g.fentAt(x, y);
-    const ok = x >= 0 && y >= 0 && x < FACTORY.w && y < FACTORY.h && (!e || (kind === 'trunk' && e.kind === 'trunk'));
+    const ok = x >= 0 && y >= 0 && x < g.fw && y < g.fh && (!e || (kind === 'trunk' && e.kind === 'trunk'));
     ctx.globalAlpha = 0.6;
     if (kind === 'trunk') drawRot(ctx, sheet('trunk'), 0, x * TILE, y * TILE, rot);
     else {
@@ -465,7 +480,7 @@ function overlays(ctx: CanvasRenderingContext2D, g: Game, ov: FactoryOverlay, ti
       outline(ctx, e.x, e.y, e.w, e.h, rgba(C.glow, 0.6 + 0.4 * Math.sin(time * 10)));
       label(ctx, '3x', (e.x + 0.5) * TILE, e.y * TILE - 13, C.hot);
     } else if (e) outline(ctx, e.x, e.y, e.w, e.h, rgba(C.bone, 0.7));
-    else if (h.x >= 0 && h.y >= 0 && h.x < FACTORY.w && h.y < FACTORY.h) {
+    else if (h.x >= 0 && h.y >= 0 && h.x < g.fw && h.y < g.fh) {
       ctx.fillStyle = rgba(C.bone, 0.12);
       ctx.fillRect(h.x * TILE, h.y * TILE, TILE, TILE);
     }

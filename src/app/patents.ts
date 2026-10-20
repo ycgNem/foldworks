@@ -294,26 +294,15 @@ export function effectInfo(app: App, p: PatentDef): { does: string[]; now: strin
     }
     case 'sideIntake':
       return { does: ['A module also takes inputs from a trunk into its left side: 2 input sides instead of 1.'], now: own ? 'In effect in this run and every run after.' : ruleNow(app, 'sideIntake') ? 'No change this run: modules have it already.' : 'This run: every module gets its second input side at once.' };
-    case 'heapCap': {
-      const v = num('value'), cur = ruleNow(app, 'heapCap');
-      return { does: [`A Slag Heap holds ${v} slag${was(cur, BUILD.heap.capacity)}.`], now: change(cur, v, (x) => `${x} slag`, up) };
-    }
-    case 'claims': {
-      const v = num('value'), cur = ruleNow(app, 'extraClaims') ?? 0;
-      return { does: [`+${v} deposit claims on every ore: ${v} more copies of each source module.`], now: own ? 'In effect in this run and every run after.' : `This run: +${v} claims on every ore at once (+${cur} from Patents now).` };
-    }
+    // the Milestone 5-6 review round (the reset layer): the re-derived rules
+    case 'halfClaims':
+      return { does: ['A copy of a source design graded S or S+ holds half a claim on each ore: twice the copies of a well-folded source line.'], now: own ? 'In effect in this run and every run after.' : 'This run: your S and S+ source designs need half a claim a copy at once.' };
     case 'nestedMax': {
       const v = num('value'), cur = ruleNow(app, 'nestedMax');
       return { does: [`A nested fold boxes up to ${v}x${v}${was(cur, base('nestedMax'), (x) => `${x}x${x}`)}.`], now: change(cur, v, (x) => `${x}x${x}`, up) };
     }
-    case 'overdriveCool': {
-      const v = num('value'), cur = ruleNow(app, 'overdriveCool');
-      return { does: [`Overdrive cools in ${v} s${was(cur, base('overdriveCool'), ' s')}.`], now: change(cur, v, (x) => `${x} s`, down) };
-    }
-    case 'stampGrowth': {
-      const v = num('value'), cur = ruleNow(app, 'stampGrowth');
-      return { does: [`Each stamped copy costs ${v} more of its bill${was(cur, base('stampGrowth'))}: bill x (1 + ${v} n).`], now: change(cur, v, (x) => `+${x} a copy`, down) };
-    }
+    case 'freshDies':
+      return { does: ['A design refolded at a better grade than every earlier one of its product starts its stamp price over.'], now: own ? 'In effect in this run and every run after.' : 'This run: refold a line better and its copies are cheap again.' };
     case 'shovel': {
       const v = num('every'), cur = ruleNow(app, 'shovelEvery');
       return { does: [`Shovels one jammed machine clear every ${v} s, on its own.`], now: own ? 'In effect in this run and every run after.' : cur ? `No change this run: a frog shovels every ${cur} s already.` : 'This run: the frog starts at once.' };
@@ -322,9 +311,13 @@ export function effectInfo(app: App, p: PatentDef): { does: string[]; now: strin
       const v = num('every');
       return { does: [`Stamps a spare of each "keep one spare" design every ${v} s while you can afford it.`], now: own ? 'In effect in this run and every run after.' : 'This run: the press starts at once.' };
     }
-    case 'drone': {
-      const v = num('n'), cur = ruleNow(app, 'drones') ?? 0;
-      return { does: [`${v} ${v === 1 ? 'dragonfly builds' : 'dragonflies build'} your blueprint ghosts, as coin allows.`], now: change(cur, v, (x) => `${x} ${x === 1 ? 'dragonfly' : 'dragonflies'}`, up) };
+    case 'draughtsman': {
+      const v = num('every');
+      return { does: [`Unfolds the designs you queue in the Patent Drawer, in your order, one every ${v} s at most, as land, research and coin allow.`], now: own ? 'In effect in this run and every run after.' : 'This run: queue kept designs in the Drawer and it starts at once.' };
+    }
+    case 'drawer': {
+      const v = num('add'), cur = ruleNow(app, 'drawerSlots');
+      return { does: [`The Patent Drawer keeps ${v} more designs.`], now: change(cur, (cur ?? 0) + v, (x) => `${x} slots`, up) };
     }
     case 'offline': {
       const add = num('add');

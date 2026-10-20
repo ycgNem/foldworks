@@ -87,11 +87,12 @@ export const CUSTOMERS: Record<CustomerId, CustomerDef> = {
     ],
     rewards: [
       { rep: 1, text: 'Coat Pockets: modules hold 6 s of each input and output (was 2), so a hiccup in a feed is ridden out' },
-      { rep: 2, text: 'The Great Drill\'s stage 2 opens; and the Night Crew: while you are away, every Slag Heap loses 1 slag every 10 s to the coat' },
-      { rep: 3, text: 'Pocketed Kits: every stamp needs 1 Machine Kit fewer' },
-      { rep: 4, text: 'The Great Drill\'s stage 3 opens' },
+      { rep: 2, text: 'The Night Crew: while you are away, every Slag Heap loses 1 slag every 10 s to the coat' },
+      { rep: 3, text: 'The Great Drill\'s stage 2 opens' },
+      { rep: 4, text: 'Pocketed Kits: every stamp needs 1 Machine Kit fewer' },
+      { rep: 5, text: 'The Great Drill\'s stage 3 opens' },
     ],
-    derivation: '§19 The Committee: met with the Great Drill research in the first run, or after the first Reorganize once Folding is done; its reputation (kept through every reset) opens the Great Drill\'s stages 2 and 3; every reputation reward is a rule',
+    derivation: '§19 The Committee: met with the Great Drill research in the first run, or after the first Reorganize once Folding is done; its reputation (kept through every reset) opens the Great Drill\'s stages 2 and 3 at 3 and 5, two orders a run, so stage 2 is the second run\'s and stage 3 the third\'s; every reputation reward is a rule',
   },
 };
 
@@ -129,7 +130,7 @@ export const ORDERS: OrderDef[] = [
   { id: 'midnightOil', customer: 'committee', name: 'Midnight Oil', pitch: 'Oil. For the coat. It squeaks.', wants: { oil: 150 }, pays: 900, rep: 1, requires: ['refining'], derivation: '§19 The Committee: 150 oil, about 20 min of one Plastic module\'s oil (about 8 a minute) at a Dock; 600 was over an hour of two modules and the bot never filled it (the Milestone 5 review); 2x oil at 3 -> 900 + 1 rep' },
   { id: 'brickThrone', customer: 'committee', name: 'The Brick Throne', pitch: 'One of us wishes to be king. The other two wish to sit on him. Bricks.', wants: { slagBrick: 100 }, pays: 1200, rep: 1, requires: ['slagBricks'], derivation: '§19 The Committee: 100 slag bricks (400 slag through a brick press: a line nobody builds unless asked; 25 min of one press fed by two smelters) -> 2x 600 = 1,200 + 1 rep' },
   { id: 'gravelGarden', customer: 'committee', name: 'Gravel Garden', pitch: 'A garden. Of gravel. For contemplation. And for hiding things.', wants: { gravel: 300 }, pays: 1200, rep: 1, requires: ['crushing'], derivation: '§19 The Committee: 300 gravel (600 slag through a crushing press, about 15 min of the Bay floor\'s slag) -> 2x 600 = 1,200 + 1 rep' },
-  { id: 'shinyThings', customer: 'committee', name: 'Shiny Things', pitch: 'Shiny. Shinier. The shiniest. Also some wire, for the shiny.', wants: { glass: 300, copperWire: 600 }, pays: 9600, rep: 1, requires: ['glassworks'], derivation: '§19 The Committee: 300 glass + 600 wire (4,800 at Dock value) -> 9,600 (2x) + 1 rep' },
+  { id: 'shinyThings', customer: 'committee', name: 'Shiny Things', pitch: 'Shiny. Shinier. The shiniest. Wire, for the shiny. Ingots, for the shinier.', wants: { copperWire: 1200, ironIngot: 600 }, pays: 8400, rep: 1, requires: ['steamPower'], derivation: '§19 The Committee: 1,200 wire + 600 ingots (4,200 at Dock value): what an Act II Factory floor sends its Dock anyway (two wire and two ingot copies beside the Dock: about 75 wire and 150 ingots a minute, so about 16 min), the second order a run fills beside The Pile; glass never reached a Dock on the bot floor (the review round) -> 8,400 (2x) + 1 rep' },
   { id: 'coatLining', customer: 'committee', name: 'The Lining', pitch: 'The coat needs a lining. Plastic. And motors. Do not look at the motors.', wants: { plastic: 200, motor: 10 }, pays: 22400, rep: 1, requires: ['motors'], derivation: '§19 The Committee: 200 plastic + 10 motors (11,200 at Dock value) -> 22,400 (2x) + 1 rep' },
   { id: 'gizmoFestival', customer: 'bramble', name: 'The Gizmo Festival', pitch: 'A festival! Of Gizmos! By the crateload, from your Factory floor. I do not know what they do and neither will the guests.', wants: { gizmo: 400 }, pays: 64000, rep: 1, requires: ['folding'], at: 'factory', derivation: '§7 400 Gizmos (32,000) -> 64,000 + 1 rep: 2x; §11 only the Factory Dock counts, so the slice ends with a Gizmo module fed by gear and wire modules running at rate (the Milestone 3 gate review)' },
 ];

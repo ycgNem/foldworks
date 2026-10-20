@@ -365,13 +365,14 @@ function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, x: nu
   const end = inner.y + inner.h - 17;
   let yy = inner.y + 2;
   // the Milestone 5-6 review round: stages 2 and 3 open at the Committee's reputation (kept through
-  // every reset); until then the Bay takes nothing for them, and the gate says so plainly
+  // every reset); until then the Bay passes its steel on to the Dock and scraps its bits, and the
+  // gate says so plainly
   if (stage.rep && !megaOpen(g, stage)) {
     const rep = g.s.orders.rep.committee ?? 0;
     ui.fill(inner.x, yy, inner.w, 20, C.ink);
     ui.fill(inner.x + 1, yy + 1, inner.w - 2, 18, C.shadow);
     ui.text(`${ICON.lock} Stage ${stage.stage} opens at the Committee's reputation ${stage.rep} (now ${rep})`, inner.x + 5, yy + 7, C.violet);
-    ui.hint(inner.x, yy, inner.w, 20, `Fill the Committee's odd orders (Orders, the raccoons' tab): each is +1 reputation, kept through every reset. Until then the Bay takes nothing for stage ${stage.stage}.`, 190);
+    ui.hint(inner.x, yy, inner.w, 20, `Fill the Committee's odd orders (Orders, the raccoons' tab): each is +1 reputation, kept through every reset. Until then the Bay counts nothing for stage ${stage.stage}: its steel goes on to the Dock and sells, its bits are scrapped.`, 190);
     yy += 24;
   }
   const ents = Object.entries(stage.wants) as [ItemId, number][];

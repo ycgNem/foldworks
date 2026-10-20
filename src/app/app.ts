@@ -653,7 +653,7 @@ export class App {
         if (kind) this.pickBuild(kind);
       }
     }
-    if (this.floor === 'factory') this.renderer.clampCam(FACTORY.w, FACTORY.h);
+    if (this.floor === 'factory') this.renderer.clampCam(this.game.fw, this.game.fh);
     else this.renderer.clampCam(this.game.W, this.game.H);
   }
 
@@ -677,7 +677,7 @@ export class App {
   /** Which edges of the floor view have more floor (or town) beyond them: for the HUD's arrows. */
   panHints(): { l: boolean; r: boolean; u: boolean; d: boolean } {
     const r = this.renderer;
-    const fw = this.floor === 'factory' ? FACTORY.w : this.game.W, fh = this.floor === 'factory' ? FACTORY.h : this.game.H;
+    const fw = this.floor === 'factory' ? this.game.fw : this.game.W, fh = this.floor === 'factory' ? this.game.fh : this.game.H;
     const a = r.screenToWorld(r.view.x, r.view.y), b = r.screenToWorld(r.view.x + r.view.w, r.view.y + r.view.h);
     return { l: a.x > 4, r: b.x < fw * TILE - 4, u: a.y > -TOWN_ROWS * TILE + 4, d: b.y < fh * TILE - 4 };
   }
@@ -782,11 +782,11 @@ export class App {
     const g = this.game;
     const cam = this.renderer.cam;
     if (this.floor === 'factory') {
-      const z = this.fillZoom((FACTORY.w + 1) * TILE, (FACTORY.h + 1) * TILE);
+      const z = this.fillZoom((this.game.fw + 1) * TILE, (this.game.fh + 1) * TILE);
       if (reset || cam.zoom > z) cam.zoom = z;
-      cam.x = (FACTORY.w / 2) * TILE;
-      this.frameRows(0, FACTORY.h * TILE);
-      this.renderer.clampCam(FACTORY.w, FACTORY.h);
+      cam.x = (this.game.fw / 2) * TILE;
+      this.frameRows(0, this.game.fh * TILE);
+      this.renderer.clampCam(this.game.fw, this.game.fh);
       return;
     }
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -845,7 +845,7 @@ export class App {
     const t = this.renderer.screenToTile(sx, sy);
     // the tile the button went down on (drags start there even if the mouse has moved on)
     const pt = this.renderer.screenToTile(inp.mouse.px * k, inp.mouse.py * k);
-    const inFloor = this.floor === 'factory' ? t.x >= 0 && t.y >= 0 && t.x < FACTORY.w && t.y < FACTORY.h : g.inb(t.x, t.y);
+    const inFloor = this.floor === 'factory' ? t.x >= 0 && t.y >= 0 && t.x < g.fw && t.y < g.fh : g.inb(t.x, t.y);
     this.hud.hoverTile = !overUI && inFloor ? t : null;
     this.townTip = !overUI && !inFloor && this.mouseIn ? this.renderer.townAt(sx, sy) : null;
 
@@ -924,11 +924,11 @@ export class App {
   private factoryInput(t: { x: number; y: number }, overUI: boolean, pt: { x: number; y: number }) {
     const inp = this.input;
     const g = this.game;
-    const inFloor = t.x >= 0 && t.y >= 0 && t.x < FACTORY.w && t.y < FACTORY.h;
+    const inFloor = t.x >= 0 && t.y >= 0 && t.x < this.game.fw && t.y < this.game.fh;
     if (this.mode.k === 'fold') {
       // a nested fold: drag a box over a group of modules (DESIGN.md §18)
-      const pIn = pt.x >= 0 && pt.y >= 0 && pt.x < FACTORY.w && pt.y < FACTORY.h;
-      const cx = Math.max(0, Math.min(FACTORY.w - 1, t.x)), cy = Math.max(0, Math.min(FACTORY.h - 1, t.y));
+      const pIn = pt.x >= 0 && pt.y >= 0 && pt.x < this.game.fw && pt.y < this.game.fh;
+      const cx = Math.max(0, Math.min(this.game.fw - 1, t.x)), cy = Math.max(0, Math.min(this.game.fh - 1, t.y));
       if (inp.mouse.pressed[0] && !overUI && pIn) this.foldDrag = { x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
       if (this.foldDrag && inp.mouse.down[0]) { this.foldDrag.x1 = cx; this.foldDrag.y1 = cy; }
       if (this.foldDrag && !inp.mouse.down[0]) {
@@ -939,7 +939,7 @@ export class App {
       return;
     }
     if (this.mode.k === 'ftrunk') {
-      const pIn = pt.x >= 0 && pt.y >= 0 && pt.x < FACTORY.w && pt.y < FACTORY.h;
+      const pIn = pt.x >= 0 && pt.y >= 0 && pt.x < this.game.fw && pt.y < this.game.fh;
       if (inp.mouse.pressed[0] && !overUI && pIn) this.drag = { x0: pt.x, y0: pt.y, path: [{ x: pt.x, y: pt.y, rot: this.rot }] };
       if (this.drag && inp.mouse.down[0]) this.drag.path = this.lPath(this.drag.x0, this.drag.y0, t.x, t.y);
       if (this.drag && !inp.mouse.down[0]) {

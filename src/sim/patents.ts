@@ -72,7 +72,7 @@ export function prules(g: Game): PatentRules {
     drawerSlots: RULES.drawerSlots.value,
     offline: RULES.offlineEff.value,
     nightCrew: rep >= 2,
-    kitsOff: rep >= 3 ? RULES.pocketedKits.value : 0,
+    kitsOff: rep >= 4 ? RULES.pocketedKits.value : 0,
   };
   for (const id of s.meta.nodes) {
     const e: PatentEffect | undefined = PATENTS[id]?.effect;

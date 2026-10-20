@@ -358,10 +358,10 @@ export class Renderer {
     ctx.fillRect(0, 0, this.W, this.H);
     ctx.setTransform(z, 0, 0, z, ox, oy);
     ctx.imageSmoothingEnabled = false;
-    if (ov.floor === 'factory') this.backdrop(ox, oy, z, FACTORY.w, FACTORY.h);
+    if (ov.floor === 'factory') this.backdrop(ox, oy, z, g.fw, g.fh);
     else this.backdrop(ox, oy, z, g.W, g.H);
     // Bramble's Town on the water, behind the floor
-    if (ov.floor === 'factory') this.town.draw(ctx, g, FACTORY.w, FACTORY.h, this.time);
+    if (ov.floor === 'factory') this.town.draw(ctx, g, g.fw, g.fh, this.time);
     else this.town.draw(ctx, g, g.W, g.H, this.time);
     for (const n of this.town.news) {
       this.fx.burst(n.x, n.y, 30, [C.gold, C.leaf, C.bone, C.hot], 70, 40, 1, 1);

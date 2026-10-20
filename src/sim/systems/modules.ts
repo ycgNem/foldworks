@@ -20,7 +20,7 @@ import { annexPrice } from './annex';
 import { RULES } from '../../data/rules';
 import { RECIPES } from '../../data/recipes';
 import { ITEMS, itemName, type ItemId } from '../../data/items';
-import { megaStage, type MegaStage } from '../../data/megaprojects';
+import { MEGA, megaStage, type MegaStage } from '../../data/megaprojects';
 import { DX, DY, ccw, cw, newFEnt, opposite, type Dir, type FEnt, type ModuleDesign } from '../world';
 import { entsIn, inBox, gradedAudit } from './audits';
 import { claimRefusal, oresOf, placeClaimRefusal } from './claims';
@@ -538,8 +538,13 @@ export function runModules(g: Game) {
       const n = Math.floor(e.inBuf[k] + 1e-9);
       if (n < 1) continue;
       e.inBuf[k] -= n;
-      if (e.kind === 'fbay') megaGive(g, e, k as ItemId, n);
-      else g.intake.push({ to: e.kind === 'fdock' ? 'dock' : 'hopper', item: k as ItemId, x: e.x + 1, y: e.y + 1, n: Num.of(n), floor: 'factory' });
+      if (e.kind === 'fbay') {
+        // the Bay never jams (the Milestone 5-6 review round): what its stage can't count now
+        // (a stage still shut, or a part it has in full) goes on to the Dock and sells; Drill
+        // Bits, which no Dock buys, are scrapped
+        const left = megaGive(g, e, k as ItemId, n);
+        if (left > 0 && !ITEMS[k as ItemId]?.refused) g.intake.push({ to: 'dock', item: k as ItemId, x: e.x + 1, y: e.y + 1, n: Num.of(left), floor: 'factory' });
+      } else g.intake.push({ to: e.kind === 'fdock' ? 'dock' : 'hopper', item: k as ItemId, x: e.x + 1, y: e.y + 1, n: Num.of(n), floor: 'factory' });
     }
   }
   // 4. once a second: statistics, the slice's end, and the Megaproject Bay arriving
@@ -589,21 +594,27 @@ function placeBay(g: Game) {
 }
 
 /** Count whole items into the Megaproject's current stage; complete it when everything is in.
- * Each delivery earns its share of the stage's Patents for this run's Reorganize (DESIGN.md §19). */
-export function megaGive(g: Game, bay: FEnt, item: ItemId, n: number) {
+ * Each delivery earns its share of the stage's Patents for this run's Reorganize (DESIGN.md §19).
+ * Returns how many it could not count (the stage shut, or that part already in full). */
+export function megaGive(g: Game, bay: FEnt, item: ItemId, n: number): number {
   const st = megaStage(g.s.mega.stage);
-  if (!st) return;
+  if (!st || !megaOpen(g, st)) return n;
   const p = g.s.mega.progress;
   const want = st.wants[item] ?? 0;
   const have = p[item]?.toNumber() ?? 0;
   const counted = Math.max(0, Math.min(n, want - have));
-  p[item] = (p[item] ?? Num.ZERO).add(n);
+  if (counted <= 0) return n;
+  p[item] = (p[item] ?? Num.ZERO).add(counted);
   // offline progress measures the Bay's intake like the Docks' (DESIGN.md §12)
-  if (g.tally) g.tally.bay[item] = (g.tally.bay[item] ?? Num.ZERO).add(n);
-  if (counted > 0) g.s.megaPatents += (st.patents * counted) / want / megaParts(st);
-  g.emit({ type: 'megaGive', x: bay.x + 1, y: bay.y + 1, id: item, value: n, floor: 'factory' });
+  if (g.tally) g.tally.bay[item] = (g.tally.bay[item] ?? Num.ZERO).add(counted);
+  g.s.megaPatents += (st.patents * counted) / want / megaParts(st);
+  g.emit({ type: 'megaGive', x: bay.x + 1, y: bay.y + 1, id: item, value: counted, floor: 'factory' });
   megaCheck(g, bay);
+  return n - counted;
 }
+
+/** Items some stage of the Great Drill wants: the Bay always takes these (it never jams). */
+const MEGA_ITEMS = new Set<string>(MEGA.flatMap((m) => Object.keys(m.wants)));
 
 /** How many things a stage wants: each item is an equal share of its Patents. */
 export function megaParts(st: MegaStage): number {
@@ -638,12 +649,11 @@ export function acceptRoom(g: Game, to: FEnt, item: string): number {
   if (to.kind === 'fdock') return item === 'slag' || !ITEMS[item as ItemId]?.refused ? Infinity : 0;
   if (to.kind === 'fhopper') return item !== 'slag' || hopperWantsSlag(g) ? Infinity : 0;
   if (to.kind === 'fbay') {
-    const st = megaStage(g.s.mega.stage);
-    const want = st?.wants[item as ItemId];
-    if (!want) return 0;
-    // stages 2 and 3 open at a reputation with the Committee (DESIGN.md §19)
-    if (!megaOpen(g, st ?? null)) return 0;
-    return Math.max(0, want - (g.s.mega.progress[item as ItemId]?.toNumber() ?? 0) - (to.inBuf[item] ?? 0));
+    // the Bay takes whatever some stage of the Drill is built from, always: what the stage now
+    // open can't count goes on to the Dock (megaGive), so the Bay floor never jams while a stage
+    // waits on the Committee's reputation or one part is in full (the Milestone 5-6 review round)
+    if (!MEGA_ITEMS.has(item)) return 0;
+    return Infinity;
   }
   if (to.kind !== 'module' || to.paused) return 0;
   const d = g.design(to.design);

@@ -103,7 +103,7 @@ export const RULES = {
   coatBuffer: r(6, '§19 The Committee rep 1: module buffers hold 6 s of each rate (was 2, §11)'),
   nightCrewSeconds: r(10, '§19 The Committee rep 2: while you are away (the tab hidden or the game closed), each Slag Heap loses one slag every 10 s (a smelter makes one every 8 s: a heap fed by one smelter fills at a fifth of the speed overnight); never while you play, so Act I\'s slag lesson stands'),
   /** the Committee rep 3: Machine Kits a stamp needs fewer */
-  pocketedKits: r(1, '§19 The Committee rep 3: every stamp needs 1 Machine Kit fewer (never below none; §18 Machine Kits)'),
+  pocketedKits: r(1, '§19 The Committee rep 4: every stamp needs 1 Machine Kit fewer (never below none; §18 Machine Kits)'),
 };
 
 export type RuleId = keyof typeof RULES;
