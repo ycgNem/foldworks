@@ -1,0 +1,71 @@
+// What a save holds (CLAUDE.md: seed + commands + periodic snapshots): the seed, a snapshot of the
+// state at some tick, and the commands logged since it. Loading restores the snapshot and replays
+// the commands on top, so a save is exact; replaying the seed with the whole command log from tick
+// 0 reaches the same state too (tests/sim.test.ts checks both).
+import { Num, reviveNums } from '../engine/num';
+import { Game, type Logged } from './Game';
+import type { State } from './world';
+
+export interface SavePayload {
+  seed: number;
+  /** ms since epoch when written (from the app; the sim never reads a clock) */
+  saved: number;
+  /** the tick the save was written at */
+  tick: number;
+  /** JSON of the State at `snapTick` */
+  snap: string;
+  snapTick: number;
+  /** commands applied since the snapshot */
+  log: Logged[];
+}
+
+export function takeSnapshot(g: Game): { snap: string; snapTick: number } {
+  return { snap: JSON.stringify(g.s), snapTick: g.s.tick };
+}
+
+/** A save of the game now: a fresh snapshot (the log since it is empty). */
+export function savePayload(g: Game, savedMs: number): SavePayload {
+  const { snap, snapTick } = takeSnapshot(g);
+  g.log = [];
+  return { seed: g.s.seed, saved: savedMs, tick: g.s.tick, snap, snapTick, log: [] };
+}
+
+export function stateFrom(json: string): State {
+  return JSON.parse(json, reviveNums) as State;
+}
+
+/** Rebuild a Game from a save: the snapshot, then the logged commands replayed up to `tick`. */
+export function restore(p: { seed: number; snap: string; snapTick: number; log: Logged[]; tick: number }): Game {
+  const g = new Game(p.seed, { empty: true });
+  g.s = stateFrom(p.snap);
+  g.rebuild();
+  replayInto(g, p.log, p.tick);
+  return g;
+}
+
+/** Step `g` to `until`, applying each logged command at its tick. */
+export function replayInto(g: Game, log: Logged[], until: number) {
+  let i = 0;
+  while (g.s.tick < until || i < log.length) {
+    while (i < log.length && log[i].t === g.s.tick) g.act(log[i++].c);
+    if (i < log.length && log[i].t < g.s.tick) throw new Error(`replay: command for tick ${log[i].t} is in the past (now ${g.s.tick})`);
+    if (g.s.tick >= until && i >= log.length) break;
+    g.tick();
+  }
+}
+
+/** Replay a whole run from its seed and complete command history. */
+export function replay(seed: number, history: Logged[], until: number): Game {
+  const g = new Game(seed, { keepHistory: true });
+  replayInto(g, history, until);
+  return g;
+}
+
+/** A stable fingerprint of a state, for determinism checks. */
+export function fingerprint(g: Game): string {
+  const s = g.s;
+  const ents = s.ents.map((e) => `${e.id}${e.kind}${e.x},${e.y}${e.rot}|${e.item ?? ''}${e.p.toFixed(3)}|${JSON.stringify(e.inBuf)}${e.out}${e.by}${e.prog}${e.count}${e.store.join(',')}`).join(';');
+  return [s.tick, s.coin.toString(), s.earned.toString(), s.rng, s.research.done.join(','), ents, JSON.stringify(s.research.bank)].join('#');
+}
+
+export { Num };

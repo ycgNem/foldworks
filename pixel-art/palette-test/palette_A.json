@@ -1,0 +1,126 @@
+[
+ {
+  "name": "ink",
+  "hex": "#1d1420"
+ },
+ {
+  "name": "shadow",
+  "hex": "#3a2532"
+ },
+ {
+  "name": "bone",
+  "hex": "#f2e6cf"
+ },
+ {
+  "name": "ground0",
+  "hex": "#4a3431"
+ },
+ {
+  "name": "ground1",
+  "hex": "#62473b"
+ },
+ {
+  "name": "ground2",
+  "hex": "#7e624c"
+ },
+ {
+  "name": "hull0",
+  "hex": "#463f50"
+ },
+ {
+  "name": "hull1",
+  "hex": "#78737c"
+ },
+ {
+  "name": "hull2",
+  "hex": "#a9a29f"
+ },
+ {
+  "name": "hull3",
+  "hex": "#dccfb8"
+ },
+ {
+  "name": "iron0",
+  "hex": "#333a5a"
+ },
+ {
+  "name": "iron1",
+  "hex": "#5c6d93"
+ },
+ {
+  "name": "iron2",
+  "hex": "#96a9c6"
+ },
+ {
+  "name": "copper0",
+  "hex": "#722d2a"
+ },
+ {
+  "name": "copper1",
+  "hex": "#c4633b"
+ },
+ {
+  "name": "copper2",
+  "hex": "#ec9e78"
+ },
+ {
+  "name": "slag",
+  "hex": "#74586e"
+ },
+ {
+  "name": "brass0",
+  "hex": "#7a5418"
+ },
+ {
+  "name": "brass1",
+  "hex": "#c99a3a"
+ },
+ {
+  "name": "glow",
+  "hex": "#f5952a"
+ },
+ {
+  "name": "hot",
+  "hex": "#ffeca0"
+ },
+ {
+  "name": "teal0",
+  "hex": "#2a6566"
+ },
+ {
+  "name": "teal1",
+  "hex": "#6fc1ae"
+ },
+ {
+  "name": "moss",
+  "hex": "#5a6a2e"
+ },
+ {
+  "name": "leaf",
+  "hex": "#9cb446"
+ },
+ {
+  "name": "violet",
+  "hex": "#9a4a88"
+ },
+ {
+  "name": "pipGreen",
+  "hex": "#66cc50"
+ },
+ {
+  "name": "pipYellow",
+  "hex": "#ffe466"
+ },
+ {
+  "name": "pipRed",
+  "hex": "#c8362e"
+ },
+ {
+  "name": "pipGrey",
+  "hex": "#3d3c42"
+ },
+ {
+  "name": "pipBlue",
+  "hex": "#4a8fe2"
+ }
+]

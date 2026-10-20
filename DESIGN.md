@@ -63,7 +63,7 @@ a longer chain earns more per machine-second, so depth beats breadth.
 | Belt Mk1 | 1×1 | 1 / tile | 2 tiles/s, 1 item per tile → **120 items/min** | 4 miners fill one belt |
 | Splitter / Merger | 1×1 | 20 | alternates outputs / inputs; skips a blocked side | research 6 |
 | Buffer Crate | 1×1 | 30 | holds 50, passes through first-in first-out | research 7 |
-| Slag Heap | 1×1 | 25 | holds 100 slag; full → feeding smelters block | §4 Byproducts |
+| Slag Heap | 1×1 | 25 | holds 400 slag (≈53 min of one smelter's 7.5/min); full → feeding smelters block; empties out of its front into a belt or a brick press | §4 Byproducts |
 | Dock | 2×2 | starts placed | takes anything except slag; pays its value at once | §7 |
 | Hopper | 2×2 | starts placed | takes anything; counts toward research | §8 |
 

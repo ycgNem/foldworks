@@ -53,3 +53,41 @@ it rules out.
   conventions; names, numbers and order are this game's own.
 - **The zoom-out through floors** echoes Universal Paperclips' stage changes. Ours are
   floors you build out of your own modules, not a text stage change.
+
+## Milestone 0 — Foundation (2026-10-20)
+
+- 2026-10-20: **`Num` is our own, not a wrap of `break_infinity.js`.** A hybrid: values below 1e15
+  are plain doubles (so whole coin and item counts stay exact: 21 + 3 is 24, never
+  23.999999999999996, and "can I afford it?" never lies), above that a mantissa in [1, 10) and an
+  integer exponent that goes far past 1e308. Formatting floors (the display never shows more than
+  you have): commas below 10,000, three significant digits with K…Dc suffixes, scientific past
+  1e36. Why: exactness where the early game lives, no dependency, and every format rule in one
+  place (`src/engine/num.ts`, `tests/num.test.ts`). Rules out: a break_infinity drop-in later
+  without changing `Num` only.
+- 2026-10-20: **Machine buffer slots are small plain counts, not `Num`.** A machine's input
+  buffer (2 crafts' worth), output (4) and byproduct (4) are bounded slot counts; "every amount is
+  a Num" covers stocks: coin, deliveries, the research bank, order progress, module stores. The
+  purity test greps `src/sim/` for amount-like fields typed `number`.
+- 2026-10-20: **Saves are a snapshot plus the commands since it.** Each save writes a fresh
+  snapshot of the state (so the log is empty after a save); loading restores it and replays any
+  logged commands. Tests check both the snapshot round trip and that seed + the whole command
+  log from tick 0 replays to the identical state. Export strings are `FW1.<base64url>.<checksum>`.
+- 2026-10-20: **Palette A, "Foundry", picked** (the owner asked Claude to run autonomously, so
+  the lead picked the art director's recommendation; the owner can still swap to B, which is in
+  `pixel-art/palette-test/`). Why: chroma only where the player looks (blue iron on warm earth
+  reads by hue and lightness), brass modules are the clearest module-vs-machine cue, the warm
+  plum darks suit a cosy 100-hour workshop. hull1/hull2 lifted one step; a 32nd slot `gold` for
+  coin numbers. Pips: yellow 0.92 > green 0.76 > blue 0.64 > red 0.55 > grey 0.36 OKLab L.
+- 2026-10-20: **Machine art turns with its rotation, light included.** Mk1 machines are drawn
+  facing right and rotated in 90° steps; the top-left light turns with them. Subtle at 1×–2×;
+  accepted for Mk1 to keep one strip per machine. Revisit for Mk2 (four directions if it shows).
+- 2026-10-20: **The owner's direction: a full-screen, menu-dense UI** (Cookie Clicker / Clicker
+  Heroes references, mid-session message). The HUD becomes framed panels on every side: a store
+  column of large illustrated rows, tabs, a news ticker, a rolling counter, a research tree
+  screen. Flagged as derivative (CLAUDE.md standing instruction): **the store column of big rows
+  and the news ticker are Cookie Clicker's UI patterns.** Kept because the owner asked for this
+  presentation, and re-derived so they serve this game's model: store rows have flat prices
+  (no count-based price curve, PLAN.md not-list) and show what each machine makes per minute;
+  the ticker is the *Swamp Gazette*, whose headlines report the player's own factory (its jams,
+  its records, Bramble's orders), not random jokes alone. The research tree screen echoes
+  Cookie Clicker's ascension tree in look only; its nodes are this game's item-delivery research.
