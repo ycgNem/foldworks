@@ -2,6 +2,7 @@
 // who feeds a machine, what it wants per minute and what it gets, and the grade a line would
 // earn by DESIGN.md §10's formula (the Inspector Spark and the fold audit's preview use it).
 // Pure: reads the Game, never writes it.
+import { powerFactor } from './systems/power';
 import type { Game } from './Game';
 import { DX, DY, ccw, cw, faceTiles, opposite, type Dir, type Ent } from './world';
 import { machineRecipes } from './transfer';
@@ -173,9 +174,10 @@ export function endsAtSink(g: Game, m: Ent): boolean {
 
 /** What feeds machine m: the machines upstream of it (through belts, mergers, splitters, crates),
  * and the machines it shares a splitter with. */
-export function feeders(g: Game, m: Ent): { from: Ent[]; shared: Ent[] } {
+export function feeders(g: Game, m: Ent): { from: Ent[]; shared: Ent[]; stores: Ent[] } {
   const from: Ent[] = [];
   const shared: Ent[] = [];
+  const stores: Ent[] = [];
   const seen = new Set<number>([m.id]);
   const todo: Ent[] = [m];
   while (todo.length) {
@@ -197,6 +199,7 @@ export function feeders(g: Game, m: Ent): { from: Ent[]; shared: Ent[] } {
         from.push(n);
       } else {
         seen.add(n.id);
+        if (n.kind === 'crate') stores.push(n);
         if (n.kind === 'splitter') {
           for (const l of outLinks(n)) {
             const o = g.entAt(l.x, l.y);
@@ -209,7 +212,7 @@ export function feeders(g: Game, m: Ent): { from: Ent[]; shared: Ent[] } {
       }
     }
   }
-  return { from, shared };
+  return { from, shared, stores };
 }
 
 function followToMachine(g: Game, e: Ent): Ent | null {
@@ -256,7 +259,11 @@ export function report(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' |
     else out.push({ text: `Blocked: its ${m.why ? itemName(m.why).toLowerCase() : 'output'} has nowhere to go${sh.n ? ' (' + pct(sh.blocked) + ' of the last minute)' : ''}`, tone: 'bad' });
   } else out.push({ text: 'Idle', tone: 'dim' });
   // rates
-  if (nom.outs.length) out.push({ text: `Makes ${nom.outs.map((o) => perMin(o.perMin) + ' ' + itemName(o.item).toLowerCase()).join(', ')} when busy; ${perMin(nom.outs[0].perMin * sh.work)} now`, tone: 'plain' });
+  // in a brownout a busy machine runs at the speed power allows (Milestone 4 review: a kiln at 67%
+  // read "busy 100%, 30/min now")
+  const pf = Math.min(1, powerFactor(g, m));
+  if (pf < 0.999) out.push({ text: `Short of power: running at ${pct(pf)} speed`, tone: 'warn' });
+  if (nom.outs.length) out.push({ text: `Makes ${nom.outs.map((o) => perMin(o.perMin) + ' ' + itemName(o.item).toLowerCase()).join(', ')} when busy; ${perMin(nom.outs[0].perMin * sh.work * pf)} now`, tone: 'plain' });
   if (nom.ins.length) {
     const f = feeders(g, m);
     out.push({ text: `Wants ${nom.ins.map((i) => perMin(i.perMin) + ' ' + itemName(i.item).toLowerCase()).join(' + ')}`, tone: 'plain' });
@@ -266,7 +273,8 @@ export function report(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' |
         return `${entName(g, s)} (${sn.outs.map((o) => perMin(o.perMin) + ' ' + itemName(o.item).toLowerCase()).join(', ')})`;
       });
       out.push({ text: `Fed by ${supply.join(', ')}`, tone: 'plain' });
-    } else out.push({ text: m.kind === 'furnace' ? 'Fed by hand (the ore patch)' : 'Nothing feeds it: point a belt or a machine\'s front into it', tone: m.kind === 'furnace' ? 'dim' : 'bad' });
+    } else if (f.stores.length) out.push({ text: `Fed from ${f.stores.length > 1 ? f.stores.length + ' crates' : 'a crate'} (${f.stores.reduce((n, c) => n + c.store.length, 0)} held)`, tone: 'plain' });
+    else out.push({ text: m.kind === 'furnace' ? 'Fed by hand (the ore patch)' : 'Nothing feeds it: point a belt or a machine\'s front into it', tone: m.kind === 'furnace' ? 'dim' : 'bad' });
     if (f.shared.length) out.push({ text: `Its supply is shared with ${f.shared.map((s) => entName(g, s)).join(', ')}`, tone: 'warn' });
   }
   if (r.byproduct) {

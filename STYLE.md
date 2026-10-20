@@ -97,6 +97,31 @@ that roll and bump, pops and flying coins on every sale. Never a bare map with a
 - **Research node icons** that had none live in their own named atlas `ui_research` (16x16),
   not appended to `ui_icons`, so the 8x8 `ui_icons_small` list does not have to follow.
 
+## Bramble's Town (`pixel-art/town/`)
+
+The frog town that grows in the swamp round the floors. It is night-time water, so the town is
+read by **warm windows** (glow glass with a hot corner) and lit rims, not by its ink outlines.
+- **One footing for everything that stands in the water**: the last two rows of the sprite are
+  the waterline (iron0/teal0 ripples round each piling, a shadow pixel under it), pilings are
+  2 px wood (ground1 lit, ground0 shade) above that, and a plank deck (ground2 lit top, ground1
+  and ground0 face) above them. So any two town sprites bottom-aligned on one tile row share a
+  waterline. Houses' deck top is row 23 of 32; the tall buildings' row 39 of 48.
+- **Roofs carry the variety** (`town_house` order: hut thatch in brass tiers, gable copper tiles,
+  a lily pad with a lotus, tin over teal boards, turf over slag bricks, and the Mayor's). The
+  Mayor's house is the widest: navy boards (his coat), a slate roof with his copper sash and gold
+  badge across it, and a top hat for a chimney (shadow crown with a hull rim so it reads on ink).
+- **Customers' buildings quote their portraits**: Unit 7's observatory is its own head on a
+  shaft (the screen, teal eye, gold 7, a shop window of one of every item colour), with a dish
+  that turns and an eye that follows it; Dame Voltaire's pavilion is violet ironwork, bone
+  stone, a teal glass dome and a gold bolt, under a three-bladed turbine (30 degrees a frame).
+- **Boardwalk tiles** run a 6 px plank band to the tile edge on each connected side; planks
+  cross the direction of travel with seams every 4 px; open bottom edges get a front face and
+  pilings. Names in the JSON `order` (h, v, corners, ends, tees, cross).
+- **Frogs** are lit from above (moss back, leaf front) so the game mirrors `town_frog` for
+  walking left; feet are on the frame's bottom row.
+- Decorations (`town_lily`) have no outline: pads are leaf with a moss rim and a notch; reeds and
+  cattails stand on a ripple.
+
 ## Tools
 
 pixel-art-studio for everything (`pixel-art/<slug>/build.py`, every pixel placed on purpose).

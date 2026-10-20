@@ -28,7 +28,9 @@ import { ORDER, CUSTOMERS } from '../data/orders';
 import { TITLE } from '../game-info';
 import { Renderer, type Overlay } from '../render/renderer';
 import { TILE } from '../render/ground';
-import { drawHud, drawTitle, newHudState, type HudState } from './hud';
+import { drawHud, drawTitle, newHudState, banner, type HudState } from './hud';
+import { TOWN_ROWS } from '../render/town';
+import { ICON } from '../ui/font';
 import { nine } from './chrome';
 import { sheet, hasArt } from '../render/sprites';
 import { layout, type Layout } from './layout';
@@ -108,6 +110,14 @@ export class App {
   private hasSave = false;
   /** what the title screen offers */
   titleInfo: { hasSave: boolean; coin: string } = { hasSave: false, coin: '0' };
+  /** the town piece under the mouse: its one-line label */
+  townTip: string | null = null;
+  /** the slice-end card waits for the Gizmo parade (UI time it opens at) */
+  sliceAt: number | null = null;
+  /** the mouse is over the canvas (edge-scrolling stops when it leaves) */
+  private mouseIn = false;
+  /** seconds the mouse has rested at an edge of the floor view */
+  private edgeT = 0;
 
   constructor(public canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -115,6 +125,10 @@ export class App {
     this.game = new Game(1);
     this.loop = new GameLoop(() => this.tick(), (dt, alpha) => this.frame(dt, alpha));
     this.input.attach(canvas);
+    canvas.addEventListener('pointerenter', () => { this.mouseIn = true; });
+    canvas.addEventListener('pointermove', () => { this.mouseIn = true; });
+    canvas.addEventListener('pointerleave', () => { this.mouseIn = false; });
+    window.addEventListener('blur', () => { this.mouseIn = false; });
     this.ui.sfx = (id) => this.audio.sfx(id);
     this.ui.tipSkin = (ctx, x, y, w, h) => {
       if (!hasArt('ui_tip')) return void ((ctx.fillStyle = C.ink), ctx.fillRect(x, y, w, h));
@@ -310,6 +324,11 @@ export class App {
       return;
     }
     this.controls(dt);
+    if (this.sliceAt !== null && (this.ui.time >= this.sliceAt || !this.renderer.parade)) {
+      this.sliceAt = null;
+      this.panel = 'sliceEnd';
+      this.gradeAt = this.ui.time;
+    }
     const ov = this.overlay();
     this.renderer.draw(g, dt, this.frozen ? 0 : alpha, ov);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -357,6 +376,13 @@ export class App {
             this.renderer.firstMiner(e.x ?? 0, e.y ?? 0);
             this.toast('Your first Miner!', 'It digs on its own: ore every 2 s, no clicks. Belt it into the furnace and the line runs while you watch.', C.gold, 'build');
           }
+          // the first Mk2 machine: a fanfare and a banner
+          if (e.id && /Mk2$/.test(e.id) && (e.floor ?? 'workshop') === 'workshop' && (this.game.s.counters.mk2Built ?? 0) <= 1 && this.game.s.ents.filter((q) => /Mk2$/.test(q.kind)).length === 1) {
+            a.sfx('fanfare', 0.8);
+            this.renderer.fx.kick(4);
+            banner(this, 'FIRST MK2!', `${BUILD[e.id as BuildKind]?.name ?? 'A Mk2 machine'}: ${BUILD[e.id as BuildKind]?.speed ?? 4}x the speed of its Mk1, in 2x2`, C.copper2);
+            this.renderer.firstMk2(e.x ?? 0, e.y ?? 0);
+          }
           break;
         }
         case 'remove': a.sfx('remove'); break;
@@ -380,6 +406,13 @@ export class App {
           const c = CUSTOMERS[d.customer];
           const n = this.game.s.orders.done.length;
           this.toast(`${d.name}: filled!`, `+${Num.of(d.pays).format()} coin, +${d.rep} reputation. "${c.thanks[(n - 1) % c.thanks.length]}"`, C.lime, 'crate');
+          // a reputation level: a fanfare and a banner naming what it gives
+          const rep = this.game.s.orders.rep[d.customer];
+          const reward = c.rewards.find((q) => q.rep === rep);
+          a.sfx('fanfare', 0.7);
+          banner(this, `${ICON.heart.repeat(Math.max(1, Math.min(3, rep)))} REPUTATION ${rep}!`, `${c.name}: ${reward ? reward.text : 'a new house in town'}`, C.leaf);
+          // the Festival: the Factory floor, to watch the Gizmo parade into its Dock
+          if (e.id === 'gizmoFestival' && !this.panel && this.floor !== 'factory') this.setFloor('factory', true);
           break;
         }
         case 'spark': a.sfx('spark'); break;
@@ -423,6 +456,8 @@ export class App {
           a.sfx('sparkGet');
           const it = ITEMS[e.id as ItemId];
           this.toast('Codex entry!', `Unit 7 catalogues ${it ? it.name.toLowerCase() : 'it'}: ${Num.of(e.value ?? 0).format()} coin for the first one.`, C.gold, 'codex');
+          a.sfx('fanfare', 0.5, 1.2);
+          banner(this, 'CODEX FIRST!', `${it ? it.name : 'A new item'}: +${Num.of(e.value ?? 0).format()} coin`, C.teal1);
           break;
         }
         case 'claim': a.sfx('upgrade'); this.toast('Claims staked', `${e.value ?? 4} more ${ITEMS[e.id as ItemId]?.name.toLowerCase() ?? ''} claims: stamp more copies of modules that dig it.`, C.leaf, 'claim'); break;
@@ -457,8 +492,12 @@ export class App {
         case 'sliceEnd':
           a.sfx('milestone');
           this.renderer.fx.kick(5);
-          this.panel = 'sliceEnd';
-          this.gradeAt = this.ui.time;
+          // the card waits for the Gizmo parade into the Factory Dock to finish
+          if (this.renderer.parade && this.floor === 'factory') this.sliceAt = this.ui.time + Math.max(0.5, 3.6 - this.renderer.parade.t);
+          else {
+            this.panel = 'sliceEnd';
+            this.gradeAt = this.ui.time;
+          }
           break;
       }
     }
@@ -503,6 +542,7 @@ export class App {
     if (inp.isDown('panRight')) cam.x += sp;
     if (inp.isDown('panUp')) cam.y -= sp;
     if (inp.isDown('panDown')) cam.y += sp;
+    this.edgeScroll(dt);
     if (inp.wasPressed('zoomIn')) this.zoom(1);
     if (inp.wasPressed('zoomOut')) this.zoom(-1);
     if (inp.mouse.wheel && !this.ui.captured) this.zoom(-inp.mouse.wheel);
@@ -546,6 +586,31 @@ export class App {
     }
     if (this.floor === 'factory') this.renderer.clampCam(FACTORY.w, FACTORY.h);
     else this.renderer.clampCam(this.game.W, this.game.H);
+  }
+
+  /** Rest the mouse at an edge of the floor view to pan that way, while the floor runs past it. */
+  private edgeScroll(dt: number) {
+    const c = this.layout.center;
+    const ui = this.ui;
+    const m = 10;
+    const inside = this.mouseIn && !this.panel && ui.mx >= c.x && ui.my >= c.y && ui.mx < c.x + c.w && ui.my < c.y + c.h;
+    const dx = !inside ? 0 : ui.mx < c.x + m ? -1 : ui.mx >= c.x + c.w - m ? 1 : 0;
+    const dy = !inside ? 0 : ui.my < c.y + m ? -1 : ui.my >= c.y + c.h - m ? 1 : 0;
+    if (!dx && !dy) { this.edgeT = 0; return; }
+    this.edgeT += dt;
+    if (this.edgeT < 0.3 || this.input.mouse.down[0]) return;
+    const cam = this.renderer.cam;
+    const sp = (200 * dt) / Math.max(1, cam.zoom / 2) * Math.min(1, (this.edgeT - 0.3) * 3);
+    cam.x += dx * sp;
+    cam.y += dy * sp;
+  }
+
+  /** Which edges of the floor view have more floor (or town) beyond them: for the HUD's arrows. */
+  panHints(): { l: boolean; r: boolean; u: boolean; d: boolean } {
+    const r = this.renderer;
+    const fw = this.floor === 'factory' ? FACTORY.w : this.game.W, fh = this.floor === 'factory' ? FACTORY.h : this.game.H;
+    const a = r.screenToWorld(r.view.x, r.view.y), b = r.screenToWorld(r.view.x + r.view.w, r.view.y + r.view.h);
+    return { l: a.x > 4, r: b.x < fw * TILE - 4, u: a.y > -TOWN_ROWS * TILE + 4, d: b.y < fh * TILE - 4 };
   }
 
   pickBuild(kind: BuildKind) {
@@ -616,17 +681,42 @@ export class App {
     return Math.max(2, Math.round(4 * (window.devicePixelRatio || 1)));
   }
 
-  /** Zoom to fit the land you own, and centre it. */
+  /** The zoom that fills the floor view: the largest whole zoom at which `w` x `h` world px fit,
+   *  one more when that leaves most of the view empty water (the Milestone 4 review: the 24x16
+   *  Workshop drew at 1x in a quarter of a 1280x720 view). Past the fit the floor pans (drag with
+   *  the right button, WASD, or rest the mouse at the view's edge). */
+  private fillZoom(w: number, h: number): number {
+    const v = this.renderer.view;
+    const availH = v.h - 8 * this.uiScale, availW = v.w - 8 * this.uiScale;
+    let z = Math.max(1, Math.min(this.maxZoom(), Math.floor(Math.min(availW / w, availH / h))));
+    if (z + 1 <= this.maxZoom() && w * z < availW * 0.75 && h * z < availH * 0.75) z++;
+    return z;
+  }
+
+  /** Centre the camera on rows y0..y1 (world px), showing Bramble's Town above them when the
+   *  floor and the town fit together. */
+  private frameRows(y0: number, y1: number) {
+    const cam = this.renderer.cam;
+    const viewH = this.renderer.view.h / cam.zoom;
+    const town = TOWN_ROWS * TILE;
+    const over = y1 - y0 + town - viewH;
+    // all of it fits: centre floor and town together; a little short: the town on top and the
+    // floor's last few pixels off the bottom (a pan away); far short: the floor alone
+    if (over <= 0) cam.y = (y0 - town + y1) / 2;
+    else if (over <= 2 * TILE) cam.y = y0 - town + viewH / 2;
+    else cam.y = (y0 + y1) / 2;
+  }
+
+  /** Zoom to fill the view with the land you own, and centre it. */
   fitCamera(reset = false) {
     const g = this.game;
+    const cam = this.renderer.cam;
     if (this.floor === 'factory') {
-      const v = this.renderer.view;
-      const w = (FACTORY.w + 1) * TILE, h = (FACTORY.h + 1) * TILE;
-      const z = Math.max(1, Math.min(this.maxZoom(), Math.floor(Math.min((v.w - 8 * this.uiScale) / w, (v.h - 8 * this.uiScale) / h))));
-      const cam = this.renderer.cam;
+      const z = this.fillZoom((FACTORY.w + 1) * TILE, (FACTORY.h + 1) * TILE);
       if (reset || cam.zoom > z) cam.zoom = z;
       cam.x = (FACTORY.w / 2) * TILE;
-      cam.y = (FACTORY.h / 2) * TILE;
+      this.frameRows(0, FACTORY.h * TILE);
+      this.renderer.clampCam(FACTORY.w, FACTORY.h);
       return;
     }
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -635,14 +725,13 @@ export class App {
       x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x + c.w); y1 = Math.max(y1, c.y + c.h);
     }
     // show a little of the land around what you own
-    const w = (x1 - x0 + 2) * TILE, h = (y1 - y0 + 2) * TILE;
-    const v = this.renderer.view;
-    const availH = v.h - 8 * this.uiScale, availW = v.w - 8 * this.uiScale;
-    const z = Math.max(1, Math.min(this.maxZoom(), Math.floor(Math.min(availW / w, availH / h))));
-    const cam = this.renderer.cam;
+    const z = this.fillZoom((x1 - x0 + 2) * TILE, (y1 - y0 + 2) * TILE);
     if (reset || cam.zoom > z) cam.zoom = z;
     cam.x = ((x0 + x1) / 2) * TILE;
-    cam.y = ((y0 + y1) / 2) * TILE + 4;
+    // the town sits on the water above the top edge: frame it in when the owned land starts there
+    if (y0 === 0) this.frameRows(0, y1 * TILE + 4);
+    else cam.y = ((y0 + y1) / 2) * TILE + 4;
+    this.renderer.clampCam(g.W, g.H);
   }
 
   private overlay(): Overlay {
@@ -688,6 +777,7 @@ export class App {
     const pt = this.renderer.screenToTile(inp.mouse.px * k, inp.mouse.py * k);
     const inFloor = this.floor === 'factory' ? t.x >= 0 && t.y >= 0 && t.x < FACTORY.w && t.y < FACTORY.h : g.inb(t.x, t.y);
     this.hud.hoverTile = !overUI && inFloor ? t : null;
+    this.townTip = !overUI && !inFloor && this.mouseIn ? this.renderer.townAt(sx, sy) : null;
 
     // pan with the right or middle button held and moved
     const panBtn = inp.mouse.down[2] || inp.mouse.down[1];

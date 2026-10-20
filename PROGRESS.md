@@ -2,13 +2,14 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
-## Status (2026-10-20): Milestones 0–2 built, the Milestone 3 gate passed with conditions, Milestone 4 (Act II) nearly done
+## Status (2026-10-20): Milestones 0–2 built, the Milestone 3 gate passed with conditions, Milestone 4 (Act II) built and reviewed
 
 The owner asked for Milestones 0–4 in one autonomous session. Milestones 0, 1 and 2 are built.
 The critic's Milestone 1–2 review and the Milestone 3 gate reviews (idle-critic: pass with
 conditions; pacing-auditor: fail on three checks) have been acted on (DECISIONS.md); every Act I
 pace test passes again. The slice now ends with Bramble's Gizmo Festival. Act II's sim, UI and
-art are in; its bot reaches circuits but not yet the Great Drill (being finished).
+art are in, its bot plays from the slice end to the Great Drill's stage 1 (~3:52), and the
+critic's Milestone 4 review has been acted on (DECISIONS.md, "The Milestone 4 review").
 
 ### What exists
 
@@ -60,18 +61,24 @@ art are in; its bot reaches circuits but not yet the Great Drill (being finished
     construction, per-item meters and ETAs), the research card, Factory Overdrive glows.
   - Juice: up to three audit badges with countdowns, the S+ card (rays, gold-leaf rain, fanfare),
     the paper fold animation, the first-Miner fountain, the Bellows card, line and group
-    Overdrive bursts, the Festival walked through in the goal card.
+    Overdrive bursts, the Festival walked through in the goal card, the Gizmo parade and the
+    slice-end celebration card, coin cascades on every order, banners for Codex firsts, the first
+    Mk2 and each reputation level.
+  - **Bramble's Town** on the water around both floors, growing as orders are filled (houses, the
+    boardwalk, lamps, festival stalls and frogs, Unit 7's observatory, Voltaire's pavilion).
+  - The camera fills the view at an integer zoom and pans.
 - **Art** (`src/art/`, drawn with the pixel-art-studio scripts in `pixel-art/`):
   - every Act I and Act II machine and item, tiles, ore, portraits (with cheer frames);
   - the UI 9-slices and icon atlases (29 icons + 4 research icons), the Megaproject Bay and the
     Great Drill's 10-frame build, Overdrive glows, the S+ grade, the fold animation, the audit
-    stopwatch, the research lab scene, the logo.
+    stopwatch, the research lab scene, the town (8 sheets), the logo.
   - PixelLab is not used yet (the owner's call).
 - **Tests** (`npm test`):
   - Num, engine, data validation, purity;
   - the Workshop sim, folding and the Factory floor, Act II (`tests/act2.test.ts`);
   - the pace suite (`tests/pace-*.test.ts`, bots under honest limits, §13 checks 1–12, all
-    green), and the Act II bot's suite (`tests/pace-act2-run.test.ts`, 3 checks still todo).
+    green), and the Act II bot's suite (`tests/pace-act2-run.test.ts`: steel, power, circuits,
+    Concrete, the Great Drill, rules 2 and 4, Patents; rule 1 while the Bay fills is todo).
 - **Harness** (`e2e/`): `screens` (overlap audit at three sizes), `shots`, `smoke` (the fold
   flow by mouse), `bot`, `perf` (0.013 ms a tick on a dense floor), `look` (named states).
 
@@ -80,17 +87,21 @@ art are in; its bot reaches circuits but not yet the Great Drill (being finished
 Bellows 0:21 · first Miner 0:47 · Pressing 1:47 · chunk B 9:20 · first Gizmo 16:13 ·
 Folding 23:19 · first fold 24:35 · slice end (the Festival) 31:43, 8:23 after Folding ·
 greedy's longest dead air 171 s · Dock-only 9.1 min behind · 8 h offline = 3.97 h of active
-rate, 0.59 of staying open idle. Act II (two seeds, from the slice end ~0:31): steel ~0:50,
-power ~0:56, circuits ~1:21.
+rate, 0.59 of staying open idle. Act II (two seeds, from the slice end ~0:31): steel 0:49,
+power 0:57, circuits 1:26, Concrete fold 1:37, Great Drill stage 1 3:52; active/idle 1.7–1.8×;
+longest gap between decisions 6 min; 14 Patents at 5 h (divisor 2,500, formula reopened).
 
 ### Stubbed / not done
 
-- Act II pacing: the bot stalls before Concrete and the Great Drill (the Factory floor is full
-  of the slice's Gizmo chains); rule 1 and rule 4's 1.5× floor are todo tests. Being finished.
+- Act II pacing: rule 1 fails for ~40 min while the Megaproject Bay fills; coin piles up with too
+  few sinks (~1.8M at 5 h); the bot doesn't use nested folds yet; its Bay floor is hand-laid.
+- Owner decisions waiting (DECISIONS.md "Flagged as derivative"): power, machine modes, Machine
+  Kits, the Megaproject's theme. The Patents formula is reopened for Milestone 5.
 - The owner's evening of play for the Milestone 3 gate.
 - Milestones 5+ are not started (Reorganize, District, Relocate, the Last Fold).
 
 ### Next
 
-Finish the Act II bot (Concrete, nested folds, the Great Drill, Factory Overdrive for rule 4),
-then the Milestone 4 critic review and its fixes; commit and push.
+The owner plays the slice and Act II and rules on the flagged items. Then Milestone 5
+(Reorganize): its Patents formula, coin sinks for Act II's late hour, and rule 1 while the Bay
+fills.

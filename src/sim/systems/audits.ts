@@ -11,7 +11,7 @@ import { OK, no } from '../Game';
 import { TICK_RATE } from '../../engine/time';
 import { BUILD, isMachine, isPower } from '../../data/machines';
 import { RECIPE } from '../../data/recipes';
-import { RULES, SCORE_WEIGHTS, gradeFor } from '../../data/rules';
+import { RULES, SCORE_WEIGHTS, gradeFor, GRADES } from '../../data/rules';
 import { ITEMS, itemName, type ItemId } from '../../data/items';
 import { DX, DY, opposite, type AuditResult, type AuditState, type Box, type Dir, type Ent, type Port } from '../world';
 import { entName, feeders } from '../analysis';
@@ -206,27 +206,28 @@ export function runAudits(g: Game) {
   }
 }
 
-/** Outputs (item counts over the window) less what was drawn down from stock already in the box:
- * the same item first, then anything else by value, taken off every output in proportion. */
-function netOuts(g: Game, a: AuditState): Record<string, number> {
+/** Stock that drains by no more than this many of an item over the window is belts and buffers
+ * settling, not production (DESIGN.md §10 Audit). */
+const STOCK_NOISE = 3;
+
+/** The window's item counts net of stock already in the box (DESIGN.md §10 Audit; the Milestone 3
+ * gate and Milestone 4 reviews): what was drawn down of an item that also left the box comes off
+ * that output (a crate of Gizmos draining out is not a Gizmo factory), and the rest of what was
+ * drawn down is an input the module will need (a crate of steel feeding a kit assembler inside
+ * makes a module that takes steel, not one that makes kits from nothing, whatever kits are worth). */
+function netCounts(g: Game, a: AuditState): { ins: Record<string, number>; outs: Record<string, number> } {
   const outs: Record<string, number> = { ...a.outs };
-  if (!a.stock0) return outs;
+  const ins: Record<string, number> = { ...a.ins };
+  if (!a.stock0) return { ins, outs };
   const now = stockIn(g, a.box);
-  let restValue = 0;
   for (const [k, n0] of Object.entries(a.stock0)) {
     let d = n0 - (now[k] ?? 0);
-    if (d <= 0) continue;
+    if (d <= STOCK_NOISE) continue;
     const same = Math.min(d, outs[k] ?? 0);
     if (same > 0) { outs[k] -= same; d -= same; }
-    restValue += d * (ITEMS[k as ItemId]?.value ?? 0);
+    if (d > 0) ins[k] = (ins[k] ?? 0) + d;
   }
-  if (restValue > 0) {
-    let outValue = 0;
-    for (const [k, n] of Object.entries(outs)) outValue += n * (ITEMS[k as ItemId]?.value ?? 0);
-    const keep = outValue > 0 ? Math.max(0, 1 - restValue / outValue) : 0;
-    for (const k of Object.keys(outs)) if ((ITEMS[k as ItemId]?.value ?? 0) > 0) outs[k] *= keep;
-  }
-  return outs;
+  return { ins, outs };
 }
 
 /** Grade the window measured so far (DESIGN.md §10 Grade): the whole window when it closes, and
@@ -243,7 +244,8 @@ export function gradeAudit(g: Game, a: AuditState): AuditResult {
     u += busy[m.id];
   }
   u = ms.length ? u / ms.length : 0;
-  const outCounts = netOuts(g, a);
+  const net = netCounts(g, a);
+  const outCounts = net.outs;
   // W: byproducts made inside (plus those a machine blocked by its byproduct would have made:
   // a line jammed by slag makes none, and must not score W = 1) vs. those that left by a port or
   // were used inside
@@ -282,12 +284,24 @@ export function gradeAudit(g: Game, a: AuditState): AuditResult {
     for (const [k, v] of Object.entries(t)) if (v > 1e-9) o[k as ItemId] = v / secs;
     return o;
   };
-  const ins = rate(a.ins), outs = rate(outCounts);
+  const ins = rate(net.ins), outs = rate(outCounts);
+  const advice = advise(g, ms, busy, { u, w, c }, score, byMade, byHandled, machineTiles, boxTiles, outs, a.stall ?? {});
+  // S+ is a zero-waste line: its byproducts are used inside the box (bricks, gravel), or it makes
+  // none. A line that only routes its slag out to a heap or a Dock tops out at S (the Milestone 4
+  // review: a miner and a smelter graded S+)
+  const gr2 = splusGate(gr, score, byMade, usedInside);
+  if (gr2 !== gr) advice.unshift(`One step to S+: use the ${[...byItems].map((i) => itemName(i as ItemId).toLowerCase()).join(' and ')} inside the box (a press making bricks, a crusher making gravel); routed out to a heap, it caps the grade at S.`);
   return {
-    grade: { letter: gr.letter, score, u, w, c, mult: gr.mult },
+    grade: { letter: gr2.letter, score, u, w, c, mult: gr2.mult },
     ins, outs, byMade, byHandled, machineTiles, boxTiles, busy,
-    advice: advise(g, ms, busy, { u, w, c }, score, byMade, byHandled, machineTiles, boxTiles, outs, a.stall ?? {}),
+    advice,
   };
+}
+
+/** S+ needs the byproducts used inside the box (RULES.splusUsedInside of them), or none made. */
+export function splusGate<T extends { letter: string }>(gr: T, score: number, byMade: number, usedInside: number): T {
+  if (gr.letter !== 'S+' || byMade <= 0 || usedInside >= byMade * RULES.splusUsedInside.value) return gr;
+  return (GRADES.find((q) => q.letter === 'S') as unknown as T) ?? gr;
 }
 
 /** The projected grade of an audit while it runs (null during the warm-up). */

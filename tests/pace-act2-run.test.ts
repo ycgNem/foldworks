@@ -1,15 +1,20 @@
-// Act II pace tests (DESIGN.md §16, ROADMAP.md Milestone 4): the Act I planner plays to the slice
-// end (the Gizmo Festival), then the honest Act II policy (src/sim/bot2.ts) plays on to 5 h. Times
-// are rebased from the measured slice end (~0:31), not from the old ~1:00 assumption.
+// Act II pace tests (DESIGN.md §16, §18 Pacing targets; ROADMAP.md Milestone 4): the Act I planner
+// plays to the slice end (the Gizmo Festival), then the honest Act II policy (src/sim/bot2.ts)
+// plays on to 5 h. Every target is measured from the slice end S (about 0:31), not the clock.
 // Measured on seeds 1000 and 8919 (bot2 at this commit):
-//   slice end 0:30-0:31, steel 0:48-0:50 (+18-19 min), power 0:55-0:58 (+25-27),
-//   circuits 1:20-1:23 (+50-52), longest decision gap 5.7-6.0 min, max 4 clicks/s,
-//   lifetime coin 4 h 1.97-2.01M, 5 h 2.53-2.56M, rule 4 active/idle 1.36-1.38.
+//   S 0:30-0:31; steel S+18-19 min; power S+25-27; circuits S+55; Concrete fold S+65-67;
+//   Drill works fold S+1:56; the Great Drill's stage 1 S+3:22-3:37 (3:53-4:08);
+//   longest stretch without a decision 5.8-6.0 min; at most 4 clicks in any second;
+//   Overdrive (Workshop machines and Factory groups) about 3,600 clicks;
+//   rule 4 active/idle over 2:00-2:30 1.80-1.84; lifetime coin 4 h 1.80M, 5 h 2.05-2.07M.
 import { describe, expect, it } from 'vitest';
 import { act2Run, earnedAt, idleEarned, longestGap, patents, hmm, SEEDS2, RULE4_AT, RULE4_FOR } from './pace-act2-helpers';
 
 const T = 120_000;
 const MIN = 60;
+
+/** Goal events: research, land, folds, orders, modules placed, the Bay's stage (rule 1's proxy). */
+const GOAL = /^(research|land|fold|order|module|stage)/;
 
 describe('Act II pacing (bot2 after the planner)', () => {
   for (const seed of SEEDS2) {
@@ -20,19 +25,25 @@ describe('Act II pacing (bot2 after the planner)', () => {
         expect(r.overdrives).toBeGreaterThan(0);
       }, T);
 
-      it('hands over at the slice end, then reaches steel, power and circuits on the rebased targets', () => {
+      it('hands over at the slice end, then reaches steel, power, circuits and the Concrete fold on the rebased targets', () => {
         const r = act2Run(seed);
         const h = r.handover;
-        console.log(`seed ${seed}: handover ${hmm(h)} steel ${hmm(r.at.steel)} power ${hmm(r.at.power)} circuits ${hmm(r.at.circuits)} concrete ${hmm(r.at.concrete)} drill ${hmm(r.at.greatDrill1)}`);
+        const rel = (k: string) => (r.at[k] === undefined ? undefined : r.at[k] - h);
+        console.log(`seed ${seed}: S ${hmm(h)} steel ${hmm(r.at.steel)} power ${hmm(r.at.power)} circuits ${hmm(r.at.circuits)} Concrete fold ${hmm(r.at['fold:Concrete'])} Drill works ${hmm(r.at['fold:Drill works'])} stage 1 ${hmm(r.at.greatDrill1)}`);
         expect(h).toBeGreaterThan(25 * MIN);
         expect(h).toBeLessThan(40 * MIN);
-        // steel within 25 min of the slice end, power within 35, circuits within 60
-        expect(r.at.steel).toBeDefined();
-        expect(r.at.steel! - h).toBeLessThanOrEqual(25 * MIN);
-        expect(r.at.power).toBeDefined();
-        expect(r.at.power! - h).toBeLessThanOrEqual(35 * MIN);
-        expect(r.at.circuits).toBeDefined();
-        expect(r.at.circuits! - h).toBeLessThanOrEqual(60 * MIN);
+        // §18 Pacing targets: steel by S+25 min, power by S+35, circuits by S+60, Concrete by S+80
+        expect(rel('steel')).toBeLessThanOrEqual(25 * MIN);
+        expect(rel('power')).toBeLessThanOrEqual(35 * MIN);
+        expect(rel('circuits')).toBeLessThanOrEqual(60 * MIN);
+        expect(rel('fold:Concrete')).toBeLessThanOrEqual(80 * MIN);
+      }, T);
+
+      it('fills the Great Drill\'s stage 1 by S+4 h', () => {
+        const r = act2Run(seed);
+        expect(r.at['fold:Drill works']).toBeDefined();
+        expect(r.at.greatDrill1).toBeDefined();
+        expect(r.at.greatDrill1! - r.handover).toBeLessThanOrEqual(4 * 3600);
       }, T);
 
       it('rule 2: no dead air longer than 15 min between decisions, slice end to 5 h', () => {
@@ -53,24 +64,30 @@ describe('Act II pacing (bot2 after the planner)', () => {
         expect(p10 - p5).toBeGreaterThanOrEqual(3);
       }, T);
 
-      it('rule 4 (partial): active play out-earns idle from the same 2 h state', () => {
+      it('rule 4: active play earns 1.5-4x idle from the same 2 h state', () => {
         const r = act2Run(seed);
         const act = earnedAt(r, RULE4_AT + RULE4_FOR) - earnedAt(r, RULE4_AT);
         const idle = idleEarned(r);
         console.log(`seed ${seed}: rule 4 active ${Math.round(act)} idle ${Math.round(idle)} ratio ${(act / idle).toFixed(2)}`);
         expect(idle).toBeGreaterThan(0);
-        expect(act / idle).toBeGreaterThan(1);
+        expect(act / idle).toBeGreaterThanOrEqual(1.5);
         expect(act / idle).toBeLessThanOrEqual(4);
+      }, T);
+
+      it('rule 1 (logged): the longest wait between goals, slice end to the stage', () => {
+        const r = act2Run(seed);
+        const goals = r.decisions.filter((_, i) => GOAL.test(r.what[i]));
+        const end = r.at.greatDrill1 ?? 5 * 3600;
+        const before = longestGap(goals, r.handover, r.at['fplan:bay'] ?? end);
+        const after = longestGap(goals, r.at['fplan:bay'] ?? end, end);
+        console.log(`seed ${seed}: rule 1 longest goal gap ${(before.gap / 60).toFixed(1)} min at ${hmm(before.at)} before the Bay floor, ${(after.gap / 60).toFixed(1)} at ${hmm(after.at)} while the Bay fills`);
+        // up to the Bay floor a goal lands at least every 15 min (rule 2's bound; rule 1's 3 min is not met, see it.todo)
+        expect(before.gap).toBeLessThanOrEqual(15 * MIN);
       }, T);
     });
   }
 
-  // Known gaps, measured and reported, not yet held:
-  // rule 4's band: active/idle is 1.36-1.38, under the 1.5 floor (Overdrive's real ceiling is +50%
-  // and the Gizmo chains earn most of the coin with or without the player).
-  it.todo('rule 4: active/idle in 1.5-4 at 2:00-2:30');
-  // rule 1: bot2 stalls at "no room for circ1" (the Festival planner leaves 15 Act I modules on the
-  // Factory floor), so after concrete research at ~2:29 no goal lands for the rest of the run.
-  it.todo('rule 1: the next goal always within 3 min of reach');
-  it.todo('Concrete fold by ~2:30 and Great Drill stage 1 by ~4:30');
+  // Not met yet, measured and reported: while the Bay fills (about 1.5 h) the goals are the last
+  // research nodes and the stage itself, 25-40 min apart; §16 rule 1 wants one within 3 min.
+  it.todo('rule 1: the next goal always within 3 min of reach while the Bay fills');
 });

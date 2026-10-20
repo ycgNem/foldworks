@@ -8,6 +8,7 @@ import { TICK_RATE } from '../../engine/time';
 import { offer } from '../transfer';
 import { note } from './stats';
 import { overdriveTick, veinBoost } from './machines';
+import { isAudited } from './audits';
 
 export function runMiners(g: Game) {
   const cap = RULES.outputCap.value;
@@ -19,7 +20,8 @@ export function runMiners(g: Game) {
     // a Lucky Vein boosts its line (veinBoost: never while audited, or it would be folded in)
     const speed = veinBoost(g, m)
       * ((m.od ?? 0) > 0 ? RULES.overdriveMult.value : 1)
-      * (g.s.mega.stage >= 1 ? 1 + RULES.drillBoost.value : 1);
+      // the Great Drill never reaches a miner being audited (a folded rate would count it twice)
+      * (g.s.mega.stage >= 1 && !isAudited(g, m.id) ? 1 + RULES.drillBoost.value : 1);
     if (m.out < cap) {
       m.prog += speed;
       const need = r.time * TICK_RATE;

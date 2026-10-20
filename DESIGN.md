@@ -227,7 +227,13 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
 2. **Audit.** The box keeps running for **70 s** of sim time (10 s warm-up + a 60 s window) while
    you play on. The game measures, per item: rate in through ports, rate out through ports, and
    items made inside (miners count as made inside). Over the window it also tracks each
-   machine's busy fraction and where the byproducts ended up.
+   machine's busy fraction and where the byproducts ended up. **Stock already in the box** is
+   counted when the window opens: what of it drains out as the same item comes off that output,
+   and the rest of what drains (more than 3 of an item: belts settling) is an **input** the module
+   will need. *Derivation (Milestone 3 gate, Milestone 4 review): a crate of Gizmos draining out
+   graded as a Gizmo factory, and a crate of steel feeding a kit assembler folded into kits made
+   from nothing.* The Great Drill's boost never reaches a machine being audited (it would be
+   counted twice once the module runs boosted).
 3. **Grade.** `score = 0.6·U + 0.2·W + 0.2·C`
    - **U** = mean busy fraction of the machines in the box.
    - **W** = byproducts leaving through ports or used inside ÷ byproducts made (1 if none are
@@ -238,6 +244,7 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
 
    | Grade | Score | Rate multiplier |
    |---|---|---|
+   | S+ | ≥ 0.97, and its byproducts used inside the box (80%), or none made | ×1.35 |
    | S | ≥ 0.90 | ×1.25 |
    | A | ≥ 0.80 | ×1.10 |
    | B | ≥ 0.65 | ×1.00 |
@@ -278,7 +285,10 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
   Hopper** at the floor's edge, which work like the Workshop's.
 - Modules run as rate functions, not crafts: each tick a module consumes its inputs at rate
   if they're available (fractional amounts banked), produces at rate, and is **starved** or
-  **blocked** in proportion. The same status pips apply.
+  **blocked** in proportion. The same status pips apply. A byproduct with nowhere to go blocks
+  it; of its products it runs while any one has room, and a full one **spills** (the hover says
+  so). *Derivation (Act II's bot): a glass-and-plastic module feeding circuits, which take the two
+  in another ratio than it makes them, stopped for good when the plastic backed up.*
 - **The slice ends here**: when **Bramble's Gizmo Festival** is filled, 400 Gizmos delivered to
   the **Factory Dock** (§7). Then Bramble's closing line and a "Milestone reached" card. A Gizmo
   module needs a Gizmo line folded with at least one other kind of machine (a module is a line,
@@ -483,14 +493,17 @@ what they run on.
 
 ### Land and deposits
 - The Workshop widens east to 24×16: **chunk E** (x 16–23, y 0–7) with a coal and a sand
-  deposit, 15,000 coin, after *Coal Seams*; **chunk F** (x 16–23, y 8–15) with coal and iron,
-  40,000, after *Steam Power*. *Derivation: E costs about 6 minutes of a slice-end factory's
-  income (≈2,500/min), F about 8 minutes of an early Act II one (≈5,000/min).*
+  deposit, 60,000 coin, after *Coal Seams*; **chunk F** (x 16–23, y 8–15) with coal and iron,
+  120,000, after *Steam Power*. *Derivation: measured, the slice-end factory earns about
+  12,500/min played (7,200 idle), not the 2,500 first assumed; E is about 5 minutes of it, F about
+  10 minutes of the early Act II factory (≈12,000/min). At 15,000 and 40,000 they were 1.2 and
+  3.3 minutes (the Milestone 4 review).*
 - **Deposit claims, not depletion** (decided here, `DECISIONS.md`). Ore never runs out. A
   *source* design (miners inside, no inputs) may have as many stamped copies of each ore as you
   hold claims for that ore. Everyone starts with 3 claims per ore plus 2 per Workshop deposit of
   that ore they own; the **Survey Office** (research *Surveying*) sells more, 4 at a time
-  (iron and copper 5,000, sand 8,000, coal 12,000; each later block of 4 costs 1.5× the last of
+  (iron and copper 25,000, sand 40,000, coal 60,000: 2–5 minutes of Act II income; each later
+  block of 4 costs 1.5× the last of
   its ore, linear in blocks bought: `price × (1 + 0.5·b)`, the stamp rule again). *Derivation:
   claims keep the Workshop's ore patches meaningful after folding (pillar 2: land matters),
   without the chore of re-folding depleted lines.*
@@ -500,30 +513,37 @@ what they run on.
 |---|---|---|---|---|
 | Coal | 2 | Miner | coal deposit | 2.0 s |
 | Sand | 1 | Miner | sand deposit | 2.0 s |
-| Steel | 15 | Smelter | iron ingot + coal, 1 slag per 2 | 3.0 s |
-| Glass | 8 | Kiln | 2 sand | 2.0 s |
+| Steel | 22 | Smelter | iron ingot + coal, 1 slag per 2 | 3.0 s |
+| Glass | 12 | Kiln | 2 sand | 2.0 s |
 | Gravel | 2 | Press | 2 slag | 1.0 s |
-| Concrete | 22 | Mixer | 2 gravel + sand | 3.0 s |
-| Plastic | 16 | Refinery | 2 coal, 1 oil per 2 | 4.0 s |
+| Concrete | 32 | Mixer | 2 gravel + sand | 3.0 s |
+| Plastic | 24 | Refinery | 2 coal, 1 oil per 2 | 4.0 s |
 | Oil | 3 | (Refinery byproduct) | | |
-| Circuit | 110 | Assembler | 3 wire + plastic + glass | 5.0 s |
+| Circuit | 180 | Assembler | 3 wire + plastic + glass | 5.0 s |
 | Machine Kit | parts | Assembler | 2 steel + 2 gears | 4.0 s |
-| Motor | 420 | Assembler | 2 steel + gear + circuit | 8.0 s |
+| Motor | 640 | Assembler | steel + 4 copper wire + circuit | 8.0 s |
 | Drill Bit | megaproject | Assembler | 4 steel + motor + 2 concrete | 12 s |
 
-*Derivation: each step pays about 1.5–4.5× its inputs' value (circuit 3.7×, motor 2.7×, glass 4×,
-concrete 4.4×); per machine-second a deeper chain earns more (motor 6.3 coin/s against steel's
-1.7), so a deeper line is always worth building; slag now has two outlets (gravel,
+*Derivation: each step pays about 3–6× its inputs' value (circuit 4.3×, motor 3.0×, glass 6×,
+concrete 6.4×). Act II goods out-earn the slice's Gizmo per module tile (the Milestone 4 review: a
+Gizmo chain is 3 modules at 0.27 Gizmos/s × 80, 7.3 coin/s a module): an S-grade module of a
+full-speed line earns Steel 9.2 coin/s, Glass 7.5, Plastic 7.5, Concrete 13, a Circuits chain 15
+a module. Thin lines fold into thin modules: the Act II bot's one-miner lines measure Steel 8.1
+(A), Plastic 5.7 (C), Glass 2.3 (D), so a player who widens a line before folding is paid for it.
+The motor's recipe was 2 steel + gear + circuit, re-derived (windings, not the shape of another
+game's engine unit). Per machine-second a deeper chain earns more, so a deeper line is always
+worth building; slag now has two outlets (gravel,
 bricks) and the refinery's oil is a byproduct with a use (boiler fuel), so zero-waste lines
 are possible and earn W = 1.*
 
 ### Power
-- **Boiler** (120 coin): burns 1 coal or 1 oil every 4 s while the grid needs it, and steams the
-  **Steam Engine** in front of it (200 coin), which makes **300 kW**. **Generator** (260): one
-  tile, burns 1 coal every 3 s for **150 kW**. *Derivation: the boiler pair gets 1,200 kJ from a
-  coal, the generator 450 kJ: efficiency against compactness, which is exactly what the fold
-  grade's C weighs.*
-- **Pole** (15): powers everything within 2 tiles (a 5×5 square) and joins poles within 6 tiles
+- **Boiler** (1,200 coin): burns 1 coal or 1 oil every 4 s while the grid needs it, and steams
+  the **Steam Engine** in front of it (2,000 coin), which makes **300 kW**. **Generator** (2,600):
+  one tile, burns 1 coal every 3 s for **200 kW**. *Derivation: the boiler pair gets 1,200 kJ from
+  a coal at 150 kW a tile, the generator 600 kJ at 200 kW a tile: efficiency against compactness,
+  which is exactly what the fold grade's C weighs. Prices are set against Act II income (about
+  12,000/min), not against Mk1 machines: a power plant is about half a minute.*
+- **Pole** (150): powers everything within 2 tiles (a 5×5 square) and joins poles within 6 tiles
   into one grid. Producers join a grid the same way.
 - Draw: Kiln 60 kW, Mixer 80, Refinery 120, Smelter Mk2 150, Press Mk2 120, Assembler Mk2 200.
   **Mk1 machines need no power** (Act I keeps working untouched).
@@ -536,9 +556,11 @@ are possible and earn W = 1.*
 
 ### Machines: Mk2 and modes
 - **Mk2** smelter, press and assembler are 2×2, powered, and craft their Mk1 family's recipes at
-  **3× speed** (600, 1,200 and 4,000 coin). *Derivation: 3× fits one Mk1 belt (a Mk2 smelter's
-  90 ingots/min under the belt's 120); four tiles for three machines' work is worse density
-  than Mk1, paid back by fewer belts and ports and by modes.*
+  **4× speed** (6,000, 9,000 and 20,000 coin). *Derivation: 4× fills exactly one Mk1 belt (a Mk2
+  smelter's 120 ingots/min); four tiles for four machines' work, paid back by fewer belts and
+  ports and by modes. Priced at half a minute to 1.7 minutes of Act II income; the earlier 230,
+  580 and 1,950 were set against Mk1 prices and were a rounding error of the coin piling up (the
+  Milestone 4 review). Kiln 3,000, Mixer 4,000, Refinery 9,000 likewise.*
 - **Modes** (research *Tuning*, powered machines only): **Efficient** 0.75× speed at 0.5×
   power; **Overclocked** 1.5× speed at 2.2× power; **Precision** 0.8× speed, +25% of the main
   output (§15).
@@ -551,21 +573,21 @@ are possible and earn W = 1.*
 
 ### Customers
 - **Unit 7** (met with *Coal Seams*): a collecting robot. Orders: *Calibration Weights* (300
-  steel → 9,000), *Lens Array* (400 glass + 60 circuits → 24,000), *One of Everything* (one of
-  every item made so far → 30,000). Reputation: 1 opens **the Codex** (every item with its
+  steel → 13,000), *Lens Array* (400 glass + 60 circuits → 34,000), *One of Everything* (20 each
+  of steel, glass, concrete, plastic, 10 circuits and 5 motors → 14,500). Reputation: 1 opens **the Codex** (every item with its
   story; a first delivery of each pays 30 × its value once; 100× was a 71K one-off burst, a single motor
   paying 42K); 2 teaches **Recycled Glass**
   (Kiln: 3 gravel → glass, 2.5 s); 3 adds +10% to Precision's yield.
 - **Dame Voltaire** (met with *Steam Power*): the swamp's electricity baroness. Orders:
-  *Streetlamps* (150 circuits + 300 glass → 40,000), *Concrete Promenade* (800 concrete →
-  45,000), *The Grand Turbine* (40 motors + 600 steel → 60,000). Reputation: 1 lets boilers
+  *Streetlamps* (150 circuits + 300 glass → 64,000), *Concrete Promenade* (800 concrete →
+  56,000), *The Grand Turbine* (40 motors + 600 steel → 85,000). Reputation: 1 lets boilers
   burn oil at 2× heat; 2 gives steam engines +25%; 3 extends pole reach by 1.
 - *Derivation: each order pays about 1.5–2.5× its items' Dock value (§7's rule), and every
   reputation reward is a rule a player plans around, not a flat multiplier.*
 
 ### Machine Kits (parts costs for stamps)
 - Stamping a design that holds any Act II machine (powered, Mk2 or a power building) also costs
-  **Machine Kits**: 1 + floor(bill ÷ 1,500). Kits delivered to a Hopper go to the parts bank,
+  **Machine Kits**: 1 + floor(bill ÷ 500). Kits delivered to a Hopper go to the parts bank,
   not to research; the Dock refuses them. *Derivation: production feeds expansion (§15);
   slice-era designs stay coin-only so Act I never stalls on parts.*
 
@@ -579,12 +601,17 @@ are possible and earn W = 1.*
   enough for Act II, and the District (Act III) the floor where they go.*
 
 ### Megaproject #1: the Great Drill (stage 1)
-- Research *The Great Drill* puts the **Megaproject Bay** (2×2) on the Factory floor. Stage 1
-  wants 40 Drill Bits, 1,500 concrete and 600 steel, delivered by trunk. Done, it lets every
+- Research *The Great Drill* (40 motors + 200 concrete) puts the **Megaproject Bay** (2×2) on
+  the Factory floor. Stage 1 wants **450 Drill Bits and 2,000 steel**, delivered by trunk (the
+  concrete is in the bits, 2 each). Done, it lets every
   Miner and every source module run **+50%** for good. **Megaproject progress survives every
   reset** (stored apart from the run's state for Milestone 5). Stages 2 and 3 arrive with
-  later floors. *Derivation: stage 1 is about the last hour of Act II's output; +50% on ore is
-  the biggest single boost of the act, earned, permanent, and visible on every miner.*
+  later floors. *Derivation: from the slag the Act II bot's Bay floor turns into bits: a Drill
+  Bit is 2 concrete, 8 slag; the floor's Concrete module takes about 35 slag/min (a Steel and an
+  Iron ingots copy), so bits come at 5–6 a minute while the Bay's Steel also runs and about 2.5
+  after; 450 bits and 2,000 steel take the bot about 1.4 h from the Bay floor (S+3:20 to S+3:40),
+  inside the S+4 h target with room for a slower player. +50% on ore is the biggest single boost
+  of the act, earned, permanent, and visible on every miner.*
 
 ### Rules settled while building it (Milestone 4)
 - A Boiler or Generator holds 4 fuel (`RULES.fuelCap`) and takes it from any side but a boiler's
@@ -603,7 +630,33 @@ are possible and earn W = 1.*
 - A nested fold needs at least two modules; a depth-2 module can't be folded again.
 
 ### Pacing targets (Act II)
-- Steel by about 1:45, power by 2:15, circuits by 3:00 (§16: "3 h: power, steel, glass,
-  circuits"), the Great Drill's stage 1 by about 4:30, and the first sensible Reorganize point
-  at about 5 h: lifetime coin enough for 12–20 Patents (§15's formula, rescaled in Milestone 4
-  to this economy, `DECISIONS.md`).
+Measured from the slice end **S** (the Gizmo Festival filled, about 0:31), not from the clock: the
+slice ends far earlier than §16's 90-minute budget, and every Act II number is set against the
+factory the player actually has then. Encoded in `tests/pace-act2-run.test.ts` (the Act I planner
+to S, then the Act II bot in `src/sim/bot2.ts`, seeds 1000 and 8919, 5 h):
+
+| Goal | Target | Measured |
+|---|---|---|
+| Steel | ≤ S+25 min | S+18–19 |
+| Power | ≤ S+35 min | S+25–27 |
+| Circuits | ≤ S+60 min | S+55 |
+| Concrete fold | ≤ S+80 min | S+65–67 |
+| Drill works fold | (logged) | S+1:54–1:56 |
+| Great Drill stage 1 | ≤ S+4 h | S+3:20–3:23 |
+| Reorganize at 5 h | 12–20 Patents | 14 (4 h: 13; ×2 lifetime coin: 19) |
+
+- **Rule 2** (dead air): the longest stretch without a decision is 5.8–6.0 min (≤ 15).
+- **Rule 4** (active over idle): from the same 2:00 state, 30 min of the bot (building, Sparks,
+  Overdrive on Workshop machines and on Factory module groups, at most 4 clicks a second) earns
+  1.70–1.84× an idle 30 min (band 1.5–4). Overdrive on the Factory floor is what lifts it: the
+  money after the slice is there (1.37× without it).
+- **Rule 1** (next goal): up to the Bay floor a goal (research, land, fold, module, stage) lands
+  at least every 13 min; while the Bay fills (about 1.4 h) the goals are the last research
+  nodes and the stage, about 40 min apart. Not met; Milestone 4's open item.
+- **Rule 5** (new thinking): ratios and power. The bot's own build shows them: every Act II line
+  is a ratio problem (one steel line's slag sets the concrete rate; a kiln on one sand miner
+  works half the time), and every mixed belt into a machine needs a splitter with an overflow;
+  on the Factory floor, a module's outputs must be consumed in the ratio it makes them, or the
+  surplus fills its buffer and stops the rest, so byproducts go to a sink that never waits.
+- Lifetime coin: 1.8M at 4 h, 2.0–2.05M at 5 h. Income about 12,500/min from S to the Bay floor,
+  4,300/min after (the Gizmo chains are cleared for it).

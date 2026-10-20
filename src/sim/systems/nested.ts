@@ -11,9 +11,8 @@ import { FACTORY } from '../../data/land';
 import { RULES, SCORE_WEIGHTS, gradeFor } from '../../data/rules';
 import { itemName, type ItemId } from '../../data/items';
 import type { AuditResult, Box, FEnt, ModuleDesign } from '../world';
-import { inBox } from './audits';
+import { inBox, splusGate } from './audits';
 import { BYPRODUCTS, defaultName, fname } from './modules';
-import { oresOf } from './claims';
 
 const DT = 1 / TICK_RATE;
 const warmTicks = () => RULES.auditWarmup.value * TICK_RATE;
@@ -52,8 +51,22 @@ export function ffoldRefusal(g: Game, b: Box): string | null {
   for (const m of mods) if (g.design(m.design)?.depth === 2) return `${fname(g, m)} is folded from modules already: depth 2 is the limit`;
   // a group, not a pile: at least one module inside must feed another inside (two unrelated
   // modules in a box would stack their grades for nothing; the Milestone 3 gate review)
+  // one group, not a pile: every module inside joined to the others by trunks inside the box
+  // (two unrelated modules, or a pair with strangers riding along, would stack their grades for
+  // nothing; the Milestone 3 gate and Milestone 4 reviews)
   const ids = new Set(mods.map((m) => m.id));
-  if (!g.routes.some((r) => !r.by && r.to && ids.has(r.from.id) && ids.has(r.to.id))) return 'Box a group that works together: at least one module inside must feed another inside';
+  const inner = g.routes.filter((r) => r.to && ids.has(r.from.id) && ids.has(r.to.id));
+  if (!inner.some((r) => !r.by)) return 'Box a group that works together: at least one module inside must feed another inside';
+  const seen = new Set<number>([mods[0].id]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const r of inner) {
+      const a = r.from.id, b = r.to!.id;
+      if (seen.has(a) !== seen.has(b)) { seen.add(a); seen.add(b); grew = true; }
+    }
+  }
+  const stray = mods.find((m) => !seen.has(m.id));
+  if (stray) return `${fname(g, stray)} isn't joined to the rest by a trunk inside the box: box one group`;
   return null;
 }
 
@@ -100,14 +113,14 @@ export function runFAudits(g: Game) {
   a.t++;
   const warm = warmTicks();
   if (a.t <= warm) return;
-  const drill = g.s.mega.stage >= 1 ? 1 + RULES.drillBoost.value : 1;
   for (const id of a.ids) {
     const m = g.fById.get(id);
     if (!m) continue;
     a.run[id] = (a.run[id] ?? 0) + m.f;
     const d = g.design(m.design);
     if (!d) continue;
-    const k = drill > 1 && Object.keys(oresOf(g, d)).length ? drill : 1;
+    // modules under audit run without the Great Drill's boost (runModules), so k is 1 here
+    const k = 1;
     for (const [o, r] of Object.entries(d.outs) as [ItemId, number][]) {
       if (!BYPRODUCTS.has(o)) continue;
       a.made += r * k * DT * m.f;
@@ -142,7 +155,7 @@ export function gradeFAudit(g: Game): AuditResult {
   const boxTiles = a.box.w * a.box.h;
   const c = Math.min(1, machineTiles / boxTiles / RULES.compactFull.value);
   const score = SCORE_WEIGHTS.u * u + SCORE_WEIGHTS.w * w + SCORE_WEIGHTS.c * c;
-  const gr = gradeFor(score);
+  const gr = splusGate(gradeFor(score), score, byMade, a.inside);
   const rate = (t: Record<string, number>) => {
     const o: Partial<Record<ItemId, number>> = {};
     for (const [k, v] of Object.entries(t)) if (v > 1e-6) o[k as ItemId] = v / secs;

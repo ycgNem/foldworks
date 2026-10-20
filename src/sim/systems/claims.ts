@@ -2,7 +2,9 @@
 // module with miners inside holds one claim on every ore its miners dig. A player starts with 3
 // claims per ore plus 2 for each Workshop deposit of that ore they own, and buys more at the
 // Survey Office (research Surveying), 4 at a time, each block costing price x (1 + 0.5 b).
-// Folding is never refused for claims (the line was already digging); stamping a copy is.
+// Folding is never refused for claims (the line was already digging); stamping a copy is, and so
+// is placing a copy on the Factory floor past the claims held (a re-folded copy got around them:
+// the Milestone 4 review).
 import type { Game, ActResult } from '../Game';
 import { OK, no } from '../Game';
 import { Num } from '../../engine/num';
@@ -67,6 +69,29 @@ export function claimRefusal(g: Game, d: ModuleDesign): string | null {
       return g.done('surveying')
         ? `Needs a ${name} claim (${used} of ${held} in use): buy more at the Survey Office`
         : `Needs a ${name} claim (${used} of ${held} in use): research Surveying to buy more`;
+    }
+  }
+  return null;
+}
+
+/** Claims the modules placed on the Factory floor dig with. */
+function placedClaims(g: Game, ore: ItemId): number {
+  let n = 0;
+  for (const e of g.s.factory.ents) {
+    if (e.kind !== 'module') continue;
+    const d = g.design(e.design);
+    if (d) n += oresOf(g, d)[ore] ?? 0;
+  }
+  return n;
+}
+
+/** Why placing one more copy of this design would dig past the claims held, or null. */
+export function placeClaimRefusal(g: Game, d: ModuleDesign): string | null {
+  for (const [ore, n] of Object.entries(oresOf(g, d)) as [ItemId, number][]) {
+    const held = claimsHeld(g, ore), placed = placedClaims(g, ore);
+    if (placed + n > held) {
+      const name = itemName(ore).toLowerCase().replace(' ore', '');
+      return `Out of ${name} claims (${placed} of ${held} digging): ${g.done('surveying') ? 'buy more at the Survey Office' : 'research Surveying to buy more'}`;
     }
   }
   return null;

@@ -17,10 +17,23 @@ export class Gazette {
   x = 0;
   private n = 0;
   private recent: string[] = [];
+  /** breaking news (the town growing): printed next, ahead of everything else */
+  private breaking: string[] = [];
+
+  /** Print this headline next (it cuts in if the current one has barely started). */
+  push(text: string) {
+    if (!this.breaking.includes(text)) this.breaking.push(text);
+    if (this.breaking.length > 4) this.breaking.shift();
+  }
 
   /** Pick the next headline. Every third one is about the player's factory when there is news. */
   next(g: Game) {
     this.n++;
+    const b = this.breaking.shift();
+    if (b) {
+      this.text = b;
+      return;
+    }
     const own = this.n % 3 === 0 ? this.factoryNews(g) : null;
     if (own) {
       this.text = own;

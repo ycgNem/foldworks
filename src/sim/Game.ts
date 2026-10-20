@@ -620,11 +620,12 @@ export class Game {
     return Math.round((RULES.sparkMin.value + u * (RULES.sparkMax.value - RULES.sparkMin.value)) * TICK_RATE);
   }
 
-  /** Add coin earned (counts toward the income statistic and lifetime coin). */
-  earn(n: Num) {
+  /** Add coin earned (lifetime coin, and the income statistic unless it is a one-off payout: an
+   * order filled or a Codex first would read as 65K coin/min for a minute; Milestone 4 review). */
+  earn(n: Num, oneOff = false) {
     this.s.coin = this.s.coin.add(n);
     this.s.earned = this.s.earned.add(n);
-    this.s.incomeSec += n.toNumber();
+    if (!oneOff) this.s.incomeSec += n.toNumber();
   }
 
   /** coin per minute over the last minute (a rate) */

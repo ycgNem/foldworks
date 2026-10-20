@@ -22,6 +22,8 @@ import { DX, DY } from '../sim/world';
 
 export interface Goal {
   text: string;
+  /** a second, lower-ranked line under the goal (a heap filling, a stamp refused for claims) */
+  note?: string;
   /** a tile to point at, if any */
   tile?: { x: number; y: number };
   /** a HUD element to point at: 'bellows', 'research', 'orders', 'build:<kind>', 'land' */
@@ -91,7 +93,7 @@ function act2Goal(g: Game): Goal | null {
   if (!delivered(g, 'circuit')) return { text: 'Make circuits: an Assembler with 3 wire, a plastic and a glass. They pay 110 each.' };
   const r6 = researchToward(g, 'heavyMachines');
   if (r6) return r6;
-  if (!count('smelterMk2') && !count('pressMk2') && !count('assemblerMk2')) return { text: 'Build a Mk2 machine (Heavy tab): 2x2, powered, 3x the speed of its Mk1.', ui: 'build:smelterMk2' };
+  if (!count('smelterMk2') && !count('pressMk2') && !count('assemblerMk2')) return { text: `Build a Mk2 machine (Heavy tab): 2x2, powered, ${BUILD.smelterMk2.speed ?? 4}x the speed of its Mk1.`, ui: 'build:smelterMk2' };
   const r7 = researchToward(g, 'nestedFolds');
   if (r7) return r7;
   if (!s.designs.some((d) => d.depth === 2)) {
@@ -109,15 +111,40 @@ function act2Goal(g: Game): Goal | null {
     const fed = g.routes.some((r) => r.to === bay);
     return { text: fed ? `Feed the Great Drill: ${want}.` : `Trunk Drill Bits, concrete and steel into the Megaproject Bay: ${want}.`, ui: 'mega' };
   }
+  // the Drill runs: the act's last steps are the customers' orders
+  if (!s.orders.active) {
+    const o = offeredOrders(g)[0];
+    if (o) return { text: `Take ${o.name} (O): ${o.pitch}`, ui: 'orders' };
+  } else {
+    const d = ORDER[s.orders.active];
+    const left = (Object.entries(d.wants) as [ItemId, number][]).map(([k, n]) => `${fmt(Math.max(0, n - Math.floor(s.orders.progress[d.id]?.[k]?.toNumber() ?? 0)))} ${ITEMS[k].name.toLowerCase()}`).join(', ');
+    return { text: `${d.name}: ${left} still to deliver${d.at === 'factory' ? ' at the Factory Dock' : ''}. It pays ${fmt(d.pays)}.`, ui: 'orders' };
+  }
   return null;
 }
 
-/** Interrupts that beat the chain: a heap nearly full, a stamp refused for want of claims. */
+/** How long a heap's alert stays up, in game seconds: it is said once per heap, then the status
+ *  strip and the heap's own hover carry it (the Milestone 4 review: it held the Next card for
+ *  minutes after the slice end). */
+const HEAP_ALERT_S = 20;
+/** heap id -> the tick its alert was first shown, for the game it was shown in */
+let heapSeen = new Map<number, number>();
+let heapGame: Game | null = null;
+
+/** Interrupts: a heap nearly full (once per heap, for HEAP_ALERT_S), a stamp refused for want of
+ *  claims. Before the slice end they beat the chain; after it they sit under it as a note. */
 function act2Alerts(g: Game): Goal | null {
   const s = g.s;
+  if (heapGame !== g) { heapGame = g; heapSeen = new Map(); }
   const cap = BUILD.heap.capacity ?? 400;
-  const heap = s.ents.filter((e) => e.kind === 'heap' && e.count >= cap * 0.75).sort((a, b) => b.count - a.count)[0];
+  const live = (e: { id: number }) => {
+    const at = heapSeen.get(e.id);
+    if (at === undefined) return true;
+    return s.tick >= at && s.tick - at < HEAP_ALERT_S * 20;
+  };
+  const heap = s.ents.filter((e) => e.kind === 'heap' && e.count >= cap * 0.75 && live(e)).sort((a, b) => b.count - a.count)[0];
   if (heap) {
+    if (!heapSeen.has(heap.id)) heapSeen.set(heap.id, s.tick);
     const pct = Math.round((heap.count / cap) * 100);
     const fix = g.done('slagBricks') ? (g.done('crushing') ? 'press it into bricks or gravel: a Press at its front' : 'press it into bricks: a Press at its front') : 'research Slag Bricks to press it into bricks';
     return { text: `A Slag Heap is ${pct}% full: ${fix}, or the smelters beside it will jam.`, tile: { x: heap.x + DX[heap.rot], y: heap.y + DY[heap.rot] } };
@@ -196,7 +223,10 @@ export function nextGoal(g: Game): Goal | null {
     const mods = s.factory.ents.filter((e) => e.kind === 'module');
     if (!mods.length) return { text: 'Go to the Factory floor (Tab) and place your module, its gold front toward a trunk to the Factory Dock.', ui: 'factory' };
     const alert = act2Alerts(g);
-    if (alert) return alert;
+    const after = g.flag('sliceEnd');
+    // before the slice end an alert beats the chain; after it, the Act II chain leads and the
+    // alert rides under it as a note (the Milestone 4 review)
+    if (alert && !after) return alert;
     const jam = mods.find((m) => m.state === 'blocked');
     if (jam && !s.flags.includes('sliceEnd')) return { text: 'A module is blocked: hover it on the Factory floor to see why.' };
     // the slice's end (DECISIONS.md, the gate's blocking findings): Bramble's Gizmo Festival,
@@ -205,9 +235,10 @@ export function nextGoal(g: Game): Goal | null {
       const fest = festivalGoal(g, mods);
       if (fest) return fest;
     }
-    if (g.flag('sliceEnd') || g.done('coalSeams')) {
+    if (after || g.done('coalSeams')) {
       const a2 = act2Goal(g);
-      if (a2) return a2;
+      if (a2) return alert ? { ...a2, note: alert.text, tile: a2.tile ?? alert.tile } : a2;
+      if (alert) return alert;
     }
   }
   if (count('miner') === 0) {

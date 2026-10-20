@@ -144,6 +144,10 @@ New thinking: **ratios and power**.
 - Factory-floor folding: fold a group of modules into a depth-2 module (the District
   placement itself comes in Milestone 7).
 
+**Status: built 2026-10-20, reviewed by the idle-critic and its findings acted on.** The Act II
+bot reaches the Great Drill's stage 1 at ~3:52. Open items (rule 1 while the Bay fills, coin
+sinks, owner decisions on the derivative flags) are in PROGRESS.md.
+
 Exit: a fresh save reaches the first sensible Reorganize point (`DESIGN.md` §16: about 5 h) with
 the planner bot; rules 1, 2, 4 and 5 hold for 0–5 h.
 

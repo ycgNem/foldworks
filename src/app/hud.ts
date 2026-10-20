@@ -68,7 +68,7 @@ export interface HudState {
   /** Codex entries when the Codex was last open */
   codexSeen: number;
   /** screen-wide celebrations (the Megaproject, claims) and their confetti rain (UI px) */
-  celebs: { kind: string; t: number; x: number; y: number; id?: string; value?: number }[];
+  celebs: { kind: string; t: number; x: number; y: number; id?: string; value?: number; title?: string; sub?: string; color?: string }[];
   rain: { x: number; y: number; vx: number; vy: number; f: number; spin: number; gold?: boolean }[];
   /** the first Miner has been celebrated */
   firstMiner: boolean;
@@ -129,6 +129,8 @@ function presentation(app: App) {
     }
   }
   r.screenEvents.length = 0;
+  for (const n of r.townNews) app.gazette.push(n);
+  r.townNews.length = 0;
   const tab = app.ui.ids.get('floorFactory') ?? app.ui.ids.get('modules');
   r.factoryTarget = tab ? { x: (tab.x + tab.w / 2) * app.ui.scale, y: (tab.y + tab.h / 2) * app.ui.scale } : null;
   if (app.panel) app.hud.opened.add(app.panel);
@@ -294,12 +296,18 @@ function leftColumn(app: App, L: Layout, dt: number) {
   const room = bottom - stack.h - y;
   const goal = nextGoal(g);
   // the Next card grows to its goal's lines (they were cut at four), leaving Shipping 44 px
-  const goalLines = wrap(goal ? goal.text : 'Build, balance, and keep the pips green.', r.w - 10).length;
-  const gh = room >= 120 ? Math.max(58, Math.min(room - 44, 20 + goalLines * 10)) : room;
+  const noteLines = goal?.note ? wrap(goal.note, r.w - 10).length : 0;
+  const goalLines = wrap(goal ? goal.text : 'Build, balance, and keep the pips green.', r.w - 10).length + (noteLines ? noteLines + 0.4 : 0);
+  const gh = room >= 110 ? Math.max(58, Math.min(room - 40, 24 + Math.ceil(goalLines * 10))) : room;
   if (gh >= 34) {
     const gin = card(ui, r.x, y, r.w, gh, 'Next', C.glow, 'star');
     ui.clip(gin.x, gin.y, gin.w, gin.h);
-    ui.para(goal ? goal.text : 'Build, balance, and keep the pips green.', gin.x, gin.y, gin.w, C.bone);
+    const used = ui.para(goal ? goal.text : 'Build, balance, and keep the pips green.', gin.x, gin.y, gin.w, C.bone);
+    // a lower-ranked alert under the goal, in warning yellow, only while it fits
+    if (goal?.note && used + 4 + noteLines * 10 <= gin.h) {
+      ui.fill(gin.x, gin.y + used + 1, gin.w, 1, C.ground2);
+      ui.para(goal.note, gin.x, gin.y + used + 4, gin.w, C.pipYellow);
+    }
     ui.unclip();
     y += gh;
   }
@@ -563,13 +571,15 @@ function storeTab(app: App, id: string, x: number, y: number, w: number, h: numb
   ui.fill(x + 1, y + 1, w - 2, 1, active ? C.copper1 : blink ? C.brass1 : hov ? C.hull1 : C.ground1);
   if (active) ui.fill(x + 1, y + h - 2, w - 2, 1, C.gold);
   const lw = textWidth(label);
-  const withLabel = 8 + 2 + lw <= w - 4;
+  // a fresh tab's "!" sits inside its right end, so the label gives it room
+  const bang = fresh ? 11 : 0;
+  const withLabel = 8 + 2 + lw <= w - 4 - bang * 2;
   const cw = withLabel ? 10 + lw : 8;
   const cx = x + Math.floor((w - cw) / 2);
   const down = hov && ui.input.mouse.down[0] ? 1 : 0;
   if (hasArt('ui_icons_small') || hasArt('ui_icons')) uiIcon(ui, icon, cx, y + 3 + down, 1);
   if (withLabel) ui.text(label, cx + 10, y + 3 + down, active ? C.hot : fresh ? C.gold : C.bone, { shadow: C.ink });
-  if (fresh) badge(ui, x + w - 7, y - 2, '!', C.pipRed);
+  if (fresh) badge(ui, x + w - bang, y + 2, '!', C.pipRed);
   if (hov) {
     ui.hoverId = id;
     ui.tip(tip, 170);
@@ -820,6 +830,19 @@ function centerOverlay(app: App, L: Layout) {
       // a world marker, not HUD text: drawn straight to the canvas, outside the overlap audit
       drawText(ui.ctx, ICON.down, ux - 6, uy, C.glow, 2, C.ink);
     }
+  }
+  // more floor (or town) past an edge of the view: a soft arrow there, pulsing (drag with the
+  // right button, WASD, or rest the mouse at that edge to pan)
+  if (!app.panel) {
+    const ph = app.panHints();
+    const a = 0.35 + 0.25 * Math.sin(ui.time * 3);
+    ui.ctx.globalAlpha = a;
+    const mx = c.x + Math.floor(c.w / 2), my = c.y + Math.floor(c.h / 2);
+    if (ph.l) drawText(ui.ctx, ICON.left, c.x + 3, my - 4, C.bone, 1, C.ink);
+    if (ph.r) drawText(ui.ctx, ICON.right, c.x + c.w - 9, my - 4, C.bone, 1, C.ink);
+    if (ph.u) drawText(ui.ctx, ICON.up, mx - 3, c.y + 18, C.bone, 1, C.ink);
+    if (ph.d) drawText(ui.ctx, ICON.down, mx - 3, c.y + c.h - 10, C.bone, 1, C.ink);
+    ui.ctx.globalAlpha = 1;
   }
   // Sparks off-screen: an arrow at the edge of the frame pointing at them
   if (app.floor === 'workshop')
@@ -1124,7 +1147,8 @@ function celebrations(app: App, L: Layout, dt: number) {
   const h = app.hud;
   const ctx = ui.ctx;
   for (const c of h.celebs) c.t += dt;
-  h.celebs = h.celebs.filter((c) => c.t < (c.kind === 'megaDone' ? 4.5 : c.kind === 'splus' ? 3.2 : 1.6));
+  h.celebs = h.celebs.filter((c) => c.t < (c.kind === 'megaDone' ? 4.5 : c.kind === 'splus' ? 3.2 : c.kind === 'banner' ? BANNER_S : 1.6));
+  let bannerN = 0;
   // confetti rain
   if (h.rain.length) {
     const s = sheet('fx_confetti');
@@ -1171,31 +1195,91 @@ function celebrations(app: App, L: Layout, dt: number) {
       const drop = c.t < 0.25 ? (1 - k) * -50 : c.t > 2.7 ? (c.t - 2.7) * -140 : Math.round(Math.sin(Math.min(1, (c.t - 0.25) * 4) * Math.PI) * 3);
       const title = c.id === 'fold' ? 'S+ MODULE!' : 'S+  FLAWLESS!';
       const sub = c.id === 'fold' ? 'The best fold there is: x1.35, in one tile.' : 'The top grade: every part at full marks.';
-      const sc = textWidth(title) * 3 + 40 <= ui.w ? 3 : 2;
-      const bw = Math.max(textWidth(title) * sc, textWidth(sub)) + 30, bh = 9 * sc + 26;
-      // on the grade card it sits right of the stamp's column (the art director's check: it
-      // covered the S+ emblem's plus), else centred
-      const O = L.overlay, cw = Math.min(380, O.w - 12), cardX = O.x + Math.floor((O.w - cw) / 2);
-      const stampRight = cardX + 8 + (cw >= 340 ? 96 : 48) + 14;
-      const cx0 = Math.floor(ui.w / 2 - bw / 2);
-      const bx = app.panel === 'grade' && stampRight + bw <= ui.w - 4 ? Math.max(cx0, stampRight) : cx0;
-      const by = Math.round(L.overlay.y + 34 + drop);
+      const O = L.overlay;
+      const onCard = app.panel === 'grade' || app.panel === 'fgrade';
+      let bx: number, by: number, bw: number, bh: number, sc: number, row: boolean;
+      if (onCard) {
+        // on the grade card the banner is one compact row ABOVE the card (the Milestone 4 review:
+        // it covered the U and W rows while the player read them); where there is no room above,
+        // it overlaps only the card's title strip, never the parts
+        const cw = Math.min(380, O.w - 12), ch = Math.min(264, O.h - 8);
+        const cardY = O.y + Math.floor((O.h - ch) / 2);
+        sc = 2;
+        row = textWidth(title) * sc + 12 + textWidth(sub) + 24 <= Math.min(ui.w - 8, cw + 120);
+        bw = textWidth(title) * sc + (row ? 12 + textWidth(sub) : 0) + 24;
+        bh = 9 * sc + 8;
+        bx = Math.floor(ui.w / 2 - bw / 2);
+        const lift = c.t < 0.25 ? Math.round((1 - k) * -30) : c.t > 2.7 ? Math.round((c.t - 2.7) * -80) : 0;
+        by = Math.max(O.y + 1, cardY - bh - 2) + lift;
+      } else {
+        sc = textWidth(title) * 3 + 40 <= ui.w ? 3 : 2;
+        row = false;
+        bw = Math.max(textWidth(title) * sc, textWidth(sub)) + 30;
+        bh = 9 * sc + 26;
+        bx = Math.floor(ui.w / 2 - bw / 2);
+        by = Math.round(O.y + 34 + drop);
+      }
       ctx.globalAlpha = c.t > 2.7 ? Math.max(0, 1 - (c.t - 2.7) * 2) : 1;
       ctx.fillStyle = rgba(C.ink, 0.5);
       ctx.fillRect(bx + 3, by + 3, bw, bh);
       if (hasArt('ui_panel')) nine(ctx, sheet('ui_panel'), 0, bx, by, bw, bh);
       else { ctx.fillStyle = C.brass0; ctx.fillRect(bx, by, bw, bh); }
       ctx.fillStyle = Math.floor(ui.time * 8) % 2 ? C.gold : C.hot;
-      ctx.fillRect(bx + 4, by + 4, bw - 8, 1);
-      ctx.fillRect(bx + 4, by + bh - 5, bw - 8, 1);
+      ctx.fillRect(bx + 4, by + 2, bw - 8, 1);
+      ctx.fillRect(bx + 4, by + bh - 3, bw - 8, 1);
       const mid = bx + bw / 2;
-      drawText(ctx, title, Math.floor(mid - (textWidth(title) * sc) / 2), by + 8, Math.floor(ui.time * 6) % 2 ? C.gold : C.hot, sc, C.copper0);
-      drawText(ctx, sub, Math.floor(mid - textWidth(sub) / 2), by + 12 + 9 * sc, C.bone, 1, C.ink);
+      const glowCol = Math.floor(ui.time * 6) % 2 ? C.gold : C.hot;
+      if (onCard) {
+        drawText(ctx, title, bx + 12, by + 5, glowCol, sc, C.copper0);
+        if (row) drawText(ctx, sub, bx + 12 + textWidth(title) * sc + 12, by + 5 + Math.floor((9 * sc - 7) / 2), C.bone, 1, C.ink);
+      } else {
+        drawText(ctx, title, Math.floor(mid - (textWidth(title) * sc) / 2), by + 8, glowCol, sc, C.copper0);
+        drawText(ctx, sub, Math.floor(mid - textWidth(sub) / 2), by + 12 + 9 * sc, C.bone, 1, C.ink);
+      }
       // sparkles orbiting the banner
       for (let i = 0; i < 10; i++) {
         const a = c.t * 3 + (i * Math.PI) / 5;
         ctx.fillStyle = i % 2 ? C.gold : C.bone;
         ctx.fillRect(Math.round(mid + Math.cos(a) * (bw / 2 + 8)), Math.round(by + bh / 2 + Math.sin(a) * (bh / 2 + 6)), 2, 2);
+      }
+      ctx.globalAlpha = 1;
+    } else if (c.kind === 'banner') {
+      // a first (a Codex entry, the first Mk2, a reputation level): a ribbon drops in at the top of
+      // the floor view, holds, and lifts away; several stack
+      const i = bannerN++;
+      if (i > 2) continue;
+      const title = c.title ?? '', sub = c.sub ?? '';
+      const col = c.color ?? C.gold;
+      const sc = textWidth(title) * 2 + 40 <= L.center.w ? 2 : 1;
+      const bw = Math.min(ui.w - 8, Math.max(textWidth(title) * sc, textWidth(sub)) + 28), bh = 9 * sc + (sub ? 16 : 8);
+      const cx = app.panel ? ui.w / 2 : L.center.x + L.center.w / 2;
+      const k = Math.min(1, c.t * 5);
+      const lift = c.t < 0.2 ? Math.round((1 - k) * -20) : c.t > BANNER_S - 0.4 ? Math.round((c.t - (BANNER_S - 0.4)) * -60) : 0;
+      const bx = Math.floor(cx - bw / 2), by = (app.panel ? L.overlay.y + 4 : L.center.y + 20) + i * (bh + 4) + lift;
+      ctx.globalAlpha = c.t > BANNER_S - 0.4 ? Math.max(0, (BANNER_S - c.t) / 0.4) : 1;
+      ctx.fillStyle = rgba(C.ink, 0.5);
+      ctx.fillRect(bx + 2, by + 2, bw, bh);
+      ctx.fillStyle = C.ink;
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = C.brass0;
+      ctx.fillRect(bx + 1, by + 1, bw - 2, bh - 2);
+      ctx.fillStyle = C.ground0;
+      ctx.fillRect(bx + 2, by + 2, bw - 4, bh - 4);
+      ctx.fillStyle = Math.floor(ui.time * 8) % 2 ? col : C.hot;
+      ctx.fillRect(bx + 3, by + 2, bw - 6, 1);
+      // ribbon tails
+      ctx.fillStyle = C.brass0;
+      ctx.fillRect(bx - 6, by + 4, 6, bh - 8);
+      ctx.fillRect(bx + bw, by + 4, 6, bh - 8);
+      ctx.fillStyle = C.ink;
+      ctx.fillRect(bx - 6, by + Math.floor(bh / 2) - 1, 2, 2);
+      ctx.fillRect(bx + bw + 4, by + Math.floor(bh / 2) - 1, 2, 2);
+      drawText(ctx, title, Math.floor(cx - (textWidth(title) * sc) / 2), by + 4, Math.floor(ui.time * 6) % 2 ? col : C.gold, sc, C.ink);
+      if (sub) drawText(ctx, sub, Math.floor(cx - textWidth(sub) / 2), by + 6 + 9 * sc, C.bone, 1, C.ink);
+      if (c.t < 0.6) for (let j = 0; j < 8; j++) {
+        const a = (j / 8) * Math.PI * 2, rr = 8 + c.t * 70;
+        ctx.fillStyle = j % 2 ? col : C.bone;
+        ctx.fillRect(Math.round(cx + Math.cos(a) * rr * 1.6), Math.round(by + bh / 2 + Math.sin(a) * rr * 0.5), 2, 2);
       }
       ctx.globalAlpha = 1;
     } else if (c.kind === 'claim') {
@@ -1218,11 +1302,20 @@ function celebrations(app: App, L: Layout, dt: number) {
   }
 }
 
+/** seconds a first's banner stays up */
+const BANNER_S = 2.8;
+
+/** Put up a banner for a first (a Codex entry, the first Mk2, a reputation level). */
+export function banner(app: App, title: string, sub: string, color: string = C.gold) {
+  app.hud.celebs.push({ kind: 'banner', t: 0, x: 0, y: 0, title, sub, color });
+}
+
 // ------------------------------------------------------------------ the hover report
 
 function hoverReport(app: App) {
   const ui = app.ui;
   const h = app.hud.hoverTile;
+  if (!h && app.townTip && app.mode.k === 'idle' && !ui.tooltip) { ui.tip([{ text: app.townTip, color: C.gold }], 240); return; }
   if (!h || app.mode.k !== 'idle' || ui.tooltip) return;
   const g = app.game;
   if (app.floor === 'factory') {

@@ -15,7 +15,7 @@ import { megaStage } from '../data/megaprojects';
 import { ICON, textWidth, wrapText } from '../ui/font';
 import { TICK_RATE } from '../engine/time';
 import { Num } from '../engine/num';
-import { sheet, itemIcon, hasArt, spriteName } from '../render/sprites';
+import { sheet, itemIcon, hasArt, spriteName, frameNamed } from '../render/sprites';
 import { mainOutput, megaFrac } from '../render/factory';
 import { auditTicks, projectAudit, entsIn, gradedAudit } from '../sim/systems/audits';
 import { BUILD } from '../data/machines';
@@ -916,6 +916,27 @@ export function factoryStore(app: App, L: Layout) {
   });
 }
 
+/** Why a module's output backs up, with both rates when the module downstream takes less than
+ *  it is offered (the Milestone 4 review: "does not take it" when it took 34 of 81 a minute). */
+function blockedWhy(g: App['game'], e: FEnt, d: ModuleDesign, to: FEnt | null, item: ItemId): string {
+  if (!to) return 'Its front leads nowhere: lay a trunk from its gold mark to the Factory Dock.';
+  const offered = d.outs[item] ?? 0;
+  if (to.kind === 'module') {
+    const td = g.design(to.design);
+    const name = fname(g, to);
+    const takes = td?.ins[item] ?? 0;
+    if (!td || takes <= 0) {
+      const wants = td ? (Object.keys(td.ins) as ItemId[]).map((k) => ITEMS[k].name.toLowerCase()) : [];
+      return `${name} does not take ${ITEMS[item]?.name.toLowerCase() ?? 'it'}${wants.length ? `: it wants ${wants.join(', ')}` : ': it is a source and takes nothing'}. Turn this trunk to the Factory Dock.`;
+    }
+    if (to.state === 'blocked') return `${name} takes ${perMinW(takes)}/min but is blocked itself, so it takes nothing now. Clear its front first.`;
+    if (takes < offered * 0.98) return `${name} takes ${perMinW(takes)} of the ${perMinW(offered)}/min offered: a trunk feeds one module. Fold a works that takes ${perMinW(offered)}/min, or split the source.`;
+    return `${name} takes ${perMinW(takes)}/min, as much as is offered, but its input store is full.`;
+  }
+  if (to.kind === 'fbay') return 'The Megaproject Bay takes only what its stage wants.';
+  return `The trunk is full: it carries ${FACTORY.trunkSpeed * 60}/min. Give the module a trunk of its own.`;
+}
+
 /** The hover report for a thing on the Factory floor. */
 export function factoryReport(app: App, e: FEnt): { text: string; color?: string }[] {
   const g = app.game;
@@ -944,9 +965,12 @@ export function factoryReport(app: App, e: FEnt): { text: string; color?: string
   else if (e.state === 'starved') out.push({ text: `Starved of ${ITEMS[e.why as ItemId]?.name.toLowerCase() ?? 'input'} (${pct}% lately): feed its back`, color: C.pipYellow });
   else if (e.state === 'blocked') {
     const r = g.routes.find((q) => q.from === e && !q.by);
-    const where = !r?.to ? 'its front leads nowhere: lay a trunk to the Factory Dock' : r.to.kind === 'module' ? `${fname(g, r.to)} does not take it` : 'the trunk is full';
-    out.push({ text: `Blocked: ${ITEMS[e.why as ItemId]?.name.toLowerCase() ?? 'output'} has nowhere to go (${where})`, color: C.pipRed });
+    const item = e.why as ItemId;
+    const iname = ITEMS[item]?.name.toLowerCase() ?? 'output';
+    out.push({ text: `Blocked: ${iname} backs up`, color: C.pipRed });
+    out.push({ text: blockedWhy(g, e, d, r?.to ?? null, item), color: C.pipRed });
   } else out.push({ text: 'Idle', color: C.hull2 });
+  if (e.spill) out.push({ text: `Spilling ${ITEMS[e.spill as ItemId]?.name.toLowerCase() ?? 'a product'}: what its front leads to doesn't take it all. Trunk it somewhere that does, or fold a works that uses it`, color: C.pipYellow });
   if (g.done('overdrive')) {
     const od = e.od ?? 0, cool = e.cool ?? 0;
     if (od > 0) out.push({ text: `Overdriven: ${RULES.overdriveMult.value}x for ${Math.ceil(od / TICK_RATE)} s more`, color: C.glow });
@@ -1042,60 +1066,227 @@ function listNames(items: ItemId[]): string {
   return `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`;
 }
 
+/** A strip of the Festival: boardwalk, stalls, lamps and bunting, frogs walking (UI px). */
+function festivalScene(app: App, x: number, y: number, w: number, h: number, t: number) {
+  const ui = app.ui;
+  const ctx = ui.ctx;
+  const k = h >= 64 ? 2 : 1;
+  frame(ui, x - 1, y - 1, w + 2, h + 2, 'inset', false);
+  ui.clip(x, y, w, h);
+  // water, a dusk sky line, then the boardwalk along the bottom
+  ctx.fillStyle = C.shadow;
+  ctx.fillRect(x, y, w, h);
+  if (hasArt('tile_water')) {
+    const ws = sheet('tile_water');
+    for (let yy = y; yy < y + h; yy += 16 * k) for (let xx = x; xx < x + w; xx += 16 * k) ctx.drawImage(ws.frames[(Math.floor(t * 4) + xx + yy) & 3], xx, yy, 16 * k, 16 * k);
+  }
+  const deckY = y + h - 16 * k;
+  const bw = sheet('town_boardwalk');
+  for (let xx = x; xx < x + w; xx += 16 * k) ctx.drawImage(bw.frames[frameNamed(bw, 'h')], xx, deckY, 16 * k, 16 * k);
+  const tops: { x: number; y: number }[] = [];
+  const step = 64 * k;
+  for (let i = 0, xx = x + 6 * k; xx < x + w - 16 * k; i++, xx += step / 2) {
+    if (i % 2 === 0 && hasArt('town_lamp')) {
+      const l = sheet('town_lamp');
+      ctx.drawImage(l.frames[Math.floor(t * (l.fps || 6) + i) % l.frames.length], xx, deckY + 16 * k - l.h * k, l.w * k, l.h * k);
+      tops.push({ x: xx + (l.w * k) / 2, y: deckY + 16 * k - l.h * k + 4 * k });
+    } else if (hasArt('town_stall')) {
+      const st = sheet('town_stall');
+      ctx.drawImage(st.frames[Math.floor(t * (st.fps || 6) + i) % st.frames.length], xx - 8 * k, deckY + 16 * k - st.h * k, st.w * k, st.h * k);
+    }
+  }
+  // bunting between the lamp tops
+  const cols = [C.pipRed, C.gold, C.teal1, C.leaf, C.hot];
+  for (let i = 0; i + 1 < tops.length; i++) {
+    const a = tops[i], b = tops[i + 1];
+    for (let j = 0; j <= 16; j++) {
+      const u = j / 16;
+      const bx = Math.round(a.x + (b.x - a.x) * u), by = Math.round(a.y + Math.sin(u * Math.PI) * 6 * k);
+      ctx.fillStyle = j % 2 ? cols[(i + j) % cols.length] : C.ink;
+      ctx.fillRect(bx, by, j % 2 ? 2 * k : k, j % 2 ? 2 * k : k);
+    }
+  }
+  if (hasArt('town_frog')) {
+    const fr = sheet('town_frog');
+    for (let i = 0; i < 6; i++) {
+      const sp = 14 + i * 5;
+      const span = w + 16 * k;
+      const d = (t * sp * k + i * 53 * k) % (span * 2);
+      const back = d >= span;
+      const fx = x - 16 * k + (back ? span * 2 - d : d);
+      const img = fr.frames[Math.floor(t * (fr.fps || 8) + i) % fr.frames.length];
+      const fy = deckY - 6 * k;
+      if (back) { ctx.save(); ctx.translate(Math.round(fx) + fr.w * k, 0); ctx.scale(-1, 1); ctx.drawImage(img, 0, fy, fr.w * k, fr.h * k); ctx.restore(); }
+      else ctx.drawImage(img, Math.round(fx), fy, fr.w * k, fr.h * k);
+    }
+  }
+  ui.unclip();
+}
+
+/** the slice-end card's count-up and its one-time rain, keyed by when the card opened */
+let sliceOpened = -1;
+let sliceTicks = 0;
+let sliceLanded = false;
+
+/** The slice's end (the Milestone 4 review: it was a plain table missing the Festival's 64K):
+ *  a celebration. Gold rays behind the card, confetti over the screen, Bramble cheering at 2x,
+ *  the payout counted up big with ticks and a slam, the Festival's 400 Gizmos popping in, and
+ *  the factory's numbers as tiles. */
 export function sliceEndCard(app: App, L: Layout) {
   const ui = app.ui;
   const g = app.game;
   const O = L.overlay;
+  const fest = ORDER.gizmoFestival;
+  const pays = fest?.pays ?? 64000;
+  const want = fest?.wants.gizmo ?? 400;
+  const t = ui.time - app.gradeAt;
+  if (sliceOpened !== app.gradeAt) {
+    sliceOpened = app.gradeAt;
+    sliceTicks = 0;
+    sliceLanded = false;
+    for (let i = 0; i < 180; i++) app.hud.rain.push({ x: Math.random() * ui.w, y: -Math.random() * ui.h * 0.9, vx: (Math.random() - 0.5) * 30, vy: 40 + Math.random() * 60, f: Math.floor(Math.random() * 8), spin: Math.random() * 6, gold: i % 3 === 0 });
+    app.audio.sfx('fanfare', 0.9);
+  }
   ui.fill(O.x, O.y, O.w, O.h, C.ink, 0.7);
-  const w = Math.min(340, O.w - 12), h = Math.min(236, O.h - 8);
+  const w = Math.min(420, O.w - 12), h = Math.min(300, O.h - 8);
   const x = O.x + Math.floor((O.w - w) / 2), y = O.y + Math.floor((O.h - h) / 2);
+  // gold rays turning behind the whole card, over the dimmed floor
+  ui.clip(O.x, O.y, O.w, O.h);
+  rays(app, x + w / 2, y + h / 2, Math.max(O.w, O.h), C.gold, 18);
+  ui.unclip();
   frame(ui, x, y, w, h);
   ui.fill(x + 3, y + 3, w - 6, 15, C.shadow);
-  ui.text('Milestone reached', x + w / 2, y + 7, C.gold, { align: 'center', shadow: C.ink });
-  const t = ui.time - app.gradeAt;
-  if (t < 3 && Math.floor(t * 30) % 2 === 0) app.hud.confetti = Math.max(app.hud.confetti, 2);
+  ui.fill(x + 3, y + 17, w - 6, 1, Math.floor(ui.time * 4) % 2 ? C.gold : C.hot);
+  uiIcon(ui, 'star', x + 6, y + 2);
+  ui.text('Milestone: the Gizmo Festival!', x + w / 2, y + 7, Math.floor(ui.time * 3) % 2 ? C.gold : C.hot, { align: 'center', shadow: C.ink });
+  if (t < 4 && Math.floor(t * 30) % 2 === 0) app.hud.confetti = Math.max(app.hud.confetti, 2);
+  // Bramble cheering, bouncing, at 2x when the card is big enough
+  const P = h >= 290 && w >= 400 ? 96 : 48;
+  const px0 = x + 10, py0 = y + 24;
+  frame(ui, px0 - 2, py0 - 2, P + 4, P + 4, 'inset', false);
+  ui.clip(px0, py0, P, P);
+  ui.fill(px0, py0, P, P, C.moss);
+  rays(app, px0 + P / 2, py0 + P / 2, P, C.gold, 10);
+  const bounce = Math.floor(t * 4) % 2 ? -Math.max(1, P / 48) : 0;
   if (hasArt('portrait_bramble_cheer')) {
-    frame(ui, x + 10, y + 24, 52, 52, 'inset', false);
     const s = sheet('portrait_bramble_cheer');
-    ui.ctx.drawImage(s.frames[Math.floor(t * 4) % s.frames.length], x + 12, y + 26);
-  } else portrait(ui, 'bramble', x + 12, y + 26, hasArt('portrait_bramble') ? 48 : 24);
-  confetti(app, x + 36, y + 40);
-  const parts = sliceEndParts(g);
-  const prods = factoryProducts(app);
-  ui.text('The Gizmo Festival is on!', x + 70, y + 26, C.hot);
-  const named = listNames(prods.slice(0, 4));
-  const quote = `"Four hundred Gizmos! ${named[0].toUpperCase() + named.slice(1)}, humming into one Dock${chainedNow(app) ? ', one module feeding the next' : ''}. I understand none of it and I love all of it. Ribbit!" Mayor Bramble`;
-  ui.para(quote, x + 70, y + 38, w - 82, C.bone);
-  // what the player built: the products, side by side
-  let yy = y + 84;
-  ui.text('Running into the Factory Dock', x + 14, yy, C.hull2);
-  yy += 10;
-  let px = x + 14;
-  for (const it of prods.slice(0, 6)) {
-    const s = ITEMS[it].name;
-    if (px + 20 + textWidth(s) > x + w - 12) break;
-    ui.fill(px, yy, 12, 12, C.ink);
-    ui.ctx.drawImage(itemIcon(it), px + 2, yy + 2);
-    px += 22 + ui.text(s, px + 15, yy + 3, C.gold);
+    ui.ctx.drawImage(s.frames[Math.floor(t * 4) % s.frames.length], px0, py0 + bounce, P, P);
+  } else if (hasArt('portrait_bramble')) ui.ctx.drawImage(sheet('portrait_bramble').frames[0], px0, py0 + bounce, P, P);
+  ui.unclip();
+  if (!hasArt('portrait_bramble_cheer') && !hasArt('portrait_bramble')) portrait(ui, 'bramble', px0, py0, 48);
+  confetti(app, px0 + P / 2, py0 + P / 3);
+  // the payout: counted up from 0 over 1.6 s with ticks, then it slams and bumps
+  const rx = px0 + P + 12, rw = x + w - 10 - rx;
+  let ry = py0;
+  ui.text('The Festival pays', rx, ry, C.hull2);
+  ry += 10;
+  const k = Math.min(1, Math.max(0, (t - 0.3) / 1.6));
+  const ease = 1 - (1 - k) ** 3;
+  const shown = Math.round(pays * ease);
+  const step = Math.floor(k * 24);
+  if (step > sliceTicks && k < 1) { sliceTicks = step; app.audio.sfx('coin', 0.5, 0.8 + k * 0.8); }
+  if (k >= 1 && !sliceLanded) {
+    sliceLanded = true;
+    app.audio.sfx('stampLand', 1);
+    app.audio.sfx('codex', 0.8, 1.3);
+    app.renderer.fx.kick(5);
+    app.hud.confetti = Math.max(app.hud.confetti, 80);
   }
-  yy += 16;
+  const num = `+${fmt(shown)}`;
+  const big = textWidth(`+${fmt(pays)}`) * 3 + 22 <= rw ? 3 : 2;
+  const landT = t - 1.9;
+  coinIcon(ui, rx, ry + (big === 3 ? 3 : 0));
+  ui.text(num, rx + 20, ry - (k >= 1 && landT < 0.15 ? 1 : 0), k >= 1 ? (Math.floor(ui.time * 5) % 2 ? C.gold : C.hot) : C.gold, { scale: big, shadow: C.brass0 });
+  if (k >= 1 && landT < 0.6) {
+    // a burst of sparkles off the number as it lands
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2, rr = 6 + landT * 60;
+      ui.ctx.fillStyle = i % 2 ? C.gold : C.bone;
+      ui.ctx.fillRect(Math.round(rx + 20 + (textWidth(num) * big) / 2 + Math.cos(a) * rr), Math.round(ry + 10 + Math.sin(a) * rr * 0.6), 2, 2);
+    }
+  }
+  ry += 9 * big + 3;
+  const earned = g.s.earned.toNumber();
+  const share = earned > 0 ? Math.round((pays / earned) * 100) : 0;
+  ui.clip(rx, ry, rw, 10);
+  ui.text(share > 0 && share <= 100 ? `${share}% of all the coin you have earned` : "Bramble's biggest order yet", rx, ry, C.leaf);
+  ui.unclip();
+  ry += 13;
+  // the 400 Gizmos: one icon per 20, popping in one by one
+  ui.text(`${fmt(want)} Gizmos, one Dock`, rx, ry, C.bone);
+  ry += 10;
+  let rEnd = ry;
+  const per = 20, n = Math.ceil(want / per);
+  const cols = Math.max(1, Math.floor(rw / 11));
+  const rows = Math.ceil(n / cols);
+  if (P - (ry - py0) >= rows * 11) {
+    const on = Math.min(n, Math.floor(Math.max(0, t - 0.2) * 14));
+    for (let i = 0; i < on; i++) {
+      const ix = rx + (i % cols) * 11, iy = ry + Math.floor(i / cols) * 11;
+      const fresh = Math.max(0, t - 0.2) * 14 - i < 1.5;
+      ui.fill(ix, iy, 10, 10, fresh ? C.gold : C.brass0);
+      ui.ctx.drawImage(itemIcon('gizmo'), ix + 1, iy + 1 - (fresh ? 1 : 0));
+    }
+    ui.hint(rx, ry, cols * 11, rows * 11, `Each one is ${per} Gizmos: ${fmt(want)} delivered at the Factory Dock.`, 160);
+    rEnd = ry + rows * 11;
+  }
+  // Bramble, under the portrait, across the card
+  const prods = factoryProducts(app);
+  const named = listNames(prods.slice(0, 4));
+  let yy = Math.max(py0 + P + 8, rEnd + 4);
+  const quote = `"${fmt(want)} Gizmos! ${named[0].toUpperCase() + named.slice(1)}, humming into one Dock${chainedNow(app) ? ', one module feeding the next' : ''}. I understand none of it and I love all of it. Ribbit!"`;
+  yy += ui.para(quote, x + 12, yy, w - 24, C.bone) + 4;
+  // the factory's numbers as tiles
   const secs = Math.floor(g.seconds);
   const best = g.s.designs.map((d) => d.grade.letter).sort((a, b) => GRADE_RANK.indexOf(a) - GRADE_RANK.indexOf(b))[0] ?? '-';
-  const rows: [string, string][] = [
-    ['Time', `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`],
-    ['Coin earned', g.s.earned.format()],
-    ['Products into the Factory Dock', `${Math.max(parts.designs, prods.length)}`],
-    ['One module feeding another', chainedNow(app) ? 'yes' : 'not yet'],
-    ['Designs folded / modules placed', `${g.s.designs.length} / ${g.s.factory.ents.filter((e) => e.kind === 'module').length}`],
-    ['Best grade', best],
+  const mods = g.s.factory.ents.filter((e) => e.kind === 'module').length;
+  const tiles: [string, string, string][] = [
+    [`${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`, 'played', C.bone],
+    [g.s.earned.format(), 'coin earned', C.gold],
+    [String(mods), 'modules placed', C.gold],
+    [String(g.s.designs.length), 'designs folded', C.bone],
+    [String(Math.max(sliceEndParts(g).designs, prods.length)), 'products to Dock', C.leaf],
+    [best, 'best grade', GRADE_COL[best] ?? C.bone],
   ];
-  for (const [k, v] of rows) {
-    if (yy + 10 > y + h - 44) break;
-    ui.text(k, x + 14, yy, C.hull2);
-    ui.text(v, x + w - 14, yy, C.gold, { align: 'right' });
-    yy += 11;
+  const tcols = 3, gap = 4;
+  const tw = Math.floor((w - 24 - gap * (tcols - 1)) / tcols), th = 22;
+  const bottom = y + h - 44;
+  tiles.forEach(([v, label, col], i) => {
+    const tx = x + 12 + (i % tcols) * (tw + gap), ty = yy + Math.floor(i / tcols) * (th + 3);
+    if (ty + th > bottom) return;
+    // tiles pop in one after another
+    if (t < 0.4 + i * 0.12) return;
+    frame(ui, tx, ty, tw, th, 'inset', false);
+    const sc = textWidth(v) * 2 + textWidth(label) + 14 <= tw ? 2 : 1;
+    if (sc === 2) {
+      ui.text(v, tx + 4, ty + 4, col, { scale: 2, shadow: C.ink });
+      ui.text(label, tx + tw - 4, ty + 11, C.hull2, { align: 'right' });
+    } else {
+      ui.clip(tx, ty, tw, th);
+      ui.text(v, tx + 4, ty + 2, col, { shadow: C.ink });
+      ui.text(label, tx + 4, ty + 12, C.hull2);
+      ui.unclip();
+    }
+  });
+  yy += 2 * (th + 3);
+  // what runs into the Factory Dock, while there is room
+  if (yy + 14 <= bottom) {
+    let ix = x + 12;
+    for (const it of prods.slice(0, 6)) {
+      const s2 = ITEMS[it].name;
+      if (ix + 20 + textWidth(s2) > x + w - 12) break;
+      ui.fill(ix, yy, 12, 12, C.ink);
+      ui.ctx.drawImage(itemIcon(it), ix + 2, yy + 2);
+      ix += 22 + ui.text(s2, ix + 15, yy + 3, C.gold);
+    }
+    yy += 16;
   }
-  ui.para('Act II opens up from here: coal, steel, power and two new customers. Keep folding.', x + 14, y + h - 42, w - 28, C.teal1);
+  // the Festival itself, in whatever room is left: the town's boardwalk with its stalls, lamps,
+  // bunting and townsfrogs strolling (the town's own sprites, when drawn)
+  const sceneH = bottom - yy;
+  if (sceneH >= 36 && hasArt('town_boardwalk')) festivalScene(app, x + 8, yy, w - 16, Math.min(sceneH, 72), t);
+
+  ui.para('Act II opens from here: coal, steel, power and two new customers. Keep folding.', x + 14, y + h - 40, w - 28, C.teal1);
   if (button(ui, 'sliceOk', x + Math.floor(w / 2) - 55, y + h - 20, 110, 16, 'Keep building', { gold: true, pulse: true })) app.panel = null;
 }
 

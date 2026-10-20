@@ -32,8 +32,9 @@ export function runOrders(g: Game) {
     const complete = (Object.entries(d.wants) as [ItemId, number][]).every(([item, n]) => (p[item] ?? Num.ZERO).gte(n));
     if (complete) {
       o.done.push(d.id);
+      (o.doneAt ??= {})[d.id] = g.s.tick;
       o.active = null;
-      g.earn(Num.of(d.pays));
+      g.earn(Num.of(d.pays), true);
       o.rep[d.customer] = (o.rep[d.customer] ?? 0) + d.rep;
       g.emit({ type: 'order', id: d.id, value: d.pays });
       // reputation can change the rules the layout runs by (Voltaire's rep 3 extends pole reach)

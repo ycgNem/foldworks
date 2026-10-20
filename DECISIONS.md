@@ -423,3 +423,133 @@ auditor's slice-end and rule-4 levers are settled here.
   Why: the Act II bot found the old rule refused an all-assembler line (circuits into motors),
   which is a line by any reading; a lone miner, or two machines side by side that don't feed each
   other, are still refused.
+
+## The Milestone 4 review (idle-critic, 2026-10-20)
+
+Fixed in the sim:
+- 2026-10-20: **Stock drawn down inside an audited box becomes the module's input** (the same
+  item still nets off its output). Why: the value-based discount let 0-value items through: a
+  crate of steel feeding a kit assembler folded into Machine Kits (and Drill Bits) from nothing.
+  Drawdowns of 3 or fewer of an item are belts settling and are ignored.
+- 2026-10-20: **S+ needs the line's byproducts used inside the box** (80%), or none made. Why:
+  S moved up a grade instead of being fixed: a miner and a smelter with a heap outside graded S+,
+  while the real multi-stage Gizmo works got A. S+ now asks for the zero-waste line (bricks,
+  gravel) that §15 and Act II's slag → concrete chain promise.
+- 2026-10-20: **A copy isn't placed on the Factory floor past the claims held.** Why: a re-folded
+  copy got around them (copper at 6/5). Folding stays free of claims; placing is checked.
+- 2026-10-20: **No premium on re-folding a product.** The critic proposed charging the stamp
+  premium on every fold after a product's first. Not done: a re-fold costs the machines again
+  plus a 70 s audit, and stamping is the convenience of skipping both; with claims now checked at
+  placement, re-folding gets around nothing that matters.
+- 2026-10-20: **A nested fold boxes one connected group**: every module in the box joined to the
+  others by trunks inside it. Why: one internal pair let strangers ride along and take a second
+  grade multiplier.
+- 2026-10-20: **The Great Drill never boosts what is being audited** (miners and Factory modules).
+  Why: its +50% was measured into a fold and then applied again to the module holding miners.
+- 2026-10-20: **One-off payouts (orders, Codex firsts) don't count in the coin-per-minute rate**;
+  the hover report shows a brownout's real speed, and a crate feeding a machine.
+
+Handed on: the economy (Act II goods out-earn a Gizmo chain per tile, Act II prices rebased to
+the measured ~7.2K coin/min, coin goals between research nodes) to the Act II bot's round; the
+Next card, the module hover, the S+ banner, the slice-end card, Bramble's town and the missing
+fanfares to UI wave 3. Patents from lifetime coin alone let an idle slice factory earn ~14 against
+the Act II bot's 15: **the Patents formula is reopened for Milestone 5** (products, grades and
+Megaproject progress are candidates).
+
+### Flagged as derivative (the Milestone 4 review; owner to decide)
+
+- **Machine modes** (Efficient, Overclocked, Precision) map onto Factorio's efficiency, speed and
+  productivity modules, under Satisfactory's "overclock" name. ROADMAP.md Milestone 4 names the
+  three modes, so they stay. **For the owner:** a re-derivation from Foldworks' own model is
+  byproduct modes: in place of Precision's +25% yield, a *Thrift* mode (half the slag, 0.8×
+  speed) and a *Recycling* mode (takes slag back in with its ore), which make the slag puzzle the
+  thing a mode changes.
+
+### UI wave 3 (the Milestone 4 review's juice and fullness, 2026-10-20)
+
+- 2026-10-20: **The default camera zoom fills the view** (integer zoom; the floor pans by
+  right-drag, WASD or resting the mouse at an edge, with faint arrows where there is more). Why:
+  at 1280×720 the 24×16 Act II Workshop drew at 1× in a quarter of the screen.
+- 2026-10-20: **Bramble's Town grows on the water around both floors as orders are filled**: two
+  houses at the start, a boardwalk for The Boardwalk, lamps for Lamp Posts, stalls, bunting and
+  walking frogs for the Gizmo Festival, Unit 7's observatory and Voltaire's pavilion with their
+  first orders, a house per order filled. Each piece arrives with a burst, a sound and a Gazette
+  line, and hovers with what it is from and when (orders.doneAt, kept in the save). Why: the owner
+  wants the screen full and alive, and orders had no lasting trace. A record of progress, not a
+  currency or a mechanic: it changes no number.
+- 2026-10-20: **The slice end is a celebration**: the Festival's Gizmos parade along the trunks into
+  the Factory Dock, then the card counts the 64,000 up with Bramble cheering. Coin cascades from
+  the Dock on every order filled; Codex firsts, the first Mk2 and each reputation level get a
+  banner and a fanfare. Heap alerts show once per heap and sit under the Act II goal after the
+  slice end.
+
+### Act II pacing (the bot)
+
+- 2026-10-20: **Act II's targets are measured from the slice end S (the Gizmo Festival, about
+  0:31), not the clock.** Why: the slice ends about an hour before §16's 90-minute budget, and
+  every Act II number has to be set against the factory the player actually has then. Steel by
+  S+25 min, power S+35, circuits S+60, the Concrete fold S+80, the Great Drill's stage 1 by S+4 h
+  (DESIGN.md §18 Pacing targets; `tests/pace-act2-run.test.ts`). Serves pillar 1 (pacing is
+  tested). Rule 1 is not met while the Bay fills (goals about 40 min apart): an open item.
+- 2026-10-20: **Act II coin prices are set against measured income (about 12,500/min from the
+  slice end), not against Act I prices**: chunk E 15,000 → 60,000, F 40,000 → 120,000; claim
+  blocks iron and copper 5,000 → 25,000, sand 8,000 → 40,000, coal 12,000 → 60,000; Boiler
+  1,200, Steam Engine 2,000, Generator 2,600, Pole 150, Kiln 3,000, Mixer 4,000, Refinery 9,000;
+  Mk2 Smelter, Press and Assembler 6,000, 9,000, 20,000 (4× speed; generator 200 kW). Why: the
+  Milestone 4 review found E at 2.1 minutes of income, a claims block 41 s and coin piling up
+  unspent. No Dock saturation mechanic (the lead's decision). Machine Kits count bills, so ten
+  times the machine prices is ten times the kits per stamp: **proposed** `kitDivisor` 500 → 5,000
+  to keep kits per stamp where they were (RULES are the lead's).
+- 2026-10-20: **Act II goods out-earn the Gizmo per module tile**: steel 15 → 22, glass 8 → 12,
+  plastic 16 → 24, concrete 22 → 32, circuit 110 → 180, motor 420 → 640, and every Act II order's
+  payout re-derived at about 2.1–2.2× its goods (Calibration 13,000, Lens Array 34,000, One of
+  Everything 14,500, Streetlamps 64,000, Promenade 56,000, Turbine 85,000). Why: a Gizmo chain is
+  3 modules at 0.27/s × 80, 7.3 coin/s a module; an S-grade module of a full-speed Act II line
+  now beats it (Steel 9.2, Glass and Plastic 7.5, Concrete 13, a Circuits chain 15 a module).
+  The bot's one-miner lines fold thin and fall under it (Plastic 5.7, Glass 2.3), which pays a
+  player for widening a line before folding.
+- 2026-10-20: **Research costs**: Coal Seams 600 gears, Steelmaking 300 coal + 300 gears, Steam
+  Power 500 coal + 400 gears (no item that only the next chunk can make); Concrete 500 gravel +
+  400 sand → 200 + 200, The Great Drill 60 motors + 600 concrete → 40 + 200. Why: one steel
+  line's slag (0.17–0.3/s) is the only gravel in the Workshop; the old costs put Concrete 1.5 h
+  after Crushing and the Great Drill's concrete over 3 h of it.
+- 2026-10-20: **The Great Drill's stage 1 wants 450 Drill Bits and 2,000 steel** (was 40 bits,
+  1,500 concrete, 600 steel). Why: set from the bot's Bay floor (a Drill Bit is 2 concrete, 8
+  slag; the floor turns about 35 slag/min into bits), so stage 1 lands at S+3:20–3:23, inside the
+  S+4 h target. Concrete left the wants: a floor that sends concrete both to the Drill works and
+  to the Bay needs two Concrete copies (Machine Kits), and the concrete is in every bit.
+- 2026-10-20: **Patents divisor 2,500** (`RULES.patentDivisor`): 5 h of the bot is 2.0–2.05M
+  lifetime coin, 14 Patents (4 h 13, twice the coin 19). Provisional: the formula is reopened for
+  Milestone 5.
+- 2026-10-20: **The Act II bot clears the Act I Gizmo chains from the Factory floor when the
+  Great Drill's floor needs the room** (`fremove`, newest chain first), the lead's call. Income
+  falls from about 12,500/min to 4,300/min while the Bay fills; the bot then places Iron ingots
+  and Copper wire copies on the Dock's free sides.
+
+Findings for the sim and design (not changed here):
+- **A module whose outputs are consumed in another ratio than it makes them stalls for good**:
+  a Glass & plastic module feeding a Circuits module (measured at 0.12 glass to 0.075 plastic)
+  fills its plastic buffer, stops, and starves the Circuits module of glass. Any audit's measured
+  ratio is off by a few items, so every multi-output module feeding one consumer deadlocks
+  eventually. The bot folds the glass and plastic works twice, once with each half stopped, to
+  get single-output designs. Proposal: a blocked output should not stop a module's other outputs
+  (or let a trunk carry the surplus on to the Dock).
+- **Byproduct loops deadlock the same way**: a module that waits on Concrete must not send its
+  slag into that Concrete (Concrete full of slag waiting for oil stops the Steel that feeds the
+  Drill works that Concrete waits on). The bot's Bay floor sends those byproducts to the Dock.
+- **Rule 1 while the Bay fills**: the last 1.5 h of Act II has three goals (Tuning, Nested Folds,
+  the stage). Candidates: the stage's items as separate visible goals, Surveying at an Act II
+  cost (its 100 slag bricks need a brick press nobody builds in Act II) so claims become a goal,
+  and orders reachable from the Bay floor.
+
+### After Act II's bot (2026-10-20)
+
+- 2026-10-20: **A module with several products runs while any one has room; a full one spills.**
+  Why: Act II's bot found a multi-output module deadlocked for good whenever its consumer took the
+  products in another ratio (and audit noise makes every measured ratio slightly off). A
+  byproduct with nowhere to go still blocks: that is the slag lesson.
+- 2026-10-20: **Machine Kits: 1 + floor(bill ÷ 5,000)** (was ÷ 500). Why: Act II machine prices rose
+  10× against the measured income, and kits per stamp should not.
+- Open: rule 1 (a goal within reach every 3 min) fails for ~40 min while the Megaproject Bay
+  fills (Act II pacing, the bot); coin piles up (~1.8M at 5 h) with too few sinks; the bot doesn't
+  use nested folds yet. Carried to Milestone 5's planning.

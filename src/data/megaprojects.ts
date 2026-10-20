@@ -16,9 +16,9 @@ export const MEGA: MegaStage[] = [
   {
     stage: 1,
     name: 'The Great Drill, stage 1',
-    wants: { drillBit: 40, concrete: 1500, steel: 600 },
+    wants: { drillBit: 450, steel: 2000 },
     reward: 'Every Miner and every module with miners inside runs +50%, for good',
-    derivation: '§18 Megaproject #1: 40 Drill Bits, 1,500 concrete and 600 steel, about the last hour of Act II',
+    derivation: '§18 Megaproject #1: from the slag the Act II bot Bay floor turns into bits (a bit is 2 concrete, 8 slag; about 35 slag/min, 5-6 bits/min while the Bay Steel runs, 2.5 after): 450 bits and 2,000 steel take it about 1.4 h, stage 1 at S+3:20, inside the S+4 h target; concrete is in the bits',
   },
 ];
 

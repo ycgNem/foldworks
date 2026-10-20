@@ -20,6 +20,7 @@ import { Ground, TILE } from './ground';
 import { sheet, drawRot, frameAt, itemIcon, hasArt, spriteName } from './sprites';
 import { Fx, FOLD_DUR, FOLD_FLASH } from './fx';
 import { onGridKind, powered, gridIndex, cheb, wirePairs, reached, capacity } from './powerview';
+import { Town, TOWN_ROWS } from './town';
 
 export class Camera {
   /** centre, in world pixels */
@@ -95,6 +96,12 @@ export class Renderer {
   private foldSnaps = new Map<string, { x: number; y: number; w: number; h: number; img: HTMLCanvasElement; t: number }>();
   /** any grid browned out last frame (a fizz when one starts) */
   private wasBrown = false;
+  /** Bramble's Town in the water around the floors */
+  town = new Town();
+  /** the Festival's Gizmo parade along the trunks into the Factory Dock (Factory-floor world px) */
+  parade: { t: number; n: number; paths: { x: number; y: number }[][]; dock: { x: number; y: number } } | null = null;
+  /** town news lines for the Gazette, drained by the HUD */
+  townNews: string[] = [];
 
   constructor(public ctx: CanvasRenderingContext2D) {}
 
@@ -141,8 +148,24 @@ export class Renderer {
     const mw = wTiles * TILE, mh = hTiles * TILE;
     const halfW = this.view.w / 2 / c.zoom, halfH = this.view.h / 2 / c.zoom;
     const pad = 48;
+    // the town above the floor may be scrolled to: TOWN_ROWS of water on top
+    const top = TOWN_ROWS * TILE;
     c.x = mw + pad * 2 <= halfW * 2 ? mw / 2 : Math.max(halfW - pad, Math.min(mw + pad - halfW, c.x));
-    c.y = mh + pad * 2 <= halfH * 2 ? mh / 2 : Math.max(halfH - pad, Math.min(mh + pad - halfH, c.y));
+    c.y = mh + top + pad <= halfH * 2 ? (mh - top) / 2 + pad / 2 : Math.max(halfH - top, Math.min(mh + pad - halfH, c.y));
+  }
+
+  /** World pixel under a screen pixel. */
+  screenToWorld(sx: number, sy: number) {
+    const c = this.cam;
+    const { mx, my } = this.mid();
+    const ox = Math.round(mx - Math.round(c.x) * c.zoom), oy = Math.round(my - Math.round(c.y) * c.zoom);
+    return { x: (sx - ox) / c.zoom, y: (sy - oy) / c.zoom };
+  }
+
+  /** The town piece under a screen pixel: its one-line label. */
+  townAt(sx: number, sy: number): string | null {
+    const w = this.screenToWorld(sx, sy);
+    return this.town.at(w.x, w.y)?.label ?? null;
   }
 
   private sfx(id: string, v = 1, p = 1) {
@@ -161,6 +184,11 @@ export class Renderer {
       }
       if (e.type === 'codex') this.sfx('codex');
       if (e.type === 'parts') this.sfx('kit', 0.7);
+      if (e.type === 'order' && e.id) {
+        this.town.times[e.id] = e.tick;
+        this.orderCascade(g, e.id);
+        if (e.id === 'gizmoFestival') this.startParade(g);
+      }
       if ((e.floor ?? 'workshop') !== this.floor) continue;
       const px = (e.x ?? 0) * TILE, py = (e.y ?? 0) * TILE;
       switch (e.type) {
@@ -332,8 +360,19 @@ export class Renderer {
     ctx.imageSmoothingEnabled = false;
     if (ov.floor === 'factory') this.backdrop(ox, oy, z, FACTORY.w, FACTORY.h);
     else this.backdrop(ox, oy, z, g.W, g.H);
+    // Bramble's Town on the water, behind the floor
+    if (ov.floor === 'factory') this.town.draw(ctx, g, FACTORY.w, FACTORY.h, this.time);
+    else this.town.draw(ctx, g, g.W, g.H, this.time);
+    for (const n of this.town.news) {
+      this.fx.burst(n.x, n.y, 30, [C.gold, C.leaf, C.bone, C.hot], 70, 40, 1, 1);
+      this.fx.ring(n.x, n.y, C.gold, 28, 0.7, 4);
+      this.sfx('land', 0.7);
+      this.townNews.push(n.text);
+    }
+    this.town.news.length = 0;
     if (ov.floor === 'factory') {
       drawFactory(ctx, g, this.time, ov.factory);
+      this.drawParade(g, dt);
       this.effects(dt);
       return;
     }
@@ -1194,6 +1233,92 @@ export class Renderer {
     }
   }
 
+  /** An order filled: a fountain of coins out of the Dock on screen and a cascade of them into
+   *  the coin counter, staggered so they pour (the Milestone 4 review's missing juice). */
+  private orderCascade(g: Game, id: string) {
+    const fx = this.fx;
+    let dock: { x: number; y: number } | null = null;
+    if (this.floor === 'factory') {
+      const d = g.s.factory.ents.find((e) => e.kind === 'fdock');
+      if (d) dock = { x: d.x + 1, y: d.y + 1 };
+    } else {
+      const d = g.s.ents.find((e) => e.kind === 'dock');
+      if (d) dock = { x: d.x + d.w / 2, y: d.y + d.h / 2 };
+    }
+    if (!dock) return;
+    const big = id === 'gizmoFestival' ? 2 : 1;
+    fx.fountain(dock.x * TILE, dock.y * TILE - 6, 50 * big, [C.gold, C.hot, C.brass1, C.bone], 120, 2, 1.4);
+    fx.ring(dock.x * TILE, dock.y * TILE, C.gold, 40, 0.8, 6);
+    fx.text(dock.x * TILE, dock.y * TILE - 26, 'ORDER FILLED!', C.gold, 2, true);
+    const s = this.toScreen(dock.x, dock.y);
+    const n = 18 * big;
+    for (let i = 0; i < n; i++) fx.fly(s.x + ((i % 6) - 3) * 6, s.y - (i % 3) * 4, this.coinTarget.x, this.coinTarget.y, undefined, false, i * 0.045);
+    this.sfx('coin', 0.8, 1.2);
+  }
+
+  /** The Festival filled: Gizmos parade along every trunk that carries them into the Factory Dock. */
+  private startParade(g: Game) {
+    const dock = g.s.factory.ents.find((e) => e.kind === 'fdock');
+    if (!dock) return;
+    const paths: { x: number; y: number }[][] = [];
+    for (const r of g.routes) {
+      if (r.by || r.to?.kind !== 'fdock') continue;
+      const d = g.design(r.from.design);
+      if (!d || !(d.outs.gizmo ?? 0)) continue;
+      const pts = [{ x: r.from.x + 0.5, y: r.from.y + 0.5 }, ...r.tiles.map((t) => ({ x: t.x + 0.5, y: t.y + 0.5 })), { x: dock.x + 1, y: dock.y + 1 }];
+      paths.push(pts.map((p) => ({ x: p.x * TILE, y: p.y * TILE })));
+    }
+    // no Gizmo trunk found (a hand-made state): march in from the floor's left edge
+    if (!paths.length) paths.push([{ x: 0, y: (dock.y + 1) * TILE }, { x: (dock.x + 1) * TILE, y: (dock.y + 1) * TILE }]);
+    this.parade = { t: 0, n: 0, paths, dock: { x: (dock.x + 1) * TILE, y: (dock.y + 1) * TILE } };
+    this.sfx('fanfare', 0.8);
+  }
+
+  /** seconds the Gizmo parade runs (the slice-end card waits for it) */
+  static PARADE_S = 3.6;
+
+  private drawParade(g: Game, dt: number) {
+    const p = this.parade;
+    if (!p) return;
+    p.t += dt;
+    if (p.t > Renderer.PARADE_S) { this.parade = null; return; }
+    const ctx = this.ctx;
+    const icon = itemIcon('gizmo');
+    const speed = 5 * TILE;
+    let arrived = 0;
+    for (const path of p.paths) {
+      const lens: number[] = [0];
+      for (let i = 1; i < path.length; i++) lens.push(lens[i - 1] + Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y));
+      const total = lens[lens.length - 1];
+      for (let k = 0; k < 14; k++) {
+        const d = (p.t - k * 0.16) * speed;
+        if (d < 0) continue;
+        if (d >= total) { arrived++; continue; }
+        let i = 1;
+        while (i < lens.length - 1 && lens[i] < d) i++;
+        const seg = lens[i] - lens[i - 1] || 1;
+        const u = (d - lens[i - 1]) / seg;
+        const x = path[i - 1].x + (path[i].x - path[i - 1].x) * u, y = path[i - 1].y + (path[i].y - path[i - 1].y) * u;
+        const hop = Math.abs(Math.sin(d / 6)) * 4;
+        ctx.fillStyle = rgba(C.ink, 0.5);
+        ctx.fillRect(Math.round(x - 3), Math.round(y + 3), 7, 2);
+        ctx.fillStyle = C.gold;
+        ctx.fillRect(Math.round(x - 5), Math.round(y - 5 - hop), 10, 10);
+        ctx.drawImage(icon, Math.round(x - 4), Math.round(y - 4 - hop));
+        if (k % 3 === 0) { ctx.fillStyle = C.bone; ctx.fillRect(Math.round(x - 6), Math.round(y - 8 - hop), 1, 1); }
+      }
+    }
+    // each Gizmo that reaches the Dock pops a spark
+    if (arrived > p.n) {
+      for (let i = p.n; i < arrived; i++) {
+        this.fx.burst(p.dock.x, p.dock.y - 4, 8, [C.gold, C.hot, C.bone], 50, 60, 1, 0.6);
+        if (i % 2 === 0) this.fx.pop(p.dock.x, p.dock.y - 14, 20, 'parade', C.gold, 'gizmo', '+');
+      }
+      this.sfx('coin', 0.4, 1.4);
+      p.n = arrived;
+    }
+  }
+
   /** The first Miner placed: a fountain of ore and gold, rings, and a big "FIRST MINER!" */
   firstMiner(tx: number, ty: number) {
     const fx = this.fx;
@@ -1203,6 +1328,16 @@ export class Renderer {
     fx.ring(x, y, C.iron2, 24, 0.6, 2);
     fx.text(x, y - 22, 'FIRST MINER!', C.gold, 2.4, true);
     fx.kick(4);
+  }
+
+  /** The first Mk2 machine placed: a copper and gold burst over its 2x2 and "FIRST MK2!" */
+  firstMk2(tx: number, ty: number) {
+    const fx = this.fx;
+    const x = tx * TILE + 16, y = ty * TILE + 16;
+    fx.burst(x, y, 50, [C.copper2, C.gold, C.hot, C.bone], 100, 40, 2, 1.2);
+    fx.ring(x, y, C.gold, 40, 0.9, 10);
+    fx.ring(x, y, C.copper2, 28, 0.6, 6);
+    fx.text(x, y - 26, 'FIRST MK2!', C.gold, 2.2, true);
   }
 
   /** Pops and flying coins and labels, drawn in screen space at the UI scale (crisp text). */
@@ -1243,6 +1378,7 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
     for (const f of this.fx.flyers) {
+      if (f.t < 0) continue;
       const t = Math.min(1, f.t / f.dur);
       const e = t * t * (3 - 2 * t);
       const x = f.x0 + (f.x1 - f.x0) * e, y = f.y0 + (f.y1 - f.y0) * e - Math.sin(t * Math.PI) * f.arc * uiScale / 2;

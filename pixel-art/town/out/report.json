@@ -1,0 +1,105 @@
+{
+ "town_house": {
+  "frame": [
+   32,
+   32
+  ],
+  "frames": 6,
+  "colours": 26,
+  "fps": 0,
+  "order": [
+   "hut",
+   "gable",
+   "lily",
+   "tall",
+   "brick",
+   "bramble"
+  ]
+ },
+ "town_boardwalk": {
+  "frame": [
+   16,
+   16
+  ],
+  "frames": 13,
+  "colours": 8,
+  "fps": 0,
+  "order": [
+   "h",
+   "v",
+   "corner_ws",
+   "end_e",
+   "corner_es",
+   "corner_wn",
+   "corner_en",
+   "end_w",
+   "end_n",
+   "end_s",
+   "tee_s",
+   "tee_n",
+   "cross"
+  ]
+ },
+ "town_lamp": {
+  "frame": [
+   16,
+   32
+  ],
+  "frames": 4,
+  "colours": 15,
+  "fps": 6
+ },
+ "town_stall": {
+  "frame": [
+   32,
+   32
+  ],
+  "frames": 4,
+  "colours": 21,
+  "fps": 6
+ },
+ "town_frog": {
+  "frame": [
+   16,
+   16
+  ],
+  "frames": 4,
+  "colours": 6,
+  "fps": 8
+ },
+ "town_unit7": {
+  "frame": [
+   32,
+   48
+  ],
+  "frames": 4,
+  "colours": 25,
+  "fps": 4
+ },
+ "town_voltaire": {
+  "frame": [
+   32,
+   48
+  ],
+  "frames": 4,
+  "colours": 17,
+  "fps": 8
+ },
+ "town_lily": {
+  "frame": [
+   16,
+   16
+  ],
+  "frames": 6,
+  "colours": 11,
+  "fps": 0,
+  "order": [
+   "pad",
+   "pads",
+   "flower",
+   "reeds",
+   "cattails",
+   "buds"
+  ]
+ }
+}

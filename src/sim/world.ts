@@ -207,6 +207,8 @@ export interface FEnt {
   why: string | null;
   /** round-robin over output items */
   rr: number;
+  /** a product spilling because its output is full while another still has room, this tick */
+  spill?: string | null;
   /** a trunk tile's flow last tick, items/s (for drawing items along it) */
   flow: number;
   /** 'w' 's' 'b' 'i' per second over the last minute */
@@ -251,6 +253,8 @@ export interface OrderState {
   /** delivered toward each order, by item */
   progress: Record<string, Partial<Record<ItemId, Num>>>;
   done: string[];
+  /** the tick each order was filled on (absent on older saves; Bramble's Town labels read it) */
+  doneAt?: Record<string, number>;
   rep: Record<CustomerId, number>;
 }
 

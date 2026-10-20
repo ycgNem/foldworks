@@ -8,15 +8,16 @@
 //  - it looks at what the screen shows (the map, buffers, pips, research and order progress).
 //
 // Shape of the policy. Act II's new thinking is ratios and power, so the Workshop's new chunks
-// (E, F, and the free corner of B by the copper patch) are a line lab: each line is laid out from
-// a fixed plan (LAYOUTS below), fed by belts, powered by its own plant, and folded into a module
-// once it runs; the lab is rebuilt or rearranged for the next line. Research items reach the
-// Workshop Hopper by a spine belt down chunk E's west edge and a corridor through chunk B found by
-// search (so the policy composes with whatever the Act I planner left in chunks A-D). On the
-// Factory floor a small planner places module copies and trunk belts by search: sources into the
-// Factory Hopper (research), the Factory Dock (coin and orders) and the Megaproject Bay, byproducts
-// out of a side trunk to whatever uses them (slag into concrete, oil into the concrete plant's
-// boiler) or to the Dock.
+// (E, F, and the free corner of B by the copper patch) are a line lab: lines are laid out from
+// fixed parts (PARTS below), fed by belts, powered by their own plants, and folded into modules
+// once they run well (some in the background while the plan goes on); the lab is rearranged for
+// the next line. Research items reach the Workshop Hopper by a spine down chunk E's west edge and
+// a corridor through chunk B found by search; once research needs only motors and concrete the
+// spine becomes a loop of splitters feeding the motor and drill-bit assemblers. A few audits are
+// prepared like a player would: a slag heap is let fill first so the Concrete and Drill works
+// lines are measured at full speed, and the glass and plastic works is folded twice with each
+// half stopped, for single-output modules. On the Factory floor the first Steel copy goes to the
+// Hopper by search; the Great Drill's floor is laid by hand (BAY_PLAN), clearing the Act I chains.
 //
 // Options model §16 rule 4's two players: `overdrive` (an active player clicking Overdrive on busy
 // machines, capped), `sparks` and `build`. With everything off the bot does nothing: idle play.
@@ -33,10 +34,11 @@ import { TICK_RATE } from '../engine/time';
 import { available } from './systems/research';
 import { offeredOrders } from './systems/orders';
 import { auditLock, foldRefusal } from './systems/audits';
-import { BYPRODUCTS, kitsFor, mainItem, stampCost, stampRefusal } from './systems/modules';
-import { ffoldRefusal } from './systems/nested';
+import { BYPRODUCTS, buildRoutes, kitsFor, mainItem, stampCost, stampRefusal } from './systems/modules';
+import { fauditLock, ffoldRefusal } from './systems/nested';
 import { shares } from './systems/stats';
 import { recipeKnown } from './transfer';
+import { placeClaimRefusal } from './systems/claims';
 
 /** E S W N */
 const E: Dir = 0, S: Dir = 1, W: Dir = 2, N: Dir = 3;
@@ -60,6 +62,8 @@ export interface Pl {
    * turning a miner away once the Hopper's bank holds enough, so the spine carries what is short) */
   gate?: ItemId[];
   off?: Dir;
+  /** a valve the bot works by hand: on (its own rot) while this says so, else turned to `off` */
+  on?: (b: Act2Bot) => boolean;
 }
 
 /** Gate a part: on (its own rot) while research still needs one of `items`, else turned to `off`. */
@@ -115,7 +119,10 @@ export const PARTS: Record<string, Pl[]> = {
   // steel smelter (20,12); coal from the miner (19,12) into its west side; steel north and west
   // along row 10 to the spine column; steel's slag east (21,12) and north up column 23
   steel: [
-    ...draw(19, 11, ['..b^..', 'm>s^b>', 'h.s^m<'], { '20,12': 'smeltSteel', '20,13': 'smeltIron' }),
+    ...draw(19, 11, ['..b^..', 'm>s^b>', 'hvs^m<'], { '20,12': 'smeltSteel', '20,13': 'smeltIron' }),
+    // the ingot smelter's slag: its heap empties south and along row 14 into the slag column, so
+    // both smelters' slag reaches the gravel press (a slag line, not a dump)
+    ...belts([[19, 14, E], [20, 14, E], [21, 14, E], [22, 14, E], [23, 14, N], [23, 13, N]]),
     ...belts([[20, 10, W], [19, 10, W], [18, 10, W], [17, 10, W], [16, 10, N], [16, 9, N], [16, 8, N]]),
     ...belts([[22, 12, E], [23, 12, N], [23, 11, N]]),
   ],
@@ -135,13 +142,19 @@ export const PARTS: Record<string, Pl[]> = {
   circuitAsm: draw(15, 2, ['a>'], { '15,2': 'etchCircuit' }),
   // E's glass and plastic works (box 18,0 4x6, its own grid): a generator fed by coal (18,2), the
   // pole (19,2), a kiln (21,4) fed by sand (21,5), glass north up column 21 and west along row 0
+  // Folded twice, once with each half stopped (the sand miner or the refinery's coal miner turned
+  // away): a Glass module and a Plastic module, each with one main output. A module making glass
+  // and plastic together stalls for good feeding a Circuits module that takes them in any other
+  // ratio than 1:1 (the surplus fills its output and stops the other); one output each, every
+  // module runs at what its consumer takes.
   gp: [
     ...draw(17, 0, ['b<b<b<b<b<']),
     ...draw(18, 1, ['g...b^b^']),
     ...draw(18, 2, ['m^o.b^b^']),
-    ...draw(18, 3, ['m>..b^b^']),
+    { kind: 'miner', x: 18, y: 3, rot: E, on: (b) => b.foldMode !== 'glass', off: S },
+    ...draw(20, 3, ['b^b^']),
     ...draw(21, 4, ['k^']),
-    ...draw(21, 5, ['m^']),
+    { kind: 'miner', x: 21, y: 5, rot: N, on: (b) => b.foldMode !== 'plastic', off: E },
   ],
   // after Refining: the refinery (19,3) takes coal from (18,3), plastic north up column 20, its
   // oil south down column 19
@@ -153,12 +166,19 @@ export const PARTS: Record<string, Pl[]> = {
   oilSplit: [...draw(19, 5, ['Sv']), ...belts([[18, 5, W], [17, 5, W]])],
   // after Crushing: the slag heap drains north into a gravel press (22,8); gravel and sand west
   // along row 8 into the spine
+  // (23,9) is a valve: before the Concrete and Drill works audits it is turned east (off the map,
+  // one slag stuck on it) so the heap fills, and the audit then measures the mixer (and the
+  // drill-bit assembler after it) at full speed rather than at the trickle of slag one steel line
+  // makes: a player lets the buffer fill before measuring
   gravel: [
-    ...belts([[23, 9, N], [23, 8, W]]),
+    { kind: 'belt', x: 23, y: 9, rot: N, on: (b) => b.valveOpen(), off: E },
+    ...belts([[23, 8, W]]),
     ...draw(22, 8, ['p<'], { '22,8': 'crushGravel' }),
     ...draw(21, 6, ['mv']), ...belts([[21, 7, S]]),
-    ...gated(belts([[17, 8, W]]), ['gravel', 'sand', 'concrete'], N), ...belts([[18, 8, W], [19, 8, W], [20, 8, W]]),
+    { kind: 'belt', x: 17, y: 8, rot: W, on: (b) => b.concreteOut(), off: N },
+    ...belts([[19, 8, W], [20, 8, W]]),
   ],
+  g18: belts([[18, 8, W]]),
   gravelOut: belts([[21, 8, W]]),
   // after Concrete: the mixer (21,8) takes gravel from behind and sand from above; its plant is a
   // boiler (19,7) burning the refinery's oil and an engine (20,7), on the pole (21,9): a grid of
@@ -169,7 +189,56 @@ export const PARTS: Record<string, Pl[]> = {
     ...draw(19, 7, ['B>e.']),
     ...draw(21, 9, ['o.']),
   ],
+  // ---- after Motors and the Concrete fold, research needs only motors and concrete: the spine's
+  // top half becomes a loop. Steel and concrete come up column 16 from F, pass a splitter beside
+  // the motor assembler (15,3), go east along row 2 and back down column 17 to a merger at (16,6);
+  // a splitter at (16,5) lets a share of each lap out west into the corridor (the Hopper takes
+  // research concrete and anything the assemblers pass up). Every machine is fed through a splitter
+  // that skips it when it refuses an item, so a mixed belt never jams (the gpFeed2 lesson).
+  loop: [
+    ...belts([[16, 1, E], [16, 2, E], [16, 4, N], [16, 7, N]]),
+    ...draw(16, 3, ['S^']), ...draw(16, 5, ['S^']), ...draw(16, 6, ['J^']),
+    ...belts([[17, 1, S], [17, 2, S], [17, 3, S], [17, 4, S], [17, 5, S], [17, 6, W]]),
+  ],
+  // the refinery's oil: south to the boiler, or west into the loop (17,5)
+  oilSplitM: [...draw(19, 5, ['Sv']), ...belts([[18, 5, W]])],
+  // two copper lines: (12,2) into the circuit assembler, (12,3) into the motor assembler
+  wireB3: [
+    ...draw(12, 2, ['m>s>p>'], { '13,2': 'smeltCopper', '14,2': 'drawWire' }),
+    ...draw(12, 3, ['m>s>p>'], { '13,3': 'smeltCopper', '14,3': 'drawWire' }),
+    ...draw(13, 1, ['h<']), ...draw(13, 4, ['h.']),
+  ],
+  // circuits (15,2) hand straight down into the motor assembler (15,3), which takes wire from the
+  // press on its west side and steel from the loop's splitter on its east
+  motorAsm: draw(15, 2, ['av', 'av'], { '15,2': 'etchCircuit', '15,3': 'buildMotor' }),
+  // motors south into the corridor (research)
+  motorOut: belts([[15, 4, S], [15, 5, S]]),
+  // ---- after The Great Drill: the motors run down (15,4) into a drill-bit assembler (15,5) that
+  // hands its bits into the corridor. The loop no longer lets anything out to the Hopper before
+  // the assemblers have had their pick: the drill's splitter (16,5) comes first after the merger,
+  // the motor's (16,3) next, and only the last (16,2) sends a share north onto the glass and
+  // plastic feed, whose splitter passes what the circuit assembler refuses west along row 0 to the
+  // Workshop Dock (sold). The oil no longer joins the loop (the boiler takes it; a full boiler is
+  // shovelled like a slag heap).
+  drill: [...belts([[15, 4, S]]), ...draw(15, 5, ['av'], { '15,5': 'forgeDrillBit' })],
+  loopX: [
+    ...belts([[16, 1, N], [16, 4, N], [16, 7, N]]),
+    ...draw(16, 2, ['S^']), ...draw(16, 3, ['S^']), ...draw(16, 5, ['S^']), ...draw(16, 6, ['J^']),
+    ...belts([[17, 2, S], [17, 3, S], [17, 4, S], [17, 5, S], [17, 6, W]]),
+    ...belts([[14, 1, N], [14, 0, W], [13, 0, W], [12, 0, W]]),
+  ],
+  oilBoiler: draw(19, 5, ['Sv']),
+  // ---- once the Drill works is folded the lab's last job is research (Tuning, Nested Folds):
+  // circuits east into the loop and out to the Hopper with the concrete
+  circuitZ: [...draw(15, 2, ['a>'], { '15,2': 'etchCircuit' }), ...belts([[15, 5, S]])],
 };
+
+/** The lab once research needs only motors and concrete (§18 Motors, Megaproject). */
+const PHASE_M = ['loop', 'corridor', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB3', 'motorAsm', 'motorOut', 'gp', 'gravel', 'g18', 'refinery', 'oilSplitM', 'concrete'];
+/** The lab after the Drill works fold: circuits and concrete for the last research nodes. */
+const PHASE_Z = ['loop', 'corridor', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitZ', 'gp', 'gravel', 'g18', 'refinery', 'oilSplitM', 'concrete'];
+/** The lab once The Great Drill is researched: the motor assembler feeds a drill-bit assembler. */
+const PHASE_X = ['loopX', 'corridor', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB3', 'motorAsm', 'drill', 'gp', 'gravel', 'g18', 'refinery', 'oilBoiler', 'concrete'];
 
 // ------------------------------------------------------------------ the plan
 
@@ -180,19 +249,70 @@ export type Step =
   | { k: 'need'; r: ResearchId }
   | { k: 'parts'; parts: string[] }
   | { k: 'corridor'; name: string; from: [number, number]; enter: Dir; to: 'hopper' | 'dock' }
-  | { k: 'fold'; box: Box; name: string; ready?: (g: Game, b: Act2Bot) => boolean }
-  | { k: 'fmod'; id: string; design: string; to: Dest; by?: Dest }
+  | { k: 'fold'; box: Box; name: string; ready?: (g: Game, b: Act2Bot) => boolean; bg?: boolean; mode?: 'glass' | 'plastic' }
+  /** wait until these designs are folded (a background fold must land before its box changes) */
+  | { k: 'folded'; names: string[] }
+  | { k: 'fmod'; id: string; design: string; to: Dest; by?: Dest; hub?: boolean }
   | { k: 'order'; id: string }
   | { k: 'wait'; label: string; until: (g: Game, b: Act2Bot) => boolean }
+  /** a whole Factory-floor layout laid by hand: everything else on the floor is cleared */
+  | { k: 'fplan'; name: string; items: FPl[] }
   | { k: 'mark'; name: string };
 
 /** Research the plan wants, in order (a node already paid for by the bank goes first). */
 export const WISH: ResearchId[] = [
   'coalSeams', 'steelmaking', 'steamPower', 'overdrive', 'glassworks', 'crushing', 'refining', 'circuits', 'splitters', 'concrete',
-  'machineKits', 'heavyMachines', 'tuning', 'motors', 'nestedFolds', 'greatDrill',
+  'motors', 'greatDrill', 'machineKits', 'heavyMachines', 'tuning', 'nestedFolds',
 ];
 
 const BASE = ['spine', 'corridor', 'coalFeed'];
+
+/** One tile of a hand-laid Factory-floor layout: a trunk, or a copy of a design (by name). */
+export interface FPl { kind: 'module' | 'trunk'; x: number; y: number; rot: Dir; design?: string }
+const ft = (pts: [number, number, Dir][]): FPl[] => pts.map(([x, y, rot]) => ({ kind: 'trunk', x, y, rot }));
+const fm = (design: string, x: number, y: number, rot: Dir): FPl => ({ kind: 'module', x, y, rot, design });
+
+/**
+ * The Great Drill's floor (DESIGN.md §18 Megaproject), laid by hand once the Drill works is folded
+ * (the search placer packs the first modules into the Bay's corner and walls in the trunks the
+ * later ones need). The Drill works X (2,7) feeds the Bay along row 7 from Concrete C, Steel S and
+ * Circuits c; Plastic P and Glass G feed Circuits. No module feeding the Drill works sends a
+ * byproduct back into Concrete: every such loop (Concrete waits on the Drill works, which waits on
+ * a module blocked by its own slag waiting on Concrete) stalls for good, so their slag and oil go
+ * to the Dock, and Concrete takes its slag and oil only from modules that never wait on it: the
+ * Bay's Steel s (0,5), Iron ingots I (4,2, ingots to the Dock) and a second Plastic copy p (2,3,
+ * plastic to the Dock).
+ *
+ *        0 1 2 3 4 5 6 7 8 9 A B
+ *     0  . . > > > > v . . . . .
+ *     1  . . ^ . . . > > > > D D
+ *     2  . . ^ . I > ^ . . > D D
+ *     3  v < p v v . ^ P > ^ . .
+ *     4  > > > v < . ^ v G ^ . .
+ *     5  s > > v . . ^ v . ^ H H
+ *     6  B B . C S > ^ c > ^ H H
+ *     7  B B X < < < < < . . . .
+ */
+export const BAY_PLAN: FPl[] = [
+  ...ft([[3, 7, W], [4, 7, W], [5, 7, W], [6, 7, W], [7, 7, W]]),
+  ...ft([[5, 6, E], [6, 6, N], [6, 5, N], [6, 4, N], [6, 3, N], [6, 2, N], [6, 1, E], [7, 1, E], [8, 1, E], [9, 1, E]]),
+  ...ft([[8, 6, E], [9, 6, N], [9, 5, N], [9, 4, N], [9, 3, N], [9, 2, E]]),
+  ...ft([[7, 4, S], [7, 5, S], [8, 3, E]]),
+  ...ft([[3, 3, S], [3, 4, S], [3, 5, S]]),
+  ...ft([[1, 5, E], [2, 5, E]]),
+  ...ft([[5, 2, E], [4, 3, S], [4, 4, W]]),
+  ...ft([[2, 2, N], [2, 1, N], [2, 0, E], [3, 0, E], [4, 0, E], [5, 0, E], [6, 0, S]]),
+  ...ft([[1, 3, W], [0, 3, S], [0, 4, E], [1, 4, E], [2, 4, E]]),
+  fm('Drill works', 2, 7, W),
+  fm('Concrete', 3, 6, S),
+  fm('Steel', 4, 6, S),
+  fm('Circuits', 7, 6, S),
+  fm('Plastic', 7, 3, S),
+  fm('Glass', 8, 4, W),
+  fm('Steel', 0, 5, S),
+  fm('Iron ingots', 4, 2, E),
+  fm('Plastic II', 2, 3, N),
+];
 
 export const PLAN2: Step[] = [
   { k: 'need', r: 'coalSeams' },
@@ -202,39 +322,65 @@ export const PLAN2: Step[] = [
   { k: 'need', r: 'steamPower' },
   { k: 'land', id: 'F' },
   { k: 'parts', parts: [...BASE, 'sandFeed', 'steel', 'steelSlagHeap'] },
-  { k: 'fold', box: { x: 19, y: 11, w: 3, h: 3 }, name: 'Steel', ready: (g) => working(g, 20, 12, 20) },
-  { k: 'fmod', id: 'steelDock', design: 'Steel', to: { k: 'dock' }, by: { k: 'dock' } },
   { k: 'order', id: 'calibration' },
   { k: 'need', r: 'glassworks' },
   { k: 'parts', parts: [...BASE, 'sandFeed', 'steel', 'steelSlagHeap', 'gpFeed', 'wireB', 'wireOut', 'gp'] },
-  { k: 'fmod', id: 'steelHop', design: 'Steel', to: { k: 'hopper' }, by: { k: 'dock' } },
   { k: 'need', r: 'crushing' },
-  { k: 'parts', parts: [...BASE, 'sandFeed', 'steel', 'steelSlagHeap', 'gpFeed', 'wireB', 'wireOut', 'gp', 'gravel', 'gravelOut'] },
+  { k: 'parts', parts: [...BASE, 'sandFeed', 'steel', 'steelSlagHeap', 'gpFeed', 'wireB', 'wireOut', 'gp', 'gravel', 'g18', 'gravelOut'] },
   { k: 'need', r: 'refining' },
-  { k: 'parts', parts: [...BASE, 'sandFeed', 'steel', 'steelSlagHeap', 'gpFeed', 'wireB', 'wireOut', 'gp', 'gravel', 'gravelOut', 'refinery', 'oilBelt'] },
+  { k: 'parts', parts: [...BASE, 'sandFeed', 'steel', 'steelSlagHeap', 'gpFeed', 'wireB', 'wireOut', 'gp', 'gravel', 'g18', 'gravelOut', 'refinery', 'oilBelt'] },
+  // the steel line is folded once it runs flat out (the spine is clear once coal is researched)
+  { k: 'fold', box: { x: 19, y: 11, w: 3, h: 3 }, name: 'Steel', ready: (g) => working(g, 20, 12, 60, 0.9), bg: true },
+  { k: 'fmod', id: 'steelHop', design: 'Steel', to: { k: 'hopper' }, by: { k: 'dock' } },
   { k: 'need', r: 'circuits' },
   { k: 'need', r: 'splitters' },
-  { k: 'parts', parts: [...BASE, 'sandFeed', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitAsm', 'gp', 'gravel', 'gravelOut', 'refinery', 'oilBelt'] },
-  { k: 'fold', box: { x: 12, y: 2, w: 4, h: 2 }, name: 'Circuits', ready: (g) => working(g, 15, 2, 20) },
-  { k: 'need', r: 'splitters' },
-  { k: 'parts', parts: [...BASE, 'sandFeed', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitAsm', 'gp', 'gravel', 'gravelOut', 'refinery', 'oilSplit'] },
-  { k: 'fold', box: { x: 18, y: 0, w: 4, h: 6 }, name: 'Glass & plastic', ready: (g) => working(g, 19, 3, 20) && working(g, 21, 4, 20) },
-  { k: 'fmod', id: 'circ1', design: 'Circuits', to: { k: 'hopper' }, by: { k: 'dock' } },
+  { k: 'parts', parts: [...BASE, 'sandFeed', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitAsm', 'gp', 'gravel', 'g18', 'gravelOut', 'refinery', 'oilBelt'] },
+  { k: 'fold', box: { x: 12, y: 2, w: 4, h: 2 }, name: 'Circuits', ready: (g) => working(g, 15, 2, 60, 0.8), bg: true },
+  { k: 'parts', parts: [...BASE, 'sandFeed', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitAsm', 'gp', 'gravel', 'g18', 'gravelOut', 'refinery', 'oilSplit'] },
   { k: 'need', r: 'concrete' },
-  { k: 'parts', parts: [...BASE, 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitAsm', 'gp', 'gravel', 'refinery', 'oilSplit', 'concrete'] },
-  { k: 'fold', box: { x: 19, y: 6, w: 4, h: 4 }, name: 'Concrete', ready: (g) => working(g, 21, 8, 20) },
-  { k: 'fmod', id: 'conc1', design: 'Concrete', to: { k: 'hopper' } },
-  { k: 'fmod', id: 'gp1', design: 'Glass & plastic', to: { k: 'mod', id: 'circ1' }, by: { k: 'mod', id: 'conc1' } },
-  { k: 'fmod', id: 'steelConc', design: 'Steel', to: { k: 'hopper' }, by: { k: 'mod', id: 'conc1' } },
+  { k: 'parts', parts: [...BASE, 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitAsm', 'gp', 'gravel', 'g18', 'refinery', 'oilSplit', 'concrete'] },
+  { k: 'fold', box: { x: 19, y: 6, w: 4, h: 4 }, name: 'Concrete', ready: (g, b) => b.concreteGo && working(g, 21, 8, 30, 0.9), bg: true },
+  // the glass and plastic halves are folded one at a time, after Circuits (its audit needs both);
+  // Glass after Concrete too (with the refinery stopped there is no oil for the concrete boiler)
+  { k: 'folded', names: ['Circuits'] },
+  { k: 'fold', box: { x: 18, y: 0, w: 4, h: 6 }, name: 'Plastic', mode: 'plastic', ready: (g) => working(g, 19, 3, 30, 0.8) && idle(g, 21, 4, 15) },
+  { k: 'fold', box: { x: 18, y: 0, w: 4, h: 6 }, name: 'Plastic II', mode: 'plastic', ready: (g) => working(g, 19, 3, 30, 0.8) && idle(g, 21, 4, 15) },
+  { k: 'folded', names: ['Concrete'] },
+  // one sand miner feeds the kiln half of what it can fire: it works about half the time
+  { k: 'fold', box: { x: 18, y: 0, w: 4, h: 6 }, name: 'Glass', mode: 'glass', ready: (g) => working(g, 21, 4, 30, 0.4) && idle(g, 19, 3, 15) },
+  { k: 'need', r: 'motors' },
+  { k: 'parts', parts: PHASE_M },
+  { k: 'need', r: 'greatDrill' },
+  { k: 'parts', parts: PHASE_X },
+  { k: 'fold', box: { x: 12, y: 3, w: 4, h: 3 }, name: 'Drill works', ready: (g, b) => b.drillGo && working(g, 15, 5, 30, 0.8) },
+  // the Megaproject Bay: drill bits from the Drill works, steel from a Steel copy
+  { k: 'fplan', name: 'bay', items: BAY_PLAN },
+  { k: 'parts', parts: PHASE_Z },
+  // while the Bay fills: the Dock's free sides take copies that sell (ingots and wire), one at a
+  // time as coin allows
+  { k: 'fplan', name: 'dock1', items: [...BAY_PLAN, fm('Iron ingots', 10, 3, N)] },
+  { k: 'fplan', name: 'dock2', items: [...BAY_PLAN, fm('Iron ingots', 10, 3, N), fm('Iron ingots', 11, 3, N)] },
+  { k: 'fplan', name: 'dock3', items: [...BAY_PLAN, fm('Iron ingots', 10, 3, N), fm('Iron ingots', 11, 3, N), fm('Copper wire', 10, 0, S)] },
+  { k: 'fplan', name: 'dock4', items: [...BAY_PLAN, fm('Iron ingots', 10, 3, N), fm('Iron ingots', 11, 3, N), fm('Copper wire', 10, 0, S), fm('Copper wire', 11, 0, S)] },
+  { k: 'need', r: 'tuning' },
+  { k: 'need', r: 'nestedFolds' },
   { k: 'mark', name: 'end' },
 ];
 
-/** Is the machine at (x, y) working, and has it been for most of the last `sec` seconds? */
-export function working(g: Game, x: number, y: number, sec: number): boolean {
+/** Has the machine at (x, y) done nothing for the last `sec` seconds? */
+export function idle(g: Game, x: number, y: number, sec: number): boolean {
+  const m = g.entAt(x, y);
+  if (!m || !isMachine(m.kind)) return true;
+  return m.state !== 'work' && !m.hist.slice(-sec).includes('w');
+}
+
+/** Is the machine at (x, y) working, and has it been for `frac` of the last `sec` seconds? A
+ * player folds a line once it runs well: the audit measures the module's rates for good. */
+export function working(g: Game, x: number, y: number, sec: number, frac = 0.7): boolean {
   const m = g.entAt(x, y);
   if (!m || !isMachine(m.kind) || m.state !== 'work') return false;
   const h = m.hist.slice(-sec);
-  return h.length >= sec && [...h].filter((c) => c === 'w').length >= sec * 0.7;
+  return h.length >= sec && [...h].filter((c) => c === 'w').length >= sec * frac;
 }
 
 // ------------------------------------------------------------------ the bot
@@ -257,6 +403,8 @@ export interface Act2Log {
   clicks: number[];
   overdrives: number[];
   shovels: number;
+  /** Act I chains cleared from the Factory floor */
+  cleared: number;
   cmds: number[];
   /** the step reached and why it waits, for the logs */
   step: number;
@@ -264,7 +412,7 @@ export interface Act2Log {
 }
 
 export class Act2Bot {
-  log: Act2Log = { at: {}, decisions: [], what: [], clicks: [], overdrives: [], shovels: 0, cmds: [], step: 0, waiting: '' };
+  log: Act2Log = { at: {}, decisions: [], what: [], clicks: [], overdrives: [], shovels: 0, cleared: 0, cmds: [], step: 0, waiting: '' };
   step = 0;
   /** ids of Workshop buildings this bot placed */
   mine = new Set<number>();
@@ -300,7 +448,7 @@ export class Act2Bot {
 
   private act(c: Cmd): boolean | null {
     const t = this.g.s.tick;
-    if (c.k === 'click') {
+    if (c.k === 'click' || c.k === 'fclick') {
       if (t < this.clickAt) return null;
       this.clickAt = t + CLICK_TICKS;
       this.log.clicks.push(t);
@@ -372,7 +520,10 @@ export class Act2Bot {
       if ((d.motor?.toNumber() ?? 0) > 0) this.mark('motors');
       if ((d.plastic?.toNumber() ?? 0) > 0) this.mark('plastic');
       if (g.grids.some((gr) => gr.supply > 0 && gr.consumers.some((c) => c.state === 'work'))) this.mark('power');
-      if (g.s.mega.stage >= 1) this.mark('greatDrill1');
+      if (g.s.mega.stage >= 1 && this.log.at.greatDrill1 === undefined) {
+        this.mark('greatDrill1');
+        this.decide('stage:greatDrill1');
+      }
       if (g.s.factory.ents.some((e) => e.kind === 'fbay')) this.mark('bay');
     }
     this.log.step = this.step;
@@ -413,6 +564,7 @@ export class Act2Bot {
     const g = this.g;
     const t = g.s.tick;
     if (!g.done('overdrive') || t < this.clickAt || t < this.odAt) return;
+    if (this.fOverdrive()) return;
     // machines without a byproduct (overdriving a smelter fills its slag heap 3x as fast and
     // jams the line: a player learns that once)
     const ms = g.machines.filter((m) => m.kind !== 'furnace' && !(m.od ?? 0) && !(m.cool ?? 0) && m.state === 'work' && !!m.recipe && !RECIPE[m.recipe].byproduct);
@@ -427,6 +579,25 @@ export class Act2Bot {
     this.odAt = t + OD_TICKS;
     if (this.act({ k: 'click', x: m.x, y: m.y })) this.log.overdrives.push(t);
   }
+
+  /** Overdrive on the Factory floor (DESIGN.md §18): a click on a module runs it and every module
+   * joined to it by trunks 3x for 10 s. The groups are taken round robin, each as soon as it has
+   * cooled: where the money is after the slice. */
+  private fOverdrive(): boolean {
+    const g = this.g;
+    const groups = moduleGroups(g);
+    if (!groups.length) return false;
+    const ready = groups.filter((grp) => grp.some((m) => m.state === 'work') && grp.every((m) => !(m.od ?? 0) && !(m.cool ?? 0) && !fauditLock(g, m.x, m.y)));
+    if (!ready.length) return false;
+    const pick = ready.find((grp) => grp[0].id >= this.fodNext) ?? ready[0];
+    this.fodNext = pick[0].id + 1;
+    const m = pick[0];
+    this.odAt = g.s.tick + OD_TICKS;
+    if (this.act({ k: 'fclick', x: m.x, y: m.y })) this.log.overdrives.push(g.s.tick);
+    return true;
+  }
+
+  private fodNext = 0;
 
   // ---------------------------------------------------------------- research
 
@@ -473,6 +644,11 @@ export class Act2Bot {
     // a person looks at the plan now and then, not 20 times a second
     if (this.g.s.tick < this.lookAt) return;
     this.lookAt = this.g.s.tick + TICK_RATE / 2;
+    // folds under way beside the plan: each is audited once its line runs well
+    for (const f of [...this.bgFolds]) {
+      if (this.fold(f) === 'done') this.bgFolds = this.bgFolds.filter((q) => q !== f);
+      if (!this.handReady || this.fq.length) return;
+    }
     for (let guard = 0; guard < 20 && this.step < this.plan.length; guard++) {
       const s = this.plan[this.step];
       const res = this.tryStep(s);
@@ -520,9 +696,19 @@ export class Act2Bot {
       case 'wait':
         return s.until(g, this) ? 'done' : s.label;
       case 'fold':
+        if (s.bg) {
+          if (!this.bgFolds.includes(s)) this.bgFolds.push(s);
+          return 'done';
+        }
         return this.fold(s);
+      case 'folded': {
+        const left = s.names.filter((n) => !this.designNamed(n));
+        return left.length ? `fold ${left.join(', ')}` : 'done';
+      }
       case 'fmod':
         return this.fmod(s);
+      case 'fplan':
+        return this.fplan(s);
     }
   }
 
@@ -561,7 +747,44 @@ export class Act2Bot {
     return n - (r.bank[item]?.toNumber() ?? 0);
   }
 
+  /** Is the lab in its loop phases (research only motors and concrete, or none)? */
+  looping(): boolean {
+    return this.layout.includes('loop') || this.layout.includes('loopX');
+  }
+
+  /** The half of the glass and plastic works stopped for a fold of the other half. */
+  foldMode: 'glass' | 'plastic' | null = null;
+
+  /** Set once the slag heap has filled again for the Drill works audit. */
+  drillGo = false;
+
+  /** The concrete gate (17,8): open while research needs gravel, sand or concrete, and in the
+   * loop phases (the drill-bit assembler takes concrete off the loop). */
+  concreteOut(): boolean {
+    return this.looping() || (['gravel', 'sand', 'concrete'] as ItemId[]).some((i) => this.needOf(i) > 0);
+  }
+
+  /** Set once the slag heap has filled for the Concrete audit. */
+  concreteGo = false;
+
+  /** The slag valve (23,9): shut after Concrete is researched until the heap holds enough for a
+   * full-speed audit (about 90 s of the mixer at full speed is 120 slag), then open for good. */
+  valveOpen(): boolean {
+    const g = this.g;
+    const h = g.entAt(23, 10);
+    const n = h && h.kind === 'heap' ? h.count : 0;
+    // the Drill works audit: the heap fills again (170 slag runs the mixer flat out for 2 min), so the drill-bit assembler is measured on a full flow of concrete
+    if (this.layout.includes('loopX') && !this.drillGo && !this.designNamed('Drill works')) {
+      if (n >= 170) this.drillGo = true;
+      return this.drillGo;
+    }
+    if (this.concreteGo || !this.layout.includes('concrete') || this.designNamed('Concrete')) return true;
+    if (n >= 160) this.concreteGo = true;
+    return this.concreteGo;
+  }
+
   private rotOf(p: Pl): Dir {
+    if (p.on) return p.on(this) ? p.rot : p.off!;
     if (!p.gate) return p.rot;
     return p.gate.some((i) => this.needOf(i) > 0) ? p.rot : p.off!;
   }
@@ -619,13 +842,34 @@ export class Act2Bot {
 
   // ---------------------------------------------------------------- folding
 
+  private bgFolds: Extract<Step, { k: 'fold' }>[] = [];
+  private warmSince = new Map<string, number>();
+
+  /** Is anything wanted inside the box not built yet? */
+  private boxMissing(b: Box): boolean {
+    const g = this.g;
+    for (const p of this.wanted()) {
+      if (!inside(b, p.x, p.y)) continue;
+      const e = g.entAt(p.x, p.y);
+      if (!e || !this.matches(e, p)) return true;
+      if (p.recipe && e.recipe !== p.recipe && recipeKnown(g, RECIPE[p.recipe])) return true;
+    }
+    return false;
+  }
+
   private fold(s: Extract<Step, { k: 'fold' }>): string {
     const g = this.g;
-    if (g.s.designs.some((d) => d.name === s.name)) return 'done';
+    if (g.s.designs.some((d) => d.name === s.name)) {
+      if (s.mode && this.foldMode === s.mode) this.foldMode = null;
+      return 'done';
+    }
+    if (s.mode) this.foldMode = s.mode;
     const a = g.s.audits.find((q) => q.box.x === s.box.x && q.box.y === s.box.y && q.box.w === s.box.w && q.box.h === s.box.h);
     if (!a) {
-      if (this.layoutMissing()) return 'building before the fold';
-      if (s.ready && !s.ready(g, this)) return 'line warming up';
+      if (this.boxMissing(s.box)) { this.warmSince.delete(s.name); return 'building before the fold'; }
+      if (!this.warmSince.has(s.name)) this.warmSince.set(s.name, g.seconds);
+      // a player waits a while for a line to run well, then folds it as it is
+      if (s.ready && !s.ready(g, this) && g.seconds - this.warmSince.get(s.name)! < 30 * 60) return 'line warming up';
       const why = foldRefusal(g, s.box);
       if (why) return `fold: ${why}`;
       this.buy({ k: 'audit', ...s.box }, 'audit');
@@ -660,8 +904,19 @@ export class Act2Bot {
       return 'stamping';
     }
     if (g.s.tick < this.placeAt) return `no room for ${s.id}`;
-    const plan = placeModule(g, d, s.to, s.by, this.mods);
+    // out of claims for another copy digging: clear the newest Act I chain (its miners stop)
+    if (placeClaimRefusal(g, d)) return this.clearChain(`claims for ${s.id}`);
+    // a destination module that does not take these goods: no room to clear would help
+    for (const [dest, items] of [[s.to, mainOuts(d, !!s.by)], [s.by, byOuts(d)]] as [Dest | undefined, ItemId[]][]) {
+      if (dest?.k !== 'mod' || !items.length) continue;
+      const m = g.s.factory.ents.find((e) => e.id === this.mods[dest.id]);
+      const dd = m && g.design(m.design);
+      if (!dd || !items.every((i) => (dd.ins[i] ?? 0) > 0)) return `${dest.id} does not take ${items.join(', ')}`;
+    }
+    const plan = placeModule(g, d, s.to, s.by, this.mods, s.hub);
     if (!plan) {
+      // no room: clear the newest Act I chain (modules back to the inventory, trunks refunded)
+      if (nextChainToClear(g, new Set(Object.values(this.mods)))) return this.clearChain(`room for ${s.id}`);
       this.placeAt = g.s.tick + 10 * TICK_RATE;
       return `no room for ${s.id}`;
     }
@@ -677,6 +932,60 @@ export class Act2Bot {
     this.fqFor = s.id;
     this.pendingMod = { id: s.id, x: plan.x, y: plan.y };
     return 'placing';
+  }
+
+  /** One command toward a hand-laid floor: clear what is not in it, stamp copies it needs, lay
+   * its trunks, then its modules. */
+  private fplan(s: Extract<Step, { k: 'fplan' }>): string {
+    const g = this.g;
+    const want = new Map<string, FPl>();
+    for (const p of s.items) want.set(`${p.x},${p.y}`, p);
+    const fits = (e: FEnt, p: FPl | undefined) => !!p && e.kind === p.kind && e.rot === p.rot && (p.kind === 'trunk' || g.design(e.design)?.name === p.design);
+    // clear: modules first (their flows stop), newest first, then trunks
+    const extra = g.s.factory.ents
+      .filter((e) => (e.kind === 'module' || e.kind === 'trunk') && !fits(e, want.get(`${e.x},${e.y}`)))
+      .sort((a, b) => (a.kind === b.kind ? b.id - a.id : a.kind === 'module' ? -1 : 1));
+    if (extra.length) {
+      const e = extra[0];
+      if (this.act({ k: 'fremove', x: e.x, y: e.y })) {
+        if (e.kind === 'module') { this.decide('clear'); this.log.cleared++; }
+      }
+      return `clearing the floor for ${s.name}`;
+    }
+    const missing = s.items.filter((p) => { const e = g.fentAt(p.x, p.y); return !e || !fits(e, p); });
+    if (!missing.length) {
+      this.mark('fplan:' + s.name);
+      return 'done';
+    }
+    const t = missing.find((p) => p.kind === 'trunk');
+    if (t) {
+      if (g.s.coin.lt(FACTORY.trunkCost)) return 'coin for trunks';
+      this.act({ k: 'ftrunk', x: t.x, y: t.y, rot: t.rot });
+      return `laying ${s.name}`;
+    }
+    const m = missing[0];
+    const d = this.designNamed(m.design!);
+    if (!d) return `no design ${m.design}`;
+    if (d.spare < 1) {
+      const why = stampRefusal(g, d);
+      if (why) return `stamp ${d.name}: ${why}`;
+      this.buy({ k: 'stamp', id: d.id }, 'stamp');
+      return 'stamping';
+    }
+    const why = placeClaimRefusal(g, d);
+    if (why) return `place ${d.name}: ${why}`;
+    if (this.buy({ k: 'fplace', design: d.id, x: m.x, y: m.y, rot: m.rot }, 'module')) this.mark('module:' + d.name);
+    return `placing ${d.name}`;
+  }
+
+  /** Queue the removal of the newest Act I chain (modules back to the inventory, trunks refunded). */
+  private clearChain(why: string): string {
+    const clear = nextChainToClear(this.g, new Set(Object.values(this.mods)));
+    if (!clear) return `no chain left to clear (${why})`;
+    this.fq = clear.map((t): Cmd => ({ k: 'fremove', x: t.x, y: t.y }));
+    this.decide('clear');
+    this.log.cleared++;
+    return `clearing a chain: ${why}`;
   }
 
   private pendingMod: { id: string; x: number; y: number } | null = null;
@@ -784,6 +1093,45 @@ export function corridor(g: Game, from: [number, number], enter: Dir, to: 'hoppe
 
 function dirOf(x: number, y: number, x2: number, y2: number): Dir {
   return x2 > x ? E : x2 < x ? W : y2 > y ? S : N;
+}
+
+// ------------------------------------------------------------------ Factory-floor groups
+
+/** Modules joined by trunk routes, each group sorted by id. */
+export function moduleGroups(g: Game): FEnt[][] {
+  const mods = g.s.factory.ents.filter((e) => e.kind === 'module');
+  const parent = new Map<number, number>();
+  const find = (a: number): number => {
+    let r = a;
+    while (parent.get(r) !== r) r = parent.get(r)!;
+    parent.set(a, r);
+    return r;
+  };
+  for (const m of mods) parent.set(m.id, m.id);
+  for (const r of g.routes) if (r.to && r.to.kind === 'module' && parent.has(r.from.id) && parent.has(r.to.id)) parent.set(find(r.from.id), find(r.to.id));
+  const out = new Map<number, FEnt[]>();
+  for (const m of mods) {
+    const k = find(m.id);
+    if (!out.has(k)) out.set(k, []);
+    out.get(k)!.push(m);
+  }
+  return [...out.values()].map((grp) => grp.sort((a, b) => a.id - b.id)).sort((a, b) => a[0].id - b[0].id);
+}
+
+/** The tiles of the newest Act I chain on the Factory floor (the planner's Gizmo chains: modules
+ * this bot did not place, joined by trunks), modules first, then the trunks no other module's
+ * route uses: what a player clears to make room after the Festival. */
+export function nextChainToClear(g: Game, mine: Set<number>): { x: number; y: number }[] | null {
+  const routes = buildRoutes(g);
+  const groups = moduleGroups(g).filter((grp) => grp.every((m) => !mine.has(m.id)));
+  if (!groups.length) return null;
+  const grp = groups.sort((a, b) => b[b.length - 1].id - a[a.length - 1].id)[0];
+  const ids = new Set(grp.map((m) => m.id));
+  const keep = new Set<number>();
+  for (const r of routes) if (!ids.has(r.from.id)) for (const t of r.tiles) keep.add(t.id);
+  const trunks = new Map<number, FEnt>();
+  for (const r of routes) if (ids.has(r.from.id)) for (const t of r.tiles) if (!keep.has(t.id)) trunks.set(t.id, t);
+  return [...grp, ...trunks.values()].map((e) => ({ x: e.x, y: e.y }));
 }
 
 // ------------------------------------------------------------------ Factory-floor placement
@@ -906,10 +1254,13 @@ function destPred(g: Game, to: Dest, items: ItemId[], mods: Record<string, numbe
 
 /** Where to put a copy of `d` so its main outputs reach `to` (and its byproducts `by`, out of a
  * side trunk), with the fewest trunk tiles. */
-export function placeModule(g: Game, d: ModuleDesign, to: Dest, by: Dest | undefined, mods: Record<string, number>): FPlan | null {
-  const outs = Object.keys(d.outs) as ItemId[];
-  const byItems = outs.filter((i) => BYPRODUCTS.has(i));
-  const main = by ? outs.filter((i) => !BYPRODUCTS.has(i)) : outs;
+const byOuts = (d: ModuleDesign) => (Object.keys(d.outs) as ItemId[]).filter((i) => BYPRODUCTS.has(i));
+const mainOuts = (d: ModuleDesign, by: boolean) => (Object.keys(d.outs) as ItemId[]).filter((i) => !by || !BYPRODUCTS.has(i));
+
+/** `hub`: several modules will feed this one, so the tiles around its back stay open for their trunks. */
+export function placeModule(g: Game, d: ModuleDesign, to: Dest, by: Dest | undefined, mods: Record<string, number>, hub = false): FPlan | null {
+  const byItems = byOuts(d);
+  const main = mainOuts(d, !!by);
   const h = fhazards(g);
   const blocked = new Set<number>();
   // the Megaproject Bay's corner stays clear until it arrives
@@ -922,6 +1273,21 @@ export function placeModule(g: Game, d: ModuleDesign, to: Dest, by: Dest | undef
       for (let rot = 0 as Dir; rot < 4; rot = (rot + 1) as Dir) {
         const fx = x + DX[rot], fy = y + DY[rot];
         if (!finb(fx, fy)) continue;
+        // a module that takes inputs keeps its back open for the trunk that will feed it
+        if (Object.keys(d.ins).length) {
+          const bx = x - DX[rot], by_ = y - DY[rot];
+          if (!finb(bx, by_) || blocked.has(by_ * FW + bx) || h.arrive[by_ * FW + bx]) continue;
+          const t = g.fentAt(bx, by_);
+          if (t && !(t.kind === 'trunk' && t.rot === rot)) continue;
+          if (hub) {
+            let open = 0;
+            for (const k of [opposite(rot), ccw(rot), cw(rot)]) {
+              const nx = bx + DX[k], ny = by_ + DY[k];
+              if (finb(nx, ny) && !g.fentAt(nx, ny) && !blocked.has(ny * FW + nx)) open++;
+            }
+            if (open < 3) continue;
+          }
+        }
         // existing trunks beside it pointing away would take its byproducts
         let bad = false;
         for (const s of [ccw(rot), cw(rot)]) {
@@ -933,6 +1299,8 @@ export function placeModule(g: Game, d: ModuleDesign, to: Dest, by: Dest | undef
         bl.add(y * FW + x);
         const path = trunkPath(g, h, fx, fy, rot, null, destPred(g, to, main, mods), bl);
         if (!path) continue;
+        // a module feeding another sits a trunk away from it, so others can join that trunk
+        if (to.k === 'mod' && !path.length) continue;
         let trunks = path;
         if (by && byItems.length) {
           for (const p of path) bl.add(p.y * FW + p.x);

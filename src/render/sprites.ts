@@ -18,9 +18,11 @@ export interface SpriteSheet {
   placeholder: boolean;
   /** 9-slice insets [left, top, right, bottom] for UI frames */
   slice?: [number, number, number, number];
+  /** frame names, when the sidecar lists them (town_house: hut, gable...) */
+  order?: string[];
 }
 
-interface Meta { frame: [number, number]; frames: number; anchor: [number, number]; fps?: number; slice?: [number, number, number, number] }
+interface Meta { frame: [number, number]; frames: number; anchor: [number, number]; fps?: number; slice?: [number, number, number, number]; order?: string[]; names?: string[] }
 
 const PNG = import.meta.glob('../art/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const JSON_META = import.meta.glob('../art/*.json', { eager: true, import: 'default' }) as Record<string, Meta>;
@@ -52,7 +54,7 @@ export function loadArt(): Promise<void> {
           c.getContext('2d')!.drawImage(img, (i % perRow) * w, Math.floor(i / perRow) * h, w, h, 0, 0, w, h);
           frames.push(c);
         }
-        sheets.set(name, { frames, w, h, ax: meta.anchor[0], ay: meta.anchor[1], fps: meta.fps ?? 4, placeholder: false, slice: meta.slice });
+        sheets.set(name, { frames, w, h, ax: meta.anchor[0], ay: meta.anchor[1], fps: meta.fps ?? 4, placeholder: false, slice: meta.slice, order: meta.order ?? meta.names });
         res();
       };
       img.onerror = () => { console.error('sprite failed to load', url); res(); };
@@ -74,6 +76,12 @@ export function sheet(name: string): SpriteSheet {
 export function hasArt(name: string) {
   const s = sheets.get(name);
   return !!s && !s.placeholder;
+}
+
+/** A frame's index by its sidecar name (0 when the name or the list is missing). */
+export function frameNamed(s: SpriteSheet, name: string, fallback = 0): number {
+  const i = s.order ? s.order.indexOf(name) : -1;
+  return i >= 0 ? i : fallback;
 }
 
 /** The sprite sheet name for a building kind: art files are snake_case (steamEngine ->

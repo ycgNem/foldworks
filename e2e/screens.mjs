@@ -112,11 +112,12 @@ export async function act2Setup(state) {
   a.game.events.drain();
   a.panel = null;
   if (state === 'fgrade' || state === 'faudit') {
-    act({ k: 'faudit', x: 2, y: 1, w: 3, h: 2 });
+    act({ k: 'faudit', x: 2, y: 1, w: 3, h: 1 });
     a.step(state === 'fgrade' ? 20 * 71 : 20 * 34);
     if (state === 'faudit') a.game.events.drain();
   }
-  if (state === 'sliceEnd2') { g.s.flags = g.s.flags.filter((f) => f !== 'sliceEnd'); a.panel = 'sliceEnd'; a.gradeAt = a.ui.time; }
+  // the slice-end card at rest: the payout counted up and landed, the Gizmos in, the tiles shown
+  if (state === 'sliceEnd2') { g.s.flags = g.s.flags.filter((f) => f !== 'sliceEnd'); a.panel = 'sliceEnd'; a.gradeAt = a.ui.time - 2.6; a.hud.rain = []; g.s.earned = N.of(89100); g.s.tick = 20 * 1903; }
   if (state === 'orders2') {
     // the screen opens, then a fill lands: Unit 7 cheers and its tab opens
     a.panel = 'orders';
@@ -150,12 +151,35 @@ export async function act2Setup(state) {
   a.trophyPops = [];
   a.refusal = null;
   a.lookAt(6, 4);
+  // the Workshop in Act II at the default camera, and Bramble's Town at its stages
+  const TOWN = { townStart: [], townLamps: ['boardwalk', 'lampPosts'], townFestival: ['boardwalk', 'lampPosts', 'gizmoFestival'] };
+  if (state in TOWN) {
+    g.s.orders.done = TOWN[state];
+    g.s.orders.rep = { bramble: TOWN[state].length, unit7: 0, voltaire: 0 };
+    g.s.orders.active = null;
+    if (state === 'townStart') { g.s.land = ['A', 'B', 'C', 'D']; g.s.flags = g.s.flags.filter((f) => f !== 'sliceEnd'); }
+  }
+  if (state === 'townAct2') {
+    g.s.orders.done = ['boardwalk', 'lampPosts', 'gizmoFestival', 'calibration', 'streetlamps', 'lensArray', 'promenade'];
+    g.s.orders.rep = { bramble: 3, unit7: 2, voltaire: 2 };
+    g.s.orders.active = 'turbine';
+  }
+  if (state === 'act2ws' || state in TOWN || state === 'townAct2') {
+    a.setFloor('workshop', true);
+    a.renderer.ground = null;
+    a.fitCamera(true);
+    // the setup's sales sent coins flying from the Factory floor: let the shot start clean
+    a.renderer.fx.flyers = [];
+    a.renderer.fx.pops = [];
+  }
+  // hover Mayor Bramble's house: the town's one-line tooltip
+  if (state === 'townAct2') return { hover: [3, -2] };
   // the nested-fold box is dragged with the real mouse (the caller holds the button down)
   if (state === 'fbox') { a.setMode({ k: 'fold' }); return { drag: [[2, 1], [4, 3]] }; }
   return null;
 }
 
-export const ACT2 = ['orders2', 'codex', 'survey', 'mega', 'megaDone', 'fgrade', 'faudit', 'factory2', 'fbox', 'modules2', 'sliceEnd2', 'festival', 'festivalFloor', 'research2', 'factoryOD'];
+export const ACT2 = ['orders2', 'codex', 'survey', 'mega', 'megaDone', 'fgrade', 'faudit', 'factory2', 'fbox', 'modules2', 'sliceEnd2', 'festival', 'festivalFloor', 'research2', 'factoryOD', 'act2ws', 'townStart', 'townLamps', 'townFestival', 'townAct2'];
 
 /** Runs in the page: the Workshop with fold audits. audits3: three audits, the iron line in
  * chunk C graded and two smelter/press lines in chunk D still measuring. gradeSplus: the iron
@@ -290,7 +314,7 @@ async function main() {
       if (r?.drag) await dragTiles(page, r.drag);
       else if (r?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), r.hover); await page.mouse.move(p.x, p.y); }
       else await page.mouse.move(Math.floor(w / 2), Math.floor(h / 2) + 40);
-      await frames(page, state === 'megaDone' ? 40 : 4);
+      await frames(page, state === 'megaDone' ? 40 : state === 'gradeSplus' ? 36 : 4);
       await page.screenshot({ path: `${out}/${name}.png` });
       if (r?.drag) await page.mouse.up();
       const { issues, k } = await page.evaluate(() => {

@@ -75,6 +75,6 @@ function codex(g: Game, item: ItemId, x: number, y: number, floor?: 'factory') {
   g.s.codex.push(item);
   g.bump('codex');
   const pay = Num.of(v * RULES.codexMult.value);
-  g.earn(pay);
+  g.earn(pay, true);
   g.emit({ type: 'codex', x, y, id: item, value: pay.toNumber(), floor });
 }

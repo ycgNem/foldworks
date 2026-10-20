@@ -23,8 +23,8 @@ export const CHUNKS: ChunkDef[] = [
   { id: 'B', name: 'Chunk B (copper)', x: 8, y: 0, w: 8, h: 8, cost: 1000, requires: 'surveyEast', derivation: '§9 chunk B costs 1,000 after Survey East' },
   { id: 'C', name: 'Chunk C (iron)', x: 0, y: 8, w: 8, h: 8, cost: 1000, requires: 'gizmoTheory', derivation: '§9 chunk C costs 1,000 after Gizmo Theory: the spending is its ~3,000 of gear lines, bought one by one, not a long save (§13 checks 10, 11)' },
   { id: 'D', name: 'Chunk D', x: 8, y: 8, w: 8, h: 8, cost: 12000, requires: 'folding', derivation: '§9 chunk D costs 12,000 after Folding' },
-  { id: 'E', name: 'Chunk E (coal, sand)', x: 16, y: 0, w: 8, h: 8, cost: 15000, requires: 'coalSeams', derivation: '§18 Land: chunk E, 15,000 after Coal Seams' },
-  { id: 'F', name: 'Chunk F (coal, iron)', x: 16, y: 8, w: 8, h: 8, cost: 40000, requires: 'steamPower', derivation: '§18 Land: chunk F, 40,000 after Steam Power' },
+  { id: 'E', name: 'Chunk E (coal, sand)', x: 16, y: 0, w: 8, h: 8, cost: 60000, requires: 'coalSeams', derivation: '§18 Land: chunk E, 60,000 after Coal Seams: about 5 min of the slice-end factory (12,500/min with Overdrive and Sparks, 7,200 idle; it was 15,000, 1.2 min, the Milestone 4 review)' },
+  { id: 'F', name: 'Chunk F (coal, iron)', x: 16, y: 8, w: 8, h: 8, cost: 120000, requires: 'steamPower', derivation: '§18 Land: chunk F, 120,000 after Steam Power: about 10 min of the early Act II factory (12,000/min)' },
 ];
 
 export interface PatchDef { item: ItemId; x: number; y: number; w: number; h: number; derivation: string }
@@ -42,10 +42,10 @@ export const PATCHES: PatchDef[] = [
 /** Deposit claims at the Survey Office (DESIGN.md §18 Land and deposits): the first block of 4
  * for each ore; each later block costs price x (1 + 0.5 b). */
 export const CLAIM_PRICE: { item: ItemId; price: number; derivation: string }[] = [
-  { item: 'ironOre', price: 5000, derivation: '§18 Land and deposits: iron claims 5,000 a block of 4' },
-  { item: 'copperOre', price: 5000, derivation: '§18 Land and deposits: copper claims 5,000 a block of 4' },
-  { item: 'sand', price: 8000, derivation: '§18 Land and deposits: sand claims 8,000 a block of 4' },
-  { item: 'coal', price: 12000, derivation: '§18 Land and deposits: coal claims 12,000 a block of 4 (it is fuel too)' },
+  { item: 'ironOre', price: 25000, derivation: '§18 Land and deposits: iron claims 25,000 a block of 4, about 2 min of Act II income (12,000/min)' },
+  { item: 'copperOre', price: 25000, derivation: '§18 Land and deposits: copper claims 25,000 a block of 4, about 2 min of Act II income' },
+  { item: 'sand', price: 40000, derivation: '§18 Land and deposits: sand claims 40,000 a block of 4, about 3 min of Act II income' },
+  { item: 'coal', price: 60000, derivation: '§18 Land and deposits: coal claims 60,000 a block of 4, about 5 min of Act II income (it is fuel too)' },
 ];
 
 /** The Workshop's size in tiles: the four slice chunks, then Act II's two to the east. */

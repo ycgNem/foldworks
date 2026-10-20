@@ -80,9 +80,10 @@ export class Fx {
     this.rings.push({ x, y, life, max: life, color, r0, r1 });
   }
 
-  fly(x0: number, y0: number, x1: number, y1: number, icon?: string, big = false) {
-    if (this.flyers.length > 32) return;
-    this.flyers.push({ x0, y0, x1, y1, t: 0, dur: (icon ? 0.8 : 0.55) + Math.random() * 0.2, arc: 30 + Math.random() * 40, icon, big });
+  /** Something flying to a HUD target; `delay` seconds before it sets off (a cascade). */
+  fly(x0: number, y0: number, x1: number, y1: number, icon?: string, big = false, delay = 0) {
+    if (this.flyers.length > 64) return;
+    this.flyers.push({ x0, y0, x1, y1, t: -delay, dur: (icon ? 0.8 : 0.55) + Math.random() * 0.2, arc: 30 + Math.random() * 40, icon, big });
   }
 
   kick(amount: number) {

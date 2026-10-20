@@ -34,6 +34,8 @@ export const RULES = {
   auditWarmup: r(10, '§10 Audit: 10 s warm-up'),
   auditWindow: r(60, '§10 Audit: a 60 s window'),
   /** Workshop lines audited at once */
+  /** S+ needs at least this share of the byproducts made used inside the box */
+  splusUsedInside: r(0.8, '§10 Grade S+: a zero-waste line uses its byproducts inside the box (80%: slag on belts at the window edges); routed out to a heap or a Dock it caps at S (the Milestone 4 review)'),
   maxAudits: r(3, '§10 Audit: up to three lines at once, so the slice\'s folds are not three waits in a row (the Milestone 3 gate review)'),
   /** compactness: machine tiles / box tiles at which C = 1 */
   compactFull: r(0.6, '§10 Grade: C = min(1, (machine tiles / box tiles) / 0.6)'),
@@ -68,7 +70,7 @@ export const RULES = {
   overdriveSeconds: r(10, '§18 Machines: Overdrive runs a machine 3x for 10 s, then it cools 30 s'),
   overdriveCool: r(30, '§18 Machines: Overdrive runs a machine 3x for 10 s, then it cools 30 s'),
   /** Machine Kits per stamp of a design with Act II buildings: 1 + floor(bill / this) */
-  kitDivisor: r(500, '§18 Machine Kits: 1 + floor(bill / 500); at 1,500 a stamp took 2-3 kits, about 3% of its price in goods, a chore with no weight (the Milestone 3 gate review)'),
+  kitDivisor: r(5000, '§18 Machine Kits: 1 + floor(bill / 5,000); at 1,500 a stamp took 2-3 kits, a chore with no weight (the Milestone 3 gate review), so 500; then Act II machine prices rose 10x against the measured income (Act II pacing, the bot), so 5,000 keeps the same kits per stamp'),
   /** deposit claims: the start, per Workshop deposit owned, per Survey Office block, block growth */
   claimsBase: r(3, '§18 Land and deposits: 3 claims per ore plus 2 per Workshop deposit'),
   claimsPerDeposit: r(2, '§18 Land and deposits: 3 claims per ore plus 2 per Workshop deposit'),
@@ -83,7 +85,7 @@ export const RULES = {
   /** nested folds: the box limit on the Factory floor */
   nestedMax: r(6, '§18 Nested folds: a box up to 6x6 of modules and trunks'),
   /** Reorganize (§15): patents = floor((lifetime coin / this) ^ 0.4) */
-  patentDivisor: r(2500, '§15 Reorganize, §16 rule 6: the Act II bot (tests/pace-act2-run.test.ts) has earned about 2.5M lifetime coin by 5 h; 2.5M / 2,500 = 1,000 and 1,000 ^ 0.4 = 15.8, so a 5 h first run gives 15 Patents (12-20), 4 h about 14, and doubling lifetime coin adds about 6'),
+  patentDivisor: r(2500, '§15 Reorganize, §16 rule 6: the Act II bot (tests/pace-act2-run.test.ts) has earned about 2.05M lifetime coin by 5 h and 1.8M by 4 h; 2.05M / 2,500 = 820 and 820 ^ 0.4 = 14.7, so a 5 h first run gives 14 Patents (12-20), 4 h 13, and doubling lifetime coin 19. Provisional: lifetime coin alone lets an idle slice factory earn about as many, so the formula is reopened for Milestone 5 (the Milestone 4 review)'),
 };
 
 export type RuleId = keyof typeof RULES;

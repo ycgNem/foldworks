@@ -2,7 +2,7 @@
 // node e2e/look.mjs <state> [w] [h]   (states: start, mid, research, orders, stats, trophies, options,
 // audit, grade, gradeC, factory, modules, sliceEnd, offline, and Act II's: orders2, codex, survey, mega,
 // megaDone, fgrade, faudit, factory2, fbox, modules2, sliceEnd2, festival, festivalFloor, research2,
-// factoryOD; the Workshop's audits3 and gradeSplus; foldAnim writes a strip of frames of a fold)
+// factoryOD, act2ws, townStart, townLamps, townFestival, townAct2; the Workshop's audits3 and gradeSplus; foldAnim writes a strip of frames of a fold)
 // Writes e2e/out/look/<state>-<w>x<h>.png. For eyeballing while working; npm run screens is the audit.
 import fs from 'node:fs';
 import { launch, openGame, frames } from './launch.mjs';
@@ -50,6 +50,54 @@ const foldSetup = async (slagPort) => {
   }, slagPort);
 };
 let held = null;
+if (state === 'parade') {
+  // the Festival fills: the coin cascade, the reputation banner, the Gizmo parade into the
+  // Factory Dock, then the slice-end card (a strip of frames)
+  await page.evaluate(act2Setup, 'festivalFloor');
+  await page.evaluate(() => {
+    const a = window.__app;
+    const g = a.game;
+    a.panel = null;
+    a.fitCamera(true);
+    g.s.orders.progress.gizmoFestival.gizmo = g.s.coin.constructor.of(398);
+    for (let i = 0; i < 20 * 60 && !g.s.orders.done.includes('gizmoFestival'); i++) a.step(1);
+    a.step(20);
+  });
+  fs.mkdirSync('e2e/out/look', { recursive: true });
+  let n = 0;
+  for (const f of [8, 30, 70, 130, 260]) {
+    await frames(page, f - n);
+    n = f;
+    await page.screenshot({ path: `e2e/out/look/parade-${f}-${w}x${h}.png` });
+  }
+  console.log('e2e/out/look/parade-*.png');
+  if (errors.length) console.log(errors.join(' | '));
+  await browser.close();
+  process.exit(0);
+}
+if (state === 'firsts') {
+  // the banners for firsts: a Codex entry, the first Mk2 and a reputation level, stacked
+  await page.evaluate(act2Setup, 'act2ws');
+  await page.evaluate(() => {
+    const a = window.__app;
+    const g = a.game;
+    g.s.counters.mk2Built = 0;
+    a.act({ k: 'place', kind: 'smelterMk2', x: 10, y: 10, rot: 0 });
+    const d = g.s.ents.find((e) => e.kind === 'dock');
+    g.emit({ type: 'codex', id: 'glass', value: 360, x: d.x, y: d.y });
+    g.s.orders.done.push('lensArray');
+    g.s.orders.rep.unit7 = 2;
+    g.emit({ type: 'order', id: 'lensArray', value: 24000 });
+    a.step(1);
+  });
+  await frames(page, 24);
+  fs.mkdirSync('e2e/out/look', { recursive: true });
+  await page.screenshot({ path: `e2e/out/look/firsts-${w}x${h}.png` });
+  console.log(`e2e/out/look/firsts-${w}x${h}.png`);
+  if (errors.length) console.log(errors.join(' | '));
+  await browser.close();
+  process.exit(0);
+}
 if (WORKSHOP.includes(state)) await page.evaluate(workshopSetup, state);
 else if (state === 'foldAnim') {
   // the fold, frame by frame: the graded S+ line folds (crease, corners, squeeze, flash, pop)
@@ -68,7 +116,11 @@ else if (state === 'foldAnim') {
   await browser.close();
   process.exit(0);
 }
-else if (ACT2.includes(state)) { held = await page.evaluate(act2Setup, state); if (held?.drag) await dragTiles(page, held.drag); }
+else if (ACT2.includes(state)) {
+  held = await page.evaluate(act2Setup, state);
+  if (held?.drag) await dragTiles(page, held.drag);
+  else if (held?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), held.hover); await page.mouse.move(p.x, p.y); }
+}
 else if (state === 'audit') { await foldSetup(true); await page.evaluate(() => window.__app.step(20 * 30)); }
 else if (state === 'grade' || state === 'gradeC') { await foldSetup(state === 'grade'); await page.evaluate(() => window.__app.step(20 * 70)); }
 else if (['factory', 'modules', 'sliceEnd', 'offline'].includes(state)) {
@@ -100,7 +152,7 @@ else if (['factory', 'modules', 'sliceEnd', 'offline'].includes(state)) {
 }
 else if (state !== 'start') await mid();
 if (['research', 'orders', 'stats', 'trophies', 'options'].includes(state)) await page.evaluate((s) => window.__app.togglePanel(s), state);
-await frames(page, state === 'megaDone' ? 40 : 6);
+await frames(page, state === 'megaDone' ? 40 : state === 'gradeSplus' ? 36 : 6);
 fs.mkdirSync('e2e/out/look', { recursive: true });
 const out = `e2e/out/look/${state}-${w}x${h}.png`;
 await page.screenshot({ path: out });

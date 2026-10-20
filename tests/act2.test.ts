@@ -11,7 +11,7 @@ import { TICK_RATE } from '../src/engine/time';
 import { drawKw } from '../src/sim/systems/power';
 import { claimsHeld, claimPrice } from '../src/sim/systems/claims';
 import { kitsFor, stampRefusal } from '../src/sim/systems/modules';
-import { foldRefusal } from '../src/sim/systems/audits';
+import { foldRefusal, splusGate } from '../src/sim/systems/audits';
 import { auditTicks } from '../src/sim/systems/audits';
 import { machineRecipes } from '../src/sim/transfer';
 import { migrate } from '../src/engine/save';
@@ -302,17 +302,17 @@ describe('claims and Machine Kits (DESIGN.md §18)', () => {
     expect(claimsHeld(g, 'coal')).toBe(7);
     for (let i = 0; i < 6; i++) must(g, { k: 'stamp', id: d.id });
     expect(stampRefusal(g, d)).toMatch(/coal claim \(7 of 7/);
-    expect(claimPrice(g, 'coal')!.toNumber()).toBe(12000);
+    expect(claimPrice(g, 'coal')!.toNumber()).toBe(60000);
     must(g, { k: 'claim', item: 'coal' });
-    expect(claimPrice(g, 'coal')!.toNumber()).toBe(18000);
+    expect(claimPrice(g, 'coal')!.toNumber()).toBe(90000);
     expect(claimsHeld(g, 'coal')).toBe(11);
     must(g, { k: 'stamp', id: d.id });
   });
 
   it('stamping a design with Act II buildings costs Machine Kits; a Hopper banks them', () => {
     const g = sandbox();
-    const d = design(g, { parts: [{ kind: 'kiln', dx: 0, dy: 0, rot: 0, recipe: null }, { kind: 'pole', dx: 1, dy: 0, rot: 0, recipe: null }], bill: 3200, outs: { glass: 0.5 } });
-    expect(kitsFor(g, d)).toBe(7); // 1 + floor(3,200 / 500)
+    const d = design(g, { parts: [{ kind: 'kiln', dx: 0, dy: 0, rot: 0, recipe: null }, { kind: 'pole', dx: 1, dy: 0, rot: 0, recipe: null }], bill: 32000, outs: { glass: 0.5 } });
+    expect(kitsFor(g, d)).toBe(7); // 1 + floor(32,000 / 5,000)
     expect(g.act({ k: 'stamp', id: d.id }).why).toMatch(/7 Machine Kits/);
     // seven kits into the Workshop Hopper
     g.intake.push({ to: 'hopper', item: 'machineKit', x: 7, y: 5, n: N(7) });
@@ -333,10 +333,10 @@ describe('customers and the Codex (DESIGN.md §18 Customers)', () => {
     const c0 = g.s.coin.toNumber();
     g.intake.push({ to: 'dock', item: 'steel', x: 7, y: 2 });
     g.tick();
-    expect(g.s.coin.toNumber() - c0).toBe(15 + 450);
+    expect(g.s.coin.toNumber() - c0).toBe(22 + 660);
     g.intake.push({ to: 'dock', item: 'steel', x: 7, y: 2 });
     g.tick();
-    expect(g.s.coin.toNumber() - c0).toBe(15 + 450 + 15);
+    expect(g.s.coin.toNumber() - c0).toBe(22 + 660 + 22);
     expect(g.s.codex).toContain('steel');
   });
 
@@ -370,8 +370,8 @@ describe('the Megaproject Bay and the Great Drill (DESIGN.md §18 Megaproject #1
     g.step(20 * TICK_RATE);
     expect(g.s.mega.stage).toBe(0);
     expect(g.s.mega.progress.steel?.toNumber() ?? 0).toBeGreaterThan(0);
-    // 8/s a route: 1,500 concrete need about 3 minutes
-    g.step(200 * TICK_RATE);
+    // the stage's 450 Drill Bits at 1/s need 7.5 minutes (2,000 steel at 8/s about 4)
+    g.step(480 * TICK_RATE);
     expect(g.s.mega.stage).toBe(1);
     // miners run 1.5x now
     must(g, { k: 'place', kind: 'miner', x: 2, y: 11, rot: 0 });
@@ -562,6 +562,98 @@ describe('the Milestone 3 gate fixes', () => {
   it('the Hand Furnace starts with a Slag Heap, so hand-smelting never jams', () => {
     const g = new Game(1);
     expect(g.entAt(3, 4)?.kind).toBe('heap');
+  });
+});
+
+describe('the Milestone 4 review fixes', () => {
+  it('a module with two products runs while either has room; the full one spills', () => {
+    const g = sandbox();
+    g.first('factoryOpen');
+    const gp = design(g, { outs: { glass: 0.5, plastic: 0.5 }, parts: [{ kind: 'kiln', dx: 0, dy: 0, rot: 0, recipe: null }, { kind: 'refinery', dx: 1, dy: 0, rot: 0, recipe: null }] });
+    const c = design(g, { ins: { glass: 0.5 }, outs: { circuit: 0.1 }, parts: [{ kind: 'assembler', dx: 0, dy: 0, rot: 0, recipe: null }] });
+    must(g, { k: 'fplace', design: gp.id, x: 4, y: 1, rot: 0 });
+    must(g, { k: 'fplace', design: c.id, x: 5, y: 1, rot: 0 });
+    for (let x = 6; x < 10; x++) must(g, { k: 'ftrunk', x, y: 1, rot: 0 });
+    g.step(60 * TICK_RATE);
+    // the circuit module takes no plastic: it backs up, but glass keeps flowing
+    const m = g.fentAt(4, 1)!;
+    expect(m.fAvg).toBeGreaterThan(0.5);
+    expect(m.spill).toBe('plastic');
+    expect(g.fentAt(5, 1)!.fAvg).toBeGreaterThan(0.5);
+  });
+
+  it('stock drawn down inside the box becomes an input, whatever it is worth', () => {
+    const g = sandbox();
+    // a crate of ingots -> press -> assembler, no belt in: the module needs ingots, not nothing
+    must(g, { k: 'place', kind: 'crate', x: 2, y: 9, rot: 0 });
+    must(g, { k: 'place', kind: 'press', x: 3, y: 9, rot: 0 });
+    must(g, { k: 'place', kind: 'assembler', x: 4, y: 9, rot: 0 });
+    must(g, { k: 'place', kind: 'belt', x: 5, y: 9, rot: 0 });
+    must(g, { k: 'place', kind: 'crate', x: 6, y: 9, rot: 0 });
+    at(g, 2, 9).store = new Array(50).fill('ironIngot');
+    must(g, { k: 'audit', x: 2, y: 9, w: 3, h: 1 });
+    g.step(auditTicks() + 1);
+    const res = g.s.audits[0].result!;
+    expect(res.outs.gear ?? 0).toBeGreaterThan(0.1);
+    expect(res.ins.ironIngot ?? 0).toBeGreaterThan(0.4);
+  });
+
+  it('S+ needs the byproducts used inside the box: slag routed to a heap caps a line at S', () => {
+    expect(splusGate(GRADES[0], 0.99, 10, 9).letter).toBe('S+');
+    expect(splusGate(GRADES[0], 0.99, 10, 2).letter).toBe('S');
+    expect(splusGate(GRADES[0], 0.99, 0, 0).letter).toBe('S+');
+    const g = sandbox();
+    must(g, { k: 'place', kind: 'miner', x: 2, y: 11, rot: 0 });
+    must(g, { k: 'place', kind: 'belt', x: 3, y: 11, rot: 0 });
+    must(g, { k: 'place', kind: 'smelter', x: 4, y: 11, rot: 0 });
+    must(g, { k: 'place', kind: 'belt', x: 5, y: 11, rot: 0 });
+    must(g, { k: 'place', kind: 'crate', x: 6, y: 11, rot: 0 });
+    must(g, { k: 'place', kind: 'heap', x: 4, y: 12, rot: 1 });
+    g.step(10 * TICK_RATE);
+    must(g, { k: 'audit', x: 2, y: 11, w: 3, h: 1 });
+    g.step(auditTicks() + 1);
+    const res = g.s.audits[0].result!;
+    expect(res.grade.score).toBeGreaterThanOrEqual(0.97);
+    expect(res.grade.letter).toBe('S');
+    expect(res.advice[0]).toMatch(/One step to S\+/);
+  });
+
+  it('a copy is not placed past the claims held, however it was made', () => {
+    const g = sandbox();
+    g.first('factoryOpen');
+    const held = claimsHeld(g, 'copperOre');
+    const d = design(g, { spare: held + 1, outs: { copperIngot: 0.5 }, parts: [{ kind: 'miner', dx: 0, dy: 0, rot: 0, recipe: 'mineCopper' }, { kind: 'smelter', dx: 1, dy: 0, rot: 0, recipe: null }] });
+    for (let i = 0; i < held; i++) must(g, { k: 'fplace', design: d.id, x: i % 10, y: 4 + Math.floor(i / 10), rot: 0 });
+    expect(g.act({ k: 'fplace', design: d.id, x: 0, y: 7, rot: 0 }).why).toMatch(/Out of copper claims/);
+  });
+
+  it('a nested fold boxes one group: a stranger riding along is refused', () => {
+    const g = sandbox();
+    g.first('factoryOpen');
+    const a = design(g, { outs: { ironPlate: 0.5 }, parts: [{ kind: 'press', dx: 0, dy: 0, rot: 0, recipe: null }] });
+    const b = design(g, { ins: { ironPlate: 0.5 }, outs: { gear: 0.25 }, parts: [{ kind: 'assembler', dx: 0, dy: 0, rot: 0, recipe: null }] });
+    const c = design(g, { outs: { copperWire: 0.5 }, parts: [{ kind: 'press', dx: 0, dy: 0, rot: 0, recipe: null }] });
+    must(g, { k: 'fplace', design: a.id, x: 4, y: 1, rot: 0 });
+    must(g, { k: 'fplace', design: b.id, x: 5, y: 1, rot: 0 });
+    must(g, { k: 'fplace', design: c.id, x: 4, y: 2, rot: 0 });
+    expect(g.act({ k: 'faudit', x: 4, y: 1, w: 2, h: 2 }).why).toMatch(/isn't joined/);
+    expect(g.act({ k: 'faudit', x: 4, y: 1, w: 2, h: 1 }).ok).toBe(true);
+  });
+
+  it('the Great Drill never boosts a miner being audited', () => {
+    const g = sandbox();
+    g.s.mega.stage = 1;
+    for (const y of [11, 12]) {
+      must(g, { k: 'place', kind: 'miner', x: 2, y, rot: 0 });
+      must(g, { k: 'place', kind: 'belt', x: 3, y, rot: 0 });
+      must(g, { k: 'place', kind: 'smelter', x: 4, y, rot: 0 });
+    }
+    must(g, { k: 'audit', x: 2, y: 11, w: 3, h: 1 });
+    const p0 = [at(g, 2, 11).prog, at(g, 2, 12).prog];
+    g.tick();
+    const d = [(at(g, 2, 11).prog - p0[0] + 40) % 40, (at(g, 2, 12).prog - p0[1] + 40) % 40];
+    expect(d[0]).toBeCloseTo(1);
+    expect(d[1]).toBeCloseTo(1 + RULES.drillBoost.value);
   });
 });
 

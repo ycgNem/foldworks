@@ -22,7 +22,7 @@ import { ITEMS, itemName, type ItemId } from '../../data/items';
 import { megaStage } from '../../data/megaprojects';
 import { DX, DY, ccw, cw, newFEnt, opposite, type Dir, type FEnt, type ModuleDesign } from '../world';
 import { entsIn, inBox, gradedAudit } from './audits';
-import { claimRefusal, oresOf } from './claims';
+import { claimRefusal, oresOf, placeClaimRefusal } from './claims';
 import { hopperWantsSlag } from '../transfer';
 import { fauditFlow, fauditLock } from './nested';
 
@@ -248,6 +248,8 @@ export function fplaceRefusal(g: Game, kind: 'module' | 'trunk', x: number, y: n
     const d = g.s.designs.find((q) => q.id === design);
     if (!d) return 'Pick a module from the inventory';
     if (d.spare < 1) return `No spare ${d.name}: stamp a copy`;
+    const claim = placeClaimRefusal(g, d);
+    if (claim) return claim;
   } else if (g.s.coin.lt(FACTORY.trunkCost)) return `Needs ${FACTORY.trunkCost} coin`;
   return null;
 }
@@ -418,7 +420,10 @@ export function runModules(g: Game) {
     if (m.kind !== 'module') continue;
     const d = g.design(m.design);
     if (!d) continue;
-    const k = (drill > 1 && Object.keys(oresOf(g, d)).length ? drill : 1) * ((m.od ?? 0) > 0 ? RULES.overdriveMult.value : 1);
+    // the Great Drill boosts modules with miners inside, but never one under audit: its rate is
+    // being measured, and a depth-2 module folded from it gets the boost again (Milestone 4 review)
+    const audited = !!g.s.faudit && !g.s.faudit.result && g.s.faudit.ids.includes(m.id);
+    const k = (drill > 1 && !audited && Object.keys(oresOf(g, d)).length ? drill : 1) * ((m.od ?? 0) > 0 ? RULES.overdriveMult.value : 1);
     if (m.od) { m.od--; if (!m.od) m.cool = Math.round(RULES.overdriveCool.value * TICK_RATE); } else if (m.cool) m.cool--;
     let frac = 1;
     let why: string | null = null;
@@ -430,17 +435,33 @@ export function runModules(g: Game) {
       const fi = (m.inBuf[i] ?? 0) / need;
       if (fi < frac) { frac = fi; why = i; kind = 'starved'; }
     }
+    // a byproduct with nowhere to go blocks the module (the slag lesson, §11); of its products, it
+    // runs while any one has room, and a full one spills (a module making glass and plastic for a
+    // consumer that takes them in another ratio would otherwise stop for good: Act II's bot)
+    let bestMain = -1, fullMain: string | null = null;
     for (const [o, r0] of Object.entries(d.outs) as [ItemId, number][]) {
       const r = r0 * k;
       const need = r * DT;
       if (need <= 0) continue;
       const room = r * buf - (m.outBuf[o] ?? 0);
       const fo = Math.max(0, room / need);
-      if (fo < frac) { frac = fo; why = o; kind = 'blocked'; }
+      if (BYPRODUCTS.has(o)) {
+        if (fo < frac) { frac = fo; why = o; kind = 'blocked'; }
+      } else {
+        if (fo > bestMain) bestMain = fo;
+        if (fo < 1e-9) fullMain = o;
+      }
     }
+    if (bestMain >= 0 && bestMain < frac) { frac = bestMain; why = fullMain ?? why; kind = 'blocked'; }
     frac = Math.max(0, Math.min(1, frac));
+    m.spill = null;
     for (const [i, r] of Object.entries(d.ins) as [ItemId, number][]) m.inBuf[i] = Math.max(0, (m.inBuf[i] ?? 0) - r * k * DT * frac);
-    for (const [o, r] of Object.entries(d.outs) as [ItemId, number][]) m.outBuf[o] = (m.outBuf[o] ?? 0) + r * k * DT * frac;
+    for (const [o, r] of Object.entries(d.outs) as [ItemId, number][]) {
+      const cap = r * k * buf;
+      const v = (m.outBuf[o] ?? 0) + r * k * DT * frac;
+      if (!BYPRODUCTS.has(o) && v > cap && frac > 0) m.spill = o;
+      m.outBuf[o] = BYPRODUCTS.has(o) ? v : Math.min(Math.max(cap, m.outBuf[o] ?? 0), v);
+    }
     m.f = frac;
     m.fsum = (m.fsum ?? 0) + frac;
     m.fAvg = m.fAvg * 0.98 + frac * 0.02;
