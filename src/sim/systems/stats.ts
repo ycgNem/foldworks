@@ -34,6 +34,12 @@ export function runStats(g: Game) {
       m.sec[0] = m.sec[1] = m.sec[2] = m.sec[3] = 0;
     }
   }
+  // the bills term's window (§19): each building's measured work, minute by minute
+  if ((g.s.tick + 1) % (60 * TICK_RATE) === 0) {
+    const n = RULES.billsWindow.value;
+    for (const list of [g.miners, g.machines, g.power]) for (const m of list) rollWork(m, n);
+    for (const m of g.s.factory.ents) if (m.kind === 'module') rollWork(m, n);
+  }
   checkTrophies(g);
   g.s.income.push(g.s.incomeSec);
   if (g.s.income.length > win) g.s.income.shift();
@@ -46,6 +52,28 @@ export function runStats(g: Game) {
     const avg = m.perMinRing.reduce((a, b) => a + b, 0) / m.perMinRing.length;
     if (m.perMinRing.length >= 5 && avg > m.peakPerMin) m.peakPerMin = avg;
   }
+}
+
+/** Close a minute of measured work (seconds, to two places) into the last `n` minutes. */
+function rollWork(m: { wkAcc?: number; wk?: number[]; hist: string; state: string }, n: number) {
+  // a building from a save made before the record: its last minute's pips stand in for the
+  // minutes before this one (only such a building has no record; a new one starts empty)
+  if (!m.wk) { const v = Math.round(shares(m as Ent).work * 6000) / 100; m.wk = Array.from({ length: n - 1 }, () => v); }
+  const w = m.wk;
+  w.push(Math.round(((m.wkAcc ?? 0) / TICK_RATE) * 100) / 100);
+  while (w.length > n) w.shift();
+  m.wkAcc = 0;
+}
+
+/** A building's measured work share over the bills term's window (0..1): what it did in each of
+ * the last RULES.billsWindow whole minutes, a minute it did not stand counted as none. Saves from
+ * before the final round have no record (`wk` absent): their last minute's pip history stands in. */
+export function workShare(m: { wk?: number[]; hist: string }): number {
+  if (!m.wk) return shares(m as Ent).work;
+  const n = RULES.billsWindow.value;
+  let s = 0;
+  for (const v of m.wk) s += v;
+  return Math.min(1, s / (60 * n));
 }
 
 /** Fraction of the recorded window a machine spent in each state. */

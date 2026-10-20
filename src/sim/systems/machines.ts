@@ -88,6 +88,12 @@ export function runMachines(g: Game) {
         if (sp > 0) {
           m.prog += sp;
           progressed = true;
+          // the bills term counts its work at the square of its grid's satisfaction (§19): a grid
+          // at 90% of the power it wants counts 81% of its machines, a brownout farm at 1% nothing
+          // (at the plain satisfaction, 239 refineries on one generator counted as the 1.7
+          // refineries that generator runs: the final round)
+          const sat = Math.min(1, pf);
+          m.wkAcc = (m.wkAcc ?? 0) + sat * sat;
         } else unpowered = pf <= 0;
       }
       const need = r.time * TICK_RATE;

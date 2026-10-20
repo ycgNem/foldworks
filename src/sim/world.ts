@@ -100,6 +100,14 @@ export interface Ent {
   /** stopped by the player (the 'pause' command): takes nothing, makes nothing, draws no power;
    * splitters route around it as around any full machine */
   paused?: boolean;
+  // ---- the bills term (DESIGN.md §19, the Milestone 5-6 final round); absent on older saves
+  /** measured work this minute, in ticks: a machine's work x its grid's satisfaction, a Miner's
+   * digging, a power producer's burn share */
+  wkAcc?: number;
+  /** the work of each of the last whole minutes (seconds, newest last, at most RULES.billsWindow) */
+  wk?: number[];
+  /** a belt or logistics part: the tick it last took an item */
+  used?: number;
 }
 
 /** A box on the Workshop, in tiles. */
@@ -230,6 +238,11 @@ export interface FEnt {
   cool?: number;
   /** a module stopped by the player (DESIGN.md §20): runs at 0 and takes nothing */
   paused?: boolean;
+  /** the bills term (DESIGN.md §19): a module's run fraction this minute (ticks) and in each of the
+   * last whole minutes (seconds); a trunk's last tick carrying items */
+  wkAcc?: number;
+  wk?: number[];
+  used?: number;
 }
 
 export interface FactoryState {
@@ -445,7 +458,7 @@ export function newFEnt(id: number, kind: FKind, x: number, y: number, rot: Dir,
   const big = kind === 'fdock' || kind === 'fhopper' || kind === 'fbay';
   return {
     id, kind, x, y, w: big ? 2 : 1, h: big ? 2 : 1, rot, design,
-    inBuf: {}, outBuf: {}, f: 0, fAvg: 0, state: 'idle', why: null, rr: 0, flow: 0, hist: '', sec: [0, 0, 0, 0],
+    inBuf: {}, outBuf: {}, f: 0, fAvg: 0, state: 'idle', why: null, rr: 0, flow: 0, hist: '', sec: [0, 0, 0, 0], wk: [],
   };
 }
 
@@ -462,7 +475,7 @@ export function newEnt(id: number, kind: EntKind, x: number, y: number, w: numbe
     recipe: null, inBuf: {}, out: 0, outItem: null, by: 0, byItem: null, prog: 0, active: false, crafts: 0, state: 'idle', why: null,
     item: null, p: 0, mv: false, occ: 0, jam: 0,
     store: [], count: 0, rr: 0,
-    hist: '', sec: [0, 0, 0, 0],
+    hist: '', sec: [0, 0, 0, 0], wk: [],
   };
 }
 

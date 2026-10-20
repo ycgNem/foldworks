@@ -92,6 +92,8 @@ export const RULES = {
   tierBonus: r(0.5, '§19 Filing: +0.5 to the value per rate tier, so four times the line is worth half again a product\'s Patents, never four times (a bigger line is progress, not the whole of it)'),
   /** the bills term: log2(1 + bills standing and running / this) */
   patentBillsDivisor: r(25000, '§19 Filing: the minor term, log2(1 + the bills of every building and module that ran in the last minute / 25,000): the slice-end factory stands on about 14K (0.6), the Act II bot\'s 4 h factory about 85K (2.1); coin on hand counts for nothing and an idle building for nothing, so a hoard is never burned for Patents (the Milestone 5 review)'),
+  /** the bills term's window, minutes: a building's bill counts by its measured share of this */
+  billsWindow: r(5, "§19 Filing, the bills term: each building counts by its measured work over the last 5 whole minutes (a machine's work times its grid's satisfaction, a power producer's burn share, a module's run fraction; belts and trunks if they carried items): long enough that a building bought and run a minute before a reset counts a fifth, short enough that the factory standing at the reset is the one counted (the final round: a machine that worked one second in the last 60 counted in full, so idle and browned-out buildings were farmed for Patents)"),
   /** a reset needs at least this many Patents to be taken (the preview says what to do first) */
   patentMin: r(1, '§19 Reorganize: at least one Patent, so a reset is never a loss by accident'),
   /** the Patent Drawer: designs kept, the box limit of a share string */

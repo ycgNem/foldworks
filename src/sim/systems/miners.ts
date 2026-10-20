@@ -33,6 +33,7 @@ export function runMiners(g: Game) {
       * (g.s.mega.stage >= 1 && !isAudited(g, m.id) ? 1 + RULES.drillBoost.value : 1);
     if (m.out < cap) {
       m.prog += speed;
+      m.wkAcc = (m.wkAcc ?? 0) + 1;
       const need = r.time * TICK_RATE;
       while (m.prog >= need - 1e-9 && m.out < cap) {
         m.prog -= need;

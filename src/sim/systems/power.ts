@@ -143,6 +143,12 @@ export function runPower(g: Game) {
       const burner = p.kind === 'generator' ? p : g.boilerOf.get(p.id);
       const on = live.includes(p);
       if (burner && on) burner.prog = Math.max(0, burner.prog - load);
+      // the bills term counts a producer by its own burn share (§19): an unfuelled or idle one
+      // counts nothing, a plant four times the load a quarter each
+      if (on) {
+        p.wkAcc = (p.wkAcc ?? 0) + load;
+        if (burner && burner !== p) burner.wkAcc = (burner.wkAcc ?? 0) + load;
+      }
       p.state = on ? 'work' : demand > 0 ? 'starved' : 'idle';
       p.why = on || demand <= 0 ? null : 'coal';
       if (burner && burner !== p) {

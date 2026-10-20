@@ -530,6 +530,7 @@ export function runModules(g: Game) {
     for (const t of r.tiles) {
       used.set(t.id, (used.get(t.id) ?? 0) + moved);
       t.flow = (used.get(t.id) ?? 0) * TICK_RATE;
+      if (moved > 1e-9) t.used = g.s.tick;
     }
   }
   // 3. whole items reaching the Factory Dock and Hopper are paid out by the docks system; the
@@ -559,6 +560,8 @@ export function runModules(g: Game) {
       m.sec = [0, 0, 0, 0];
       // seconds in a row at half speed or better
       m.ok = (m.fsum ?? 0) / TICK_RATE >= 0.5 ? (m.ok ?? 0) + 1 : 0;
+      // the bills term (§19) counts a module by its run fraction
+      m.wkAcc = (m.wkAcc ?? 0) + (m.fsum ?? 0);
       m.fsum = 0;
     }
     sliceEndCheck(g);

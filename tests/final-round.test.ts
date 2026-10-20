@@ -8,8 +8,8 @@ import { RESEARCH_IDS } from '../src/data/research';
 import { CHUNKS } from '../src/data/land';
 import { TICK_RATE } from '../src/engine/time';
 import { auditTicks } from '../src/sim/systems/audits';
-import { designValue } from '../src/sim/reorganize';
-import type { Dir, ModuleDesign } from '../src/sim/world';
+import { billsStanding, billsTerm, designValue } from '../src/sim/reorganize';
+import type { Dir, Ent, ModuleDesign } from '../src/sim/world';
 
 function sandbox(seed = 1) {
   const g = new Game(seed);
@@ -64,6 +64,93 @@ function design(g: Game, over: Partial<ModuleDesign>): ModuleDesign {
   g.s.designs.push(d);
   return d;
 }
+
+/** Bills (and the term) a farm adds on top of a factory standing on `base` coin of bills. */
+const added = (base: number, farm: number) => billsTerm(base + farm) - billsTerm(base);
+
+describe('the bills term counts measured work (DESIGN.md §19, the final round)', () => {
+  /** A grid of poles over x 8-23, y 0-15 with one generator kept fuelled, every other free tile a
+   * machine of `kind` kept fed: far more demand than one generator gives (a brownout). */
+  function brownout(kind: 'refinery' | 'kiln', fed: (e: Ent) => void) {
+    const g = sandbox();
+    must(g, { k: 'place', kind: 'generator', x: 9, y: 1, rot: 0 });
+    let n = 0;
+    for (let y = 0; y < 16; y++) for (let x = 8; x < 24; x++) {
+      if (x === 9 && y === 1) continue;
+      if ((x - 8) % 4 === 2 && y % 4 === 1) { g.act({ k: 'place', kind: 'pole', x, y, rot: 0 }); continue; }
+      if (g.act({ k: 'place', kind, x, y, rot: 0 }).ok) n++;
+    }
+    g.rebuild();
+    const gen = g.s.ents.find((e) => e.kind === 'generator')!;
+    const ms = g.s.ents.filter((e) => e.kind === kind);
+    for (let t = 0; t < 6 * 60 * TICK_RATE; t++) {
+      gen.inBuf.coal = 4;
+      for (const m of ms) fed(m);
+      g.tick();
+    }
+    return { g, n, ms };
+  }
+
+  it('a brownout farm (100+ machines on one generator, all kept fed) adds under 0.5 Patents', () => {
+    const { g, n, ms } = brownout('refinery', (m) => { m.recipe = 'refinePlastic'; m.inBuf.coal = 4; m.out = 0; m.by = 0; });
+    expect(n).toBeGreaterThanOrEqual(100);
+    // they are all "working" by their pips, at a sliver of the power they want
+    expect(ms.filter((m) => m.hist.includes('w')).length).toBeGreaterThanOrEqual(100);
+    expect(g.grids[0].sat).toBeLessThan(0.02);
+    const b = billsStanding(g);
+    const spent = n * 9000;
+    console.log(`[pace] brownout farm: ${n} refineries (${spent} coin) on one generator at ${(g.grids[0].sat * 100).toFixed(1)}% of their power: bills ${Math.round(b)}, +${added(14000, b).toFixed(2)} Patents on the slice-end factory, +${added(80000, b).toFixed(2)} on the 4 h factory`);
+    for (const base of [0, 14000, 80000]) expect(added(base, b)).toBeLessThan(0.5);
+  });
+
+  it('a field of generators with one fuelled, or many fuelled for one kiln, counts by burn share', () => {
+    const g = sandbox();
+    must(g, { k: 'place', kind: 'kiln', x: 8, y: 0, rot: 0 });
+    let n = 0;
+    for (let y = 0; y < 8; y++) for (let x = 8; x < 24; x++) {
+      if ((x - 8) % 4 === 2 && y % 4 === 1) { g.act({ k: 'place', kind: 'pole', x, y, rot: 0 }); continue; }
+      if (g.act({ k: 'place', kind: 'generator', x, y, rot: 0 }).ok) n++;
+    }
+    g.rebuild();
+    const kiln = g.s.ents.find((e) => e.kind === 'kiln')!;
+    const gens = g.s.ents.filter((e) => e.kind === 'generator');
+    const play = (fuelAll: boolean) => {
+      for (let t = 0; t < 6 * 60 * TICK_RATE; t++) {
+        kiln.recipe = 'fireGlass'; kiln.inBuf.sand = 4; kiln.out = 0;
+        if (fuelAll) for (const q of gens) q.inBuf.coal = 4;
+        else gens[0].inBuf.coal = 4;
+        g.tick();
+      }
+      return billsStanding(g);
+    };
+    const one = play(false);
+    const all = play(true);
+    console.log(`[pace] ${n} generators (${n * 2600} coin) for one kiln: bills ${Math.round(one)} with one fuelled, ${Math.round(all)} with all fuelled`);
+    expect(n).toBeGreaterThanOrEqual(100);
+    // the kiln (3,000), its share of the one generator it needs (60 of 200 kW), a few poles
+    for (const b of [one, all]) {
+      expect(b).toBeLessThan(3000 + 2 * 2600 + 2000);
+      expect(added(14000, b)).toBeLessThan(0.5);
+    }
+  });
+
+  it('idle, starved and blocked buildings count for nothing; a line counts once it has run the window', () => {
+    const g = sandbox();
+    for (let x = 8; x < 20; x++) must(g, { k: 'place', kind: 'assembler', x, y: 8, rot: 0 });
+    g.step(6 * 60 * TICK_RATE);
+    expect(billsStanding(g)).toBe(0);
+    ironLine(g);
+    g.step(61 * TICK_RATE);
+    const early = billsStanding(g);
+    g.step(5 * 60 * TICK_RATE);
+    const full = billsStanding(g);
+    // the miner (40), the smelter (60), the heap (25) and the belts (12): a fifth after a minute
+    expect(early).toBeGreaterThan(0);
+    expect(early).toBeLessThan(full * 0.5);
+    expect(full).toBeGreaterThan(100);
+    expect(full).toBeLessThanOrEqual(40 + 60 + 25 + 12 + 1e-6);
+  });
+});
 
 describe('Overdrive never reaches an audited line (DESIGN.md §10 Select)', () => {
   for (const quick of [false, true]) {
