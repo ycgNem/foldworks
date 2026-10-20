@@ -36,7 +36,7 @@ function perHour(patents: number, ticks: number): string {
 registerCounter({
   id: 'patents',
   show: (app) => app.game.s.meta.runs > 0 || app.game.s.meta.patents.gt(0) || resetMeaningful(app, previewPatents(app.game).now),
-  draw: (app, x, y) => {
+  draw: (app, x, y, room) => {
     const ui = app.ui;
     const g = app.game;
     let w = 0;
@@ -48,8 +48,10 @@ registerCounter({
     }
     const pv = previewPatents(g).now;
     if (resetMeaningful(app, pv)) {
-      const label = `Reorganize +${pv}`;
-      const bw = textWidth(label) + 10;
+      // where the bar is short of room, the reset icon stands for the word
+      const short = w + textWidth(`Reorganize +${pv}`) + 10 > room;
+      const label = short ? `+${pv}` : `Reorganize +${pv}`;
+      const bw = textWidth(label) + (short ? 26 : 10);
       const m = g.s.meta;
       const last = m.history[m.history.length - 1];
       const tip = [
@@ -58,7 +60,7 @@ registerCounter({
         { text: `This run: ${perHour(pv, runSeconds(g) * TICK_RATE)}.`, color: C.teal1 },
         ...(last ? [{ text: `Last run: ${perHour(last.patents, last.ticks)}.`, color: C.hull2 }] : []),
       ];
-      if (button(ui, 'reorganizeBar', x + w, y - 4, bw, 14, label, { active: app.panel === 'reorganize', tip })) app.togglePanel('reorganize');
+      if (button(ui, 'reorganizeBar', x + w, short ? y - 5 : y - 4, bw, short ? 16 : 14, label, { active: app.panel === 'reorganize', tip, icon: short ? 'reset' : undefined })) app.togglePanel('reorganize');
       w += bw;
     }
     return w;

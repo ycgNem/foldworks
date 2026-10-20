@@ -63,7 +63,7 @@ const SHORT: Partial<Record<string, string>> = {
   bellows: 'Bellows', starterLine: 'Miner', notebooks: 'Notes', copperDeeds: 'Copper', gearPatterns: 'Gears', gizmoPatent: 'Gizmo',
   foldingPatent: 'Folding', grant: 'Grant', overdriveHabit: 'Overdrv', coalRights: 'Coal', steelCharter: 'Steel', glassNotes: 'Glass',
   circuitPatent: 'Circuit',
-  surveyCharter: 'Claims', widerBox: 'Big box', quickAudit: 'Quick', moreAuditors: 'Auditors', sideIntake: 'Side in', deepHeaps: 'Heaps',
+  surveyCharter: 'Claims', widerBox: 'Wider', quickAudit: 'Quick', moreAuditors: 'Auditors', sideIntake: 'Intake', deepHeaps: 'Heaps',
   nestedBoxes: 'Nesting', coolHands: 'Cooling', stampDies: 'Dies',
   shovelFrog: 'Shovel', labAssistant: 'Lab', orderClerk: 'Clerk', stampPress: 'Press', dragonfly: 'Drone', dragonflies: 'Swarm',
   nightShift: 'Shift', nightWatch: 'Watch', lightsOn: 'Lights',
@@ -234,9 +234,9 @@ export function effectInfo(app: App, p: PatentDef): { does: string[]; now: strin
   const num = (k: string) => (typeof e[k] === 'number' ? (e[k] as number) : NaN);
   const list = (k: string) => (Array.isArray(e[k]) ? (e[k] as unknown[]) : []);
   const own = hasPatent(g, p.id);
-  const was = (now: number | undefined, base: number | undefined, unit = '') => {
+  const was = (now: number | undefined, base: number | undefined, unit: string | ((v: number) => string) = '') => {
     const b = own ? base : now;
-    return b === undefined || !isFinite(b) ? '' : ` instead of ${b}${unit}`;
+    return b === undefined || !isFinite(b) ? '' : ` instead of ${typeof unit === 'string' ? b + unit : unit(b)}`;
   };
   const base = (k: string) => (RULES as unknown as Record<string, { value: number } | undefined>)[k]?.value;
   const change = (from: number | undefined, to: number, fmt: (v: number) => string, better: (a: number, b: number) => boolean) => {
@@ -279,7 +279,7 @@ export function effectInfo(app: App, p: PatentDef): { does: string[]; now: strin
     }
     case 'foldMax': {
       const v = num('value'), cur = ruleNow(app, 'foldMax');
-      return { does: [`The fold box is up to ${v}x${v}${was(cur, base('foldMax'))}.`], now: change(cur, v, (x) => `${x}x${x}`, up) };
+      return { does: [`The fold box is up to ${v}x${v}${was(cur, base('foldMax'), (x) => `${x}x${x}`)}.`], now: change(cur, v, (x) => `${x}x${x}`, up) };
     }
     case 'audit': {
       const w = num('warmup'), s = num('span');
@@ -304,7 +304,7 @@ export function effectInfo(app: App, p: PatentDef): { does: string[]; now: strin
     }
     case 'nestedMax': {
       const v = num('value'), cur = ruleNow(app, 'nestedMax');
-      return { does: [`A nested fold boxes up to ${v}x${v}${was(cur, base('nestedMax'))}.`], now: change(cur, v, (x) => `${x}x${x}`, up) };
+      return { does: [`A nested fold boxes up to ${v}x${v}${was(cur, base('nestedMax'), (x) => `${x}x${x}`)}.`], now: change(cur, v, (x) => `${x}x${x}`, up) };
     }
     case 'overdriveCool': {
       const v = num('value'), cur = ruleNow(app, 'overdriveCool');

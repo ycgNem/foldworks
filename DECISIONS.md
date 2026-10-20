@@ -846,3 +846,63 @@ at `offlineEfficiency(g)` and the save version, which the lead renumbers at the 
 - **The Patents formula was checked and is not derivative**: CC's heavenly chips and AD's infinity
   points are a root or log of currency earned; ours counts distinct folded products by recipe
   depth and audit grade, with coin as a minor log term.
+
+## The Milestone 5–6 review round: UI legibility (2026-10-20)
+
+From the idle-critic's review of the merged Milestones 5–6 and the UI redesign: the floor and the
+first minute read well; the newer screens were sparse or buried. Presentation only: no sim
+behaviour, number or data file changed.
+
+- 2026-10-20: **The Patent tree names and prices every node, and its detail panel speaks in
+  numbers.** Each node shows a distinct picture (an item icon, a UI icon or a building's sprite;
+  the flame and the clock were each used twice), its price on a chip at the corner (a tick when
+  owned) and a short label under it, 8 small capitals at most so it fits a column at 1024x640. The
+  panel states the effect as numbers against what this run has ("An audit takes 45 s ... instead of
+  70 s"), what buying it changes this run ("70 s becomes 45 s the moment you buy it"; a head start
+  lists what it adds now), its price against the bank, and its prerequisites ticked or crossed.
+  *Why:* the critic could not tell nodes apart or what one bought. The screen reads `effect.k` and
+  its fields and `prules()` by field name, with fallbacks (an effect it does not know shows the
+  node's own `text`; a node with no icon or label gets one from its effect and its name), so the
+  reset agent's rewrite of `src/data/patents.ts` needs no change here.
+- 2026-10-20: **Toasts fit the screen and the overlap audit checks them.** Lines wrap to the
+  column and a single word wider than it is cut; trophy names wrap to two lines instead of being
+  clipped; a toast with no room in full shows its title alone. A toast that has landed is drawn on
+  the audit's new `float` layer: it may lie over the floor (by design), but `findIssues` flags it
+  when it leaves the screen (`offscreen`) or covers HUD text (`covered`, `clash`). Sliding in, it
+  stays on the `tip` layer the audit ignores, and `npm run screens` shoots toasts at rest. *Why:*
+  the act2power and jam shots caught toasts mid-slide and trophy names clipped at the edge, and the
+  audit skipped toasts entirely.
+- 2026-10-20: **A pinned report keeps 54 px of the right side for toasts.** It is anchored above
+  the build bar as before but never rises into that room: a tall report first widens (to 256),
+  then drops the line report, then cuts with "+N more lines: hover it for the whole report".
+  *Why:* a kiln's 13-line report pushed every toast off the stack. Stacking toasts beside the
+  report was rejected: the report would jump sideways each time a toast came and went.
+- 2026-10-20: **The hover report tells one story.** The status line, the feed line and the front
+  line are worked out together: a machine working from its buffer with nothing feeding it says
+  "Running on its buffer: about 6s of sand left, then it starves" (or how soon its output fills when
+  nothing takes it), and "Nothing feeds it" is then a warning, not a fault; the front line counts
+  what waits ("1 of 4 made wait inside; it blocks when full"); a share that rounds to 0% reads
+  "just now". The grid's Brownout line replaces the report's "Short of power" under it (three lines
+  said the same). Text only (`src/sim/analysis.ts` reads the machine's buffer and speed).
+- 2026-10-20: **Icons the atlas lacks are drawn at icon size.** Patents, Blueprints, Reset and
+  Overnight (appended after the art) were 5 px glyphs beside 16 px icons; they are now 16x16
+  code-drawn pictograms outlined in ink (a sealed certificate, a blue sheet, two chasing arrows, a
+  moon), and any other missing icon a dark 16 px key with its glyph centred. Placeholders until the
+  art director draws the frames (the atlas is append-only; a drawn frame wins automatically).
+- 2026-10-20: **"Reorganize +N" appears on the top bar once a reset is worth taking**: when it
+  would bank at least half of what the last run did, or 6 Patents in the first run (half the low
+  end of §16's first reset, 12-20). Its tooltip gives this run's Patents and Patents per hour beside
+  the last run's. *Why:* "+1" after the first fold invited a reset worth almost nothing. The Patent
+  Office's "Reorganize..." button is always there. (The reset agent is re-deriving the formula: the
+  6 is a presentation threshold, not a balance number; move it to `RULES` with a derivation if the
+  calibration changes.)
+- 2026-10-20: **A narrow top bar (under 600 UI px: 1024x640) folds the Orders group's keys into
+  the Orders key** (Modules, Codex, Survey, Megaproject are tabs in its header), shows a compact
+  line-health chip (green and the problem colours that have any), drops the kW unit and the power
+  bar, and draws the Reorganize key as the reset icon and "+N". *Why:* at 1024x640 twelve keys and
+  the counters ran into each other and pushed the floor tabs off the bar, so the Factory floor had
+  no visible way back. Not a layout change: the same regions, fewer keys.
+- 2026-10-20: The Megaproject card shows "Stage 1" where "Great Drill, stage 1" does not fit
+  beside its percentage (its title already says Megaproject).
+
+Nothing here is derivative of a shipped game beyond what the UI redesign already lists.
