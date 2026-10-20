@@ -10,6 +10,10 @@ import type { AuditRec, AuditKind } from './audit';
 export interface Rect { x: number; y: number; w: number; h: number }
 export interface TipLine { text: string; color?: string }
 
+/** A tooltip placed around things it must not cover: `avoid` (the hovered tile and its
+ * neighbours, the tile the goal points at), staying inside `bounds` where it can. */
+export interface TipPlace { avoid: Rect[]; bounds?: Rect }
+
 export type PanelStyle = 'dark' | 'raised' | 'inset' | 'paper';
 
 export class UI {
@@ -31,6 +35,9 @@ export class UI {
   /** paints a tooltip's box when set (the app hands over its 9-slice art); else the kit's own */
   tipSkin: ((ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void) | null = null;
   tipWidth = 180;
+  /** where this frame's tooltip may not sit, and the room it should stay in (a world tooltip:
+   * clear of the hovered tile, its neighbours and the goal's tile; see `tip`) */
+  private tipPlace: TipPlace | null = null;
   time = 0;
   clicked = false;
   rclicked = false;
@@ -62,6 +69,7 @@ export class UI {
     this.time += dt;
     this.dt = dt;
     this.tooltip = null;
+    this.tipPlace = null;
     this.prevBlocks = this.blocks;
     this.ids = this.nextIds;
     this.nextIds = new Map();
@@ -218,9 +226,10 @@ export class UI {
     if (this.hover(x, y, w, h)) this.tip(typeof lines === 'string' ? [{ text: lines }] : lines, width);
   }
 
-  tip(lines: TipLine[], width = 180) {
+  tip(lines: TipLine[], width = 180, place: TipPlace | null = null) {
     this.tooltip = lines;
     this.tipWidth = width;
+    this.tipPlace = place;
   }
 
   bar(x: number, y: number, w: number, h: number, frac: number, col: string, bg: string = C.ink) {
@@ -269,6 +278,32 @@ export class UI {
     this.auditLayer = 'ui';
   }
 
+  /** A spot for a w x h tooltip that covers none of `avoid`: beside the avoided area on the
+   * cursor's row (right, then left), then above it, then below; inside `bounds` first, then
+   * anywhere on screen. Null when nothing fits (the default spot then). */
+  private placeTip(w: number, h: number, p: TipPlace): { x: number; y: number } | null {
+    const A = p.avoid;
+    if (!A.length) return null;
+    const near = A[0];
+    const L = near.x - 4 - w, R = near.x + near.w + 4, U = near.y - 4 - h, D = near.y + near.h + 4;
+    const cy = this.my - Math.floor(h / 2), cx = this.mx - Math.floor(w / 2);
+    const cand = [
+      { x: R, y: cy }, { x: L, y: cy }, { x: cx, y: U }, { x: cx, y: D },
+      { x: R, y: U + h - 8 }, { x: L, y: U + h - 8 }, { x: R, y: near.y + 8 }, { x: L, y: near.y + 8 },
+    ];
+    const hits = (x: number, y: number) => A.some((r) => x < r.x + r.w && x + w > r.x && y < r.y + r.h && y + h > r.y);
+    const screen = { x: 2, y: 2, w: this.w - 4, h: this.h - 4 };
+    for (const b of p.bounds ? [p.bounds, screen] : [screen])
+      for (const c of cand) {
+        // slide along the free axis to stay in bounds, then test
+        const x = Math.max(b.x, Math.min(c.x, b.x + b.w - w));
+        const y = Math.max(b.y, Math.min(c.y, b.y + b.h - h));
+        if (w > b.w || h > b.h) continue;
+        if (!hits(x, y)) return { x, y };
+      }
+    return null;
+  }
+
   private drawTip(lines: TipLine[]) {
     const maxW = this.tipWidth;
     const wrapped: { text: string; color: string }[] = [];
@@ -282,6 +317,8 @@ export class UI {
     if (y + h > this.h) y = this.h - h - 2;
     x = Math.max(2, x);
     y = Math.max(2, y);
+    const placed = this.tipPlace ? this.placeTip(w, h, this.tipPlace) : null;
+    if (placed) ({ x, y } = placed);
     this.fill(x + 2, y + 2, w, h, C.ink, 0.4);
     if (this.tipSkin) this.tipSkin(this.ctx, x, y, w, h);
     else {

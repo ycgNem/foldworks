@@ -58,10 +58,12 @@ const EFFECT_ICON: Record<string, NodeIcon> = {
   drone: { ui: 'build' }, offline: { ui: 'overnight' },
 };
 
-/** Short labels under the nodes (8 small capitals or fewer, so they fit a column at 1024x640). */
-const SHORT: Partial<Record<string, string>> = {
+/** Short labels under the nodes (8 small capitals or fewer, so they fit a column at 1024x640). A
+ * list is tried in order, the first that fits its column wins (the final round: "Overdrive" where
+ * there is room, "Overdrv" at 1024x640). */
+const SHORT: Partial<Record<string, string | string[]>> = {
   bellows: 'Bellows', starterLine: 'Miner', notebooks: 'Notes', copperDeeds: 'Copper', gearPatterns: 'Gears', gizmoPatent: 'Gizmo',
-  foldingPatent: 'Folding', grant: 'Grant', overdriveHabit: 'Overdrv', coalRights: 'Coal', steelCharter: 'Steel', glassNotes: 'Glass',
+  foldingPatent: 'Folding', grant: 'Grant', overdriveHabit: ['Overdrive', 'Overdrv'], coalRights: 'Coal', steelCharter: 'Steel', glassNotes: 'Glass',
   circuitPatent: 'Circuit',
   surveyCharter: 'Claims', widerBox: 'Wider', quickAudit: 'Quick', moreAuditors: 'Auditors', sideIntake: 'Intake',
   nestedBoxes: 'Nesting', freshDies: 'Dies',
@@ -72,8 +74,9 @@ const SHORT: Partial<Record<string, string>> = {
 const STOP = new Set(['a', 'an', 'the', 'of', 'on', 'by', 'and', 'in', 'to', 'for']);
 
 /** A node's label: its short name, or the first word of its name that says something. */
-function shortLabel(p: PatentDef): string {
+function shortLabel(p: PatentDef, room = Infinity): string {
   const s = SHORT[p.id];
+  if (Array.isArray(s)) return s.find((t) => smallWidth(t.toUpperCase()) <= room) ?? s[s.length - 1];
   if (s) return s;
   const words = p.name.replace(/[^A-Za-z' ]/g, ' ').split(/\s+/).filter((w) => w && !STOP.has(w.toLowerCase()));
   return words[0] ?? p.name;
@@ -165,7 +168,7 @@ export function patentsScreen(app: App, r: Rect) {
         ui.small(ps, a.x + N - pw + 3, a.y + N - 5, can ? C.gold : C.hull2);
       }
       // the label under it, clipped to its column
-      const lab = shortLabel(p).toUpperCase();
+      const lab = shortLabel(p, cw - 2).toUpperCase();
       const lx = a.x + N / 2, ly = a.y + N + 3;
       const cx0 = a.x + N / 2 - Math.floor((cw - 2) / 2);
       ui.clip(cx0, ly - 1, cw - 2, 7);

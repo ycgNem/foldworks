@@ -856,9 +856,12 @@ function blockedWhy(g: App['game'], e: FEnt, d: ModuleDesign, to: FEnt | null, i
 }
 
 /** The hover report for a thing on the Factory floor. */
-export function factoryReport(app: App, e: FEnt): { text: string; color?: string }[] {
+/** A report line, tagged with what it says so the hover report can pick the few that matter. */
+interface RLine { text: string; color?: string; role?: 'status' | 'cause' | 'od' | 'odReady' | 'rate' }
+
+export function factoryReport(app: App, e: FEnt): RLine[] {
   const g = app.game;
-  const out: { text: string; color?: string }[] = [{ text: fname(g, e), color: C.gold }];
+  const out: RLine[] = [{ text: fname(g, e), color: C.gold }];
   if (e.kind === 'trunk') {
     const r = g.routes.find((q) => q.tiles.includes(e));
     const cap = FACTORY.trunkSpeed * 60;
@@ -879,28 +882,49 @@ export function factoryReport(app: App, e: FEnt): { text: string; color?: string
   const d = g.design(e.design);
   if (!d) return out;
   const pct = Math.round(e.fAvg * 100);
-  if (e.state === 'work') out.push({ text: `Working: ${pct}% of full speed lately`, color: C.pipGreen });
-  else if (e.state === 'starved') out.push({ text: `Starved of ${ITEMS[e.why as ItemId]?.name.toLowerCase() ?? 'input'} (${pct}% lately): feed its back`, color: C.pipYellow });
+  if (e.state === 'work') out.push({ text: `Working: ${pct}% of full speed lately`, color: C.pipGreen, role: 'status' });
+  else if (e.state === 'starved') out.push({ text: `Starved of ${ITEMS[e.why as ItemId]?.name.toLowerCase() ?? 'input'} (${pct}% lately): feed its back`, color: C.pipYellow, role: 'status' });
   else if (e.state === 'blocked') {
     const r = g.routes.find((q) => q.from === e && !q.by);
     const item = e.why as ItemId;
     const iname = ITEMS[item]?.name.toLowerCase() ?? 'output';
-    out.push({ text: `Blocked: ${iname} backs up`, color: C.pipRed });
-    out.push({ text: blockedWhy(g, e, d, r?.to ?? null, item), color: C.pipRed });
-  } else out.push({ text: 'Idle', color: C.hull2 });
-  if (e.spill) out.push({ text: `Spilling ${ITEMS[e.spill as ItemId]?.name.toLowerCase() ?? 'a product'}: what its front leads to doesn't take it all. Trunk it somewhere that does, or fold a works that uses it`, color: C.pipYellow });
+    out.push({ text: `Blocked: ${iname} backs up`, color: C.pipRed, role: 'status' });
+    out.push({ text: blockedWhy(g, e, d, r?.to ?? null, item), color: C.pipRed, role: 'cause' });
+  } else out.push({ text: 'Idle', color: C.hull2, role: 'status' });
+  if (e.spill) out.push({ text: `Spilling ${ITEMS[e.spill as ItemId]?.name.toLowerCase() ?? 'a product'}: what its front leads to doesn't take it all. Trunk it somewhere that does, or fold a works that uses it`, color: C.pipYellow, role: 'cause' });
   if (g.done('overdrive')) {
     const od = e.od ?? 0, cool = e.cool ?? 0;
-    if (od > 0) out.push({ text: `Overdriven: ${RULES.overdriveMult.value}x for ${Math.ceil(od / TICK_RATE)} s more`, color: C.glow });
+    if (od > 0) out.push({ text: `Overdriven: ${RULES.overdriveMult.value}x for ${Math.ceil(od / TICK_RATE)} s more`, color: C.glow, role: 'od' });
     else if (cool > 0) out.push({ text: `Cooling: Overdrive again in ${Math.ceil(cool / TICK_RATE)} s`, color: C.hull2 });
-    else out.push({ text: `Overdrive: click to run it and every module trunked to it ${RULES.overdriveMult.value}x for ${RULES.overdriveSeconds.value} s`, color: C.glow });
+    else out.push({ text: `Overdrive: click to run it and every module trunked to it ${RULES.overdriveMult.value}x for ${RULES.overdriveSeconds.value} s`, color: C.glow, role: 'odReady' });
   }
-  out.push({ text: `Makes ${Object.entries(d.outs).map(([k, v]) => `${perMin(v ?? 0)} ${ITEMS[k as ItemId].name.toLowerCase()}`).join(', ')} a minute at full speed` });
+  out.push({ role: 'rate', text: `Makes ${Object.entries(d.outs).map(([k, v]) => `${perMin(v ?? 0)} ${ITEMS[k as ItemId].name.toLowerCase()}`).join(', ')} a minute at full speed` });
   if (Object.keys(d.ins).length) out.push({ text: `Takes ${Object.entries(d.ins).map(([k, v]) => `${perMin(v ?? 0)} ${ITEMS[k as ItemId].name.toLowerCase()}`).join(', ')} a minute at its back` });
   if (g.routes.some((q) => q.from === e && q.by && q.to)) out.push({ text: 'Byproducts leave by its side trunk', color: C.violet });
   out.push({ text: feedsDock(g, e) ? 'Feeds the Factory Dock' : 'Does not reach the Factory Dock yet', color: C.hull2 });
   if (d.depth === 2) out.push({ text: `Depth 2: folded from ${(d.fparts ?? []).filter((p) => p.kind === 'module').length} modules`, color: C.teal1 });
   out.push({ text: `Grade ${d.grade.letter}: rates x${d.grade.mult.toFixed(2)}`, color: GRADE_COL[d.grade.letter] });
+  return out;
+}
+
+/** The hover report on the Factory floor, kept short (the Milestone 5-6 final round): a module's
+ * name and grade, what it is doing, the one cause worth fixing, its rate; the rest is pinned by a
+ * click. The Docks, the Hopper, the Bay and trunks say little enough to show whole. */
+export function factoryHover(app: App, e: FEnt): { text: string; color?: string }[] {
+  const all = factoryReport(app, e);
+  const keys = e.kind === 'trunk' ? 'R rotates, X removes.' : e.kind === 'module' ? 'R rotates, X removes.' : '';
+  if (e.kind !== 'module') return keys ? [...all, { text: keys, color: C.hull1 }] : all;
+  const d = app.game.design(e.design);
+  const shown = [all[0], ...all.filter((l) => l.role === 'status' || l.role === 'od'), all.find((l) => l.role === 'cause'), all.find((l) => l.role === 'rate')].filter((l): l is RLine => !!l);
+  if (d) shown[0] = { text: `${all[0].text} (${d.grade.letter})`, color: all[0].color };
+  const ready = all.some((l) => l.role === 'odReady');
+  const more = all.length - shown.length - (ready ? 1 : 0);
+  const what = `the full report${more > 0 ? ` (+${more} line${more > 1 ? 's' : ''})` : ''}`;
+  const out: { text: string; color?: string }[] = shown.map((l) => ({ text: l.text, color: l.color }));
+  if (ready) {
+    out.push({ text: `Click: Overdrive it and every module trunked to it ${RULES.overdriveMult.value}x for ${RULES.overdriveSeconds.value} s`, color: C.glow });
+    out.push({ text: `While it cools, a click pins ${what}. ${keys}`, color: C.hull1 });
+  } else out.push({ text: `Click to pin ${what}. ${keys}`, color: C.hull1 });
   return out;
 }
 
