@@ -15,11 +15,12 @@ import { OK, no } from '../Game';
 import { Num } from '../../engine/num';
 import { TICK_RATE } from '../../engine/time';
 import { BUILD, isMachine, isPower, type EntKind } from '../../data/machines';
-import { FACTORY } from '../../data/land';
+import { ANNEX, FACTORY } from '../../data/land';
+import { annexPrice } from './annex';
 import { RULES } from '../../data/rules';
 import { RECIPES } from '../../data/recipes';
 import { ITEMS, itemName, type ItemId } from '../../data/items';
-import { megaStage, type MegaStage } from '../../data/megaprojects';
+import { MEGA, megaStage, type MegaStage } from '../../data/megaprojects';
 import { DX, DY, ccw, cw, newFEnt, opposite, type Dir, type FEnt, type ModuleDesign } from '../world';
 import { entsIn, inBox, gradedAudit } from './audits';
 import { claimRefusal, oresOf, placeClaimRefusal } from './claims';
@@ -107,9 +108,13 @@ export function foldAudited(g: Game, name: string | null, id?: number): ActResul
  * line again never resets the stamp price (DECISIONS.md, the Milestone 1-2 review). */
 export function productCopies(g: Game, d: ModuleDesign): number {
   const item = mainItem(d);
+  // Fresh Dies (a Patent, §19): only designs of the product graded as well as this one count, so a
+  // line refolded at a better grade than every earlier one starts its stamp price over
+  const fresh = prules(g).freshDies;
   let n = 0, folds = 0;
   for (const q of g.s.designs) {
     if (mainItem(q) !== item) continue;
+    if (fresh && q.grade.mult < d.grade.mult) continue;
     n += q.stamped;
     folds++;
   }
@@ -119,8 +124,7 @@ export function productCopies(g: Game, d: ModuleDesign): number {
 /** What the next copy of a design costs: bill x (1 + 0.5 n), linear (DESIGN.md §10 Stamp), n
  * counted over every design of the same product. */
 export function stampCost(g: Game, d: ModuleDesign): Num {
-  // Stamping Dies (a Patent, §19) lowers the growth; it stays linear
-  return Num.of(Math.round(d.bill * (1 + prules(g).stampGrowth * productCopies(g, d))));
+  return Num.of(Math.round(d.bill * (1 + RULES.stampGrowth.value * productCopies(g, d))));
 }
 
 /** Does the design hold an Act II building (directly, or in a module it was folded from)? */
@@ -196,7 +200,7 @@ function funfoldRefusal(g: Game, d: ModuleDesign): string | null {
   const b = d.box;
   for (let y = b.y; y < b.y + b.h; y++)
     for (let x = b.x; x < b.x + b.w; x++) {
-      if (!finb(x, y)) return 'Its box is off the floor';
+      if (!finb(g, x, y)) return 'Its box is off the floor';
       if (g.fentAt(x, y)) return `The box at ${b.x},${b.y} on the Factory floor is not empty: clear ${b.w}x${b.h} tiles there`;
       if (g.s.faudit && inBox(g.s.faudit.box, x, y)) return 'An audit is running there';
     }
@@ -234,7 +238,8 @@ export function unfold(g: Game, id: number): ActResult {
 
 // ------------------------------------------------------------------ the Factory floor: building
 
-export const finb = (x: number, y: number) => x >= 0 && y >= 0 && x < FACTORY.w && y < FACTORY.h;
+/** Is (x, y) on the Factory floor as it stands: the 12x8 and the annex blocks bought (§19)? */
+export const finb = (g: Game, x: number, y: number) => x >= 0 && y >= 0 && x < g.fw && y < g.fh;
 
 export function factoryOpen(g: Game) {
   return g.flag('factoryOpen');
@@ -242,7 +247,7 @@ export function factoryOpen(g: Game) {
 
 export function fplaceRefusal(g: Game, kind: 'module' | 'trunk', x: number, y: number, design?: number): string | null {
   if (!factoryOpen(g)) return 'The Factory floor opens with your first fold';
-  if (!finb(x, y)) return 'off the floor';
+  if (!finb(g, x, y)) return x >= g.fw && x < FACTORY.w + ANNEX.blocks * ANNEX.cols && y >= 0 && y < g.fh ? `Buy this annex block first (Upgrades: ${annexPrice(g)?.format() ?? ''} coin)` : 'off the floor';
   const lock = fauditLock(g, x, y);
   if (lock) return lock;
   const e = g.fentAt(x, y);
@@ -533,8 +538,13 @@ export function runModules(g: Game) {
       const n = Math.floor(e.inBuf[k] + 1e-9);
       if (n < 1) continue;
       e.inBuf[k] -= n;
-      if (e.kind === 'fbay') megaGive(g, e, k as ItemId, n);
-      else g.intake.push({ to: e.kind === 'fdock' ? 'dock' : 'hopper', item: k as ItemId, x: e.x + 1, y: e.y + 1, n: Num.of(n), floor: 'factory' });
+      if (e.kind === 'fbay') {
+        // the Bay never jams (the Milestone 5-6 review round): what its stage can't count now
+        // (a stage still shut, or a part it has in full) goes on to the Dock and sells; Drill
+        // Bits, which no Dock buys, are scrapped
+        const left = megaGive(g, e, k as ItemId, n);
+        if (left > 0 && !ITEMS[k as ItemId]?.refused) g.intake.push({ to: 'dock', item: k as ItemId, x: e.x + 1, y: e.y + 1, n: Num.of(left), floor: 'factory' });
+      } else g.intake.push({ to: e.kind === 'fdock' ? 'dock' : 'hopper', item: k as ItemId, x: e.x + 1, y: e.y + 1, n: Num.of(n), floor: 'factory' });
     }
   }
   // 4. once a second: statistics, the slice's end, and the Megaproject Bay arriving
@@ -551,8 +561,6 @@ export function runModules(g: Game) {
     }
     sliceEndCheck(g);
     if (g.done('greatDrill') && !f.ents.some((e) => e.kind === 'fbay')) placeBay(g);
-    const bay = f.ents.find((e) => e.kind === 'fbay');
-    if (bay) megaBearings(g, bay);
   }
 }
 
@@ -586,51 +594,47 @@ function placeBay(g: Game) {
 }
 
 /** Count whole items into the Megaproject's current stage; complete it when everything is in.
- * Each delivery earns its share of the stage's Patents for this run's Reorganize (DESIGN.md §19). */
-export function megaGive(g: Game, bay: FEnt, item: ItemId, n: number) {
+ * Each delivery earns its share of the stage's Patents for this run's Reorganize (DESIGN.md §19).
+ * Returns how many it could not count (the stage shut, or that part already in full). */
+export function megaGive(g: Game, bay: FEnt, item: ItemId, n: number): number {
   const st = megaStage(g.s.mega.stage);
-  if (!st) return;
+  if (!st || !megaOpen(g, st)) return n;
   const p = g.s.mega.progress;
   const want = st.wants[item] ?? 0;
   const have = p[item]?.toNumber() ?? 0;
   const counted = Math.max(0, Math.min(n, want - have));
-  p[item] = (p[item] ?? Num.ZERO).add(n);
+  if (counted <= 0) return n;
+  p[item] = (p[item] ?? Num.ZERO).add(counted);
   // offline progress measures the Bay's intake like the Docks' (DESIGN.md §12)
-  if (g.tally) g.tally.bay[item] = (g.tally.bay[item] ?? Num.ZERO).add(n);
-  if (counted > 0) g.s.megaPatents += (st.patents * counted) / want / megaParts(st);
-  g.emit({ type: 'megaGive', x: bay.x + 1, y: bay.y + 1, id: item, value: n, floor: 'factory' });
+  if (g.tally) g.tally.bay[item] = (g.tally.bay[item] ?? Num.ZERO).add(counted);
+  g.s.megaPatents += (st.patents * counted) / want / megaParts(st);
+  g.emit({ type: 'megaGive', x: bay.x + 1, y: bay.y + 1, id: item, value: counted, floor: 'factory' });
   megaCheck(g, bay);
+  return n - counted;
 }
 
-/** How many things a stage wants (its items, and the bearings as one more): each is an equal share
- * of its Patents. */
+/** Items some stage of the Great Drill wants: the Bay always takes these (it never jams). */
+const MEGA_ITEMS = new Set<string>(MEGA.flatMap((m) => Object.keys(m.wants)));
+
+/** How many things a stage wants: each item is an equal share of its Patents. */
 export function megaParts(st: MegaStage): number {
-  return Object.keys(st.wants).length + (st.bearings ? 1 : 0);
+  return Object.keys(st.wants).length;
 }
 
-/** Bearings handed from the stash to the Bay (stages 2 and 3), once a second. */
-function megaBearings(g: Game, bay: FEnt) {
-  const st = megaStage(g.s.mega.stage);
-  if (!st?.bearings) return;
-  const have = g.s.mega.bearings ?? 0;
-  const take = Math.min(st.bearings - have, Math.floor(g.s.meta.bearings.toNumber()));
-  if (take <= 0) return;
-  g.s.meta.bearings = g.s.meta.bearings.sub(take);
-  g.s.mega.bearings = have + take;
-  g.s.megaPatents += (st.patents * take) / st.bearings / megaParts(st);
-  g.emit({ type: 'megaGive', x: bay.x + 1, y: bay.y + 1, id: 'bearing', value: take, floor: 'factory' });
-  megaCheck(g, bay);
+/** Is the Bay open for this stage? Stages 2 and 3 open at a reputation with the Committee
+ * (DESIGN.md §19; reputation is kept through every reset). */
+export function megaOpen(g: Game, st: MegaStage | null): boolean {
+  return !!st && (g.s.orders.rep.committee ?? 0) >= (st.rep ?? 0);
 }
 
 function megaCheck(g: Game, bay: FEnt) {
   const st = megaStage(g.s.mega.stage);
   if (!st) return;
   const p = g.s.mega.progress;
-  const done = (Object.entries(st.wants) as [ItemId, number][]).every(([k, want]) => (p[k] ?? Num.ZERO).gte(want)) && (g.s.mega.bearings ?? 0) >= (st.bearings ?? 0);
+  const done = (Object.entries(st.wants) as [ItemId, number][]).every(([k, want]) => (p[k] ?? Num.ZERO).gte(want));
   if (done) {
     g.s.mega.stage = st.stage;
     g.s.mega.progress = {};
-    g.s.mega.bearings = 0;
     g.bump('megaStages');
     // stages 2 and 3 change the Workshop's ground (miners beside patches, deep deposits)
     g.layoutDirty = true;
@@ -645,12 +649,11 @@ export function acceptRoom(g: Game, to: FEnt, item: string): number {
   if (to.kind === 'fdock') return item === 'slag' || !ITEMS[item as ItemId]?.refused ? Infinity : 0;
   if (to.kind === 'fhopper') return item !== 'slag' || hopperWantsSlag(g) ? Infinity : 0;
   if (to.kind === 'fbay') {
-    const st = megaStage(g.s.mega.stage);
-    const want = st?.wants[item as ItemId];
-    if (!want) return 0;
-    // stages 2 and 3 start once their Raccoon Bearings are in: the bore head is the Committee's
-    if (st && st.bearings && (g.s.mega.bearings ?? 0) < st.bearings) return 0;
-    return Math.max(0, want - (g.s.mega.progress[item as ItemId]?.toNumber() ?? 0) - (to.inBuf[item] ?? 0));
+    // the Bay takes whatever some stage of the Drill is built from, always: what the stage now
+    // open can't count goes on to the Dock (megaGive), so the Bay floor never jams while a stage
+    // waits on the Committee's reputation or one part is in full (the Milestone 5-6 review round)
+    if (!MEGA_ITEMS.has(item)) return 0;
+    return Infinity;
   }
   if (to.kind !== 'module' || to.paused) return 0;
   const d = g.design(to.design);

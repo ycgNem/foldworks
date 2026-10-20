@@ -51,12 +51,25 @@ describe('sim purity', () => {
 });
 
 describe('every amount is a Num (CLAUDE.md)', () => {
-  // coin and item stocks: fields named like an amount must not be typed as a plain number
-  const AMOUNT = /\b(coin|earned|money|bank|banked|delivered|stock|stocks|amount)\s*[:?]\s*number\b/;
+  // coin and item stocks: fields named like an amount must not be typed as a plain number (or a
+  // record of plain numbers); the names the review round added: count, bearings, progress, inBuf,
+  // outBuf
+  const NAMES = 'coin|earned|money|bank|banked|delivered|stock|stocks|amount|count|bearings|progress|inBuf|outBuf';
+  const AMOUNT = new RegExp(`\\b(${NAMES})\\s*[:?]\\s*(number\\b|(Partial<)?Record<[^>]*,\\s*number>)`, 'g');
+  /** Fields that match a name but are not an amount that grows: each one bounded, read every tick
+   * (DECISIONS.md, the Milestone 5-6 review round: Num is for amounts that grow without bound). */
+  const BOUNDED: Record<string, string[]> = {
+    // a machine's input buffer (2 crafts' worth, §4), a module's in and out buffers (2-6 s of its
+    // rates, §11, fractional), a heap's slag (its capacity, 400) or a crate's count
+    'src/sim/world.ts': ['inBuf', 'inBuf', 'outBuf', 'count'],
+    // how many machines a stopped line stopped (a tally of buildings, not of items)
+    'src/sim/offline.ts': ['count', 'count'],
+  };
   for (const f of SIM) {
     it(`${slash(f)} keeps amounts in Num`, () => {
       const src = strip(fs.readFileSync(f, 'utf8'));
-      expect(src).not.toMatch(AMOUNT);
+      const found = [...src.matchAll(AMOUNT)].map((m) => m[1]).sort();
+      expect(found).toEqual([...(BOUNDED[slash(f)] ?? [])].sort());
     });
   }
 });

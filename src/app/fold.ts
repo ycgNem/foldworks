@@ -851,7 +851,7 @@ function blockedWhy(g: App['game'], e: FEnt, d: ModuleDesign, to: FEnt | null, i
     if (takes < offered * 0.98) return `${name} takes ${perMinW(takes)} of the ${perMinW(offered)}/min offered: a trunk feeds one module. Fold a works that takes ${perMinW(offered)}/min, or split the source.`;
     return `${name} takes ${perMinW(takes)}/min, as much as is offered, but its input store is full.`;
   }
-  if (to.kind === 'fbay') return 'The Megaproject Bay takes only what its stage wants.';
+  if (to.kind === 'fbay') return 'The Megaproject Bay takes only what the Great Drill is built from (steel and Drill Bits).';
   return `The trunk is full: it carries ${FACTORY.trunkSpeed * 60}/min. Give the module a trunk of its own.`;
 }
 

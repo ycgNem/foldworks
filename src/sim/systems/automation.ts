@@ -1,12 +1,15 @@
 // Automation (DESIGN.md §19, pillar 2): the chores of the first layer, handed to machines by the
 // Patent tree, and the Committee's Night Crew. Runs first in the tick, right after the input
 // commands, since each of these is an action a player would otherwise take:
-//  - the Builder Dragonflies build blueprint ghosts as coin allows (src/sim/blueprints.ts);
+//  - the Draughtsman unfolds the Patent Drawer's queued designs as land, research and coin allow
+//    (src/sim/drawer.ts);
 //  - the Shovel Frog clears one machine jammed on its byproduct every second;
 //  - the Lab Assistant picks research when none is selected;
 //  - the Order Clerk accepts the first offered order when none is active;
 //  - the Stamp Press keeps one spare copy of each design marked for it, the cheapest first;
-//  - the Night Crew (the Committee's reputation 2) takes a slag off every heap every 10 s.
+//  - the Night Crew (the Committee's reputation 2) takes a slag off every heap every 10 s, only
+//    while the player is away (the tab hidden, or the game closed: the offline run hides it), so
+//    Act I's slag lesson stands while anyone plays.
 // None of it goes through the command log: it is the sim's own rule, replayed the same way.
 import type { Game, ActResult } from '../Game';
 import { OK, no } from '../Game';
@@ -15,7 +18,7 @@ import { RULES } from '../../data/rules';
 import { RESEARCH, type ResearchId } from '../../data/research';
 import type { ItemId } from '../../data/items';
 import { prules } from '../patents';
-import { runDrones } from '../blueprints';
+import { runDraughtsman } from '../drawer';
 import { shovel } from './machines';
 import { availableNodes, selectResearch } from './research';
 import { offeredOrders } from './orders';
@@ -23,7 +26,7 @@ import { stamp, stampCost, stampRefusal } from './modules';
 
 export function runAutomation(g: Game) {
   const r = prules(g);
-  runDrones(g);
+  runDraughtsman(g);
   const t = g.s.tick;
   if (r.shovelEvery && t % (r.shovelEvery * TICK_RATE) === 0) {
     const m = g.machines.find((q) => q.state === 'blocked' && q.byItem && q.why === q.byItem && q.by >= RULES.outputCap.value);
@@ -45,7 +48,7 @@ export function runAutomation(g: Game) {
     want.sort((a, b) => stampCost(g, a).cmp(stampCost(g, b)));
     if (want[0]) stamp(g, want[0].id);
   }
-  if (r.nightCrew && t % (RULES.nightCrewSeconds.value * TICK_RATE) === 0) for (const h of g.logistics) if (h.kind === 'heap' && h.count > 0) h.count--;
+  if (r.nightCrew && !g.s.visible && t % (RULES.nightCrewSeconds.value * TICK_RATE) === 0) for (const h of g.logistics) if (h.kind === 'heap' && h.count > 0) h.count--;
 }
 
 /** The node the bank pays the largest share of (the cheapest, on a tie). */

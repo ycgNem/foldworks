@@ -9,7 +9,8 @@
 import { C, rgba } from '../data/palette';
 import { BUILD, UPGRADES, STORE_TABS, type BuildKind } from '../data/machines';
 import { RESEARCH } from '../data/research';
-import { CHUNKS, PATCHES, FACTORY, type ChunkDef } from '../data/land';
+import { ANNEX, CHUNKS, PATCHES, FACTORY, type ChunkDef } from '../data/land';
+import { annexPrice } from '../sim/systems/annex'; // the review round: the Factory annex
 import { ITEMS, type ItemId } from '../data/items';
 import { RULES } from '../data/rules';
 import { prules } from '../sim/patents';
@@ -300,6 +301,28 @@ function upgradeSlots(app: App): Slot[] {
       price: SHORT(c.cost), priceOk: afford, afford: ready && afford, locked: !ready, active: false, fresh: false, goal: app.hud.goalUi === 'land' && ready,
       card: { title: c.name, draw: (x, y) => landTile(app, c, x, y, 32), price: { text: `${c.cost.toLocaleString('en-US')} coin`, ok: afford }, rate: `${c.w}x${c.h} tiles of land`, lines: ready ? [{ text: 'More floor to build on; its deposits add ore claims too.' }, { text: 'Click to buy (or click it on the map).', color: C.hull1 }] : [{ text: `Research ${RESEARCH[c.requires!].name} first.`, color: C.teal1 }] },
       onClick: () => { if (ready && app.act({ k: 'land', id: c.id }).ok) app.lookAt(c.x + c.w / 2, c.y + c.h / 2); else if (!ready) app.refuse(`Research ${RESEARCH[c.requires!].name} first`); },
+    });
+  }
+  // the Factory annex (DESIGN.md §19, the Milestone 5-6 review round): the next block of Factory
+  // floor east of the Dock, at a linear price, once the Factory floor is open
+  const price = annexPrice(g);
+  if (price && g.flag('factoryOpen')) {
+    const ready = g.done(ANNEX.requires);
+    const afford = g.s.coin.gte(price);
+    const n = (g.s.annex ?? 0) + 1;
+    const tile = (x: number, y: number, size: number) => {
+      const k = size / 16;
+      app.ui.fill(x, y, size, size, C.hull0);
+      for (let i = 0; i < 4; i++) app.ui.fill(x + (i % 2) * 8 * k, y + Math.floor(i / 2) * 8 * k, 8 * k, 8 * k, i % 3 ? C.hull1 : C.hull0);
+      app.ui.fill(x + 7 * k, y + 2 * k, 2 * k, 12 * k, C.brass0);
+      app.ui.fill(x + 2 * k, y + 7 * k, 12 * k, 2 * k, C.brass0);
+    };
+    out.push({
+      id: 'annex_' + n, key: '',
+      draw: (x, y) => { app.ui.ctx.globalAlpha = ready ? 1 : 0.4; tile(x, y, 16); app.ui.ctx.globalAlpha = 1; },
+      price: SHORT(price.toNumber()), priceOk: afford, afford: ready && afford, locked: !ready, active: false, fresh: false, goal: false,
+      card: { title: `Factory annex, block ${n} of ${ANNEX.blocks}`, draw: (x, y) => tile(x, y, 32), price: { text: `${price.format()} coin`, ok: afford }, rate: `${ANNEX.cols}x${FACTORY.h} more Factory floor`, lines: ready ? [{ text: 'Two more columns of Factory floor east of the Dock: room for modules the Bay floor has no space for.' }, { text: 'Lost at Reorganize, like the land.', color: C.hull1 }, { text: 'Click to buy.', color: C.hull1 }] : [{ text: `Research ${RESEARCH[ANNEX.requires].name} first.`, color: C.teal1 }] },
+      onClick: () => { if (ready) app.act({ k: 'annex' }); else app.refuse(`Research ${RESEARCH[ANNEX.requires].name} first`); },
     });
   }
   return out;

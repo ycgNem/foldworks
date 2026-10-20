@@ -42,8 +42,7 @@ import { Gazette } from './gazette';
 import type { ScreenName } from './screens';
 import { TROPHY } from '../data/trophies';
 import { Bot, type Policy } from '../sim/bot';
-// Milestone 5: Reorganize, the Patent tree and blueprints (src/app/reorganize.ts, patents.ts, blueprints.ts)
-import { blueprintInput, blueprintPreview, blueprintHud, bpBoxOk, ghostClick } from './blueprints';
+// Milestone 5: Reorganize, the Patent tree and the Patent Drawer (src/app/reorganize.ts, patents.ts, drawer.ts)
 import { prules } from '../sim/patents';
 
 export type Mode =
@@ -54,10 +53,7 @@ export type Mode =
   | { k: 'fold' }
   /** the Factory floor: laying trunk belts, or placing a module design */
   | { k: 'ftrunk' }
-  | { k: 'fmodule'; design: number }
-  /** Milestone 5: dragging a box to save a blueprint; placing one as ghosts */
-  | { k: 'bpsave' }
-  | { k: 'bpplace'; id: number };
+  | { k: 'fmodule'; design: number };
 
 export type Panel = ScreenName | null;
 
@@ -397,7 +393,6 @@ export class App {
     this.renderer.drawScreenFx(ctx, this.uiScale);
     this.ui.begin(ctx, this.input, this.uiScale, dt, false);
     drawHud(this, dt);
-    blueprintHud(this); // Milestone 5
     this.ui.end();
     this.worldInput();
     this.audio.update(this.busyShare());
@@ -432,7 +427,7 @@ export class App {
         case 'place': {
           a.sfx(e.id === 'belt' ? 'belt' : 'place');
           // the first Miner: the first thing that works without a click (the first automation)
-          if (e.id === 'miner' && (e.floor ?? 'workshop') === 'workshop' && this.game.miners.length === 1 && !this.hud.firstMiner) {
+          if (e.id === 'miner' && (e.floor ?? 'workshop') === 'workshop' && this.game.miners.length === 1 && !this.hud.firstMiner && this.game.s.meta.runs === 0) { // first run only (M5-6 review round)
             this.hud.firstMiner = true;
             a.sfx('fanfare', 0.7);
             a.sfx('codex', 0.6, 1.2);
@@ -456,6 +451,9 @@ export class App {
           this.toast('Bellows bought!', 'The Hand Furnace runs itself now: an ingot every 2 s. Keep it fed with ore.', C.amber);
           break;
         case 'land': a.sfx('land'); this.toast('Land bought', `${CHUNKS.find((c) => c.id === e.id)?.name ?? 'New land'} is yours. Build on it.`, C.gold); break;
+        // the Milestone 5-6 review round: the Factory annex and the Patent Drawer
+        case 'annex': a.sfx('land'); this.toast('Annex block bought', `Block ${e.value ?? 1} of the Factory annex: 16 more tiles beside the Factory Dock, yours until the next Reorganize.`, C.gold, 'factory'); break;
+        case 'keep': a.sfx('stamp'); this.toast('Kept in the Patent Drawer', `${e.id ?? 'The design'}: it waits there through every Reorganize, ready to unfold whole onto its box.`, C.violet); break;
         case 'research': {
           a.sfx('research');
           const d = RESEARCH[e.id as keyof typeof RESEARCH];
@@ -482,8 +480,8 @@ export class App {
         case 'spark': a.sfx('spark'); break;
         case 'sparkGet': a.sfx('sparkGet'); if (e.id === 'vein') this.toast('Lucky Vein!', "This patch's miners run 3x for 60 s.", C.gold); break;
         case 'inspected': this.toast(`Inspector: grade ${e.id}`, `Score ${(e.d ?? 0).toFixed(2)}. Handed ${Num.of(e.value ?? 0).format()} items, a minute of this line's output, to research.`, C.gold); break;
-        case 'firstSlagJam': a.sfx('jam'); this.toast('Blocked: slag!', 'Smelting leaves slag, and it has nowhere to go. Click the machine to shovel it, or build a Slag Heap beside it.', C.pipRed); break;
-        case 'firstSale': this.toast('First sale!', 'The Dock buys what you make. Coin buys machines.', C.gold); break;
+        case 'firstSlagJam': a.sfx('jam'); if (this.game.s.meta.runs === 0) this.toast('Blocked: slag!', 'Smelting leaves slag, and it has nowhere to go. Click the machine to shovel it, or build a Slag Heap beside it.', C.pipRed); break;
+        case 'firstSale': if (this.game.s.meta.runs === 0) this.toast('First sale!', 'The Dock buys what you make. Coin buys machines.', C.gold); break;
         case 'orderAccept': a.sfx('open'); break;
         case 'trophy': {
           a.sfx('milestone', 0.7);
@@ -549,7 +547,7 @@ export class App {
           } else this.toast('Folded!', 'The line is a module now: one tile with its rates. Open Modules (I) or the Factory floor (Tab) to place it.', C.gold, 'module');
           break;
         case 'firstFold':
-          this.toast('The Factory floor is open', 'Press Tab or the Factory tab to go there. Modules run as rates; trunk belts carry 480 a minute.', C.gold, 'factory');
+          if (this.game.s.meta.runs === 0) this.toast('The Factory floor is open', 'Press Tab or the Factory tab to go there. Modules run as rates; trunk belts carry 480 a minute.', C.gold, 'factory');
           break;
         case 'stamp': a.sfx('stamp'); break;
         case 'unfold': a.sfx('place'); break;
@@ -655,7 +653,7 @@ export class App {
         if (kind) this.pickBuild(kind);
       }
     }
-    if (this.floor === 'factory') this.renderer.clampCam(FACTORY.w, FACTORY.h);
+    if (this.floor === 'factory') this.renderer.clampCam(this.game.fw, this.game.fh);
     else this.renderer.clampCam(this.game.W, this.game.H);
   }
 
@@ -679,7 +677,7 @@ export class App {
   /** Which edges of the floor view have more floor (or town) beyond them: for the HUD's arrows. */
   panHints(): { l: boolean; r: boolean; u: boolean; d: boolean } {
     const r = this.renderer;
-    const fw = this.floor === 'factory' ? FACTORY.w : this.game.W, fh = this.floor === 'factory' ? FACTORY.h : this.game.H;
+    const fw = this.floor === 'factory' ? this.game.fw : this.game.W, fh = this.floor === 'factory' ? this.game.fh : this.game.H;
     const a = r.screenToWorld(r.view.x, r.view.y), b = r.screenToWorld(r.view.x + r.view.w, r.view.y + r.view.h);
     return { l: a.x > 4, r: b.x < fw * TILE - 4, u: a.y > -TOWN_ROWS * TILE + 4, d: b.y < fh * TILE - 4 };
   }
@@ -784,11 +782,11 @@ export class App {
     const g = this.game;
     const cam = this.renderer.cam;
     if (this.floor === 'factory') {
-      const z = this.fillZoom((FACTORY.w + 1) * TILE, (FACTORY.h + 1) * TILE);
+      const z = this.fillZoom((this.game.fw + 1) * TILE, (this.game.fh + 1) * TILE);
       if (reset || cam.zoom > z) cam.zoom = z;
-      cam.x = (FACTORY.w / 2) * TILE;
-      this.frameRows(0, FACTORY.h * TILE);
-      this.renderer.clampCam(FACTORY.w, FACTORY.h);
+      cam.x = (this.game.fw / 2) * TILE;
+      this.frameRows(0, this.game.fh * TILE);
+      this.renderer.clampCam(this.game.fw, this.game.fh);
       return;
     }
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -815,8 +813,7 @@ export class App {
       drag: this.floor === 'workshop' && this.drag ? this.drag.path : null,
       remove: this.mode.k === 'remove',
       selected: this.selected,
-      box: this.foldDrag && this.floor === 'workshop' ? { ...this.foldDrag, ok: this.mode.k === 'bpsave' ? bpBoxOk(this) : !foldRefusal(this.game, this.dragBox()!) } : null,
-      bp: blueprintPreview(this), // Milestone 5
+      box: this.foldDrag && this.floor === 'workshop' ? { ...this.foldDrag, ok: !foldRefusal(this.game, this.dragBox()!) } : null,
       flow: this.flowOverlay,
       floor: this.floor,
       factory: {
@@ -848,7 +845,7 @@ export class App {
     const t = this.renderer.screenToTile(sx, sy);
     // the tile the button went down on (drags start there even if the mouse has moved on)
     const pt = this.renderer.screenToTile(inp.mouse.px * k, inp.mouse.py * k);
-    const inFloor = this.floor === 'factory' ? t.x >= 0 && t.y >= 0 && t.x < FACTORY.w && t.y < FACTORY.h : g.inb(t.x, t.y);
+    const inFloor = this.floor === 'factory' ? t.x >= 0 && t.y >= 0 && t.x < g.fw && t.y < g.fh : g.inb(t.x, t.y);
     this.hud.hoverTile = !overUI && inFloor ? t : null;
     this.townTip = !overUI && !inFloor && this.mouseIn ? this.renderer.townAt(sx, sy) : null;
 
@@ -874,7 +871,6 @@ export class App {
 
     if (this.floor === 'factory') return this.factoryInput(t, overUI, pt);
     if (this.mode.k === 'fold') return this.foldInput(t, overUI, pt);
-    if (blueprintInput(this, t, overUI, pt)) return; // Milestone 5: the blueprint tools
     if (this.mode.k === 'build' && this.mode.kind === 'belt') return this.beltDrag(t, overUI, pt);
     if (!inp.mouse.pressed[0] || overUI) return;
     if (!g.inb(t.x, t.y)) {
@@ -895,7 +891,6 @@ export class App {
       if (ch) this.act({ k: 'land', id: ch.id });
       return;
     }
-    if (ghostClick(this, t.x, t.y)) return; // Milestone 5: a click on a ghost builds it
     const e = g.entAt(t.x, t.y);
     const r = g.act({ k: 'click', x: t.x, y: t.y });
     if (r.ok) return;
@@ -929,11 +924,11 @@ export class App {
   private factoryInput(t: { x: number; y: number }, overUI: boolean, pt: { x: number; y: number }) {
     const inp = this.input;
     const g = this.game;
-    const inFloor = t.x >= 0 && t.y >= 0 && t.x < FACTORY.w && t.y < FACTORY.h;
+    const inFloor = t.x >= 0 && t.y >= 0 && t.x < this.game.fw && t.y < this.game.fh;
     if (this.mode.k === 'fold') {
       // a nested fold: drag a box over a group of modules (DESIGN.md §18)
-      const pIn = pt.x >= 0 && pt.y >= 0 && pt.x < FACTORY.w && pt.y < FACTORY.h;
-      const cx = Math.max(0, Math.min(FACTORY.w - 1, t.x)), cy = Math.max(0, Math.min(FACTORY.h - 1, t.y));
+      const pIn = pt.x >= 0 && pt.y >= 0 && pt.x < this.game.fw && pt.y < this.game.fh;
+      const cx = Math.max(0, Math.min(this.game.fw - 1, t.x)), cy = Math.max(0, Math.min(this.game.fh - 1, t.y));
       if (inp.mouse.pressed[0] && !overUI && pIn) this.foldDrag = { x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
       if (this.foldDrag && inp.mouse.down[0]) { this.foldDrag.x1 = cx; this.foldDrag.y1 = cy; }
       if (this.foldDrag && !inp.mouse.down[0]) {
@@ -944,7 +939,7 @@ export class App {
       return;
     }
     if (this.mode.k === 'ftrunk') {
-      const pIn = pt.x >= 0 && pt.y >= 0 && pt.x < FACTORY.w && pt.y < FACTORY.h;
+      const pIn = pt.x >= 0 && pt.y >= 0 && pt.x < this.game.fw && pt.y < this.game.fh;
       if (inp.mouse.pressed[0] && !overUI && pIn) this.drag = { x0: pt.x, y0: pt.y, path: [{ x: pt.x, y: pt.y, rot: this.rot }] };
       if (this.drag && inp.mouse.down[0]) this.drag.path = this.lPath(this.drag.x0, this.drag.y0, t.x, t.y);
       if (this.drag && !inp.mouse.down[0]) {

@@ -1,12 +1,12 @@
 // Act II pace tests (DESIGN.md §16, §18 Pacing targets; ROADMAP.md Milestone 4): the Act I planner
 // plays to the slice end (the Gizmo Festival), then the honest Act II policy (src/sim/bot2.ts)
 // plays on to 5 h. Every target is measured from the slice end S (about 0:31), not the clock.
-// Measured on seeds 1000 and 8919 (bot2 at this commit):
-//   S 0:30-0:31; steel S+18-19 min; power S+25-27; circuits S+55; Concrete fold S+65-67;
-//   Drill works fold S+1:56; the Great Drill's stage 1 S+3:22-3:37 (3:53-4:08);
-//   longest stretch without a decision 5.8-6.0 min; at most 4 clicks in any second;
-//   Overdrive (Workshop machines and Factory groups) about 3,600 clicks;
-//   rule 4 active/idle over 2:00-2:30 1.80-1.84; lifetime coin 4 h 1.80M, 5 h 2.05-2.07M.
+// Measured on seeds 1000 and 8919 (bot2 at the Milestone 5-6 review round, with the annex):
+//   S 0:30-0:31; steel S+18-19 min; power S+25-27; circuits S+55; Concrete fold S+65-66;
+//   Drill works fold S+1:53-1:54; the Great Drill's stage 1 S+3:15 (3:45-3:46);
+//   rule 2 (Sparks not counted) 9.2-9.3 min, 4.8-5.6 with them; at most 4 clicks in any second;
+//   rule 1 (goals reached) 11.0-12.4 min before the Bay floor, 37.5-42.5 while the Bay fills;
+//   rule 4 active/idle over 2:00-2:30 1.72-1.76; the preview 7 at 2 h, 11-12 at 3 h, 15 at 4-5 h.
 import { describe, expect, it } from 'vitest';
 import { act2Run, earnedAt, idleEarned, longestGap, patentsAt, hmm, SEEDS2, RULE4_AT, RULE4_FOR } from './pace-act2-helpers';
 
@@ -46,10 +46,14 @@ describe('Act II pacing (bot2 after the planner)', () => {
         expect(r.at.greatDrill1! - r.handover).toBeLessThanOrEqual(4 * 3600);
       }, T);
 
-      it('rule 2: no dead air longer than 15 min between decisions, slice end to 5 h', () => {
+      it('rule 2: no dead air longer than 15 min between decisions, slice end to 5 h (Sparks not counted)', () => {
         const r = act2Run(seed);
-        const gap = longestGap(r.decisions, r.handover, 5 * 3600);
-        console.log(`seed ${seed}: longest gap ${(gap.gap / 60).toFixed(1)} min at ${hmm(gap.at)}`);
+        // a Spark click is a reflex, not a decision (the Milestone 5-6 review round): rule 2 is read
+        // off the build, research, order and fold decisions alone
+        const own = r.decisions.filter((_, i) => r.what[i] !== 'spark');
+        const gap = longestGap(own, r.handover, 5 * 3600);
+        const withSparks = longestGap(r.decisions, r.handover, 5 * 3600);
+        console.log(`seed ${seed}: longest gap without Sparks ${(gap.gap / 60).toFixed(1)} min at ${hmm(gap.at)} (with them ${(withSparks.gap / 60).toFixed(1)})`);
         expect(gap.gap).toBeLessThanOrEqual(15 * MIN);
       }, T);
 
@@ -87,7 +91,8 @@ describe('Act II pacing (bot2 after the planner)', () => {
     });
   }
 
-  // Not met yet, measured and reported: while the Bay fills (about 1.5 h) the goals are the last
-  // research nodes and the stage itself, 25-40 min apart; §16 rule 1 wants one within 3 min.
+  // Not met yet, measured and reported: while the Bay fills (about 1.5 h) the goals the bot reaches
+  // are Shiny Things, Nested Boxes' research, the nested Gizmo works II and the stage, 37-43 min
+  // apart at the longest (DESIGN.md §16); §16 rule 1 wants one within 3 min.
   it.todo('rule 1: the next goal always within 3 min of reach while the Bay fills');
 });

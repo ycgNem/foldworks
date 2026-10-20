@@ -310,8 +310,9 @@ export async function dragTiles(page, [[x0, y0], [x1, y1]]) {
   await page.mouse.move(p1.x, p1.y, { steps: 4 });
 }
 
-/** Runs in the page (Milestone 5): the Reorganize card, the Patent Office, the Blueprint Book,
- * ghosts on the Workshop, the Committee's tab and the Great Drill's stage 2. */
+/** Runs in the page (Milestone 5; the Milestone 5-6 review round): the Reorganize card (new, better
+ * and on-file lines), the Patent Office, the Patent Drawer with a kept design selected, the Factory
+ * annex, the Committee's tab and the Great Drill's stage 2 waiting on the Committee. */
 export async function m5Setup(state) {
   const a = window.__app;
   a.newGame(13);
@@ -325,28 +326,32 @@ export async function m5Setup(state) {
   g.s.research.done = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding', 'coalSeams', 'steelmaking', 'steamPower', 'refining', 'greatDrill'];
   g.s.flags.push('factoryOpen', 'factorySeen', 'sliceEnd', 'ordersSeen');
   const gr = (letter, mult) => ({ letter, score: 0.8, u: 0.85, w: 1, c: 0.8, mult });
-  const D = (id, name, outs, grade) => ({ id, name, box: { x: 16, y: 1, w: 4, h: 3 }, parts: [], ins: {}, outs, grade, bill: 300, stamped: 0, spare: 1 });
+  const P = (kind, dx, dy, rot = 0, recipe = null) => ({ kind, dx, dy, rot, recipe });
+  const D = (id, name, outs, grade, ins = {}, parts = []) => ({ id, name, box: { x: 16, y: 1, w: 4, h: 3 }, parts, ins, outs, grade, bill: 300, stamped: 0, spare: 1 });
   g.s.designs = [
-    D(1, 'Iron plates', { ironPlate: 0.6 }, gr('S', 1.25)), D(2, 'Gizmo works', { gizmo: 0.3 }, gr('A', 1.1)),
+    D(1, 'Iron plates', { ironPlate: 0.6 }, gr('S', 1.25), {}, [P('miner', 0, 0), P('smelter', 1, 0, 0, 'smeltIron'), P('press', 2, 0, 0, 'pressPlate'), P('belt', 3, 0)]),
+    D(2, 'Gizmo works', { gizmo: 0.3 }, gr('A', 1.1), { ironIngot: 0.6, copperWire: 0.6 }),
     D(3, 'Copper wire', { copperWire: 1 }, gr('B', 1)), D(4, 'Steel', { steel: 0.4 }, gr('A', 1.1)), D(5, 'Gears', { gear: 0.5 }, gr('C', 0.9)),
   ];
   g.s.nextDesign = 6;
   g.s.megaPatents = 2.4;
-  g.s.mega = { stage: 1, progress: { drillBit: N.of(40), steel: N.of(210) }, bearings: 3 };
+  g.s.mega = { stage: 1, progress: { drillBit: N.of(40), steel: N.of(210) } };
+  g.s.orders.rep.committee = 2;
   const m = g.s.meta;
-  m.history = [{ run: 1, ticks: 20 * 3600 * 4.6, patents: 19, earned: N.of(2.1e6), peakPerMin: 13300 }];
+  m.history = [{ run: 1, ticks: 20 * 3600 * 4.2, patents: 15, earned: N.of(2.1e6), peakPerMin: 13300 }];
   m.runs = 1;
   m.patents = N.of(9);
-  m.patentsEarned = N.of(19);
+  m.patentsEarned = N.of(15);
   m.nodes = ['bellows', 'starterLine', 'notebooks', 'surveyCharter', 'shovelFrog', 'overdriveHabit'];
-  m.bearings = N.of(2);
-  const P = (kind, dx, dy, rot = 0, recipe = null) => ({ kind, dx, dy, rot, recipe });
-  m.blueprints = [
-    { id: 1, name: 'Iron plate line', w: 5, h: 3, parts: [P('miner', 0, 0), P('smelter', 1, 0, 0, 'smeltIron'), P('press', 2, 0, 0, 'pressPlate'), P('belt', 3, 0), P('belt', 4, 0), P('belt', 1, 1, 1), P('heap', 1, 2)] },
-    { id: 2, name: 'Gizmo works with a very long name indeed', w: 7, h: 4, parts: [P('assembler', 0, 0, 0, 'gizmo'), P('assembler', 0, 2, 0, 'gizmo'), ...[1, 2, 3, 4, 5, 6].map((x) => P('belt', x, 1))] },
-    { id: 3, name: 'Wire', w: 4, h: 1, parts: [P('miner', 0, 0), P('smelter', 1, 0, 0, 'smeltCopper'), P('press', 2, 0, 0, 'drawWire'), P('belt', 3, 0)] },
+  // the record on file: Gizmos as now (on file), wire below this run's (better), plates new
+  m.patented = { gizmo: { value: 2.2, steps: 2, grade: 'A', tier: 0, run: 1 }, copperWire: { value: 1.6, steps: 2, grade: 'D', tier: 0, run: 1 }, steel: { value: 2.2, steps: 2, grade: 'A', tier: 0, run: 1 } };
+  m.drawer = [
+    { id: 1, name: 'Iron plate line', x: 2, y: 11, w: 5, h: 3, parts: [P('miner', 0, 0), P('smelter', 1, 0, 0, 'smeltIron'), P('press', 2, 0, 0, 'pressPlate'), P('belt', 3, 0), P('belt', 4, 0), P('belt', 1, 1, 1), P('heap', 1, 2)], product: 'ironPlate', grade: 'S', rate: 0.6, run: 1 },
+    { id: 2, name: 'Gizmo works with a very long name indeed', x: 4, y: 3, w: 7, h: 4, parts: [P('assembler', 0, 0, 0, 'gizmo'), P('assembler', 0, 2, 0, 'gizmo'), ...[1, 2, 3, 4, 5, 6].map((x) => P('belt', x, 1))], product: 'gizmo', grade: 'A', rate: 0.3, run: 1 },
+    { id: 3, name: 'Wire', x: 12, y: 0, w: 4, h: 1, parts: [P('miner', 0, 0), P('smelter', 1, 0, 0, 'smeltCopper'), P('press', 2, 0, 0, 'drawWire'), P('belt', 3, 0)], product: 'copperWire', grade: 'B', rate: 1, run: 1 },
   ];
-  m.nextBlueprint = 4;
+  m.nextKept = 4;
+  m.queue = [3];
   a.renderer.ground = null;
   a.setFloor('workshop', true);
   a.fitCamera(true);
@@ -356,23 +361,29 @@ export async function m5Setup(state) {
   if (state === 'patents') a.panel = 'patents';
   // a node you can buy, hovered: its numbers, what it changes this run, its price
   if (state === 'patentsHover') { a.panel = 'patents'; return { hoverId: 'patent_quickAudit' }; }
-  if (state === 'blueprints') { g.s.ghosts = [{ kind: 'press', x: 9, y: 4, rot: 0, recipe: null }]; a.panel = 'blueprints'; }
-  if (state === 'ghosts') {
-    // ghosts already laid (one ready, two waiting for coin) and a blueprint following the mouse
-    g.s.coin = N.of(60);
-    for (const [kind, x, y] of [['smelter', 8, 6], ['press', 9, 6], ['belt', 10, 6]]) g.s.ghosts.push({ kind, x, y, rot: 0, recipe: null });
-    a.setMode({ k: 'bpplace', id: 3 });
-    return { hover: [8, 9] };
+  if (state === 'drawer') {
+    a.panel = 'drawer';
+    (await import('/src/app/drawer.ts')).selectDrawer({ k: 'kept', id: 1 });
+  }
+  if (state === 'annex') {
+    // two annex blocks bought, a Gizmo chain in the first, the third block for sale beyond the wall
+    g.s.annex = 2;
+    g.rebuildFactory();
+    for (const [x, y, rot] of [[13, 1, 2], [12, 0, 2], [11, 0, 1], [12, 2, 2]]) g.act({ k: 'ftrunk', x, y, rot });
+    for (const [d, x, y, rot] of [[2, 12, 1, 2], [3, 13, 0, 1], [1, 13, 2, 3]]) g.act({ k: 'fplace', design: d, x, y, rot });
+    a.setFloor('factory', true);
+    a.fitCamera(true);
   }
   if (state === 'committee') {
     a.panel = 'orders';
     (await import('/src/app/orders.ts')).cheerFor(a, 'committee', 0);
   }
+  // stage 1 stands; stage 2 waits on the Committee's reputation 3 (now 2)
   if (state === 'mega2') { a.panel = 'mega'; a.gradeAt = a.ui.time - 30; }
   return null;
 }
 
-export const M5 = ['reorg', 'patents', 'patentsHover', 'blueprints', 'ghosts', 'committee', 'mega2'];
+export const M5 = ['reorg', 'patents', 'patentsHover', 'drawer', 'annex', 'committee', 'mega2'];
 
 const SIZES = [[1280, 720], [1920, 1080], [1024, 640]];
 // each state: a function run in the page that puts the app there (frozen); it may return

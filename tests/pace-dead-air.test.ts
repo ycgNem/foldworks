@@ -31,4 +31,9 @@ describe('pace: no dead air (§13 check 10)', () => {
   it('no stretch longer than 3 min without a decision (mean of the longest stretch per seed)', () => {
     expect(s.mean).toBeLessThanOrEqual(180);
   });
+  // the tail, as §13 check 10 words it since the Milestone 5-6 review round: 9 seeds in 10 never
+  // wait over 5 min (measured p90 243 s, the worst 244 s: saving for a land chunk after a heap)
+  it('no stretch longer than 5 min on 9 seeds in 10 (p90 of the longest stretch per seed)', () => {
+    expect(s.p90).toBeLessThanOrEqual(300);
+  });
 });

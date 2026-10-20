@@ -13,6 +13,7 @@ import { ICON, textWidth, wrapText, ellipsize } from '../ui/font';
 import { itemIcon, sheet, hasArt } from '../render/sprites';
 import { bayFrame, megaFrac, mainOutput } from '../render/factory';
 import { claimsHeld, claimsUsed, claimPrice, copiesOf, oresOf } from '../sim/systems/claims';
+import { megaOpen } from '../sim/systems/modules';
 import { Num } from '../engine/num';
 import { frame, card, button, bar, section } from './chrome';
 import { screenHeader, icon, fmt, perMin, slamScale, rays, cells } from './widgets';
@@ -363,6 +364,17 @@ function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, x: nu
   const feeds = bayFeeds(app);
   const end = inner.y + inner.h - 17;
   let yy = inner.y + 2;
+  // the Milestone 5-6 review round: stages 2 and 3 open at the Committee's reputation (kept through
+  // every reset); until then the Bay passes its steel on to the Dock and scraps its bits, and the
+  // gate says so plainly
+  if (stage.rep && !megaOpen(g, stage)) {
+    const rep = g.s.orders.rep.committee ?? 0;
+    ui.fill(inner.x, yy, inner.w, 20, C.ink);
+    ui.fill(inner.x + 1, yy + 1, inner.w - 2, 18, C.shadow);
+    ui.text(`${ICON.lock} Stage ${stage.stage} opens at the Committee's reputation ${stage.rep} (now ${rep})`, inner.x + 5, yy + 7, C.violet);
+    ui.hint(inner.x, yy, inner.w, 20, `Fill the Committee's odd orders (Orders, the raccoons' tab): each is +1 reputation, kept through every reset. Until then the Bay counts nothing for stage ${stage.stage}: its steel goes on to the Dock and sells, its bits are scrapped.`, 190);
+    yy += 24;
+  }
   const ents = Object.entries(stage.wants) as [ItemId, number][];
   const rowH = Math.max(24, Math.min(30, Math.floor((inner.h - 150) / ents.length)));
   let slowest = 0;
@@ -381,18 +393,6 @@ function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, x: nu
     ui.text(f >= 1 ? ICON.check : `${Math.floor(f * 100)}%`, inner.x + inner.w, yy + 10, f >= 1 ? C.leaf : C.hull3, { align: 'right' });
     if (f < 1) slowest = Math.max(slowest, rate ? (want - have) / rate : Infinity);
     ui.hint(inner.x, yy, inner.w, rowH, rate && f < 1 ? `${perMin(rate)} a minute arriving: about ${eta((want - have) / rate)} to go.` : f >= 1 ? 'Enough of this one.' : `Nothing brings ${ITEMS[it].name.toLowerCase()} to the Bay yet: trunk a module making it into the Bay.`, 170);
-    yy += rowH;
-  }
-  // Milestone 5: stages 2 and 3 want the Committee's Raccoon Bearings first, from the stash
-  if (stage.bearings) {
-    const have = g.s.mega.bearings ?? 0, f = have / stage.bearings;
-    ui.fill(inner.x, yy, 20, 20, C.ink);
-    ui.fill(inner.x + 1, yy + 1, 18, 18, f >= 1 ? C.moss : C.violet);
-    ui.text(ICON.cog, inner.x + 7, yy + 6, C.bone);
-    ui.text('Raccoon Bearings', inner.x + 25, yy, f >= 1 ? C.leaf : C.bone);
-    ui.text(`${have} / ${stage.bearings}`, inner.x + inner.w, yy, f >= 1 ? C.leaf : C.gold, { align: 'right' });
-    bar(ui, inner.x + 25, yy + 10, inner.w - 25 - 28, 8, f, f >= 1 ? C.leaf : C.violet);
-    ui.hint(inner.x, yy, inner.w, rowH, f >= 1 ? 'The bore head is in.' : `The Committee pays bearings for its odd orders (${g.s.meta.bearings.format()} in the stash). The Bay takes nothing else until they are in.`, 170);
     yy += rowH;
   }
   // the whole stage: a big meter with quarter ticks
@@ -448,6 +448,16 @@ function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, x: nu
       xx += 13 + ui.text(s2, xx + 10, yy, C.bone);
     }
     ui.text(`in an Assembler, ${bit.time} s`, xx + 2, yy, C.hull2);
+    yy += 11;
+  }
+  // the Milestone 5-6 review round: the drill-bit modules' rate and what holds them back
+  const bitMods = g.s.factory.ents.filter((e) => e.kind === 'module' && mainOutput(g, e.design) === 'drillBit');
+  if (bitMods.length && yy + 10 <= end) {
+    const rate = bitMods.reduce((t, e) => t + (g.design(e.design)?.outs.drillBit ?? 0) * e.fAvg, 0);
+    const slow = bitMods.find((e) => e.state !== 'work' && e.why);
+    const lim = slow ? `${slow.state === 'blocked' ? 'blocked by' : 'short of'} ${ITEMS[slow.why as ItemId]?.name.toLowerCase() ?? slow.why}` : 'running flat out';
+    ui.text(`Drill bits: ${perMin(rate)}/min, ${lim}`, inner.x, yy, slow ? C.pipYellow : C.leaf);
+    ui.hint(inner.x, yy, inner.w, 10, `${bitMods.length} drill-bit module${bitMods.length === 1 ? '' : 's'} on the floor, at their recent run fraction. ${slow ? `The slowest is ${lim}: feed it more of that.` : 'Nothing holds them back.'}`, 180);
     yy += 11;
   }
   const flowing = Object.entries(feeds) as [ItemId, number][];
@@ -583,6 +593,7 @@ function complete(app: App, x: number, y: number, w: number, h: number, celebrat
     ui.text(v, inner.x + inner.w - 6, yy, C.gold, { align: 'right' });
     yy += 11;
   }
-  if (yy + 20 <= inner.y + inner.h - 16) ui.para('Stages 2 and 3 arrive with later floors.', inner.x + 6, yy + 2, inner.w - 12, C.teal1);
+  const nx = MEGA.find((m) => m.stage === g.s.mega.stage + 1);
+  if (nx && yy + 20 <= inner.y + inner.h - 16) ui.para(`Stage ${nx.stage} opens at the Committee's reputation ${nx.rep ?? 0} (now ${g.s.orders.rep.committee ?? 0}).`, inner.x + 6, yy + 2, inner.w - 12, C.teal1);
   if (button(ui, 'megaOk', inner.x + Math.floor(inner.w / 2) - 55, inner.y + inner.h - 15, 110, 14, 'Magnificent', { gold: true, pulse: celebrate })) app.panel = null;
 }

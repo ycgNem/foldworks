@@ -1038,3 +1038,184 @@ Nothing here is derivative of a shipped game beyond what the UI redesign already
   animated by hand (shimmer, lantern flicker, the belt). `drawTitle` draws it at the smallest whole
   scale that covers the screen and places the logo, tagline and buttons in scene coordinates on
   its calm areas. 3 PixelLab generations (balance 2,021.90 → 2,018.90).
+
+## The Milestone 5–6 review round: the reset layer (2026-10-20)
+
+The idle-critic and the pacing auditor found that Milestone 5's reset paid again, every run, for
+what was already paid: a reset loop at the slice end beat the designed run's Patents per hour.
+They also found:
+
+- Raccoon Bearings were a currency with one sink.
+- The blueprint drone was a copy of Factorio's.
+- The Bay floor's long wait had nothing to do.
+
+The lead decided the fixes below. What was built and measured is in DESIGN.md §19.
+
+- 2026-10-20: **Patents are filed, not re-earned** (the lead's decision 1).
+  - The Patent Office keeps each product's best value on file across every run (`meta.patented`).
+    A Reorganize pays 0.5 for each unit of the **rise** over what is on file.
+  - Value = steps folded × grade multiplier × rate tier.
+    - *Steps folded* are the recipe steps the box holds: the product's depth less the deepest item
+      its ports take in, at least 1. A Drill Bit assembler fed from outside is 2 steps, not 5.
+    - The *rate tier* multiplies by (1 + 0.5 t). There is one tier for each ×4 of scale, counted
+      in Mk1 machines' worth (a Mk2's speed).
+  - Why: the old formula paid every run again for the same nine products, so the cheapest Patents
+    came from resetting at the slice end, over and over. Now folding the same line again files
+    nothing. A later run earns only by pushing further: a new product, a better grade, a deeper
+    fold, a bigger line, or the Drill.
+  - The Reorganize card shows the record, one line per product, marked new, better or on file.
+- 2026-10-20: **The bills term replaces the works term**: log2(1 + bills / 25,000), counting the
+  bills of the buildings and modules that ran in the last minute.
+  - Why: "coin invested" rewarded spending a hoard on anything, and a prestige formula should not
+    count coin earned. What stands and runs is the factory itself.
+  - The slice-end factory stands on about 14K (0.6 Patents). The Act II bot's 4 h factory stands on
+    about 80K (2.1).
+  - The megaproject term stays as it was.
+- 2026-10-20: **Raccoon Bearings are dropped** (the lead's decision 2), so the currency list is
+  PLAN.md's again.
+  - **The Great Drill's stages 2 and 3 open at the Committee's reputation 3 and 5**
+    (`MEGA[i].rep`).
+  - The Committee's orders pay coin (2× what the goods fetch) and 1 reputation.
+  - Why: a currency with one sink and no choice was a gate in a costume. Reputation already
+    measures the Committee.
+  - Its rewards: Coat Pockets at 1, the Night Crew at 2, stage 2 at 3, Pocketed Kits at 4, stage 3
+    at 5. With two orders a run, that puts stage 2 in the second run and stage 3 in the third.
+  - The Drill screen names the gate ("opens at their reputation 3, now 2"), and the preview lists
+    it as a goal.
+- 2026-10-20: **The Committee's orders are sized for one run's floor.** Why: the lead's target is
+  1–2 fillable orders a run. The bot fills The Pile and Shiny Things every run.
+  - The Pile: 800 slag (was 1,500). That is about 20 min of the Bay floor's slag at the Factory
+    Dock.
+  - Shiny Things: 1,200 wire + 600 ingots after Steam Power (was 300 glass + 600 wire). Glass never
+    reached a Dock on any bot floor. Wire and ingots are what an Act II Factory Dock receives anyway,
+    about 16 min of it.
+  - Midnight Oil: 150 oil (was 600).
+- 2026-10-20: **The Night Crew (rep 2) works only while you are away.** Why: in the open game it
+  ate Act I's slag puzzle in every later run, and the lead's decision 6 says it must not end it.
+- 2026-10-20: **The Megaproject Bay never jams.**
+  - It always takes steel and Drill Bits. Whatever its open stage can't count (the stage is
+    closed, or that part is full) goes on to the Dock: steel sells, bits are scrapped.
+  - Why: a stage waiting on the Committee stopped the whole Bay floor behind a full buffer. Seed
+    1000's run 2 deadlocked: the Drill works blocked, so Midnight Oil's oil never moved.
+- 2026-10-20: **Stage 3 wants 300 bits and 1,200 steel** (was 400 and 1,600). Why: the third run
+  is shorter (head starts), and the lead's target is that the bot finishes the Drill by its end.
+  The ratio of 4 steel a bit stays (Milestone 5's slag jam).
+- 2026-10-20: **The Patent Drawer replaces blueprints, ghosts and the Builder Dragonfly** (the
+  lead's decision 3).
+  - A Workshop design folded in a run can be kept: 8 slots, and A Deeper Drawer adds 4.
+  - In a later run it unfolds whole onto the box it came from. Every part is placed at once for
+    its bill, ready to audit and fold again.
+  - **The Draughtsman** (2 Patents) unfolds the designs the player queues, in their order, at most
+    one every 5 s, as land, research and coin allow. One waiting only on coin holds the queue.
+  - Why: this is re-derived from the game's own verb (Unfold, §10) instead of a construction-drone
+    network. The kept design is the reset's head start. Which lines to keep is a choice, since
+    there are 8 slots for nine products.
+  - Share strings are **FWD1**: a kept design's box, name and layout, using the FWB1 coder's LZSS
+    and checksum.
+  - Save v7 drops v6's blueprints, ghosts and bearings, with their commands. A blueprint had no
+    product or grade to keep.
+  - No text the player sees says "blueprint".
+- 2026-10-20: **The Factory annex** (the lead's decision 4).
+  - Up to 3 blocks of 2×8 tiles east of the Factory floor (18×8 at most). The n-th block costs
+    150,000 × n: 150K, 300K, 450K, linear. It needs Steam Power.
+  - It is sold from the Upgrades tab and drawn on the floor: a brass seam, and the next block
+    outlined with its price. A Reorganize loses it, like land.
+  - Why: the Bay floor pushed the coin chains off a 12×8 floor. Income fell to a third for the
+    rest of the run, and coin piled up with nothing to buy.
+  - It goes east, not south, so it never pre-empts the Floating City's +1 row (§15, Milestone 7).
+  - **Open for the lead: should the annex survive a Reorganize?** If it is lost, a later run buys it
+    again (450K, coin it has by 1–1.5 h). If it is kept, run 3 starts with room run 2 had to buy,
+    which helps rule 3 on seed 1000 (below).
+- 2026-10-20: **The Patent tree is repriced to 40 Patents** across its 29 nodes (it was 82, then 55
+  after the first re-derivation).
+  - Why: with filing, the designed first run banks 15 and runs 2 and 3 about 7–9 each. That is
+    about 31 by the end of run 3 (11–12 h): most of the tree in 5–15 h, the lead's target.
+  - Each price is about a Patent per 10–15 min of a run that the node saves.
+- 2026-10-20: **Rules are re-derived, not just renumbered** (the lead's decision 6).
+  - **The Surveyor's Charter** is now a claims rule tied to grade: a copy of a source design
+    graded S or S+ holds half a claim. A well-folded source line gets twice the copies; a sloppy one
+    gets no more. It was +2 claims on every ore, a multiplier in disguise.
+  - **Fresh Dies** replaces **Stamping Dies** (a lower stamp growth). A line refolded at a better
+    grade than every earlier design of its product starts its stamp price over. Prices stay linear.
+  - **Cool Hands** and **Deep Heaps** are dropped. Each was only a number, and Deep Heaps ended the
+    slag puzzle.
+  - **The offline nodes give +0.05 each.** There are three: 0.5 + 0.1 from the coin Night Shift +
+    0.15 = 0.75 exactly. A node bought at the 0.75 ceiling is refused (`patentRefusal`, at the
+    offline agent's request).
+  - The node once called Night Shift is now the **Graveyard Shift**, so nobody confuses it with the
+    coin Night Shift. The coin Night Shift **survives a Reorganize** (`KEEP_UPGRADE`).
+- 2026-10-20: **Rule 1 while the Bay fills.**
+  - The Act II bot chases the preview's goals: annex blocks and their chains, Committee orders, a
+    nested Gizmo works II, and chunk D for the deep seams.
+  - The Drill screen shows bits a minute and the limiting input.
+  - Committee orders and annex purchases count as goals.
+  - Measured in DESIGN.md §16 and §19.
+- 2026-10-20: **Rule 2 is read without Sparks** (the lead's decision 7). A Spark click is a reflex,
+  not a decision. The gap is measured on build, research, order, fold and purchase decisions
+  (`tests/pace-act2-run.test.ts` logs both measures).
+- 2026-10-20: **Tutorial toasts show only in the first run** (the lead's decision 8): first Miner,
+  first slag jam, first sale, and the Factory floor opening.
+- 2026-10-20: **Bounded buffers stay plain numbers, named in the purity test's allowlist**
+  (`BOUNDED` in tests/purity.test.ts).
+  - The Num check now also catches `count`, `progress`, `inBuf`, `outBuf` and `Record<…, number>`.
+  - The allowlisted fields are each bounded and read every tick:
+    - a machine's input buffer (2 crafts);
+    - a module's in and out buffers (2–6 s of its rates, fractional);
+    - a heap's or crate's count (capacity 400);
+    - the offline report's count of stopped machines.
+  - Num is for amounts that grow without bound.
+- 2026-10-20: **Rule 3 is open for run 3 against run 2 on seed 1000** (`RULE3_OPEN` in
+  tests/pace-reorganize.test.ts).
+  - Run 3 reaches the same floor as run 2: both fill the annex and the 12×8 floor with the same
+    chains. Its peak ties run 2's to within 1%, so it never "passes run 2's peak".
+  - On seed 8919 it passes at 28 min (the limit is 60).
+  - Why open: a later run's peak is capped by the floor's room, not by speed. It passes as soon as
+    there is more room, either from a kept annex (above) or from Milestone 7's Floating City.
+- 2026-10-20: **The campaign bot can play a reset loop** (`loopAt`): it resets at the slice end,
+  1 h or 2 h, every run, over the designed campaign's horizon. A pace test checks that no loop
+  beats the designed run's Patents per hour.
+
+- 2026-10-20: **`RULE4_OPEN` was re-read on this build** (the lead asked for it once the annex and
+  campaign changes were in; tests/pace-idle-helpers.ts, DESIGN.md §20).
+  - Removed, because they now pass: seed 8919's run 1 at 3 h (4.01×, now 1.59) and seed 1000's
+    run 2 at 2 h (0.54×, now 1.52). The annex keeps a Gizmo chain selling past the Bay floor, so
+    open idle there is 3,600–5,500 coin/min, not 1,100–1,400.
+  - Still open, with a new reason: seed 8919's run 2 at 2 h (1.49×).
+  - Newly open:
+    - seed 8919's run 2 at 3 h (1.49×);
+    - seed 8919's run 3 at 3 h (1.47×);
+    - run 3 at 1 h on both seeds (0.77× and 0.72×): the Bay floor rebuild, moved earlier by the head
+      starts.
+  - Why they stay open: the 1.47–1.49 readings are Overdrive's own arithmetic. 3× for 10 s in every
+    40 is exactly 1.5×, the band's floor, so a stage where the bot only clicks reads at the floor
+    or just under it.
+- 2026-10-20: **Overdrive's 30 s cooldown is kept; 20 s was tried and rejected.**
+  - What 20 s did (1.67× for a line kept in Overdrive): it passed every one of the Overdrive-only
+    readings (1.61–1.94×).
+  - Why it was rejected: it sped seed 8919's run 1 to a 3:52 first reset (outside 4–6 h), left
+    its Drill at stage 2 after run 3, and pushed rule 1's longest Act II goal gap to 16.5 min (the
+    test's bound is 15).
+  - **Open for the lead**: rule 4's floor and Overdrive's duty cycle are the same number. Raising
+    one needs the reset window and the Drill re-paced with it.
+
+### Flagged as derivative (the reset layer review round; owner to decide)
+
+- **Founders' Grant (start a run with 2,000 coin)** resembles the start-with-currency upgrades of
+  most prestige games (Cookie Clicker's heavenly upgrades, Antimatter Dimensions' starting
+  bonuses). Kept: it is one flat node worth about two minutes of the first run, not a multiplier.
+- **FWD1 share strings** resemble Factorio's blueprint strings and shapez's shared layouts: a
+  pasted string that rebuilds a layout. The format is our own, and it holds one kept design, not a
+  layout library.
+- **The Draughtsman** resembles an auto-builder: Factorio's construction robots building
+  blueprints, or an autobuyer that places what you queued. The differences:
+  - It unfolds a kept design back onto the box it was folded from.
+  - It works one design at a time, in the player's order, at the full bill.
+  - It has no drones, no range and no logistics.
+- **The Factory annex** resembles a land or plot purchase: Factorio's map expansion,
+  Builderment's land plots, every idle game's "buy more space". The differences:
+  - Three linear blocks, on one side only, lost at a reset.
+  - The puzzle is the room it gives (the Bay floor or the coin chains), not the number.
+- **Filing** (pay only the rise over the best on file) was checked against shipped prestige
+  formulas. Antimatter Dimensions' Eternity Challenges and Realities pay for a new best, and
+  Universal Paperclips' later stages count records. Ours files the best value per product, which
+  only a game of folded products has. Flagged for the owner all the same.

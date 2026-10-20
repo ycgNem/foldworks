@@ -1,22 +1,30 @@
-// Reorganize, reset layer 1 (DESIGN.md §19). A run's Patents come from what it built:
+// Reorganize, reset layer 1 (DESIGN.md §19). Patents are filed, not re-earned: the Patent Office
+// keeps each product's best value on file across every run, and a Reorganize pays only for what
+// this run raised it by:
 //
-//   Patents = floor( 0.5 x sum over products folded this run of (chain steps x best grade multiplier)
-//                    + Megaproject Patents earned this run
-//                    + log2(1 + coin invested / 100,000) )
+//   Patents = floor( 0.5 x SUM over products of max(0, best value this run - value on file)
+//                    + Megaproject Patents delivered this run
+//                    + log2(1 + bills standing and running / 25,000) )
 //
-// The main term counts each distinct product a module design of this run makes (its main output),
-// once, by how many crafting steps it sits from raw ore (ingot 1, plate 2, gear 3, Gizmo 4, Drill
-// Bit 5: read off the recipes, src/data/recipes.ts) and the best grade any of its designs got. The
-// second is each Great Drill stage's worth (src/data/megaprojects.ts) in proportion to what this run
-// delivered to the Bay. The third, minor, is the coin the run put into its factory (earned + head
-// start coin - coin on hand): spending the pile is worth a little, hoarding it nothing.
+//   value of a design = steps folded x grade multiplier x rate tier
+//
+// Steps folded are the recipe steps the box actually holds: the product's depth from raw ore less
+// the deepest item its ports take in (at least 1), so a Drill Bit assembler fed steel, concrete and
+// circuits from outside is 2 steps, not 5. The rate tier is the module's scale in Mk1 machines'
+// worth of its product's last recipe, x1.5 for each x4 (a Mk2's speed, §18). A new product, a
+// better grade, a deeper fold or a bigger line files new Patents; folding the same line again
+// files nothing, so a run pays for new progress and a reset loop dries up. The Megaproject term
+// pays each stage's Patents as its parts are delivered (progress is kept, so never twice). The
+// minor term counts the bills of the buildings and modules standing that ran in the last minute
+// (not coin spent, not a building bought and left idle): a hoard is never burned for Patents.
 //
 // The reset itself is one operation, `reorganize`: the run's state is replaced by a fresh one, and
-// what is kept is carried across: `meta` (Patents, the tree, blueprints, bearings, run history,
-// lifetime statistics) plus the four kept fields that already lived in the run's state and are read
-// all over the game: the Megaproject (`mega`), the Codex (`codex`), reputation (`orders.rep`), the
-// trophies (`trophy:` flags), and the statistics counters. Everything else is lost: both floors,
-// coin, items, land, research, module designs, claims, orders filled, Sparks, ghosts.
+// what is kept is carried across: `meta` (Patents, the tree, the record on file, the Patent Drawer,
+// run history, lifetime statistics), the Night Shift bought with coin, and the kept fields that
+// already lived in the run's state and are read all over the game: the Megaproject (`mega`), the
+// Codex (`codex`), reputation (`orders.rep`), the trophies (`trophy:` flags) and the counters.
+// Everything else is lost: both floors, coin, items, land and the annex, research, module designs,
+// claims, orders filled, Sparks.
 import type { Game, ActResult } from './Game';
 import { OK, no } from './Game';
 import { Num } from '../engine/num';
@@ -24,24 +32,27 @@ import { TICK_RATE } from '../engine/time';
 import { RULES, GRADES } from '../data/rules';
 import { RECIPES, RECIPE } from '../data/recipes';
 import { ITEMS, ITEM_IDS, itemName, type ItemId } from '../data/items';
-import { RESEARCH, RESEARCH_IDS, type ResearchId } from '../data/research';
+import { BUILD, isMachine, isPower } from '../data/machines';
+import { RESEARCH_IDS, type ResearchId } from '../data/research';
 import { CUSTOMERS, type CustomerId } from '../data/orders';
 import { MEGA, megaStage } from '../data/megaprojects';
 import { START_LAYOUT } from '../data/land';
+import { IDLE_UPGRADES } from '../data/idle';
 import { PATENTS, type PatentId } from '../data/patents';
-import { newState, type State } from './world';
-import { BYPRODUCTS, mainItem } from './systems/modules';
+import { newState, type Filed, type ModuleDesign, type State } from './world';
+import { BYPRODUCTS, mainItem, megaOpen } from './systems/modules';
 import { recipeKnown } from './transfer';
 import { prules } from './patents';
 
 /** What a Reorganize keeps, in words (the confirm card lists it). */
 export const KEPT: { what: string; why: string }[] = [
   { what: 'Patents and the Patent tree', why: 'what the reset is for' },
-  { what: 'Blueprints', why: 'your layouts, ready to place as ghosts' },
+  { what: 'The Patent Office\'s record', why: 'every product\'s best design on file: a later run is paid only for beating it' },
+  { what: 'The Patent Drawer', why: 'your kept designs, ready to unfold whole onto their boxes' },
   { what: 'The Great Drill', why: 'Megaproject progress survives every reset' },
-  { what: 'Reputation', why: 'every customer remembers you, and their rewards stay' },
+  { what: 'Reputation', why: 'every customer remembers you, and their rewards stay (the Committee\'s opens the Drill\'s stages)' },
+  { what: 'The Night Shift', why: 'the offline crews you bought with coin keep working' },
   { what: 'The Codex', why: 'firsts already paid stay paid' },
-  { what: 'Raccoon Bearings', why: 'the Committee keeps them in the coat' },
   { what: 'Trophies and lifetime statistics', why: 'the shelf and the counters' },
 ];
 
@@ -49,13 +60,13 @@ export const KEPT: { what: string; why: string }[] = [
 export const LOST: string[] = [
   'Both floors: every building, module and trunk',
   'Coin and every item in the factory',
-  'Land (back to chunk A) and deposit claims',
+  'Land (back to chunk A), the Factory annex and deposit claims',
   'Research (head starts give some back)',
-  'Module designs (blueprints rebuild the lines; fold them again)',
+  'Module designs (keep the best in the Patent Drawer to unfold them again)',
   'Orders filled this run (they are offered again)',
 ];
 
-// ------------------------------------------------------------------ chain steps
+// ------------------------------------------------------------------ chain steps and value
 
 let depthCache: Partial<Record<ItemId, number>> | null = null;
 
@@ -83,10 +94,103 @@ export function patentable(item: ItemId): boolean {
   return chainSteps(item) > 0 && !BYPRODUCTS.has(item);
 }
 
+/** The recipe steps a design's box holds: its product's depth less the deepest item it takes in
+ * through its ports, at least 1 (DESIGN.md §19). */
+export function stepsFolded(d: Pick<ModuleDesign, 'ins'>, item: ItemId): number {
+  const inDepth = Math.max(0, ...(Object.keys(d.ins) as ItemId[]).filter((i) => (d.ins[i] ?? 0) > 0).map((i) => chainSteps(i)));
+  return Math.max(1, chainSteps(item) - inDepth);
+}
+
+/** A design's scale: its product per second (before the grade) in Mk1 machines' worth of the
+ * product's last recipe (the shallowest recipe making it). */
+export function designScale(d: Pick<ModuleDesign, 'outs' | 'grade'>, item: ItemId): number {
+  const r = RECIPES.filter((q) => q.machine !== 'miner' && q.outputs.some((o) => o.item === item)).sort((a, b) => a.time - b.time)[0];
+  if (!r) return 0;
+  const n = r.outputs.find((o) => o.item === item)!.n;
+  return ((d.outs[item] ?? 0) / Math.max(0.01, d.grade.mult)) * r.time / n;
+}
+
+/** The rate tier of a scale: 0 under 4 machines' worth, then one more for each x4 (§19). */
+export function rateTier(scale: number): number {
+  const step = RULES.tierStep.value;
+  return scale < step - 1e-6 ? 0 : Math.floor(Math.log(scale + 1e-6) / Math.log(step));
+}
+
+export const tierMult = (tier: number) => 1 + RULES.tierBonus.value * tier;
+
+/** The scale a design needs for the next tier, in its product per minute (the drawer and goals). */
+export function nextTierRate(d: Pick<ModuleDesign, 'outs' | 'grade'>, item: ItemId): number {
+  const s = designScale(d, item);
+  const want = Math.pow(RULES.tierStep.value, rateTier(s) + 1);
+  return s > 0 ? ((d.outs[item] ?? 0) * 60 * want) / s : 0;
+}
+
+export interface Valued { item: ItemId; steps: number; grade: string; mult: number; scale: number; tier: number; value: number; rate: number; design: ModuleDesign }
+
+/** A design's value on the Patent Office's scale: steps folded x grade x rate tier. */
+export function designValue(d: ModuleDesign): Valued | null {
+  const item = mainItem(d);
+  if (!item || !patentable(item)) return null;
+  const steps = stepsFolded(d, item);
+  const scale = designScale(d, item);
+  const tier = rateTier(scale);
+  return { item, steps, grade: d.grade.letter, mult: d.grade.mult, scale, tier, value: steps * d.grade.mult * tierMult(tier), rate: d.outs[item] ?? 0, design: d };
+}
+
+// ------------------------------------------------------------------ bills standing
+
+/** The bills of what stands and ran in the last minute: Workshop machines that worked, power on a
+ * grid that ran something, every belt and logistics part, Factory modules that ran (their stamp
+ * bill each) and trunks. Coin on hand and buildings left idle count for nothing (§19). */
+export function billsStanding(g: Game): number {
+  let b = 0;
+  // power on a grid that ran a machine in the last minute (an engine's boiler with it)
+  const live = new Set<number>();
+  for (const gr of g.grids) {
+    if (!(gr.supply > 0 && gr.consumers.some((c) => c.hist.includes('w')))) continue;
+    for (const p of [...gr.producers, ...gr.poles]) {
+      live.add(p.id);
+      const boiler = g.boilerOf.get(p.id);
+      if (boiler) live.add(boiler.id);
+    }
+  }
+  for (const e of g.s.ents) {
+    if (e.kind === 'dock' || e.kind === 'hopper' || e.kind === 'furnace') continue;
+    const cost = BUILD[e.kind]?.cost ?? 0;
+    if (isMachine(e.kind)) { if (e.hist.includes('w')) b += cost; }
+    else if (isPower(e.kind)) { if (live.has(e.id)) b += cost; }
+    else b += cost;
+  }
+  for (const e of g.s.factory.ents) {
+    if (e.kind === 'module') { if (e.hist.includes('w')) b += g.design(e.design)?.bill ?? 0; }
+    else if (e.kind === 'trunk') b += 2;
+  }
+  return b;
+}
+
+export const billsTerm = (b: number) => Math.log2(1 + b / RULES.patentBillsDivisor.value);
+
 // ------------------------------------------------------------------ the preview
 
-export interface PatentLine { item: ItemId; steps: number; grade: string; mult: number; patents: number }
-export interface PatentGoal { kind: 'fold' | 'grade' | 'mega' | 'works'; text: string; gain: number; item?: ItemId; coin?: Num }
+export type FileStatus = 'new' | 'improved' | 'filed';
+
+export interface PatentLine {
+  item: ItemId;
+  steps: number;
+  grade: string;
+  mult: number;
+  tier: number;
+  /** this run's best value, and what is on file */
+  value: number;
+  filed: number;
+  /** Patents it files now */
+  patents: number;
+  status: FileStatus;
+  /** its product per minute (grade applied) */
+  perMin: number;
+}
+
+export interface PatentGoal { kind: 'fold' | 'grade' | 'deeper' | 'bigger' | 'mega' | 'committee' | 'bills'; text: string; gain: number; item?: ItemId }
 
 export interface Preview {
   /** Patents a Reorganize gives now */
@@ -94,11 +198,13 @@ export interface Preview {
   /** the sum before rounding down */
   total: number;
   lines: PatentLine[];
+  /** the filing term (main) */
   designs: number;
   mega: number;
-  works: number;
-  invested: number;
-  /** Patents at the next step of the main term: the best product not yet folded, folded at B */
+  /** the bills term, and the bills it counts (coin) */
+  bills: number;
+  billValue: number;
+  /** Patents at the next step: the best goal of the main term added */
   nextStep: number;
   /** goals that raise it, biggest first */
   goals: PatentGoal[];
@@ -106,60 +212,78 @@ export interface Preview {
 
 const gradeMult = (letter: string) => GRADES.find((q) => q.letter === letter)?.mult ?? 1;
 
-/** Coin the run has put into its factory: earned, plus head-start coin, less what is on hand. */
-export function invested(g: Game): number {
-  const s = g.s;
-  return Math.max(0, s.earned.toNumber() + (s.granted?.toNumber() ?? 0) - s.coin.toNumber());
+/** Each product's best design this run, valued. */
+export function bestThisRun(g: Game): Map<ItemId, Valued> {
+  const best = new Map<ItemId, Valued>();
+  for (const d of g.s.designs) {
+    const v = designValue(d);
+    if (!v) continue;
+    const cur = best.get(v.item);
+    if (!cur || v.value > cur.value) best.set(v.item, v);
+  }
+  return best;
 }
-
-export const worksTerm = (put: number) => Math.log2(1 + put / RULES.patentWorksDivisor.value);
 
 /** What Reorganize would give now, term by term, and what would raise it (pure). */
 export function previewPatents(g: Game): Preview {
   const s = g.s;
   const k = RULES.patentPerStep.value;
-  // the main term: each distinct product of this run's designs, at its best grade
-  const best = new Map<ItemId, { grade: string; mult: number }>();
-  for (const d of s.designs) {
-    const it = mainItem(d);
-    if (!it || !patentable(it)) continue;
-    const cur = best.get(it);
-    if (!cur || d.grade.mult > cur.mult) best.set(it, { grade: d.grade.letter, mult: d.grade.mult });
-  }
-  const lines: PatentLine[] = [...best.entries()].map(([item, b]) => ({ item, steps: chainSteps(item), grade: b.grade, mult: b.mult, patents: k * chainSteps(item) * b.mult }));
-  lines.sort((a, b) => b.patents - a.patents);
+  const filed = s.meta.patented ?? {};
+  const best = bestThisRun(g);
+  const lines: PatentLine[] = [...best.values()].map((v) => {
+    const on = filed[v.item]?.value ?? 0;
+    const gain = k * Math.max(0, v.value - on);
+    return { item: v.item, steps: v.steps, grade: v.grade, mult: v.mult, tier: v.tier, value: v.value, filed: on, patents: gain, status: !filed[v.item] ? 'new' : gain > 1e-9 ? 'improved' : 'filed', perMin: v.rate * 60 };
+  });
+  lines.sort((a, b) => b.patents - a.patents || b.value - a.value);
   const designs = lines.reduce((t, l) => t + l.patents, 0);
   const mega = s.megaPatents ?? 0;
-  const inv = invested(g);
-  const works = worksTerm(inv);
-  const total = designs + mega + works;
+  const billValue = billsStanding(g);
+  const bills = billsTerm(billValue);
+  const total = designs + mega + bills;
   const now = Math.floor(total + 1e-9);
-  // goals: fold a product not folded yet (its recipe known now), at B
   const goals: PatentGoal[] = [];
+  // a product not folded yet this run, its recipe known: one step at B, at the least
   const known = new Set<ItemId>();
   for (const r of RECIPES) if (r.machine !== 'miner' && recipeKnown(g, r)) for (const o of r.outputs) known.add(o.item);
   for (const it of ITEM_IDS) {
     if (best.has(it) || !known.has(it) || !patentable(it)) continue;
-    goals.push({ kind: 'fold', item: it, gain: k * chainSteps(it), text: `Fold a line making ${itemName(it).toLowerCase()}: +${fmt(k * chainSteps(it))}` });
+    const on = filed[it]?.value ?? 0;
+    const lo = k * Math.max(0, 1 - on), hi = k * Math.max(0, chainSteps(it) * GRADES[0].mult - on);
+    if (hi <= 1e-9) continue;
+    goals.push({ kind: 'fold', item: it, gain: Math.max(lo, hi / 2), text: on ? `Fold ${itemName(it).toLowerCase()} better than its filed ${fmt(on)}: up to +${fmt(hi)}` : `Fold a line making ${itemName(it).toLowerCase()} (new): +${fmt(k)} a step folded, up to +${fmt(hi)}` });
   }
-  for (const l of lines) {
-    if (l.mult >= GRADES[0].mult) continue;
-    const gain = k * l.steps * (GRADES[0].mult - l.mult);
-    if (gain >= 0.25) goals.push({ kind: 'grade', item: l.item, gain, text: `Fold ${itemName(l.item).toLowerCase()} again at S+ (now ${l.grade}): +${fmt(gain)}` });
+  // the lines folded this run: a better grade, a deeper fold, a bigger line
+  for (const v of best.values()) {
+    const on = filed[v.item]?.value ?? 0;
+    const cur = k * Math.max(0, v.value - on);
+    const gainAt = (value: number) => k * Math.max(0, value - on) - cur;
+    const name = itemName(v.item).toLowerCase();
+    if (v.mult < GRADES[0].mult) {
+      const gain = gainAt(v.steps * GRADES[0].mult * tierMult(v.tier));
+      if (gain >= 0.1) goals.push({ kind: 'grade', item: v.item, gain, text: `Refold ${name} at S+ (now ${v.grade}): +${fmt(gain)}` });
+    }
+    if (v.steps < chainSteps(v.item)) {
+      const gain = gainAt((v.steps + 1) * v.mult * tierMult(v.tier));
+      if (gain >= 0.1) goals.push({ kind: 'deeper', item: v.item, gain, text: `Fold ${name} one step deeper (${v.steps} of ${chainSteps(v.item)} steps in its box): +${fmt(gain)}` });
+    }
+    const gain = gainAt(v.steps * v.mult * tierMult(v.tier + 1));
+    if (gain >= 0.1) goals.push({ kind: 'bigger', item: v.item, gain, text: `Fold a bigger ${name} line (${fmt(v.rate * 60)}/min, next tier at ${fmt(nextTierRate(v.design, v.item))}/min): +${fmt(gain)}` });
   }
   const st = megaStage(s.mega.stage);
   if (st && g.done('greatDrill')) {
     const left = st.patents * (1 - megaFrac(g));
-    if (left > 0.05) goals.push({ kind: 'mega', gain: left, text: `Finish ${st.name}: +${fmt(left)}` });
+    if (!megaOpen(g, st)) goals.push({ kind: 'committee', gain: left, text: `Fill Committee orders: ${st.name} opens at their reputation ${st.rep} (now ${s.orders.rep.committee ?? 0}), worth +${fmt(left)}` });
+    else if (left > 0.05) goals.push({ kind: 'mega', gain: left, text: `Finish ${st.name}: +${fmt(left)}` });
   }
-  // the coin that lifts the total to the next whole Patent through the works term alone
+  // the bills that lift the total to the next whole Patent through the bills term alone
   const need = Math.ceil(total + 1e-9) - total || 1;
-  const coin = RULES.patentWorksDivisor.value * (Math.pow(2, works + need) - 1) - inv;
-  goals.push({ kind: 'works', gain: need, coin: Num.of(Math.ceil(coin)), text: `Invest ${Num.of(Math.ceil(coin)).format()} more coin in the factory: +1 Patent` });
+  const more = RULES.patentBillsDivisor.value * (Math.pow(2, bills + need) - 1) - billValue;
+  goals.push({ kind: 'bills', gain: need, text: `Run ${Num.of(Math.ceil(more)).format()} more coin of buildings and modules: +${fmt(need)}` });
   goals.sort((a, b) => b.gain - a.gain);
-  const fold = goals.filter((q) => q.kind === 'fold').sort((a, b) => b.gain - a.gain)[0];
-  const nextStep = Math.floor(total + (fold?.gain ?? 0) + 1e-9);
-  return { now, total, lines, designs, mega, works, invested: inv, nextStep, goals };
+  const main = goals.filter((q) => q.kind !== 'bills' && q.kind !== 'mega' && q.kind !== 'committee')[0];
+  const nextStep = Math.floor(total + (main?.gain ?? 0) + 1e-9);
+  return { now, total, lines, designs, mega, bills, billValue, nextStep, goals };
 }
 
 /** How far the current Great Drill stage is (mean of its parts), 0..1. */
@@ -171,7 +295,6 @@ export function megaFrac(g: Game): number {
     f += Math.min(1, (g.s.mega.progress[it]?.toNumber() ?? 0) / want);
     n++;
   }
-  if (st.bearings) { f += Math.min(1, (g.s.mega.bearings ?? 0) / st.bearings); n++; }
   return n ? f / n : 1;
 }
 
@@ -181,13 +304,28 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/
 
 export function reorganizeRefusal(g: Game): string | null {
   const p = previewPatents(g);
-  if (p.now < RULES.patentMin.value) return 'Nothing to patent yet: fold a line into a module first';
+  if (p.now < RULES.patentMin.value) return g.s.designs.length ? 'Nothing new to patent yet: fold a new product, or a line better than the one on file' : 'Nothing to patent yet: fold a line into a module first';
   if (g.s.audits.length || g.s.faudit) return 'An audit is running: fold or cancel it first';
   return null;
 }
 
 /** Flags that outlive a run (trophies; the screens the player has opened once). */
 const KEEP_FLAG = (f: string) => f.startsWith('trophy:') || f === 'ordersSeen' || f === 'factorySeen';
+
+/** The Night Shift bought with coin (src/data/idle.ts) outlives a run (the lead's decision 6). */
+const KEEP_UPGRADE = new Set<string>(IDLE_UPGRADES.map((u) => u.id));
+
+/** File this run's best design of each product with the Patent Office (only a rise is kept). */
+export function fileDesigns(g: Game) {
+  const m = g.s.meta;
+  m.patented ??= {};
+  for (const v of bestThisRun(g).values()) {
+    const on = m.patented[v.item];
+    if (on && on.value >= v.value) continue;
+    const f: Filed = { value: v.value, steps: v.steps, grade: v.grade, tier: v.tier, run: m.runs + 1 };
+    m.patented[v.item] = f;
+  }
+}
 
 /** Reorganize: bank this run's Patents and start a new run, keeping what survives (pillar 4:
  * always the player's choice, with a preview). */
@@ -197,6 +335,7 @@ export function reorganize(g: Game): ActResult {
   const s = g.s;
   const p = previewPatents(g).now;
   const m = s.meta;
+  fileDesigns(g);
   m.history.push({ run: m.runs + 1, ticks: s.tick - m.runStart, patents: p, earned: s.earned, peakPerMin: m.peakPerMin });
   m.patents = m.patents.add(p);
   m.patentsEarned = m.patentsEarned.add(p);
@@ -235,6 +374,7 @@ function carry(s: State): State {
   f.orders.rep = s.orders.rep;
   f.counters = s.counters;
   f.flags = s.flags.filter(KEEP_FLAG);
+  f.upgrades = s.upgrades.filter((u) => KEEP_UPGRADE.has(u));
   // ids keep counting, so nothing of the old run is mistaken for the new
   f.nextId = s.nextId;
   f.nextAudit = s.nextAudit;
@@ -274,9 +414,9 @@ export function runSeconds(g: Game): number {
 // ------------------------------------------------------------------ customers met
 
 /** Has the player met this customer in this run? The Committee comes after the first Reorganize
- * (once `meets` is done in that run), or in the first run once the Great Drill is researched (the
- * Bay is where its bearings go, and its odd orders are goals while the Bay fills: §16 rule 1), or
- * once the Great Drill's stage 1 stands (DESIGN.md §19). */
+ * (once `meets` is done in that run), or in any run once the Great Drill is researched there (its
+ * reputation opens the Drill's later stages, and its odd orders are goals while the Bay fills:
+ * §16 rule 1), or once the Great Drill's stage 1 stands (DESIGN.md §19). */
 export function customerMet(g: Game, c: CustomerId): boolean {
   const d = CUSTOMERS[c];
   const research = !d.meets || g.done(d.meets);
@@ -284,4 +424,4 @@ export function customerMet(g: Game, c: CustomerId): boolean {
   return (g.s.meta.runs >= 1 && research) || g.done('greatDrill') || g.s.mega.stage >= 1;
 }
 
-export { MEGA, ITEMS, RECIPE, prules };
+export { MEGA, ITEMS, RECIPE, prules, gradeMult };

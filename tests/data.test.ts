@@ -106,9 +106,11 @@ describe('cross-references', () => {
     for (let pass = 0; pass < 20; pass++) for (const d of PATENT_LIST) if (d.requires.every((r) => done.has(r))) done.add(d.id);
     expect(done.size).toBe(PATENT_LIST.length);
     expect(PATENT_LIST.length).toBeGreaterThanOrEqual(28);
-    // offline efficiency tops out at 0.75 (ROADMAP Milestone 5)
+    // offline efficiency tops out at 0.75 (ROADMAP Milestone 5): 0.5, the Patents' three +0.05
+    // nodes and the Night Shift bought with coin (+0.1, src/data/idle.ts: the review round)
     const off = PATENT_LIST.reduce((t, d) => t + (d.effect.k === 'offline' ? d.effect.add : 0), RULES.offlineEff.value);
-    expect(off).toBeCloseTo(0.75, 5);
+    expect(off).toBeCloseTo(0.65, 5);
+    expect(off + IDLE_UPGRADES.reduce((t, u) => t + u.eff, 0)).toBeCloseTo(0.75, 5);
     expect(PATENTS.bellows.cost).toBe(1);
   });
   it('the research tree has no cycles and every node can be reached', () => {

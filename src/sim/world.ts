@@ -270,20 +270,41 @@ export interface OrderState {
 
 // ---- Reorganize, layer 1 (DESIGN.md §19, Milestone 5)
 
-/** One building of a blueprint, relative to its box. */
-export interface BlueprintPart { kind: BuildKind; dx: number; dy: number; rot: Dir; recipe: string | null }
+/** One building of a patented design, relative to its box. */
+export interface DesignPart { kind: BuildKind; dx: number; dy: number; rot: Dir; recipe: string | null }
 
-/** A saved Workshop layout (kept across every Reorganize; shared as an FWB1 string). */
-export interface Blueprint {
+/** A design kept in the Patent Drawer (DESIGN.md §19): a Workshop line folded in some run, kept
+ * through every Reorganize, unfolded whole onto its box in a later run (shared as an FWD1 string). */
+export interface KeptDesign {
   id: number;
   name: string;
+  /** where it was folded on the Workshop (it unfolds there: the land and ore lie the same every run) */
+  x: number;
+  y: number;
   w: number;
   h: number;
-  parts: BlueprintPart[];
+  parts: DesignPart[];
+  /** what the audit said when it was kept (null for an imported string: not audited in this save) */
+  product: ItemId | null;
+  grade: string | null;
+  /** its main product per second, grade applied (a rate) */
+  rate: number;
+  /** the run it was kept in (1 = the first) */
+  run: number;
+  /** the design it was kept from (absent for an imported string) */
+  src?: number;
 }
 
-/** A building planned from a blueprint: drawn as an outline, it does nothing until it is built. */
-export interface Ghost { kind: BuildKind; x: number; y: number; rot: Dir; recipe: string | null }
+/** What the Patent Office has on file for a product (DESIGN.md §19): the best value filed so far,
+ * and what made it up. A Reorganize pays only for a rise in it. */
+export interface Filed {
+  /** steps folded x grade multiplier x rate tier */
+  value: number;
+  steps: number;
+  grade: string;
+  tier: number;
+  run: number;
+}
 
 /** One finished run, for the Reorganize card and the statistics. */
 export interface RunRecord {
@@ -308,10 +329,12 @@ export interface MetaState {
   patentsEarned: Num;
   /** Patent nodes bought */
   nodes: PatentId[];
-  blueprints: Blueprint[];
-  nextBlueprint: number;
-  /** the Committee's Raccoon Bearings, waiting for a Great Drill stage that wants them */
-  bearings: Num;
+  /** the Patent Office's record: each product's best filed value (DESIGN.md §19 Filing) */
+  patented: Partial<Record<ItemId, Filed>>;
+  /** the Patent Drawer: designs kept through every Reorganize, and the Draughtsman's queue (ids) */
+  drawer: KeptDesign[];
+  nextKept: number;
+  queue: number[];
   /** lifetime statistics over every run */
   lifetime: { earned: Num; delivered: Partial<Record<ItemId, Num>>; folds: number };
   history: RunRecord[];
@@ -322,8 +345,8 @@ export interface MetaState {
 
 export function newMeta(): MetaState {
   return {
-    runs: 0, runStart: 0, patents: Num.ZERO, patentsEarned: Num.ZERO, nodes: [], blueprints: [], nextBlueprint: 1,
-    bearings: Num.ZERO, lifetime: { earned: Num.ZERO, delivered: {}, folds: 0 }, history: [], peakPerMin: 0, perMinRing: [],
+    runs: 0, runStart: 0, patents: Num.ZERO, patentsEarned: Num.ZERO, nodes: [], patented: {}, drawer: [], nextKept: 1, queue: [],
+    lifetime: { earned: Num.ZERO, delivered: {}, folds: 0 }, history: [], peakPerMin: 0, perMinRing: [],
   };
 }
 
@@ -380,7 +403,7 @@ export interface State {
   codex: ItemId[];
   /** the Megaproject: stages done and what the current stage has been given. Survives every
    * reset (Milestone 5 keeps it apart from the run's state). */
-  mega: { stage: number; progress: Partial<Record<ItemId, Num>>; bearings?: number };
+  mega: { stage: number; progress: Partial<Record<ItemId, Num>> };
   /** the Factory-floor fold audit (nested folds), like `audit` on the Workshop */
   faudit: FAuditState | null;
   // ---- Milestone 6 (DESIGN.md §20)
@@ -389,12 +412,15 @@ export interface State {
   // ---- Reorganize (DESIGN.md §19)
   /** what survives a Reorganize */
   meta: MetaState;
-  /** blueprint ghosts waiting to be built (this run's) */
-  ghosts: Ghost[];
   /** Patents earned so far this run by Megaproject deliveries (a fraction of each stage's worth) */
   megaPatents: number;
-  /** coin handed over by head starts this run (coin invested = earned + granted - coin) */
+  /** coin handed over by head starts this run */
   granted: Num;
+  /** Factory annex blocks bought this run, 2x8 each east of the 12x8 floor (DESIGN.md §19 The
+   * Factory annex); absent on older saves */
+  annex?: number;
+  /** kept designs unfolded from the Patent Drawer this run (ids), so the Draughtsman does each once */
+  drafted?: number[];
 }
 
 /** A nested-fold audit on the Factory floor (DESIGN.md §18 Nested folds). */
@@ -478,9 +504,9 @@ export function newState(seed: number): State {
     faudit: null,
     inspire: {},
     meta: newMeta(),
-    ghosts: [],
     megaPatents: 0,
     granted: Num.ZERO,
+    annex: 0,
   };
 }
 

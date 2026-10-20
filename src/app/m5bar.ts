@@ -1,9 +1,10 @@
 // Milestones 5 and 6 on the redesigned top bar (DESIGN.md §19, docs/ui-redesign.md): Patents beside the
-// coin with the Reorganize button showing what a reset pays now, and the Blueprint Book and the
+// coin with the Reorganize button showing what a reset pays now, and the Patent Drawer and the
 // Patent Office as menus; the overnight check. Imported for its side effects by screens.ts.
 import { C } from '../data/palette';
 import { ICON, textWidth } from '../ui/font';
 import { previewPatents, runSeconds } from '../sim/reorganize';
+import { unfoldKeptRefusal } from '../sim/drawer';
 import { RULES } from '../data/rules';
 import { TICK_RATE } from '../engine/time';
 import { duration, plain } from '../engine/fmt';
@@ -68,10 +69,11 @@ registerCounter({
 });
 
 registerMenu({
-  id: 'blueprints', icon: 'blueprint', name: 'Blueprints', panel: 'blueprints', group: 'game',
-  tip: 'The Blueprint Book: save a layout from a box, place it again as ghosts',
-  show: (app) => app.game.done('folding') || app.game.s.meta.blueprints.length > 0,
-  dot: (app) => !app.hud.opened.has('blueprints') && app.game.s.meta.runs > 0,
+  id: 'drawer', icon: 'blueprint', name: 'Drawer', panel: 'drawer', group: 'game',
+  tip: 'The Patent Drawer: designs kept through every Reorganize; unfold one whole onto its box',
+  show: (app) => app.game.s.designs.length > 0 || app.game.s.meta.drawer.length > 0,
+  // a dot until first opened in a later run, and while a kept design is ready to unfold
+  dot: (app) => (!app.hud.opened.has('drawer') && app.game.s.meta.runs > 0) || (app.panel !== 'drawer' && app.game.s.meta.runs > 0 && app.game.s.meta.drawer.some((k) => !(app.game.s.drafted ?? []).includes(k.id) && !unfoldKeptRefusal(app.game, k))),
 });
 
 registerMenu({

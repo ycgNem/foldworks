@@ -8,9 +8,9 @@ const r = (value: number, derivation: string): Rule => ({ value, derivation });
 export const RULES = {
   /** belt speed, tiles per second */
   beltSpeed: r(2, '§4 Belt Mk1: 2 tiles/s, 1 item per tile = 120 items/min'),
-  /** a machine's input buffer holds this many crafts' worth of each input */
+  /** a machine\'s input buffer holds this many crafts' worth of each input */
   inputCrafts: r(2, '§4 Machine buffers: input holds 2 crafts worth'),
-  /** a machine's output buffer holds this many items (and its byproduct buffer the same) */
+  /** a machine\'s output buffer holds this many items (and its byproduct buffer the same) */
   outputCap: r(4, '§4 Machine buffers: output holds 4 items'),
   /** the Hand Furnace (and any furnace next to a patch) holds this much hand-mined ore */
   handOreCap: r(4, '§6 Hand-mining: the machine holds up to 4'),
@@ -27,7 +27,7 @@ export const RULES = {
   /** Lucky Vein: miners on that patch run this much faster for this long */
   veinMult: r(3, '§6 Lucky Vein: its line runs 3x for 60 s'),
   veinSeconds: r(60, '§6 Lucky Vein: 3x for 60 s'),
-  /** Inspector: pays this many seconds of the line's measured output value x the grade multiplier */
+  /** Inspector: pays this many seconds of the line\'s measured output value x the grade multiplier */
   inspectorSeconds: r(60, '§6 Inspector: 60 s of that line\'s measured output value'),
   /** fold box limit, warm-up and window (seconds) */
   foldMax: r(8, '§10 the Fold box is at most 8x8 in the slice'),
@@ -41,7 +41,7 @@ export const RULES = {
   compactFull: r(0.6, '§10 Grade: C = min(1, (machine tiles / box tiles) / 0.6)'),
   /** stamp cost growth per copy already made */
   stampGrowth: r(0.5, '§10 Stamp: bill x (1 + 0.5 n), linear'),
-  /** a module's input and output buffers hold this many seconds of its rates */
+  /** a module\'s input and output buffers hold this many seconds of its rates */
   moduleBuffer: r(2, '§11 module buffers: 2 s of each rate, like a machine holding 2 crafts (§4)'),
   /** offline */
   offlineEff: r(0.5, '§12 offline efficiency 0.5 at the start (PLAN.md Offline); §20 the Night Shift and Patents raise it, through offlineEfficiency()'),
@@ -56,7 +56,7 @@ export const RULES = {
   /** Poles: reach (a square of side 2r+1) and the distance that joins two into one grid */
   poleReach: r(2, '§18 Power: a Pole powers everything within 2 tiles (5x5)'),
   poleLink: r(6, '§18 Power: Poles within 6 tiles join one grid'),
-  /** modes: speed and power multipliers, and Precision's extra main output */
+  /** modes: speed and power multipliers, and Precision\'s extra main output */
   modeEfficientSpeed: r(0.75, '§18 Modes: Efficient 0.75x speed at 0.5x power'),
   modeEfficientPower: r(0.5, '§18 Modes: Efficient 0.75x speed at 0.5x power'),
   modeOverclockSpeed: r(1.5, '§18 Modes: Overclocked 1.5x speed at 2.2x power'),
@@ -76,7 +76,7 @@ export const RULES = {
   claimsPerDeposit: r(2, '§18 Land and deposits: 3 claims per ore plus 2 per Workshop deposit'),
   claimsPerBlock: r(4, '§18 Land and deposits: the Survey Office sells claims 4 at a time'),
   claimGrowth: r(0.5, '§18 Land and deposits: each block costs price x (1 + 0.5 b), the stamp rule'),
-  /** the Great Drill's stage 1: Miners and source modules run this much faster */
+  /** the Great Drill\'s stage 1: Miners and source modules run this much faster */
   drillBoost: r(0.5, '§18 Megaproject #1: stage 1 runs every Miner and source module +50%'),
   /** reputation rewards (Act II customers) */
   voltaireSteam: r(0.25, '§18 Customers: Dame Voltaire rep 2, Steam Engines +25%'),
@@ -85,22 +85,25 @@ export const RULES = {
   /** nested folds: the box limit on the Factory floor */
   nestedMax: r(6, '§18 Nested folds: a box up to 6x6 of modules and trunks'),
   // ---- Reorganize, layer 1 (DESIGN.md §19, Milestone 5)
-  /** Patents per chain step of each product folded this run, times its best grade's multiplier */
-  patentPerStep: r(0.5, "§19 Patents formula: the main term is half a Patent for each step of a folded product's chain from raw ore (an ingot 1, a Gizmo 4, a Drill Bit 5) times its best grade: the Act II bot's nine products (21.5 steps x grade) give about 11, an idle slice factory's three about 4"),
-  /** the works term: log2(1 + coin invested / this) */
-  patentWorksDivisor: r(100000, '§19 Patents formula: the minor term is log2(1 + coin invested / 100,000): the Act II bot invests about 280K by 4 h (2 Patents), spending the 1.8M it piles up would add 3 more; coin alone never dominates (the Milestone 4 review)'),
+  /** Patents per unit of filed value: value = steps folded x grade multiplier x rate tier */
+  patentPerStep: r(0.5, "§19 Filing: half a Patent per unit of a product\'s value (steps folded x grade x rate tier), paid only for the rise over what is on file: the Act II bot\'s first run files nine products worth about 15 (ingots 1 x S, wire 2 x S, Gizmos, steel, concrete and circuits 2 each, plastic and glass 1, drill bits 2), about 7.5 Patents, half of a 12-20 first reset"),
+  /** rate tiers: a module\'s scale in Mk1 machines\' worth of its product; each tier is this many times the last */
+  tierStep: r(4, '§19 Filing: the rate tier steps every 4x of scale, a Mk2 machine\'s speed (§18): under 4 Mk1 machines\' worth of the last recipe x1, 4 (a Mk2, or four Mk1) x1.5, 16 x2, 64 x2.5'),
+  tierBonus: r(0.5, '§19 Filing: +0.5 to the value per rate tier, so four times the line is worth half again a product\'s Patents, never four times (a bigger line is progress, not the whole of it)'),
+  /** the bills term: log2(1 + bills standing and running / this) */
+  patentBillsDivisor: r(25000, '§19 Filing: the minor term, log2(1 + the bills of every building and module that ran in the last minute / 25,000): the slice-end factory stands on about 14K (0.6), the Act II bot\'s 4 h factory about 85K (2.1); coin on hand counts for nothing and an idle building for nothing, so a hoard is never burned for Patents (the Milestone 5 review)'),
   /** a reset needs at least this many Patents to be taken (the preview says what to do first) */
   patentMin: r(1, '§19 Reorganize: at least one Patent, so a reset is never a loss by accident'),
-  /** blueprints: the box limit and the library size */
-  blueprintMax: r(16, '§19 Blueprints: a box up to 16x16, two Workshop chunks, a whole slice line set'),
-  blueprintSlots: r(24, '§19 Blueprints: 24 in the library, a page of the book with room to spare'),
-  /** the Builder Dragonfly: ticks between two ghosts built, per dragonfly */
-  droneTicks: r(40, '§19 Blueprints: a dragonfly builds one ghost every 2 s (40 ticks)'),
-  /** the Committee's reputation rewards (§19) */
+  /** the Patent Drawer: designs kept, the box limit of a share string */
+  drawerSlots: r(8, '§19 The Patent Drawer: 8 kept designs, one fewer than the nine products the Act II bot folds, so which lines to keep is a choice (A Deeper Drawer adds 4)'),
+  drawerBox: r(16, '§19 The Patent Drawer: a share string holds a box up to 16x16, two Workshop chunks (a fold box is 8x8, 10x10 with the Wider Fold Box)'),
+  /** the Surveyor\'s Charter: source designs graded at least this multiplier hold half a claim */
+  halfClaimMult: r(1.25, "§19 Surveyor\'s Charter: S (x1.25) or S+: the grade a balanced, zero-waste source line reaches (§13 check 7)"),
+  /** the Committee\'s reputation rewards (§19) */
   coatBuffer: r(6, '§19 The Committee rep 1: module buffers hold 6 s of each rate (was 2, §11)'),
-  nightCrewSeconds: r(10, '§19 The Committee rep 2: each Slag Heap loses one slag every 10 s (a smelter makes one every 8 s: a heap fed by one smelter fills at a fifth of the speed)'),
+  nightCrewSeconds: r(10, '§19 The Committee rep 2: while you are away (the tab hidden or the game closed), each Slag Heap loses one slag every 10 s (a smelter makes one every 8 s: a heap fed by one smelter fills at a fifth of the speed overnight); never while you play, so Act I\'s slag lesson stands'),
   /** the Committee rep 3: Machine Kits a stamp needs fewer */
-  pocketedKits: r(1, '§19 The Committee rep 3: every stamp needs 1 Machine Kit fewer (never below none; §18 Machine Kits)'),
+  pocketedKits: r(1, '§19 The Committee rep 4: every stamp needs 1 Machine Kit fewer (never below none; §18 Machine Kits)'),
 };
 
 export type RuleId = keyof typeof RULES;
@@ -120,5 +123,5 @@ export function gradeFor(score: number) {
   return GRADES.find((g) => score >= g.min)!;
 }
 
-/** The fold score's weights (§10): score = 0.6 U + 0.2 W + 0.2 C. */
+/** The fold score\'s weights (§10): score = 0.6 U + 0.2 W + 0.2 C. */
 export const SCORE_WEIGHTS = { u: 0.6, w: 0.2, c: 0.2, derivation: '§10 score = 0.6 U + 0.2 W + 0.2 C' };

@@ -21,7 +21,6 @@ import { sheet, drawRot, frameAt, itemIcon, hasArt, spriteName } from './sprites
 import { Fx, FOLD_DUR, FOLD_FLASH } from './fx';
 import { onGridKind, powered, gridIndex, cheb, wirePairs, reached, capacity } from './powerview';
 import { Town, TOWN_ROWS } from './town';
-import { drawGhosts, type BlueprintPreview } from './ghosts'; // Milestone 5: blueprint ghosts
 
 export class Camera {
   /** centre, in world pixels */
@@ -48,8 +47,6 @@ export interface Overlay {
   /** which floor is on screen, and the Factory floor's own overlay */
   floor: Floor;
   factory: FactoryOverlay;
-  /** Milestone 5: a blueprint being placed, following the mouse (ghosts already placed are in the Game) */
-  bp?: BlueprintPreview | null;
 }
 
 /** screen-space labels collected during the world pass, drawn on top at UI scale */
@@ -361,10 +358,10 @@ export class Renderer {
     ctx.fillRect(0, 0, this.W, this.H);
     ctx.setTransform(z, 0, 0, z, ox, oy);
     ctx.imageSmoothingEnabled = false;
-    if (ov.floor === 'factory') this.backdrop(ox, oy, z, FACTORY.w, FACTORY.h);
+    if (ov.floor === 'factory') this.backdrop(ox, oy, z, g.fw, g.fh);
     else this.backdrop(ox, oy, z, g.W, g.H);
     // Bramble's Town on the water, behind the floor
-    if (ov.floor === 'factory') this.town.draw(ctx, g, FACTORY.w, FACTORY.h, this.time);
+    if (ov.floor === 'factory') this.town.draw(ctx, g, g.fw, g.fh, this.time);
     else this.town.draw(ctx, g, g.W, g.H, this.time);
     for (const n of this.town.news) {
       this.fx.burst(n.x, n.y, 30, [C.gold, C.leaf, C.bone, C.hot], 70, 40, 1, 1);
@@ -976,7 +973,6 @@ export class Renderer {
     if (ov.flow) this.flow(g);
     this.audit(g);
     this.reachOverlay(g, ov);
-    drawGhosts(ctx, g, this.time, ov.bp); // Milestone 5: blueprint ghosts (src/render/ghosts.ts)
     if (ov.box) {
       const x0 = Math.min(ov.box.x0, ov.box.x1), y0 = Math.min(ov.box.y0, ov.box.y1);
       const w = Math.abs(ov.box.x1 - ov.box.x0) + 1, h = Math.abs(ov.box.y1 - ov.box.y0) + 1;

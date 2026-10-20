@@ -59,6 +59,8 @@ const belts = (pts: [number, number, Dir][]): Step[] => pts.map(([x, y, r]) => P
 const need = (research: ResearchId): Step => ({ k: 'need', research });
 const order = (id: string): Step => ({ k: 'order', id });
 const fold = (x: number, y: number, w: number, h: number, name: string): Step => ({ k: 'fold', x, y, w, h, name });
+/** Lines folded from ore alone: their designs take nothing in through their ports. */
+const SOURCE_LINES = new Set(['Iron ingots', 'Copper wire']);
 const fplace = (design: string, x: number, y: number, rot: Dir): Step => ({ k: 'fplace', design, x, y, rot });
 const trunks = (pts: [number, number, Dir][]): Step[] => pts.map(([x, y, rot]) => ({ k: 'ftrunk', x, y, rot }));
 const not = (policies: Policy[], steps: Step[]): Step[] => {
@@ -263,6 +265,8 @@ const ROUTE_EVERY = TICK_RATE;
 export class Bot {
   step = 0;
   log: BotLog = { at: {}, decisions: [], what: [], step: 0, clicks: [], cmds: [] };
+  /** audits cancelled and taken again because a source line measured something coming in */
+  private reaudits = new Map<string, number>();
   readonly plan: Step[];
   /** research the plan waits on, in order */
   readonly wanted: ResearchId[];
@@ -556,6 +560,14 @@ export class Bot {
         // fold once every running audit is graded: a fold takes machines away, and another audit
         // may be measuring them (the Gear works' ingots come from the Iron ingots' box)
         if (g.s.audits.some((q) => !q.result)) return false;
+        // a source line (ore in, nothing else) measured taking something from outside (a head
+        // start's neighbouring line leaking ingots into the box) would fold a module that starves
+        // on the Factory floor: a player cancels and audits it again (the review round), 3 times
+        if (SOURCE_LINES.has(s.name) && Object.keys(a.result.ins).length && (this.reaudits.get(s.name) ?? 0) < 3) {
+          const r = this.act({ k: 'auditCancel', id: a.id });
+          if (r) this.reaudits.set(s.name, (this.reaudits.get(s.name) ?? 0) + 1);
+          return r !== null;
+        }
         if (!this.log.at['grade']) this.log.at['grade'] = a.result.grade.score;
         return this.buy({ k: 'fold', name: s.name, id: a.id }, 'fold:' + a.result.grade.letter);
       }

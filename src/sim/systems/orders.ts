@@ -36,8 +36,8 @@ export function runOrders(g: Game) {
       (o.doneAt ??= {})[d.id] = g.s.tick;
       o.active = null;
       if (d.pays) g.earn(Num.of(d.pays), true);
-      // the Committee pays in Raccoon Bearings, kept across every Reorganize (DESIGN.md §19)
-      if (d.bearings) g.s.meta.bearings = g.s.meta.bearings.add(d.bearings);
+      // reputation is kept through every Reorganize; the Committee's opens the Great Drill's
+      // stages 2 and 3 (DESIGN.md §19)
       o.rep[d.customer] = (o.rep[d.customer] ?? 0) + d.rep;
       g.emit({ type: 'order', id: d.id, value: d.pays });
       // reputation can change the rules the layout runs by (Voltaire's rep 3 extends pole reach)

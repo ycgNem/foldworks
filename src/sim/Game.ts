@@ -1,5 +1,5 @@
 // The game: state, the command log, and the fixed system order (CLAUDE.md):
-// input commands -> automation (blueprint dragonflies and the Patent tree's helpers, §19) ->
+// input commands -> automation (the Patent tree's helpers: the Draughtsman, the Shovel Frog..., §19) ->
 // miners -> belts -> machines -> modules -> docks and hoppers -> orders -> research -> sparks ->
 // audits -> stats.
 // Pure (tests/purity.test.ts): time comes in as ticks; presentation effects go out as events on
@@ -16,7 +16,7 @@ import { RECIPE } from '../data/recipes';
 import type { ItemId } from '../data/items';
 import { RULES } from '../data/rules';
 import { DX, DY, MODES, newEnt, newState, opposite, type Box, type Dir, type Ent, type FEnt, type Mode, type ModuleDesign, type State } from './world';
-import { FACTORY } from '../data/land';
+import { ANNEX, FACTORY, FACTORY_MAX_H, FACTORY_MAX_W } from '../data/land';
 import { runMiners } from './systems/miners';
 import { runBelts } from './systems/belts';
 import { runMachines, crankFurnace, shovel, overdrive } from './systems/machines';
@@ -38,8 +38,9 @@ import type { IdleUpgradeId } from '../data/idle';
 import type { PatentId } from '../data/patents';
 import { buyPatent } from './patents';
 import { reorganize, customerMet } from './reorganize';
-import { bpSave, bpDelete, bpRename, bpImport, bpPlace, ghostBuild, ghostBuildAll, ghostClear, clearGhosts } from './blueprints';
+import { keepDesign, forgetKept, unfoldKept, importDesign, renameKept, queueKept } from './drawer';
 import { runAutomation, autoStamp } from './systems/automation';
+import { buyAnnex } from './systems/annex';
 
 export interface Intake {
   to: 'dock' | 'hopper';
@@ -89,15 +90,17 @@ export type Cmd =
   // Reorganize, layer 1 (DESIGN.md §19)
   | { k: 'reorganize' }
   | { k: 'patent'; id: PatentId }
-  | { k: 'bpSave'; x: number; y: number; w: number; h: number; name: string }
-  | { k: 'bpDelete'; id: number }
-  | { k: 'bpRename'; id: number; name: string }
-  | { k: 'bpImport'; code: string }
-  | { k: 'bpPlace'; id: number; x: number; y: number }
-  | { k: 'ghostBuild'; x: number; y: number }
-  | { k: 'ghostBuildAll' }
-  | { k: 'ghostClear'; x?: number; y?: number }
-  | { k: 'autoStamp'; id: number };
+  // the Patent Drawer (DESIGN.md §19): keep a folded design, forget one, unfold one whole onto its
+  // box, import a share string, rename, and order the Draughtsman's queue
+  | { k: 'keep'; id: number }
+  | { k: 'forget'; id: number }
+  | { k: 'unfoldKept'; id: number; x?: number; y?: number }
+  | { k: 'importDesign'; code: string }
+  | { k: 'renameKept'; id: number; name: string }
+  | { k: 'queueKept'; id: number; at?: number }
+  | { k: 'autoStamp'; id: number }
+  // the Factory annex (DESIGN.md §19): one more block east of the floor
+  | { k: 'annex' };
 
 export interface Logged { t: number; c: Cmd }
 
@@ -146,7 +149,7 @@ export class Game {
   /** called for every transfer between tiles (debugging and tests; the fold audit is built in) */
   watchers: ((x: number, y: number, dir: Dir, item: string) => void)[] = [];
   // ---- the Factory floor's caches (rebuilt from s.factory)
-  fgrid = new Int32Array(FACTORY.w * FACTORY.h);
+  fgrid = new Int32Array(FACTORY_MAX_W * FACTORY_MAX_H);
   fById = new Map<number, FEnt>();
   routes: Route[] = [];
   factoryDirty = true;
@@ -261,9 +264,19 @@ export class Game {
     return this.s.designs.find((d) => d.id === id);
   }
 
+  /** The Factory floor's width now: the 12 and the annex blocks bought this run (DESIGN.md §19). */
+  get fw(): number {
+    return FACTORY.w + ANNEX.cols * (this.s.annex ?? 0);
+  }
+
+  /** Its rows (the Floating City's kept row comes with Milestone 7). */
+  get fh(): number {
+    return FACTORY.h;
+  }
+
   fentAt(x: number, y: number): FEnt | null {
-    if (x < 0 || y < 0 || x >= FACTORY.w || y >= FACTORY.h) return null;
-    const id = this.fgrid[y * FACTORY.w + x];
+    if (x < 0 || y < 0 || x >= this.fw || y >= this.fh) return null;
+    const id = this.fgrid[y * FACTORY_MAX_W + x];
     return id ? this.fById.get(id) ?? null : null;
   }
 
@@ -279,7 +292,7 @@ export class Game {
     this.fById.clear();
     for (const e of this.s.factory.ents) {
       this.fById.set(e.id, e);
-      for (let y = e.y; y < e.y + e.h; y++) for (let x = e.x; x < e.x + e.w; x++) this.fgrid[y * FACTORY.w + x] = e.id;
+      for (let y = e.y; y < e.y + e.h; y++) for (let x = e.x; x < e.x + e.w; x++) this.fgrid[y * FACTORY_MAX_W + x] = e.id;
     }
     this.routes = buildRoutes(this);
     this.factoryDirty = false;
@@ -396,15 +409,15 @@ export class Game {
       case 'idleUpgrade': return buyIdleUpgrade(this, c.id);
       case 'reorganize': return reorganize(this);
       case 'patent': return buyPatent(this, c.id);
-      case 'bpSave': return bpSave(this, { x: c.x, y: c.y, w: c.w, h: c.h }, c.name);
-      case 'bpDelete': return bpDelete(this, c.id);
-      case 'bpRename': return bpRename(this, c.id, c.name);
-      case 'bpImport': return bpImport(this, c.code);
-      case 'bpPlace': return bpPlace(this, c.id, c.x, c.y);
-      case 'ghostBuild': return ghostBuild(this, c.x, c.y);
-      case 'ghostBuildAll': return ghostBuildAll(this);
-      case 'ghostClear': return ghostClear(this, c.x, c.y);
+      case 'keep': return keepDesign(this, c.id);
+      case 'forget': return forgetKept(this, c.id);
+      case 'unfoldKept': return unfoldKept(this, c.id, c.x, c.y);
+      case 'importDesign': return importDesign(this, c.code);
+      case 'renameKept': return renameKept(this, c.id, c.name);
+      case 'queueKept': return queueKept(this, c.id, c.at);
       case 'autoStamp': return autoStamp(this, c.id);
+      case 'annex': return buyAnnex(this);
+      default: return no('unknown command');
     }
   }
 
@@ -444,12 +457,6 @@ export class Game {
     return null;
   }
 
-  /** Place a building now with the player's rules and price, unlogged (blueprint ghosts are built
-   * through it: by a logged command, or by the dragonflies inside the tick). */
-  placeNow(kind: BuildKind, x: number, y: number, rot: Dir): ActResult {
-    return this.place(kind, x, y, rot);
-  }
-
   private place(kind: BuildKind, x: number, y: number, rot: Dir): ActResult {
     const existing = this.entAt(x, y);
     const lock = auditLock(this, x, y);
@@ -458,7 +465,6 @@ export class Game {
       if (existing.rot === rot) return no('already a belt facing that way');
       existing.rot = rot;
       this.layoutDirty = true;
-      clearGhosts(this, x, y);
       this.emit({ type: 'rotate', x, y });
       return OK;
     }
@@ -467,8 +473,6 @@ export class Game {
     const d = BUILD[kind];
     if (kind === 'crate' && this.s.freeCrates > 0) this.s.freeCrates--;
     else this.s.coin = this.s.coin.sub(d.cost);
-    // a blueprint ghost under it gives way
-    clearGhosts(this, x, y, d.w, d.h);
     this.addEnt(kind, x, y, rot);
     if ((d.speed ?? 1) > 1) this.bump('mk2Built');
     this.emit({ type: 'place', x, y, id: kind });
