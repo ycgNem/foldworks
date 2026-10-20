@@ -26,7 +26,11 @@ MACHINES = {
     "boiler": dict(src="boiler", swap=False, anim="fire", fps=8),
     "steam_engine": dict(src="steam_engine", swap=True, anim="steam_engine_work", fps=10),
     "generator": dict(src="generator", swap=False, anim="fire", fps=12),
-    "kiln": dict(src="kiln", swap=False, anim="fire", fps=8),
+    # the kiln is pale fired clay, not brick: a cool grey-brown dome with a bone-lit top, so it
+    # never reads as the smelter's brick box or the hand furnace's orange pot
+    "kiln": dict(src="kiln", swap=False, anim="fire", fps=8, tint={
+        P["wood0"]: P["earth0"], P["wood1"]: P["earth2"], P["wood2"]: P["earth3"], P["wood3"]: P["steel3"],
+        P["copper0"]: P["earth1"], P["copper2"]: P["bone"]}),
     "mixer": dict(src="mixer", swap=False, anim="mixer_work", fps=8),
     "refinery": dict(src="refinery", swap=False, anim="fire", fps=6),
 }
@@ -142,6 +146,41 @@ def drop_shadow(im, col=None):
     return out
 
 
+def skid(size=16):
+    """The machine family's seat (phase 3 readability): every machine stands on a dark blue-grey
+    steel skid plate with an ink rim and a lit top edge, and the skid casts a deck-dark shadow to
+    the right. Cool and dark against the warm planks, it says "machine" at 1x before the body is
+    read. Mk1: rows 12-15 of 16; Mk2: rows 25-31 of 32."""
+    out = new(size, size)
+    top = 12 if size == 16 else 25
+    x1 = size - 2
+    for y in range(top, size):
+        for x in range(0, x1 + 1):
+            if x in (0, x1) and y in (top, size - 1):
+                continue
+            rim = y in (top, size - 1) or x in (0, x1)
+            c = P["ink"] if rim else P["steel1"] if y == top + 1 else P["steel0"]
+            draw(out, [(x, y)], c)
+    bolts = [(2, top + 2), (x1 - 2, top + 2)] if size == 16 else         [(3, top + 2), (x1 - 3, top + 2), (3, size - 3), (x1 - 3, size - 3)]
+    draw(out, bolts, P["steel2"])
+    draw(out, [(x1 + 1, y) for y in range(top + 1, size)], P["wood0"])   # the skid's shadow
+    return out
+
+
+def seat(im):
+    """A machine on its skid: the skid, a 1 px ink1 shadow of the body cast down-right onto it (and
+    onto the deck above the skid), then the body."""
+    out = skid(im.width)
+    a = im.load()
+    pts = [(x + 1, y + 1) for y in range(im.height) for x in range(im.width)
+           if a[x, y][3] and x + 1 < im.width and y + 1 < im.height]
+    sh = new(*im.size)
+    draw(sh, pts, P["ink1"])
+    out.alpha_composite(sh)
+    out.alpha_composite(im)
+    return out
+
+
 def shrink(rows, box=15, size=16, lift=None, inner=None):
     """Shrink each facing's frames to fill a box x box square (one crop box and scale for all of
     a facing's frames, the same scale for east and west), bottom-centred, re-outlined, shadowed."""
@@ -170,7 +209,7 @@ def shrink(rows, box=15, size=16, lift=None, inner=None):
             cv = clean_edges(cv)
             if inner:
                 cv = soften_inner(cv, inner)
-            res.append(drop_shadow(recolor(cv, lift) if lift else cv))
+            res.append(seat(recolor(cv, lift) if lift else cv))
         out[d] = res
     return out
 
@@ -185,7 +224,7 @@ def full(rows, size=32):
             c = f.crop(b)
             cv = new(size, size)
             cv.alpha_composite(c, ((size - c.width) // 2, size - c.height - 1))
-            res.append(clean_edges(cv))
+            res.append(seat(clean_edges(cv)))
         out[d] = res
     return out
 
@@ -208,7 +247,8 @@ def build(only=None):
             print("missing draft", name)
             continue
         fs = facings(spec)
-        mk1 = shrink(fs, lift=lift_map(spec.get("lift")), inner=spec.get("inner"))
+        cmap = {**(lift_map(spec.get("lift")) or {}), **spec.get("tint", {})}
+        mk1 = shrink(fs, lift=cmap or None, inner=spec.get("inner"))
         export(name, to_rows(mk1), spec["fps"], facings=4)
         done[name] = fs
     for mk2, base in MK2.items():

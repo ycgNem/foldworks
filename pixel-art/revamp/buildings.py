@@ -4,7 +4,7 @@ Finished here: outline cleaned, fitted to the footprint, a baked shadow, lights 
 from PIL import Image
 
 from common import P, RAW, new, clean_edges, export, recolor, draw, from_rows
-from machines import strip_rim, harden, union_box, drop_shadow
+from machines import strip_rim, harden, union_box, drop_shadow, seat
 
 GLOW = [P["lamp0"], P["lamp1"], P["lamp2"], P["lamp3"]]
 TEALS = [P["water3"], P["water4"], P["teal"]]
@@ -35,7 +35,7 @@ def fit32(im, w=32, h=32, shadow=True):
     return drop_shadow(cv) if shadow else cv
 
 
-def shrink16(im, box=15, w=16, h=16):
+def shrink16(im, box=15, w=16, h=16, seated=False):
     s0 = strip_rim(im)
     b = s0.getbbox()
     c = s0.crop(b)
@@ -43,7 +43,7 @@ def shrink16(im, box=15, w=16, h=16):
     c = harden(c.resize((max(1, round(c.width * s)), max(1, round(c.height * s))), Image.NEAREST))
     cv = new(w, h)
     cv.alpha_composite(c, ((box - c.width) // 2, h - 1 - c.height))
-    return drop_shadow(clean_edges(cv))
+    return seat(clean_edges(cv)) if seated else drop_shadow(clean_edges(cv))
 
 
 def heap_frames():
@@ -77,7 +77,10 @@ def heap_frames():
                 draw(im, [(8 - half - 1, y), (8 + half, y)], P["ink"])
             draw(im, [(x, top - 1) for x in range(7, 9)], P["ink"])
             draw(im, [(6, top + 1), (9, top + 2), (5, min(8, top + 3))], P["violet"])
-        out.append(drop_shadow(im))
+        # the bin is a steel skip on the machines' skid (phase 3: wood on the wood deck vanished)
+        im = recolor(im, {P["wood0"]: P["steel0"], P["wood1"]: P["steel1"], P["wood2"]: P["steel2"],
+                          P["wood3"]: P["steel3"], P["wood4"]: P["steel4"]})
+        out.append(seat(im))
     return out
 
 
@@ -120,17 +123,11 @@ def town(im, w=32, h=32):
 
 
 def build():
-    dock = fit32(cand(0))
-    export("dock", [dock, lights(dock, 1)], 2)
-    lily = fit32(cand(3))
-    export("dock_lily", [lily, lights(lily, 1)], 2)
-    hop = fit32(cand(5))
-    export("hopper", [hop, lights(hop, 1, TEALS), lights(hop, 3, TEALS)], 3)
-    fd = fit32(cand(6))
-    export("factory_dock", [fd, lights(fd, 1)], 2)
-    fh = fit32(cand(7))
-    export("factory_hopper", [fh, lights(fh, 1, TEALS), lights(fh, 3, TEALS)], 3)
-    export("crate", [shrink16(cand(17))])
+    # the Dock, the Hopper and their Factory versions are hand-drawn in destinations.py (phase 3)
+    # the crate's boards one step darker than the deck's, so it is a box on the floor, not a knot
+    crate = recolor(shrink16(cand(17), seated=True), {P["wood2"]: P["wood1"], P["wood3"]: P["wood2"],
+                                                      P["wood4"]: P["wood3"]})
+    export("crate", [crate])
     export("heap", heap_frames())
     # the pole overhangs the tile above by 8 px; four identical facings so it is never turned
     pole = shrink16(cand(16), box=15, w=16, h=24)
