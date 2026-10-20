@@ -226,6 +226,37 @@ accent, icon)` keeps its signature and draws the same header (content starts at 
 - Menus cover the build bar too (only the top bar and the crawl stay).
 - Patents is not on the top bar yet: Milestone 5 registers it with `registerCounter`/`registerMenu`.
 
+### The legibility round (after Milestones 5–6, 2026-10-20)
+
+From the idle-critic's review (`DECISIONS.md`, "The Milestone 5–6 review round: UI legibility"):
+
+- **Patent Office** (`src/app/patents.ts`): each node is a 20 px key with its own picture (item
+  icon, UI icon or building sprite), its price on a chip at the bottom-right corner (a tick in the
+  branch colour when owned) and a short label in small capitals under it, on a dark backing so
+  prerequisite lines pass behind. The detail panel (176 wide): the picture and name; the effect in
+  numbers against this run ("instead of 70 s"); "THIS RUN" in teal, what buying changes now; the
+  price against the bank; "NEEDS" with ticks and crosses; the node's own line and its flavour as
+  room allows; the Buy button. Read generically from the data (`effectInfo`).
+- **Toasts** (`sideStack` in `src/app/hud.ts`): wrapped to the 156 (136) column, long words cut;
+  trophy names on up to two lines; a toast with no room in full shows its title alone. At rest
+  they are on the audit's `float` layer (`ui.floating(draw, 'float')`): checked for leaving the
+  screen and covering HUD text; sliding in, on `tip` (unchecked).
+- **Pinned report**: keeps `TOAST_ROOM` (54) under the top bar for toasts; a tall report widens to
+  256, then drops its line report, then cuts with "+N more lines".
+- **Hover report**: the status line, feed line and front line agree (a machine on its buffer says
+  how long it has left); one brownout line, not three.
+- **Icon fallback** (`uiIcon` in `src/app/chrome.ts`): an icon the atlas lacks draws as a 16x16
+  code-drawn pictogram (Patents, Blueprints, Reset, Overnight) or a 16 px dark key with its glyph
+  centred, never a bare 5 px glyph. The 8x8 (`half`) fallback is still the glyph.
+- **Top bar**: "Reorganize +N" only once a reset is worth taking, its tooltip with Patents per hour
+  this run and last; counters get the `room` they may use (`CounterDef.draw(app, x, y, room)`). On
+  a narrow bar (not `L.wide`): the Orders group's keys fold into Orders (their names in its
+  tooltip, any dot on it), the health chip drops zero problem pips, power drops its unit and bar,
+  and the Reorganize key is the reset icon and "+N", so the floor tabs keep their place.
+- **Rail**: the Megaproject card shortens "Great Drill, stage 1" to "Stage 1" where it must.
+- **Screens**: new states `patentsHover` (a buyable node's panel) and `act2toasts` (a tall pinned
+  report with toasts and trophies above it); toasts and trophies are shot at rest.
+
 ### Screenshots
 
 `npm run screens` (e2e/out/screens/) covers every state at three sizes, now with `jam` (a slag

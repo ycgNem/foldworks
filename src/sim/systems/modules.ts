@@ -599,7 +599,7 @@ export function megaGive(g: Game, bay: FEnt, item: ItemId, n: number) {
   const counted = Math.max(0, Math.min(n, want - have));
   p[item] = (p[item] ?? Num.ZERO).add(n);
   // offline progress measures the Bay's intake like the Docks' (DESIGN.md §12)
-  if (g.tally) g.tally.bay[item] = (g.tally.bay[item] ?? 0) + n;
+  if (g.tally) g.tally.bay[item] = (g.tally.bay[item] ?? Num.ZERO).add(n);
   if (counted > 0) g.s.megaPatents += (st.patents * counted) / want / megaParts(st);
   g.emit({ type: 'megaGive', x: bay.x + 1, y: bay.y + 1, id: item, value: n, floor: 'factory' });
   megaCheck(g, bay);

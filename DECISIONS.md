@@ -846,3 +846,144 @@ at `offlineEfficiency(g)` and the save version, which the lead renumbers at the 
 - **The Patents formula was checked and is not derivative**: CC's heavenly chips and AD's infinity
   points are a root or log of currency earned; ours counts distinct folded products by recipe
   depth and audit grade, with coin as a minor log term.
+
+## The Milestone 5–6 review round: offline (2026-10-20)
+
+The idle-critic and the pacing auditor found Milestone 6's exit unmet: only run 1 at 1–5 h on one
+seed was measured, rule 4 was read against a closed game, the offline efficiency's sources
+overlapped, a segment ran on past an order filling, and the report listed a cascade as separate
+jams. What changed, and why:
+
+- 2026-10-20: **Rule 4 is active against open idle; offline is bounded apart** (the lead's
+  decision, DESIGN.md §16 rule 4). Offline never pays more than open idle for the same time and at
+  efficiency e pays at least about e of it. Why: at e = 0.5 a closed game is inherently ~2× below
+  open idle, so "active ÷ closed ≤ 4" fails whenever active ÷ open idle passes 2, the band's own
+  middle; the 4× ceiling protects idlers who keep the game open, and the closed game has its own,
+  stricter bound.
+- 2026-10-20: **Check 12 restated for any e** (DESIGN.md §13): 8 h away pays the first hour as open
+  idle pays it and the other 7 at e − 0.03 to e + 0.05 of what open idle pays in them, checked at
+  0.5 and 0.75. Why: the old (b), "≤ 4.5 h of the planner's active rate", was the slice's bound at
+  e = 0.5 and read 5.52 h at the 0.75 ceiling, a number with no meaning. "≤ (1 + 7e) h of the first
+  idle hour" was tried first and rejected with numbers: open idle can earn more in later hours than
+  in the first (60K, then 67K an hour at run 1's 3 h stage), so it failed by up to 13% where the
+  model paid exactly what it says. The new form tests the model itself: the replayed hour is the
+  open-idle hour tick for tick, and the rest is e of it.
+- 2026-10-20: **The stage measurements cover runs 1–3 on both seeds and the slice end**
+  (`tests/pace-idle-*.test.ts`, eight files that run side by side; DESIGN.md §20's table). Run 1 is
+  the Act II bot (every hour 1–5 on seed 1000; 1, 3, 5 h on 8919); runs 2 and 3 are the campaign
+  bot after a Reorganize with its Patents spent (pace-reorganize's options), at 1–3 h of run 2 and
+  1 and 3 h of run 3, about 5–12 h of play in all. A run-2 file stops the campaign after run 2, so
+  that run plays to its cap instead of resetting: its first hours are the same as the three-run
+  campaign's and each stage keeps a half hour of play after it.
+- 2026-10-20: **Three stages miss rule 4's band and are listed as open, not hidden**
+  (`RULE4_OPEN` in tests/pace-idle-helpers.ts; the offline bounds are still checked there): seed
+  8919 run 1 at 3 h (active 4.01× open idle; seed 1000 3.97) and run 2 at 2 h on both seeds (0.54×
+  and 0.69×: in that half hour the campaign bot clears 19 Workshop pieces and places 13 modules,
+  so its coin goes into the floor and the untouched factory out-earns it). At the slice end rule 4
+  reads 0.98–1.09 (the planner builds nothing in its ten minutes after the Festival); logged, not
+  tested. Why open: the bot's build and the reset layer's
+  economy decide them, both outside this change (the reset agent's Factory annex keeps coin chains
+  running past the Bay floor, which is exactly the 3 h dip); the lead re-reads them on the merged
+  build. A ratio is read to two decimals, as the table writes it (run 2 at 1 h is 1.4996).
+- 2026-10-20: **A segment also ends when the active order would fill or the selected research
+  would finish**, and the last fraction of an item is topped up so it fills then. Why: the Dock
+  takes a refused item (the Committee's slag or oil) only while an order wants it, and the Hopper
+  takes slag only while the node wants it; a segment that ran on past either paid the line behind
+  it for the rest of the time away (`tests/idle.test.ts` guards it with a furnace whose slag goes
+  to the Dock for The Pile: offline at e = 1 now pays 1.005 of open idle).
+- 2026-10-20: **A jam inside a measuring window opens the window again** (at most 8 times in one
+  live stretch, `IDLE.remeasureMax`). Why: a line that stopped 4 s into the window left those
+  seconds' deliveries in the measured rate, and the next segment paid them for hours (14% over
+  open idle in the same test). The replay hour can run a few minutes past the hour for it; the
+  footer counts those minutes as paid in full.
+- 2026-10-20: **One row per stopped line in the report and the forecast**: the first machine to
+  block and why, how many it stopped, and a fix to build ("9 more Slag Heaps keep it running 8h",
+  "a belt taking copper ingots to the Dock", "a Crate, or a machine that uses slag"). Lines are the
+  Workshop's item-flow lines (`analysis.lines`) and the Factory's trunk-joined modules, fixed for
+  the run (nobody builds while away). The heap row merges into its line's row. Why: one copper line
+  was four rows at 0:03 with no cause named (the critic's finding); the root cause and the fix are
+  what the player acts on.
+- 2026-10-20: **"Stop line" is offered only where stopping keeps something**: a line stopped by its
+  Slag Heap filling, with the tip saying what it keeps ("its heap keeps its room: 53m 22s of
+  running when you are back; it earns nothing while stopped"). Any other stop (nowhere for its
+  output, the Dock refusing an item after an order) keeps nothing, so the row offers the fix
+  instead. Why: once heaps drain or never fill (a heap-eating rule, a gravel Press), stopping earned
+  0 and saved nothing. A stop or a start re-runs the forecast at once.
+- 2026-10-20: **Every screen says the effective rate in words**: "the first 1h 04m at 100% (as if
+  open), the other 6h 56m at 50%" (`paidHow`). Why: "at 50%" alone was wrong for any absence, and
+  for one under an hour the whole time pays 100%.
+- 2026-10-20: **`offlineEfficiency(g)` stays the one function (cap 0.75); a Night Shift purchase
+  that would add nothing at the cap is refused, saying why**, and the screen shows what each would
+  add now (`idleUpgradeGain`). Why: the reset agent's Patent offline nodes (+0.05 ×3) and the coin
+  Night Shift (kept through Reorganize) overlap; no coin should buy nothing. The Patent screen's
+  own refusal for an offline node at the cap is the reset agent's (src/sim/patents.ts).
+- 2026-10-20: **The Night Shift Rota costs 250,000 (was 400,000)**, the Foreman stays 150,000.
+  Why: both prices were derived from 7,200–12,500 coin/min, the *active* rate; the factory idles
+  6,600–8,000/min before the Bay floor and 1,100–1,400 after it. A night pays +0.05 × the 7 h of
+  open idle after the first, measured at the stage each is offered: 139K at 1 h (Steam Power) and
+  at 2 h (Circuits), so the Foreman pays back in 1.1 nights and the Rota in 1.8 (it took 2.9). A
+  pace test checks ≤ 2 nights. Derived from the pre-Bay idle of this build; the merged build with
+  the Factory annex should be re-measured (the test does it).
+- 2026-10-20: **The offline tally is Num** (`Tally` in src/sim/offline.ts, the Docks' and the Bay's
+  writes): item amounts, per CLAUDE.md. Kept as plain numbers, with the reason: the delivery rates
+  (items a second, rates may be numbers) and the carry between credit slices, a fraction of one
+  item always below 1 (a remainder of a rate times a time, not a stock).
+## The Milestone 5–6 review round: UI legibility (2026-10-20)
+
+From the idle-critic's review of the merged Milestones 5–6 and the UI redesign: the floor and the
+first minute read well; the newer screens were sparse or buried. Presentation only: no sim
+behaviour, number or data file changed.
+
+- 2026-10-20: **The Patent tree names and prices every node, and its detail panel speaks in
+  numbers.** Each node shows a distinct picture (an item icon, a UI icon or a building's sprite;
+  the flame and the clock were each used twice), its price on a chip at the corner (a tick when
+  owned) and a short label under it, 8 small capitals at most so it fits a column at 1024x640. The
+  panel states the effect as numbers against what this run has ("An audit takes 45 s ... instead of
+  70 s"), what buying it changes this run ("70 s becomes 45 s the moment you buy it"; a head start
+  lists what it adds now), its price against the bank, and its prerequisites ticked or crossed.
+  *Why:* the critic could not tell nodes apart or what one bought. The screen reads `effect.k` and
+  its fields and `prules()` by field name, with fallbacks (an effect it does not know shows the
+  node's own `text`; a node with no icon or label gets one from its effect and its name), so the
+  reset agent's rewrite of `src/data/patents.ts` needs no change here.
+- 2026-10-20: **Toasts fit the screen and the overlap audit checks them.** Lines wrap to the
+  column and a single word wider than it is cut; trophy names wrap to two lines instead of being
+  clipped; a toast with no room in full shows its title alone. A toast that has landed is drawn on
+  the audit's new `float` layer: it may lie over the floor (by design), but `findIssues` flags it
+  when it leaves the screen (`offscreen`) or covers HUD text (`covered`, `clash`). Sliding in, it
+  stays on the `tip` layer the audit ignores, and `npm run screens` shoots toasts at rest. *Why:*
+  the act2power and jam shots caught toasts mid-slide and trophy names clipped at the edge, and the
+  audit skipped toasts entirely.
+- 2026-10-20: **A pinned report keeps 54 px of the right side for toasts.** It is anchored above
+  the build bar as before but never rises into that room: a tall report first widens (to 256),
+  then drops the line report, then cuts with "+N more lines: hover it for the whole report".
+  *Why:* a kiln's 13-line report pushed every toast off the stack. Stacking toasts beside the
+  report was rejected: the report would jump sideways each time a toast came and went.
+- 2026-10-20: **The hover report tells one story.** The status line, the feed line and the front
+  line are worked out together: a machine working from its buffer with nothing feeding it says
+  "Running on its buffer: about 6s of sand left, then it starves" (or how soon its output fills when
+  nothing takes it), and "Nothing feeds it" is then a warning, not a fault; the front line counts
+  what waits ("1 of 4 made wait inside; it blocks when full"); a share that rounds to 0% reads
+  "just now". The grid's Brownout line replaces the report's "Short of power" under it (three lines
+  said the same). Text only (`src/sim/analysis.ts` reads the machine's buffer and speed).
+- 2026-10-20: **Icons the atlas lacks are drawn at icon size.** Patents, Blueprints, Reset and
+  Overnight (appended after the art) were 5 px glyphs beside 16 px icons; they are now 16x16
+  code-drawn pictograms outlined in ink (a sealed certificate, a blue sheet, two chasing arrows, a
+  moon), and any other missing icon a dark 16 px key with its glyph centred. Placeholders until the
+  art director draws the frames (the atlas is append-only; a drawn frame wins automatically).
+- 2026-10-20: **"Reorganize +N" appears on the top bar once a reset is worth taking**: when it
+  would bank at least half of what the last run did, or 6 Patents in the first run (half the low
+  end of §16's first reset, 12-20). Its tooltip gives this run's Patents and Patents per hour beside
+  the last run's. *Why:* "+1" after the first fold invited a reset worth almost nothing. The Patent
+  Office's "Reorganize..." button is always there. (The reset agent is re-deriving the formula: the
+  6 is a presentation threshold, not a balance number; move it to `RULES` with a derivation if the
+  calibration changes.)
+- 2026-10-20: **A narrow top bar (under 600 UI px: 1024x640) folds the Orders group's keys into
+  the Orders key** (Modules, Codex, Survey, Megaproject are tabs in its header), shows a compact
+  line-health chip (green and the problem colours that have any), drops the kW unit and the power
+  bar, and draws the Reorganize key as the reset icon and "+N". *Why:* at 1024x640 twelve keys and
+  the counters ran into each other and pushed the floor tabs off the bar, so the Factory floor had
+  no visible way back. Not a layout change: the same regions, fewer keys.
+- 2026-10-20: The Megaproject card shows "Stage 1" where "Great Drill, stage 1" does not fit
+  beside its percentage (its title already says Megaproject).
+
+Nothing here is derivative of a shipped game beyond what the UI redesign already lists.
