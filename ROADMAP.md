@@ -154,8 +154,9 @@ the planner bot; rules 1, 2, 4 and 5 hold for 0–5 h.
 ## Milestone 5 — Reorganize, layer 1 (5–15 h)
 
 New thinking: **when to reset, and what to keep**.
-- The Reorganize flow: a preview (Patents now, Patents at the next ×2), confirmation, and what
-  is kept (blueprints, codex, megaprojects, reputation) vs. lost.
+- The Reorganize flow: a preview (Patents now, each product's line new, improved or already on
+  file, and the goals that raise it), confirmation, and what is kept (the Patent Drawer, the
+  record on file, codex, megaprojects, reputation) vs. lost.
 - **The Patent tree** (~30 nodes): head starts (start with miners placed), rules (bigger fold
   box, +1 port per module), automation (auto-stamp the cheapest module, auto-fill standing
   orders) and offline efficiency up to 75%. No bare "+X% everything" nodes.
