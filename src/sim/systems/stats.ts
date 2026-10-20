@@ -38,6 +38,14 @@ export function runStats(g: Game) {
   g.s.income.push(g.s.incomeSec);
   if (g.s.income.length > win) g.s.income.shift();
   g.s.incomeSec = 0;
+  // the run's best 5-minute coin per minute (the Reorganize card and §16 rule 3), once a minute
+  if ((g.s.tick + 1) % (60 * TICK_RATE) === 0) {
+    const m = g.s.meta;
+    m.perMinRing.push(g.incomePerMin());
+    if (m.perMinRing.length > 5) m.perMinRing.shift();
+    const avg = m.perMinRing.reduce((a, b) => a + b, 0) / m.perMinRing.length;
+    if (m.perMinRing.length >= 5 && avg > m.peakPerMin) m.peakPerMin = avg;
+  }
 }
 
 /** Fraction of the recorded window a machine spent in each state. */

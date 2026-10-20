@@ -338,9 +338,9 @@ describe('offline v1', () => {
     expect(r.firstJam!.t).toBeLessThan(180);
   });
 
-  it('caps time away at 24 h', () => {
+  it('caps time away at 7 days (Milestone 6; the slice had 24 h)', () => {
     const g = sandbox();
-    const r = runOffline(g, 100 * 3600);
-    expect(r.counted).toBe(24 * 3600);
+    const r = runOffline(g, 400 * 3600);
+    expect(r.counted).toBe(7 * 24 * 3600);
   });
 });

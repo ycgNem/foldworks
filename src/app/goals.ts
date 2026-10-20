@@ -9,6 +9,7 @@ import { BUILD } from '../data/machines';
 import { RESEARCH, type ResearchId } from '../data/research';
 import { CHUNKS, FACTORY } from '../data/land';
 import { RULES } from '../data/rules';
+import { prules } from '../sim/patents'; // Milestone 5: the Patent rules (More Auditors, Quick Audits)
 import { ITEMS, type ItemId } from '../data/items';
 import { megaStage } from '../data/megaprojects';
 import { availableNodes, researchFrac, available } from '../sim/systems/research';
@@ -215,7 +216,7 @@ export function nextGoal(g: Game): Goal | null {
     }
     if (running.length) {
       const next = Math.min(...running.map((q) => Math.ceil((auditTicks() - q.t) / 20)));
-      const room = RULES.maxAudits.value - s.audits.length;
+      const room = prules(g).maxAudits - s.audits.length;
       const a = running[0];
       return { text: `Auditing ${running.length > 1 ? `${running.length} boxes` : 'the box'}: the next grade in ${next} s.${room > 0 ? ` Box another line meanwhile (F): ${room} more can run.` : ' Keep playing.'}`, tile: { x: a.box.x + Math.floor(a.box.w / 2), y: a.box.y } };
     }

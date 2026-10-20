@@ -9,6 +9,7 @@
 import type { Game, ActResult } from '../Game';
 import { OK, no } from '../Game';
 import { TICK_RATE } from '../../engine/time';
+import { prules } from '../patents';
 import { BUILD, isMachine, isPower } from '../../data/machines';
 import { RECIPE } from '../../data/recipes';
 import { RULES, SCORE_WEIGHTS, gradeFor, GRADES } from '../../data/rules';
@@ -38,10 +39,10 @@ export function isAudited(g: Game, id: number): boolean {
 /** Why this box can't be folded, or null. */
 export function foldRefusal(g: Game, b: Box): string | null {
   if (!g.done('folding')) return 'Research Folding first';
-  const max = RULES.maxAudits.value;
+  const max = prules(g).maxAudits;
   if (g.s.audits.length >= max) return `${max} audits are running: fold or cancel one first`;
   if (g.s.audits.some((a) => overlaps(a.box, b))) return 'This box overlaps a line being audited';
-  const fmax = RULES.foldMax.value;
+  const fmax = prules(g).foldMax;
   if (b.w > fmax || b.h > fmax) return `Too big: a fold is at most ${fmax}x${fmax}`;
   if (b.w < 1 || b.h < 1) return 'Drag a box over a line';
   const ents = entsIn(g, b);
@@ -156,14 +157,15 @@ export function auditLock(g: Game, x: number, y: number): string | null {
   return null;
 }
 
-const warmTicks = () => RULES.auditWarmup.value * TICK_RATE;
-const windowTicks = () => RULES.auditWindow.value * TICK_RATE;
-export const auditTicks = () => warmTicks() + windowTicks();
+/** warm-up and window in ticks: Quick Audits (a Patent, §19) shortens them */
+const warmTicks = (g?: Game) => (g ? prules(g).auditWarmup : RULES.auditWarmup.value) * TICK_RATE;
+const windowTicks = (g?: Game) => (g ? prules(g).auditWindow : RULES.auditWindow.value) * TICK_RATE;
+export const auditTicks = (g?: Game) => warmTicks(g) + windowTicks(g);
 
 /** Count a transfer across a box edge (called from Game.onTransfer for every tile change). */
 export function auditTransfer(g: Game, x: number, y: number, dir: Dir, item: string) {
   for (const a of g.s.audits) {
-    if (a.result || a.t < warmTicks()) continue;
+    if (a.result || a.t < warmTicks(g)) continue;
     const from = inBox(a.box, x - DX[dir], y - DY[dir]), to = inBox(a.box, x, y);
     if (from === to) continue;
     const tally = to ? a.ins : a.outs;
@@ -175,7 +177,7 @@ export function runAudits(g: Game) {
   for (const a of g.s.audits) {
     if (a.result) continue;
     a.t++;
-    const warm = warmTicks();
+    const warm = warmTicks(g);
     if (a.t === warm) {
       for (const id of a.ids) {
         const m = g.byId.get(id);
@@ -199,7 +201,7 @@ export function runAudits(g: Game) {
         }
       }
     }
-    if (a.t >= warm + windowTicks()) {
+    if (a.t >= warm + windowTicks(g)) {
       a.result = gradeAudit(g, a);
       g.emit({ type: 'auditDone', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, id: a.result.grade.letter, d: a.result.grade.score, value: a.id });
     }
@@ -233,7 +235,7 @@ function netCounts(g: Game, a: AuditState): { ins: Record<string, number>; outs:
 /** Grade the window measured so far (DESIGN.md §10 Grade): the whole window when it closes, and
  * the projected grade the badge shows while it runs. */
 export function gradeAudit(g: Game, a: AuditState): AuditResult {
-  const n = Math.max(1, Math.min(windowTicks(), a.t - warmTicks()));
+  const n = Math.max(1, Math.min(windowTicks(g), a.t - warmTicks(g)));
   const secs = n / TICK_RATE;
   const ms = a.ids.map((id) => g.byId.get(id)).filter((m): m is Ent => !!m);
   // U: mean busy fraction
@@ -308,7 +310,7 @@ export function splusGate<T extends { letter: string }>(gr: T, score: number, by
 export function projectAudit(g: Game, a: AuditState | null = g.s.audits[0] ?? null): AuditResult | null {
   if (!a) return null;
   if (a.result) return a.result;
-  if (a.t <= warmTicks() + TICK_RATE) return null;
+  if (a.t <= warmTicks(g) + TICK_RATE) return null;
   return gradeAudit(g, a);
 }
 

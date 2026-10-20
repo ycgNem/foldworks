@@ -42,7 +42,8 @@ export function runDocks(g: Game) {
     const floor = it.floor;
     g.s.delivered[it.item] = (g.s.delivered[it.item] ?? Num.ZERO).add(n);
     if (g.tally) {
-      const t = g.tally[it.to];
+      // the Factory Dock apart, so offline progress fills Factory-only orders from it (§12)
+      const t = g.tally[it.to === 'dock' && floor === 'factory' ? 'fdock' : it.to];
       t[it.item] = (t[it.item] ?? 0) + n.toNumber();
     }
     if (it.to === 'dock') {

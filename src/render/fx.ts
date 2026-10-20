@@ -2,6 +2,7 @@
 // renderer turns the sim's events into these, and they never touch the sim. Pooled arrays, no
 // allocation per frame once warm.
 import { C } from '../data/palette';
+import { amount, plain } from '../engine/fmt'; // Milestone 6: one number helper (DESIGN.md §20)
 
 export interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; grav: number; /** drag per second (smoke slows down) */ drag?: number }
 export interface Pop { x: number; y: number; text: string; color: string; life: number; max: number; value: number; key: string; icon: string | null; big: boolean }
@@ -123,8 +124,7 @@ export const FOLD_DUR = 1.3;
 export const FOLD_FLASH = 0.68;
 
 export function fmtShort(v: number): string {
-  if (v < 10 && v !== Math.floor(v)) return v.toFixed(1);
-  if (v < 1e4) return String(Math.floor(v));
-  if (v < 1e6) return (v / 1e3).toFixed(v < 1e5 ? 1 : 0) + 'K';
-  return (v / 1e6).toFixed(2) + 'M';
+  // Milestone 6: through the one number helper, so coin pops follow the notation setting
+  if (v < 10 && v !== Math.floor(v)) return plain(v, 1);
+  return amount(v);
 }

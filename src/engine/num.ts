@@ -21,10 +21,43 @@ function pow10(k: number): number {
 
 export type NumLike = Num | number;
 
-export type Notation = 'standard' | 'scientific';
+/** How big numbers are written (DESIGN.md §20 Notation, a player setting kept outside the sim):
+ * - standard: 12.3K, 4.56M ... 999Dc, then scientific past 1e36;
+ * - scientific: 1.23e4;
+ * - engineering: the exponent a multiple of 3, 12.3e3;
+ * - letters: the named suffixes to Dc, then aa, ab ... zz, aaa ... (one per thousand) past 1e36. */
+export type Notation = 'standard' | 'scientific' | 'engineering' | 'letters';
+export const NOTATIONS: readonly Notation[] = ['standard', 'scientific', 'engineering', 'letters'];
 
 /** Short suffixes, one per thousand, up to decillion; past 1e36 the format is scientific. */
 const SUFFIX = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
+
+/** The notation `format()` uses when the caller names none: a display setting, set by the app from
+ * the player's options (localStorage). It never changes the state, only how numbers are written,
+ * so the sim stays deterministic whatever it is. */
+let displayNotation: Notation = 'standard';
+export function setNotation(n: Notation) {
+  if (NOTATIONS.includes(n)) displayNotation = n;
+}
+export function getNotation(): Notation {
+  return displayNotation;
+}
+
+/** Letters for tier k past the named suffixes: 0 -> aa, 1 -> ab ... 675 -> zz, 676 -> aaa ... */
+export function letterSuffix(k: number): string {
+  let len = 2, base = 26 * 26;
+  while (k >= base) {
+    k -= base;
+    len++;
+    base *= 26;
+  }
+  let s = '';
+  for (let i = 0; i < len; i++) {
+    s = String.fromCharCode(97 + (k % 26)) + s;
+    k = Math.floor(k / 26);
+  }
+  return s;
+}
 
 export class Num {
   readonly m: number;
@@ -237,9 +270,9 @@ export class Num {
    * amounts ("2.5") below 100.
    */
   format(opts: { notation?: Notation; decimals?: number } = {}): string {
-    const notation = opts.notation ?? 'standard';
+    const notation = opts.notation ?? displayNotation;
     if (this.m < 0) return '-' + this.neg().format(opts);
-    const l = this.log10();
+    // every notation writes the same plain whole numbers below 10,000 (DESIGN.md §20)
     if (this.e === 0 && this.m < 1e4) {
       const d = opts.decimals ?? 0;
       if (d > 0 && this.m < 100 && !Number.isInteger(this.m)) {
@@ -249,14 +282,15 @@ export class Num {
       return commas(Math.floor(this.m));
     }
     const [mm, ee] = this.me();
-    if (notation === 'scientific' || ee >= SUFFIX.length * 3) {
+    if (notation === 'scientific' || (notation === 'standard' && ee >= SUFFIX.length * 3)) {
       return `${trunc(mm, 2)}e${ee}`;
     }
-    void l;
     const tier = Math.floor(ee / 3);
     const shown = mm * pow10(ee - tier * 3); // 1 .. 999.99
     const digits = shown >= 100 ? 0 : shown >= 10 ? 1 : 2;
-    return trunc(shown, digits) + SUFFIX[tier];
+    if (notation === 'engineering') return `${trunc(shown, digits)}e${tier * 3}`;
+    const suffix = tier < SUFFIX.length ? SUFFIX[tier] : letterSuffix(tier - SUFFIX.length);
+    return trunc(shown, digits) + suffix;
   }
 }
 

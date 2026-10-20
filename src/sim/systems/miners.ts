@@ -9,10 +9,19 @@ import { offer } from '../transfer';
 import { note } from './stats';
 import { overdriveTick, veinBoost } from './machines';
 import { isAudited } from './audits';
+import { prules } from '../patents';
 
 export function runMiners(g: Game) {
   const cap = RULES.outputCap.value;
   for (const m of g.miners) {
+    // stopped by the player (DESIGN.md §20): digs nothing
+    if (m.paused) {
+      m.state = 'idle';
+      m.why = 'paused';
+      overdriveTick(m);
+      note(m);
+      continue;
+    }
     const r = RECIPE[m.recipe ?? 'mineIron'];
     const out = r.outputs[0].item;
     const pi = g.patchOf[m.y * g.W + m.x];
@@ -38,7 +47,7 @@ export function runMiners(g: Game) {
       m.why = out;
     }
     if (m.out > 0 && offer(g, m.x + DX[m.rot], m.y + DY[m.rot], m.rot, m.outItem!)) m.out--;
-    overdriveTick(m);
+    overdriveTick(m, prules(g).overdriveCool);
     note(m);
   }
 }

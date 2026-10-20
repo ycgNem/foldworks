@@ -553,3 +553,296 @@ Findings for the sim and design (not changed here):
 - Open: rule 1 (a goal within reach every 3 min) fails for ~40 min while the Megaproject Bay
   fills (Act II pacing, the bot); coin piles up (~1.8M at 5 h) with too few sinks; the bot doesn't
   use nested folds yet. Carried to Milestone 5's planning.
+
+## The UI redesign (2026-10-20)
+
+The owner, after the Milestone 4 build: "Redo UI, it's crowded but not in a good way,
+cross-reference successful games and cook up for me." The full, dense, dopamine-rich direction
+(Cookie Clicker, Clicker Heroes) stands; the *kind* of density changes. The brief, the
+cross-referenced games and what was built: `docs/ui-redesign.md`. This replaces the HUD layout
+of the owner's earlier full-screen direction (above, Milestone 0) and of the Act II Workshop UI
+notes (Milestone 4); each superseded note is named below.
+
+- 2026-10-20: **Two panel weights.** Every HUD piece is a *plate* drawn in code from the palette
+  (ink at 90%, a 1 px outline, a lighter or accent top edge, notched corners; `plate()` in
+  `src/app/chrome.ts`). The ornate wood-and-brass 9-slice (`frame()`, the art's `ui_panel`) is
+  kept for full-screen menus and celebration cards only. Why: thirteen identical heavy frames
+  gave the eye nowhere to land; rare ornament makes opening a menu feel like opening something.
+  Inside menus, `card()` is now a flat section (no wood inside wood).
+- 2026-10-20: **The floor is the star.** The camera frames the area right of the card rail,
+  between the top bar and the build bar (`layout.ts` `center`); the water and town draw across
+  the whole canvas behind the HUD. At 1280x720 the floor view is ~80% of the width (it was
+  ~53%). Supersedes "the floor in the frame between" the two columns.
+- 2026-10-20: **A thin top bar (20 px) carries the global state**: the coin counter (the one
+  loud thing: big gold digits that roll, bump, glint and sweep; the rate beside it), Machine
+  Kits and power once they exist, the line-health chip, the floor tabs and the menus. Why: a
+  resource bar at the top is where every player of the genre looks first.
+- 2026-10-20: **Shipping moved into the coin counter's drop-down** (hover the counter: the whole
+  number, the rate, the income sparkline, earnings, and every item shipped with its per-minute
+  rate). Why: a list of sales on screen all the time at the same weight as the counter was the
+  brief's "static text in prime space". Stats keeps the full delivered list.
+- 2026-10-20: **The status strip became the line-health chip** (green/yellow/red/blue counts,
+  red edge blinking while anything struggles; a click jumps to the worst problem and opens its
+  report, the old "find"). Hidden until the first Miner: the first minute has one goal.
+- 2026-10-20: **Power reads demand/supply** ("380/300 kW", amber in a brownout, a bar when there
+  is room). Why: "used of available" is the convention players read without a legend; the
+  tooltip names both. Supersedes the readout under the status strip.
+- 2026-10-20: **Floor tabs appear once Folding is researched.** Before that there is one floor
+  and nothing to choose; the floor's name plate went (the tab says it).
+- 2026-10-20: **The menus are icon keys on the right of the top bar**, with a dot when something
+  waits inside (blinking gold until first opened, steady red for news); the name and key are in
+  the tooltip. Game screens first, then Stats, Trophies, Options after a divider. Supersedes the
+  bottom bar of fifteen equal buttons and its label-dropping rule.
+- 2026-10-20: **Floating cards on the left rail**, 4 px apart, each a plate with its accent edge
+  and a small-caps title: Goal, Order, Research, Megaproject. A click on the title folds a card
+  to that line; a click on its body opens its screen. Nothing else lives in the rail.
+- 2026-10-20: **The Goal card is the old "Next"**, and at the start it carries the Bellows (a bar
+  to 25 coin, then a gold Buy button). When the goal changes (its text without its live
+  numbers) the card slides in, flashes and chimes. A goal that names a screen, a floor or a
+  tool opens it from its card. Supersedes the Bellows card at the top of the store.
+- 2026-10-20: **The Order card** shows the customer's portrait, the order's name and one bar per
+  item ("Factory Dock only" when it counts there alone); with no active order, a one-line pill
+  "N orders offered" instead. **The Research card** shows the node and its bar; with none
+  selected, a "Pick research (T)" pill. Pills are plates in their accent colour, not gold
+  buttons (gold is for buying), and give way when the goal already names their screen. The
+  Research card waits for the Bellows: the first minute has one goal.
+- 2026-10-20: **The build bar** is centred at the bottom: category tabs over one row of square
+  slots (sprite at 1x, hotkey, price), a gold edge when affordable, a red dot when new, a
+  padlock over a dark silhouette when locked; the rich detail (sprite at 2x, price, rate,
+  description, what you own) in a hover card above the slot. Left of it the tools: Rotate,
+  Remove, Fold (with its audit count) and Flow, with their keys. Supersedes the store column of
+  54 px rows and the "???" locked rows.
+- 2026-10-20: **The build bar's categories are the store's tabs (Build, Power, Heavy) plus
+  Upgrades** (the Bellows and land), not the brief's Logistics/Production split. Why: keys 1-9
+  pick from the open tab and the goal texts name them ("a Miner (2)", "a Boiler (Power tab)");
+  splitting Build would renumber the keys the first minute teaches. The nine basic buildings fit
+  one row. Changes the brief.
+- 2026-10-20: **On the Factory floor the build bar has one tab, Modules**: the trunk belt (1) and
+  the designs (2-9), each slot with its spare count and grade; a shift-click stamps a copy, and a
+  last slot opens the Modules screen when there are more than eight. Supersedes the Factory
+  store column and its quick links (the Survey Office, Codex and Drill are top-bar menus).
+- 2026-10-20: **Prices on slots are gold when affordable and grey when not** (they were red).
+  Why: at the start nothing is affordable, and a row of red read as an error.
+- 2026-10-20: **Toasts stack from the top-right corner, newest on top**, sliding in with a colour
+  flash and fading out; trophies just earned stack under them. No column behind them; they
+  float (the overlap audit treats them as transient). Supersedes "toasts live at the bottom of
+  the left column".
+- 2026-10-20: **The pinned report anchors bottom-right above the build bar**, its top edge in its
+  status pip's colour, and moves left of the floor when it would cover what it reports on.
+  Hover reports stay tooltips at the mouse, in the plate style.
+- 2026-10-20: **The Swamp Gazette is a crawl along the bottom edge** (10 px: the brief said 9,
+  but the font's descenders need 10), dim, with no frame; breaking news (the town growing, an
+  order filled: a new "EXTRA!" headline) runs bright for its first pass. Supersedes the ticker
+  across the top.
+- 2026-10-20: **Diegetic touches on the map**: the active order's flag over the Dock it fills at
+  (the customer's colour, waving, with a small progress bar), and a progress ring with the
+  node's icon over the Hopper for the selected research. Drawn under the HUD, outside the overlap
+  audit (they are world markers, like the goal arrow).
+- 2026-10-20: **Three text sizes**: the big digits (the counter, grades), the normal font, and a
+  new 5 px small font (capitals and figures) for card titles, keys, prices, units and secondary
+  numbers. Spacing on a 4 px grid: 4 px between cards, 6 px inside them.
+- 2026-10-20: **Accent colours carry meaning**: gold is coin and "you can buy this", teal research
+  (and a tool that is on), leaf orders and customers (each customer has their own colour on
+  their card and flag), copper heat and jams, violet Patents and resets, blue power.
+- 2026-10-20: **Every full-screen menu uses one template** (`menuTemplate()` in `widgets.ts`): the
+  ornate frame, a header bar (icon, title in the accent colour, the menu's tabs, Esc and a close
+  key), the content, and an optional detail panel on the right (the research tree's node card is
+  the model). The header's tabs are the screen's group (Orders, Modules, Codex, Survey, Drill;
+  Stats, Trophies, Options; the research tree's Workshop and Act II pages). Menus cover the
+  floor and the build bar; the top bar stays, so the coin keeps counting.
+- 2026-10-20: **Buttons and tabs are code-drawn in the plate language** (a dark key with a lighter
+  top edge; gold for buy-or-do, teal for on). The art's `ui_button`, `ui_tab`, `ui_row`,
+  `ui_toast`, `ui_tip` and `ui_ticker` are no longer drawn; `ui_panel`, `ui_panel_light`,
+  `ui_inset`, the icons, the coin, portraits, grades and nodes are. Why: the HUD must restyle with
+  the palette (the art revamp may change it) and stay calm under the juice.
+- 2026-10-20: **Other files can add menus, counters and screens** (`registerMenu`,
+  `registerCounter` in `topbar.ts`, `registerScreen` in `screens.ts`), so Milestones 5 and 6 add
+  Patents, Blueprints and the rest without editing the HUD.
+- 2026-10-20: **All the juice stays**: coin pops and coins flying into the counter, its roll,
+  bump, glints and sweep; confetti, banners (now centred between the rail and the toasts), the
+  S+ card, the fold animation, Overdrive glows, the town growing.
+
+### Flagged as derivative (the UI redesign)
+
+- **A top resource bar, a numbered hotbar under category tabs, floating objective cards, tabbed
+  full-screen menus and a news crawl are genre conventions** (shapez, Timberborn, Factorio,
+  Cookie Clicker, Mindustry, Against the Storm and Melvor Idle all use variants). No layout, art
+  or wording is copied from any one of them.
+- Closer to one game: **the line-health chip's click-to-jump is Factorio's alert behaviour**, and
+  **the order flag over the Dock echoes Dorfromantik's quest flags**. Kept: the chip counts this
+  game's own status pips and opens this game's plain-English report; the flag shows an order's
+  progress on the Dock that fills it, which nothing else on the map did.
+## Milestone 6 — Idle and offline (2026-10-20)
+
+Built in parallel with Milestone 5 (Reorganize, Patents) on the lead's instruction; the two meet
+at `offlineEfficiency(g)` and the save version, which the lead renumbers at the merge.
+
+- 2026-10-20: **Time away counts up to 7 days** (`RULES.offlineCapHours` 24 → 168, ROADMAP.md
+  Milestone 6). Why: a holiday week should be paid; a month away is not a factory left running.
+- 2026-10-20: **Offline efficiency is one function, `offlineEfficiency(g)`**: 0.5, plus the Night
+  Shift, plus Patents (Milestone 5), capped at 0.75 (`IDLE.offlineEffMax`). Why: one place that
+  every caller (the offline run, the forecast, the overnight screen) reads; the cap is the number
+  the pace test proves honest.
+- 2026-10-20: **The Night Shift: two coin upgrades, +0.05 each (150,000 after Steam Power, 400,000
+  after Circuits), flat prices.** Why: Act II coin piles up with too few sinks (1.8M at 4 h), and a
+  small, permanent offline gain is a sink that serves pillar 4; each pays back in one or two
+  nights (DESIGN.md §20). Kept to 0.6 so Patents own the rest of the road. A new command
+  (`idleUpgrade`), not the Bellows' `upgrade`, so the Bellows' toast and store row are untouched.
+- 2026-10-20: **Offline, lines run at live speed and deliveries count at the efficiency.** Why:
+  the jams and heap fills the report names happen at the times the player would have seen them,
+  and offline ≤ open idle holds piece by piece (replays pay as live, extrapolation pays less). The
+  alternative (lines at half speed) would put jams twice as late as live and make the forecast
+  wrong.
+- 2026-10-20: **Extrapolation runs in segments that end when a heap fills or the Megaproject Bay is
+  given all it wants of an item**, each followed by 4 minutes replayed live (60 s for the jam to
+  spread, 3 min to measure). Why: v1 extrapolated 23 h from the replay's last 5 minutes, so a line
+  that jammed in hour 2 was paid for 22 more hours; with a 7-day cap that error would have been
+  the whole report. The Bay's intake and the Factory Dock (Factory-only orders) are now measured
+  too. No cap on segments: they are bounded by the heaps and Bay wants on the floor.
+- 2026-10-20: **A jam is a machine or module blocked 10 s straight**; the timeline names every one
+  (not only the first), each heap filling, orders, research and the Megaproject, with a jump-to
+  per jam and heap. Why: a belt that is briefly full blocks a machine for a tick (traffic, not a
+  jam), and the slice's card named only the first jam.
+- 2026-10-20: **Offline runs and forecasts are spread over frames** (20 ms a frame, a progress
+  bar). Why: an Act II factory's hour-long replay is 3–5 s of ticks, and a frozen page on return
+  is the stutter the roadmap rules out.
+- 2026-10-20: **The forecast is the offline model on a copy of the game.** Why: the evening's
+  forecast and the morning's report must agree (pillar 4); one computation guarantees it, and a
+  copy keeps the live game deterministic.
+- 2026-10-20: **"Stop" (`pause`) is a logged sim command**: a stopped machine or Miner takes
+  nothing, makes nothing, draws no power and keeps its buffers; splitters route around it; a
+  stopped module runs at 0 and takes nothing; a whole line (by any machine or by its heap) or a
+  trunk-joined group at once. Why: the lead asked for a stop that is useful and real. Its use is
+  keeping a heap's room for when you are back and choosing, line by line, what runs overnight;
+  it earns nothing while stopped, and the forecast shows that in coin. Not built: a "bypass" mode
+  that passes inputs through unprocessed (it would make every machine a belt).
+- 2026-10-20: **Inspiration: a click on a Hopper, from the slice end on.** 0.1% of the selected
+  node's remaining cost per item, up to 30% of each item per node (`State.inspire`), under the
+  12 clicks/s cap. Why the Hopper: it is where research is paid, so the click is where the line
+  delivers, and it needs no new building. Why the slice end: PLAN.md and the roadmap put
+  Inspiration with Act II+. A capped click is quiet (ok, nothing given) so a fast clicker does
+  not toggle the research screen. The Factory Hopper takes it through `fclick`.
+- 2026-10-20: **Notation is a player setting outside the sim** (localStorage `foldworks_settings`,
+  `setNotation` in `num.ts`): standard, scientific, engineering, letters. Why: it changes how
+  numbers are written, never a number, so it must not ride in a save or an export string.
+- 2026-10-20: **One number helper, `src/engine/fmt.ts`**, for amounts, rates, kW, shares,
+  multipliers and durations; the HUD's counter and rates, the coin pops, kW and the hover report
+  go through it. Why: the readability pass; four copies of "K/M with toFixed" ignored the notation.
+- 2026-10-20: **The background tab keeps the sim running on a 1 s timer** (40 ms a pump, up to 4%
+  of the time since the last when throttled, at most 250 ms), a pump 2 min late counts the gap as
+  time away, and on return up to 60 s owed is caught up live at 40 ticks a frame, more through the
+  offline path. Why: a hidden tab is a game left open (pillar 4: it should pay as open, not at the
+  offline efficiency, which is what v1 did by running the offline model on every return), with
+  Sparks paused (§6). Measured at 0.10–0.14% of a core.
+- 2026-10-20: **Autosave by the real clock (30 s), plus `visibilitychange`, `pagehide` and
+  `beforeunload`; three rolling backups at most one per 10 min, only from a save that loads;
+  corruption recovery to the newest good backup with the bad string kept aside and a plain-words
+  toast.** Why: the roadmap's exit (never lose more than 30 s) and a save is the one thing an
+  incremental game must never lose. Autosave was counted in sim time, so fast-forward saved every
+  frame and a frozen game never.
+- 2026-10-20: **Saves v5**: `inspire` per research node; `paused` and the Night Shift need no
+  migration. Milestone 5 may add its own step; the lead renumbers.
+- 2026-10-20: **The pace test measures every stage from 1 h to 5 h** (`tests/pace-idle-*.test.ts`,
+  seed 1000, split in two files that run side by side): rule 4 holds (1.53–3.94) and 8 h offline
+  pays no more than 8 h open and idle at 0.5 and at 0.75. Two margins are close (1.53 at 1 h, 3.94
+  at 3 h) and are reported, not tuned: the Act II bot's own build decides them.
+
+### Flagged as derivative (Milestone 6; owner to decide)
+
+- **Letter notation (aa, ab … after the named suffixes)** is a convention of many idle games,
+  mobile ones above all. Kept as one of four settings because players of the genre expect it; it
+  is not the default.
+- **Offline progress at a reduced efficiency, raised by upgrades** is the genre's convention (Cookie
+  Clicker's "Twin Gates of Transcendence" heavenly upgrades raise offline production; many idle
+  games sell "offline earnings" boosts). Ours is re-derived from the model: offline is the same
+  sim (a replay and measured rates), the efficiency is a stated number on a report the player can
+  check, and the Night Shift is two flat purchases capped at 0.6, never a bought multiplier on
+  live production.
+- **Clicking a building to speed research** (Inspiration) resembles the genre's "click the big
+  thing" loop. Ours credits only the selected node, as items, with a falling share and a 30% cap,
+  and it is clicked at the Hopper the lines already feed.
+- **Autosave plus rolling backups and export strings** are common practice (Antimatter
+  Dimensions and others keep backups); kept because it is good practice, not a mechanic.
+## Milestone 5 — Reorganize (2026-10-20)
+
+- 2026-10-20: **Patents = floor(0.5 x the chain steps of each distinct product folded this run x
+  its best grade + the Great Drill Patents delivered this run + log2(1 + invested / 100,000)).**
+  Why: a reset should pay for what the run understood and folded (pillar 1), not for coin; the
+  grade carries the audit's lesson to the reset; distinct products, not copies, so stamping more
+  of one line is not the way to Patents. Coin is the minor, logarithmic term, so the 1.8M hoard at
+  5 h is worth about 4 Patents if put into the factory, never the bulk. Milestone 4's provisional
+  coin-based `patentDivisor` is gone. Calibration and measurements: DESIGN.md §19.
+- 2026-10-20: **What a Reorganize keeps lives in `meta`, except four fields that already lived in
+  the run's state and stay there**: `mega`, `codex`, `orders.rep` and the trophy flags (plus
+  `counters`, `ordersSeen`, `factorySeen`). Why: moving them would touch every reader of them in
+  the app and the sim for no gain; the reset carries them over by name (`carry` in
+  src/sim/reorganize.ts, listed in `KEPT`).
+- 2026-10-20: **The tick and the RNG run on across a reset; `meta.runStart` marks a run's start.**
+  Why: the command log stays one ordered history, so seed + log replays across resets (tested).
+- 2026-10-20: **A head start applies at once when bought, and at the start of every later run; it
+  gives only the research it names, not the tree before it.** Why: buying one mid-run should do
+  something now (pillar 4); and the campaign bot found that giving the prerequisites too handed
+  Act II its steel research for free.
+- 2026-10-20: **The Patent tree has flat prices with prerequisites** (31 nodes, 82 Patents in all),
+  no growing price (CLAUDE.md: no geometric price curves) and no "+X% everything" node
+  (PLAN.md's not-list). Its automation branch serves pillar 2 (the chores of layer 0 become
+  machines: shovelling, picking research, accepting orders, stamping, building from blueprints).
+- 2026-10-20: **New currency: Raccoon Bearings** (the Committee's pay; kept through every reset;
+  spent only by the Great Drill's stages 2 and 3). Pillars: 5 (every customer is a character: the
+  Committee pays in what a coat full of raccoons would have) and 1 (bearings come from lines you
+  built to make what nobody else wants: slag, oil, gravel). It is not in PLAN.md's currency table:
+  **the owner should confirm it** (CLAUDE.md asks before changing the currency list).
+- 2026-10-20: **The Committee is the fourth customer**, met with the Great Drill research in the
+  first run (its bearings go to the Bay, and its orders are goals while the Bay fills: §16 rule
+  1), or after the first Reorganize once Folding is done. Its orders pay no coin, only bearings and
+  reputation; its reputation rewards are rules (module buffers 6 s, a slag-eating night crew, one
+  Machine Kit fewer per stamp).
+- 2026-10-20: **The Dock takes an item it normally refuses while the active order wants it** (slag
+  for The Pile, oil for Midnight Oil). Why: the Committee wants waste; making it go to the Dock is
+  the puzzle, not a new building.
+- 2026-10-20: **The Great Drill's stages 2 and 3 take nothing until their bearings are in, and
+  want 4 steel a bit** (stage 2: 250 bits, 1,000 steel, 4 bearings, 6 Patents; stage 3: 400 bits,
+  1,600 steel, 8 bearings, 8 Patents). Why: without the gate the first run filled stage 2 with
+  items and the preview passed 20 at 5 h; with more steel than 4.4 a bit the bot's Bay floor jammed
+  on its own slag once the bits were full. Rewards change rules for good (miners beside a patch;
+  deep deposits in chunk D).
+- 2026-10-20: **Offline efficiency is read through `offlineEfficiency(g)`** (0.5 + the offline
+  branch, 0.75 at most). The one read in src/sim/offline.ts changed; nothing else there.
+- 2026-10-20: **Blueprint share strings are our own format** (FWB1: a cell-byte grid plus recipe
+  bytes, LZSS, base64url, FNV-1a checksum, append-only tables), pure TypeScript so the sim stays
+  pure. The Blueprint Book is a list of named layouts with a mini map and four buttons, not a grid
+  of icon slots.
+- 2026-10-20: **The Act II bot (bot2) changes for later runs**: it takes only Bramble's Factory-floor
+  order (the Festival) of the slice's orders; after 10 minutes without progress on its order it
+  takes a Committee order its floor can fill (The Pile when a module outputs slag, Midnight Oil
+  when one outputs oil); the gravel line's sand miner turns away while nothing wants sand, and the
+  second coal miner rests once stage 1 runs miners +50% (both flooded the corridor in run 2); a
+  fold whose audit measured no output is cancelled and audited again. The campaign bot resets when
+  its plan is done, the preview grew under 0.25 in 20 minutes, no Committee order is filling, and
+  it has at least 12 Patents (run 1) or 4 (later runs).
+- 2026-10-20: **Bug fixed: a Reorganize rebuilt nothing of the old run's lookups**, so the old
+  floor's grid stayed under the new one (a head-start Miner was not placed where an old building
+  had stood). The reset now rebuilds both floors' lookups before placing anything.
+
+### Flagged as derivative (Milestone 5; owner to decide)
+
+- **The Builder Dragonfly and ghosts resemble Factorio's construction robots and ghost entities**
+  (planned buildings drawn as outlines, built by flying drones as materials allow). Kept because
+  blueprints are the reset's head start and building them by hand is the chore pillar 2 hands to
+  a machine. Differences: one Patent-bought helper on the Workshop only, building at a fixed
+  2 s pace with coin (no logistics network, no item delivery, no range), themed to the swamp.
+- **Blueprint share strings resemble Factorio's blueprint strings** (compressed layout text you
+  paste between saves). The format is our own; the idea of a pasteable layout string is the same.
+- **The Patent tree resembles Cookie Clicker's heavenly upgrades and Antimatter Dimensions'
+  infinity/eternity upgrade trees** (a reset currency spent on permanent nodes with
+  prerequisites). Differences: flat prices, no multiplier nodes; most nodes are head starts
+  measured in minutes saved or rule changes to folding and audits.
+- **The automation nodes resemble autobuyers** (Antimatter Dimensions above all): the Lab
+  Assistant, Order Clerk and Stamp Press do a chore on a timer. Kept for pillar 2; they act on this
+  game's own chores (research picks, orders, stamping kept-spare designs).
+- **The Reorganize card resembles every prestige confirm screen** (Cookie Clicker's Ascend,
+  Antimatter Dimensions' Big Crunch: the gain shown before you reset). It is pillar 4 as written;
+  ours lists the gain term by term with the goals that raise it, and what is kept and lost.
+- **The Patents formula was checked and is not derivative**: CC's heavenly chips and AD's infinity
+  points are a root or log of currency earned; ours counts distinct folded products by recipe
+  depth and audit grade, with coin as a minor log term.

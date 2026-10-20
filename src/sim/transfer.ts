@@ -9,6 +9,19 @@ import { ITEMS, type ItemId } from '../data/items';
 import { RECIPE, recipesFor, type RecipeDef } from '../data/recipes';
 import { RULES } from '../data/rules';
 import { RESEARCH } from '../data/research';
+import { ORDER } from '../data/orders';
+import { prules } from './patents';
+
+/** Does the active special order still want this item at the Workshop Dock? */
+export function orderWants(g: Game, item: string): boolean {
+  const id = g.s.orders.active;
+  if (!id) return false;
+  const d = ORDER[id];
+  if (d.at === 'factory') return false;
+  const want = d.wants[item as ItemId];
+  if (!want) return false;
+  return (g.s.orders.progress[id]?.[item as ItemId]?.toNumber() ?? 0) < want;
+}
 
 /** Can `to` take `item`, arriving while travelling in direction `dir`? (No side effects.) */
 export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
@@ -18,13 +31,14 @@ export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
       // never head-on into a belt that comes back at us
       return to.item === null && to.rot !== opposite(dir);
     case 'dock':
-      return !(ITEMS as Record<string, { refused?: boolean }>)[item]?.refused;
+      // what the Dock refuses it takes while the active order wants it (the Committee's slag)
+      return !(ITEMS as Record<string, { refused?: boolean }>)[item]?.refused || orderWants(g, item);
     case 'hopper':
       // slag only while the selected research still wants it (else a heap draining into the
       // Hopper would never fill, and banked slag would pay for Slag Bricks: DECISIONS.md)
       return item !== 'slag' || hopperWantsSlag(g);
     case 'heap':
-      return item === 'slag' && to.count < (BUILD.heap.capacity ?? 100);
+      return item === 'slag' && to.count < prules(g).heapCap;
     case 'crate':
       return enterSide !== to.rot && to.store.length < (BUILD.crate.capacity ?? 50);
     case 'splitter':
@@ -44,6 +58,7 @@ export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
     default:
       // crafting machines (Mk1, Act II, Mk2); miners, engines and poles take nothing
       if (!isMachine(to.kind) || to.kind === 'miner') return false;
+      if (to.paused) return false; // stopped by the player (DESIGN.md §20): its inputs route on
       if (enterSide === to.rot) return false; // the front is the output
       return machineTakes(g, to, item);
   }

@@ -1,0 +1,154 @@
+// The campaign bot (ROADMAP.md Milestone 5, DESIGN.md §16 rules 3 and 6, §19): several runs in a
+// row. Each run is the Act I planner to its slice end, then the Act II policy (bot2.ts); when the
+// Reorganize preview stops growing (a sensible player's moment: nothing more this run would earn
+// many Patents soon) it resets, spends its Patents in a fixed, sensible priority, and plays the
+// next run with the head starts. Honest like the others: every action is a command through g.act,
+// at the same hand and click pace, and it reads only what the screen shows (the preview included).
+import type { Game } from './Game';
+import { Bot } from './bot';
+import { Act2Bot, PLAN2, type Step as Step2 } from './bot2';
+import { TICK_RATE } from '../engine/time';
+import { previewPatents, runSeconds } from './reorganize';
+import { patentRefusal, hasPatent } from './patents';
+import type { PatentId } from '../data/patents';
+import { ORDER } from '../data/orders';
+import { orderFrac } from './systems/orders';
+
+/** The order a sensible player buys in: the two rules that raise income at once (two more source
+ * module copies; Overdrive from the first minute), then every Act I head start, then Act II's, then
+ * quality of life. A node waits for its prerequisites and the Patents to buy it. */
+export const PATENT_PRIORITY: PatentId[] = [
+  'surveyCharter', 'bellows', 'overdriveHabit', 'starterLine', 'notebooks', 'copperDeeds', 'gearPatterns', 'gizmoPatent', 'foldingPatent',
+  'shovelFrog', 'coolHands', 'grant', 'quickAudit', 'coalRights', 'steelCharter', 'moreAuditors', 'deepHeaps', 'nightShift',
+  'glassNotes', 'circuitPatent', 'widerBox', 'nightWatch', 'dragonfly', 'lightsOn', 'stampDies', 'nestedBoxes', 'sideIntake',
+  'labAssistant', 'orderClerk', 'stampPress', 'dragonflies',
+];
+
+/** Two more Gizmo chains for the Factory floor, once the Surveyor's Charter gives the claims: the
+ * Act II bot places them by search before its own plan (a Gizmo works feeding the Dock, an ingot
+ * and a wire module feeding it, their slag to the Dock). */
+export const EXTRA_CHAINS: Step2[] = ['F', 'G'].flatMap((c): Step2[] => [
+  { k: 'fmod', id: 'giz' + c, design: 'Gizmo works', to: { k: 'dock' }, hub: true },
+  { k: 'fmod', id: 'ing' + c, design: 'Iron ingots', to: { k: 'mod', id: 'giz' + c }, by: { k: 'dock' } },
+  { k: 'fmod', id: 'wire' + c, design: 'Copper wire', to: { k: 'mod', id: 'giz' + c }, by: { k: 'dock' } },
+]);
+
+export interface RunLog {
+  run: number;
+  /** seconds since tick 0 when the run started and ended */
+  start: number;
+  end: number;
+  /** the planner's hand-over to the Act II policy, seconds into the run (-1: never) */
+  handover: number;
+  /** milestones, seconds into the run */
+  at: Record<string, number>;
+  /** each minute: coin per minute averaged over the last 5 minutes (one-offs excluded) */
+  perMin: number[];
+  /** each minute: the preview's Patents (unrounded) */
+  preview: number[];
+  /** Patents banked at its Reorganize (0 when it never reset) */
+  patents: number;
+  peakPerMin: number;
+  /** Patent nodes bought after it */
+  bought: PatentId[];
+  megaStage: number;
+  decisions: number[];
+  what: string[];
+  clicks: number[];
+}
+
+export interface CampaignOpts {
+  /** how many runs (the last one plays to its cap and does not reset) */
+  runs: number;
+  /** each run's cap, seconds */
+  cap: (run: number) => number;
+  /** reset once the preview grew less than `stallGain` Patents over `stallMin` minutes, after the
+   * hand-over, with at least `minPatents` */
+  stallMin?: number;
+  stallGain?: number;
+  minPatents?: (run: number) => number;
+  /** never reset: play run 1 to its cap (§16 rule 6) */
+  noReset?: boolean;
+  /** called once a second */
+  onSecond?: (g: Game, run: number, bot: Act2Bot | null) => void;
+}
+
+/** Play runs in a row on `g` (a fresh game). */
+export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
+  const logs: RunLog[] = [];
+  const stallMin = o.stallMin ?? 20;
+  const stallGain = o.stallGain ?? 0.25;
+  for (let run = 1; run <= o.runs; run++) {
+    const start = g.s.tick;
+    const planner = new Bot(g, 'planner');
+    let bot: Act2Bot | null = null;
+    let doneAt: number | null = null;
+    let handover = -1;
+    const perMin: number[] = [];
+    const preview: number[] = [];
+    /** a Committee order filling (its bearings are Patents to come: the Great Drill), by minute */
+    const committee: number[] = [];
+    const ring: number[] = [];
+    const cap = o.cap(run);
+    let reset = false;
+    // the Patents, spent first thing in the new run (the tree screen, one click a hand-beat)
+    const bought: PatentId[] = [];
+    for (;;) {
+      const next = PATENT_PRIORITY.find((id) => !hasPatent(g, id) && !patentRefusal(g, id));
+      if (!next) break;
+      if (!g.act({ k: 'patent', id: next }).ok) break;
+      bought.push(next);
+      g.step(TICK_RATE / 4);
+    }
+    while (runSeconds(g) < cap) {
+      if (!bot) {
+        planner.update();
+        if (planner.step >= planner.plan.length) doneAt ??= g.s.tick;
+        if (doneAt !== null && (g.flag('sliceEnd') || g.s.tick - doneAt >= 60 * TICK_RATE)) {
+          const extra = hasPatent(g, 'surveyCharter') ? EXTRA_CHAINS : [];
+          bot = new Act2Bot(g, {}, [...extra, ...PLAN2]);
+          handover = runSeconds(g);
+        }
+      } else bot.update();
+      g.tick();
+      bot?.tick();
+      if (g.s.tick % TICK_RATE === 0) o.onSecond?.(g, run, bot);
+      if ((g.s.tick - start) % (60 * TICK_RATE) === 0) {
+        ring.push(g.incomePerMin());
+        if (ring.length > 5) ring.shift();
+        perMin.push(ring.reduce((a, b) => a + b, 0) / ring.length);
+        const p = previewPatents(g);
+        preview.push(p.total);
+        const act = g.s.orders.active;
+        committee.push(act && ORDER[act].customer === 'committee' ? orderFrac(g, act) : -1);
+        const m = preview.length;
+        if (!o.noReset && run < o.runs && bot && bot.step >= bot.plan.length && m > stallMin && p.now >= (o.minPatents?.(run) ?? 1) && preview[m - 1] - preview[m - 1 - stallMin] < stallGain && (committee[m - 1] < 0 || committee[m - 1] === committee[m - 1 - stallMin]) && !g.s.audits.length && !g.s.faudit) {
+          reset = true;
+          break;
+        }
+      }
+    }
+    const end = g.s.tick;
+    const pv = previewPatents(g);
+    const at: Record<string, number> = {};
+    const t0 = start / TICK_RATE;
+    for (const [k, v] of Object.entries({ ...planner.log.at, ...(bot?.log.at ?? {}) })) at[k] = v - t0;
+    const log: RunLog = {
+      run, start: start / TICK_RATE, end: end / TICK_RATE, handover, at, perMin, preview,
+      patents: reset ? pv.now : 0, peakPerMin: Math.max(0, ...perMin.filter((_, i) => i >= 4)), bought, megaStage: g.s.mega.stage,
+      decisions: [...planner.log.decisions, ...(bot?.log.decisions ?? [])].map((t) => t - t0).sort((a, b) => a - b),
+      what: [], clicks: [...planner.log.clicks, ...(bot?.log.clicks ?? [])],
+    };
+    logs.push(log);
+    if (!reset) break;
+    const r = g.act({ k: 'reorganize' });
+    if (!r.ok) throw new Error('campaign: reorganize refused: ' + r.why);
+  }
+  return logs;
+}
+
+/** Seconds into a run when its 5-minute coin per minute first passed `level` (or undefined). */
+export function passedAt(log: RunLog, level: number): number | undefined {
+  const i = log.perMin.findIndex((v, k) => k >= 4 && v > level);
+  return i < 0 ? undefined : (i + 1) * 60;
+}

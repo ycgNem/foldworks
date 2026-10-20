@@ -14,7 +14,8 @@ is the 100-hour pacing model, and every milestone after the gate is measured aga
 - **Tile**: 16 px. Workshop machines are 1×1 in the slice; Mk2+ footprints come in Act II.
 - **Item on a belt**: an 8×8 px icon. At most 1 item per belt tile.
 - **Numbers**: every amount of coin or items is a `Num` (`src/engine/num.ts`), from day one.
-  Display: `1,234` → `12.3K` → `4.56M` …, with scientific notation as a setting.
+  Display: `1,234` → `12.3K` → `4.56M` …, with scientific, engineering and letters notations as a
+  setting (§20).
 - **Clicks**: pace math assumes **4 clicks/s sustained** while actively clicking and a
   **12 clicks/s** ceiling (faster clicks are ignored, so autoclickers buy nothing).
 
@@ -299,24 +300,38 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
   before that, three copies of one module beside the Dock ended the slice 15 s after the first
   fold (Milestone 1–2 review).*
 
-## 12. Offline (slice)
+## 12. Offline (finished in Milestone 6; the numbers' derivations are in §20)
 
-- On load (or when a hidden tab comes back), elapsed time `t` (capped at 24 h in the slice) is
-  computed as:
-  1. **Replay**: up to **1 h** of real ticks headless (72,000 ticks, about a second), both floors,
-     through the same systems: Workshop lines item by item, modules as rates. Heaps fill and lines
-     jam during it as they would live.
-  2. **Extrapolate** the rest from what reached each Dock and Hopper in the replay's last 5 minutes,
-     at **offline efficiency 0.5**, paid through the same functions (orders first, then sales;
-     research credit; Machine Kits to the parts bank).
-- **Report**: coin earned, items delivered to the Hopper, research and orders finished, the first
-  jam in the replay with its time and machine ("47m: Hand Furnace blocked by slag", with a button
-  that jumps to it), and the Slag Heap that fills next.
-- *Measured* (§13 check 12, planner after its slice end, seed 1000): left open and idle, the slice
-  factory earns 126K in its first hour, then 48K, then 40.5K an hour from hour 3 on (11 of 23
-  Workshop machines jammed on full heaps; the modules never jam, since the Factory Dock scraps
-  slag). 8 h offline pays 331K (the replayed hour, then 7 h × 0.5 of the replay's last 5 minutes),
-  0.79 of the 417K that 8 h open and idle pays.
+- On load, or when a hidden tab comes back with time the background pump could not run (§20),
+  elapsed time `t` (capped at **7 days**; the slice had 24 h) is computed as:
+  1. **Replay**: up to **1 h** of real ticks headless (72,000 ticks), both floors, through the same
+     systems: Workshop lines item by item, modules as rates. Heaps fill and lines jam during it as
+     they would live.
+  2. **Extrapolate the rest in segments.** Rates come from what reached each Dock, Hopper and the
+     Megaproject Bay over the last 5 minutes of live ticks, and from each rising Slag Heap's fill
+     rate. A segment runs until the next thing that would change those rates: **a heap filling**,
+     or **the Bay getting all it wants of an item**. Then that heap is set full (or the want met),
+     **4 minutes are replayed live** (60 s for the jam to spread, 3 min to measure the new rates),
+     and the next segment starts. Lines run at the same physical speed as live, so heaps fill and
+     lines jam at the same times whether the game was open or closed; what they deliver while
+     extrapolated counts at the **offline efficiency**, paid through the same functions as live
+     (orders first, then sales; research credit; Machine Kits to the parts bank; the Bay's stage),
+     in 15-minute slices so an order or a node lands on the timeline near its time.
+  3. **Efficiency**: `offlineEfficiency(g)` (`src/sim/offline.ts`): **0.5**, plus the Night Shift
+     bought with coin (+0.05 twice, §20), plus Milestone 5's Patent nodes, never past **0.75**.
+- **No Sparks while away** (§6): the run tells the sim the tab is hidden.
+- **The report** is a timeline: every **jam** (a machine or module blocked **10 s straight**, so
+  belt traffic is not a jam) with its time, machine and the item it is blocked by and a button that
+  jumps to it; each **heap filling**; **orders filled**; **research finished**; the **Megaproject**'s
+  stages and its wants met. A `~` marks a time worked out from the rates rather than replayed.
+  Then the totals: coin, items into the Hopper, Machine Kits banked, what the Bay was given, what
+  sold most. Its footer says how the number was made ("1h 12m ran tick by tick; the other 6h 48m
+  from measured rates at 50%"), so it is a number the player can check (pillar 4).
+- **The forecast** (§20, "safe for overnight") is this same run on a copy of the game.
+- *Measured* (§13 check 12 and §20's stage table): at the slice end, 8 h offline pays 0.59 of 8 h
+  open and idle; from 1 h to 5 h of the Act II bot, 0.56–0.58 at 0.5 and 0.78–0.79 at the 0.75
+  ceiling. Open and idle the factory earns less every hour as heaps fill (the slice factory: 126K
+  in its first hour, then 48K, then 40.5K an hour once 11 of 23 Workshop machines have jammed).
 
 ## 13. Derived checks (these become pace tests)
 
@@ -355,7 +370,7 @@ Gizmo 16:13 (14:41–17:50); Folding 23:19 (21:03–26:03); first fold 24:35 (22
 (36:19–44:23) (10 seeds each); check 7: balanced A 0.873 (U 1.00, W 1.00, C 0.37), wrong ratio D
 0.474 (U 0.34), slag backing up D 0.073 (U 0, W 0); check 8: jam 38 s after the line starts; check
 10: greedy's longest stretch 171 s (104–244); check 11: Dock-only Folding 32:26 (29:30–38:01), 9.1
-min behind; check 12 (2 seeds): 8 h offline = 3.97 h of active earning, 0.59 of 8 h open and idle.
+min behind; check 12 (2 seeds): 8 h offline = 3.97 h of active earning, 0.59 of 8 h open and idle (Milestone 6's segmented model: 3.94 h, 0.58–0.59, §20).
 Every check holds; no test is `it.fails`.
 
 **Round 4: the Festival ends the slice** (2026-10-20, after the Milestone 3 gate). The gate found
@@ -438,7 +453,8 @@ If any answer is no, change the model here before building more.
   small, specific bonus tied to what earned it.
 - **Overdrive / Inspiration / Sparks II**: Overdrive 3× for 10 s with a 30 s cooldown per
   machine. Inspiration: 1 click = 0.1% of the selected node's remaining cost, capped at 30% of
-  each node (clicking helps but never replaces the line).
+  each node (clicking helps but never replaces the line). Built in Milestone 6: a click on a
+  Hopper from Act II on (§20).
 
 ## 16. The 100-hour pacing model
 
@@ -660,3 +676,325 @@ to S, then the Act II bot in `src/sim/bot2.ts`, seeds 1000 and 8919, 5 h):
   surplus fills its buffer and stops the rest, so byproducts go to a sink that never waits.
 - Lifetime coin: 1.8M at 4 h, 2.0–2.05M at 5 h. Income about 12,500/min from S to the Bay floor,
   4,300/min after (the Gizmo chains are cleared for it).
+
+## 19. Reorganize (Milestone 5, 5-15 h)
+
+Reset layer 1. The player ends a run on purpose and banks **Patents** for what the run built; the
+Patent tree spends them on a faster, different next run. Pillar 4: it is always a choice, made
+from a card that says exactly what it gives, keeps and loses (`src/app/reorganize.ts`), and a
+player who never resets keeps progressing (§16 rule 6).
+
+### The Patents formula
+
+    Patents = floor( 0.5 x SUM over distinct products folded this run (chain steps x best grade mult)
+                   + Great Drill Patents delivered this run
+                   + log2(1 + invested / 100,000) )
+
+- **Main term: what you folded.** Each distinct product a module design of this run makes (its
+  main output; byproducts never count) is worth half a Patent per **chain step** from raw ore,
+  derived from the recipes (`chainSteps`, the shallowest recipe): an ingot 1, plate, wire and steel
+  2, gear, concrete and circuit 3, Gizmo and motor 4, Drill Bit 5, slag brick 1, glass 1 (from
+  sand). It is multiplied by the best grade it was folded at (§10's multipliers, C 0.9 to S+ 1.35),
+  and each product counts once: twelve copies of an Iron ingots module are worth what one is. The
+  term rewards the breadth and depth of the chains the run understood well enough to fold, and the
+  audit's grade matters at the reset as it does on the floor.
+- **Megaproject term.** Each Great Drill stage is worth Patents (stage 1: 5, stage 2: 6, stage 3:
+  8), earned in proportion as its parts are delivered in this run (each item, and the bearings, an
+  equal share). Progress already in the Bay from an earlier run is not paid twice.
+- **Works term (minor).** log2(1 + invested / 100,000), invested = coin earned + head-start coin
+  granted - coin on hand: coin put into the factory, not hoarded. The Act II bot puts about 280K in
+  by 4 h (about 2 Patents); 1.8M would be about 4.2. Coin alone never dominates.
+- A reset needs at least 1 Patent (`patentMin`) and no audit running.
+
+**Not derivative of a shipped prestige formula** (checked; DECISIONS.md, Milestone 5): Cookie
+Clicker's heavenly chips and Antimatter Dimensions' infinity points are functions of the currency
+earned (a root or a log of it). Here currency is the minor, logarithmic term; the main term counts
+distinct folded products by recipe depth and audit grade, which only this game has.
+
+**Calibration.** The weight 0.5 was set so the Act II bot's run gives 12-20 at a sensible 4-6 h
+reset: its nine folded products are 21.5 chain steps, about 10.9 Patents at its grades; the Great
+Drill's stage 1 adds up to 5 (2.4-5 by the reset), works about 2. Measured
+(`tests/pace-act2-run.test.ts`, the preview at fixed times, seeds 1000 and 8919): 10 at 2 h, 14 at 3 h,
+19 at 4 h and at 5 h. The idle slice factory (the planner to the Gizmo Festival, then left
+alone) is worth 4.35 at 4 h: clearly fewer (`tests/pace-reorganize.test.ts`).
+
+**The preview** (`previewPatents`, pure): the Patents now, each term, and the goals that raise it,
+biggest first: fold a product not folded yet (+0.5 x its steps), refold one at S+ (+ the grade
+gap), finish the Drill stage (+ what is left of it), and the coin that, invested, adds the next
+whole Patent. "Next step" is the total with the best new fold added. The Reorganize card shows it
+all, with the runs so far.
+
+### What is kept, what is lost
+
+Kept (`meta`, plus four fields that already lived in the run's state): Patents and the tree,
+blueprints, Great Drill progress (`mega`), reputation, the Codex, Raccoon Bearings, trophies and
+lifetime statistics (coin earned, items delivered, folds), the run history. Lost: both floors,
+coin and items, land (back to chunk A), claims, research, module designs, orders filled this run.
+The tick and the seeded RNG run on: the command log stays one ordered history and replays across
+resets (a test checks it); `meta.runStart` marks a run's first tick.
+
+### The Patent tree (`src/data/patents.ts`, 31 nodes, 82 Patents in all)
+
+Flat prices with prerequisites, never a growing price; no "+X% everything" node. Four branches:
+
+- **Head starts (13 nodes, 33 Patents).** Bellows on the Bench 1; A Miner on the Patch 1 (a Miner
+  at 2,3 feeding the Hand Furnace); Old Notebooks 1 (Pressing, Surveying East); Copper Deeds 2
+  (chunk B, Copper Smelting, Wire Drawing); Gear Patterns 2 (Gearcutting, Splitters, Buffers); The
+  Gizmo Patent 2; Folding, Remembered 3; Founders' Grant 2 (2,000 coin); Overdrive by Habit 2; Coal
+  Rights 4 (Coal Seams, chunk E); Steel Charter 4 (Steelmaking, Steam Power, chunk F); Glass and
+  Gravel Notes 4; Circuit Patent 5. A head start applies at once in the run it is bought in, and
+  at the start of every later run. It gives only the research it names, not the tree before it:
+  Overdrive by Habit gives Overdrive, and the steel research before it stays to be done. Each
+  price is roughly the minutes of the first run it saves, a Patent per 5-8 min.
+- **Rules (9 nodes, 23).** Surveyor's Charter 3 (+2 claims on every ore: two more copies of each
+  source module); Wider Fold Box 2 (10x10, was 8x8); Quick Audits 2 (5 s warm-up + 40 s, was 70 s);
+  More Auditors 3 (5 at once, was 3); Side Intakes 3 (a module also takes from a trunk pointing
+  into its left side); Deep Heaps 1 (800 slag); Nested Boxes 3 (8x8 nested folds); Cool Hands 2
+  (Overdrive cools in 20 s); Stamping Dies 4 (a stamp costs bill x (1 + 0.3 n), still linear).
+- **Automation (6 nodes, 17).** The Shovel Frog 1 (shovels one jammed machine a second); Lab
+  Assistant 2 (picks research when none is selected); Order Clerk 2 (accepts the first offered
+  order); Stamp Press 4 (stamps the designs marked "keep one spare", every 5 s); Builder Dragonfly 3
+  and A Swarm of Dragonflies 5 (1, then 3, ghosts built every 2 s).
+- **Offline (3 nodes, 9).** Night Shift 2 (+0.1), Night Watch 3 (+0.08), Lights Left On 4 (+0.07):
+  offline efficiency 0.5 up to 0.75 at most. `offlineEfficiency(g)` is the one place
+  `src/sim/offline.ts` reads it.
+
+The campaign bot buys in a fixed priority (`PATENT_PRIORITY`): Surveyor's Charter and the Bellows
+first (two more source copies and a hands-free furnace raise income at once), Overdrive by Habit,
+the Act I head starts in order, quality of life, then Act II's head starts.
+
+### Blueprints and ghosts
+
+A blueprint is a Workshop layout saved from a box (at most 16x16, two chunks: a slice line set;
+24 in the book). The Dock, Hopper and Hand Furnace stay out. Placed by its top-left corner, it
+becomes **ghosts**: outlines that do nothing until built, by a click on one, by "Build ghosts"
+(everything affordable, in placement order), or by a Builder Dragonfly (one every 2 s, the
+cheapest ready ghost first, so a dear one waiting for coin never holds the belts up). A ghost may
+wait on coin, research or land; it may not sit on another building, off the map, or (a Miner) off
+ore. A belt ghost over a belt facing another way turns it when built. Ghosts draw as a faded
+sprite in a dashed outline, teal when ready and slow-blinking violet when waiting (§17: a ghost
+never reads as a machine).
+
+**Share strings** `FWB1.<data>.<checksum>`: the layout as a w x h grid of cell bytes (kind code + 1
++ 32 x turn; 127 for the rest of a 2x2), then a recipe byte for each crafting machine; squeezed by
+a small LZSS coder (12-bit distance, 4-bit length), written in base64url, with an FNV-1a checksum.
+Pure TypeScript (no CompressionStream). The kind and recipe tables are append-only, so old strings
+keep decoding. A 7-part 5x3 line is 45 characters; four 12-tile rows (48 parts) are 53. Import
+refuses with the reason in words: not an FWB1 string, a damaged checksum, a newer version, too
+big, an unknown building or recipe, a part sticking out of its box, overlapping parts, a recipe on
+a machine that cannot make it, extra or missing data.
+
+### The Committee (three raccoons in a trench coat)
+
+The fourth customer, met with the Great Drill research in the first run (its bearings go to the
+Bay, and its orders are goals while the Bay fills: §16 rule 1), or after the first Reorganize once
+Folding is done in that run. Its orders want what nobody else does and pay no coin but **Raccoon
+Bearings**, kept through every reset (a new currency: DECISIONS.md, Milestone 5). The Dock takes an
+item it normally refuses (slag, oil) while the active order wants it.
+
+| Order | Wants | Bearings | Needs |
+|---|---|---|---|
+| The Pile | 1,500 slag | 3 | Folding (about 30 min of a slice Factory floor's slag) |
+| Midnight Oil | 600 oil | 3 | Refining (about an hour of two Plastic modules' oil) |
+| The Brick Throne | 200 slag bricks | 3 | Slag Bricks |
+| Gravel Garden | 600 gravel | 3 | Crushing |
+| Shiny Things | 300 glass + 600 wire | 4 | Glassworks |
+| The Lining | 200 plastic + 10 motors | 4 | Motors |
+
+Its reputation rewards are rules: Coat Pockets (rep 1: module buffers hold 6 s of each rate, was 2,
+so a hiccup in a feed is ridden out), The Night Crew (rep 2: every Slag Heap loses a slag every
+10 s to the coat), Pocketed Kits (rep 3: every stamp needs 1 Machine Kit fewer).
+
+### The Great Drill, stages 2 and 3
+
+| Stage | Wants | Bearings | Patents | Reward, for good |
+|---|---|---|---|---|
+| 1 | 450 bits, 2,000 steel | - | 5 | Miners and modules with miners +50% (§18) |
+| 2, the Bore | 250 bits, 1,000 steel | 4 | 6 | Miners dig from any tile beside an ore patch: a patch feeds three times the miners |
+| 3, Breakthrough | 400 bits, 1,600 steel | 8 | 8 | Chunk D gains a deep iron and a deep copper deposit |
+
+For stages 2 and 3 the Bay takes nothing else until their bearings are in (the bore head is the
+Committee's), so a stage needs a Committee order or two first. Steel is 4 a bit (under stage 1's
+4.4) so the steel is in before the bits: with the bits full first, the bot's Bay floor jammed on
+its own slag (Steel blocked on slag, Concrete full, the Drill works starved of wire). About 50 min
+of the Bay floor for stage 2, 80 for stage 3. Progress survives every reset.
+
+### Measured pace (`tests/pace-reorganize.test.ts`, the campaign bot)
+
+Run 1 is the Act I planner to the Festival, then the Act II policy; it resets when its plan is
+done, the preview grew under 0.25 in 20 min, no Committee order is filling, and it holds at least
+12 Patents. Runs 2 and 3 buy Patents first (11 nodes, then 5-6), then play the same way.
+
+| | seed 1000 | seed 8919 |
+|---|---|---|
+| Run 1: reset at, Patents | 4:13, 19 | 4:08, 19 |
+| Run 1 peak (coin/min over 5 min) | 13,422 | 13,348 |
+| A third of run 1 (rule 3's limit) | 1:24 | 1:22 |
+| Run 2 passes run 1's peak at | 0:23 | 0:21 |
+| Run 3 passes it at | 0:15 | 0:15 |
+| Slice end (hand-over) in runs 1, 2, 3 | 0:31, 0:17, 0:10 | 0:30, 0:16, 0:10 |
+| Great Drill stage after runs 1, 2, 3 | 1, 1, 2 | 1, 2, 2 |
+
+- **Rule 3 holds** with room: runs 2 and 3 pass run 1's peak in about a sixth of run 1's length.
+  Run 2 resets at about 3 h with 12-17 Patents (the campaign scratch runs).
+- **First reset worth taking at 4-6 h** with 12-20 Patents: 4:08-4:13, 19.
+- **Rule 6** (seed 1000, never resetting, 7 h): the preview climbs 5.7, 10.3, 14.9, 19.1 at 1-4 h
+  and then holds at 19.1 to 7 h; coin earned 0.32M, 1.06M, 1.54M, 1.77M, 2.04M, 2.29M, 2.54M at
+  1-7 h; stage 1 stands at about 3:50. Progress slows and never stops; the flat preview is the
+  pressure toward a reset.
+- Honest: at most 4 clicks in any second in every run. The campaign takes about 55 s a seed.
+
+### Open after Milestone 5
+
+- **Rule 1 while the Bay fills.** The Committee now arrives with the Great Drill research, so its
+  orders and the preview's goals stand in that stretch. The Act II bot takes a Committee order
+  only when its own order stalls for 10 minutes, so the bot's measured gap barely moves (above).
+- **Coin piling up** (about 1.8M at 5 h): the works term turns coin put into the factory into
+  Patents (1.8M invested is about 4) and the preview names the coin to the next one; there is
+  still little to spend it on inside Act II besides claims, stamps and Mk2 machines.
+- **A never-resetting run's preview flattens** once every product is folded and the stage stands
+  (19.1 from 5 h to 7 h on seed 1000) while its coin keeps growing. That is the pressure toward a
+  reset, not a wall: the run still earns and builds (rule 6 holds on coin and lifetime progress).
+- **Stage 3 in three runs** needs two Committee orders a run; the campaign bot fills only The Pile
+  each run (its floor never routes oil to the Dock for Midnight Oil), so it ends run 3 at stage 2.
+## 20. Idle and offline (Milestone 6)
+
+Pillar 4 finished: time away is paid honestly and the report says how, the player can make a
+factory safe before leaving, a hidden tab keeps running, and a save never costs more than 30 s.
+Numbers live in `src/data/idle.ts` (and `RULES.offlineEff`, `RULES.offlineCapHours`), each with its
+derivation here.
+
+### Offline efficiency and the cap
+- **The cap: 7 days** (the slice had 24 h). A holiday week is paid; a month away is not.
+- **Efficiency** is one function, `offlineEfficiency(g)` in `src/sim/offline.ts`: **0.5** (PLAN.md),
+  plus the **Night Shift** (below), plus Milestone 5's Patent nodes, never past **0.75**. The
+  ceiling is checked by the pace test: 8 h offline at 0.75 still pays no more than 8 h open and
+  idle at every stage (0.78–0.79 of it, below).
+- **The Night Shift** (one-off coin purchases, flat prices, an Act II coin sink):
+
+  | Upgrade | Price | Efficiency | Offered with | Derivation |
+  |---|---|---|---|---|
+  | Night Foreman | 150,000 | +0.05 | Steam Power (S+25 min) | the slice-end factory idles at ~7,200 coin/min (§18): +0.05 of 7 extrapolated hours is 0.05 × 7,200 × 420 = 151K, one night's pay; 12 min of early Act II income (12,500/min) |
+  | Night Shift Rota | 400,000 | +0.05 (0.6 in all) | Circuits (S+55 min) | the factory then idles at ~12,500/min: 262K a night, paid back in 1.5 nights; 32 min of Act II income, against the 1.8M that piles up by 4 h |
+
+  Two steps and 0.6 at most, so the Patents keep the rest of the road to 0.75 (Milestone 5).
+
+### The model and the report (§12)
+- **Lines run at live speed offline; deliveries count at the efficiency.** So heaps fill and lines
+  jam at the same times open or closed, and the report's times are the times the player would
+  have seen. The replay (1 h) and every re-measure (4 min) pay in full, as live; only the
+  extrapolated time is scaled. Every piece pays at most what live would, so offline ≤ open idle
+  holds by construction, and the pace test checks it.
+- **Segments**: a segment ends when a heap fills or the Megaproject Bay is given all it wants of an
+  item, the two things that change a factory's rates while nobody touches it (crates fill in
+  minutes, inside the replay; module buffers in seconds). After it, **60 s** live for the jam to
+  spread (a belt of 8 tiles drains in 4 s, a machine buffer in a craft or two) and **3 min** to
+  measure the new rates. Segments are bounded by the heaps and Bay wants there are; the Act II bot's
+  factory needs 0–3 for 8 h.
+- **A jam** is a machine or module blocked **10 s straight** (a full belt blocks a machine for a
+  tick or two: traffic, not a jam). Machines already jammed when the player left are counted
+  apart ("already jammed"), not reported as news.
+- **Credit slices of 15 min**: an order filled or a node finished while extrapolated lands on the
+  timeline within 15 min of when it would have (`~` marks such a time).
+- **The timeline keeps 40 entries**, nearest the start (a week away fills it with the first
+  morning's jams; the totals cover the rest).
+- **The run is spread over frames** (20 ms a frame, the clock read every 100 ticks), with a
+  progress bar, never a frozen page. Measured in Chrome on the Act II bot's 2 h factory (179
+  Workshop buildings, 48 Factory pieces): an 8 h offline run takes **3.0–3.6 s** while the page
+  draws (longest frame 54–58 ms, the same as an ordinary frame there); in node the same run is
+  2.5–3.1 s at every stage from 1 h to 5 h.
+
+### Safe for overnight: the forecast and stopping a line
+- **The forecast is the offline model on a copy of the game** (`forecast(g, hours)`), for 1, 8
+  (the default, a night) or 24 h: the jams it shows are the ones the morning's report would show,
+  at the same times, and the coin is what closing the game would pay. The live game is never
+  touched (a test checks the fingerprint), and it runs on while the forecast is computed (8 h
+  forecast: about 6 s in Chrome with the factory running).
+- **Stopping** (`{ k: 'pause', x, y, floor?, line?, on }`, a logged command): a stopped machine or
+  Miner takes nothing, makes nothing and draws no power; it keeps what is in its buffers; a
+  splitter routes its share to its other sides as around any full machine. A stopped module runs at
+  0 and takes nothing. `line: true` stops every machine of the line (named by any machine in it,
+  or by the heap it fills) or every module joined by trunks. The pip goes grey and the report says
+  "Stopped by you". **What it is for**: a jam is a line stopped by surprise with its heap full; a
+  stop is the same line stopped on purpose with its heap's room kept for when you are back, so the
+  morning starts with 53 minutes of running (one smelter's 400 slag) instead of a line to unjam
+  first. It also takes a line out of the forecast's jams, so a "safe for overnight" factory is one
+  the player chose, line by line. It earns nothing while stopped, and the forecast says so in coin.
+
+### Inspiration (§15)
+- From the slice end (Act II), a click on a Hopper (either floor) credits the selected node with
+  **0.1% of what it still needs**, item by item, as items delivered, up to **30% of each item's
+  cost** per node. A capped click is quiet (no refusal, no research screen opening under a fast
+  clicker). It counts against the 12 clicks/s cap.
+- *Derivation*: of the remaining cost, so each click gives less: 30% takes
+  ln(0.7) / ln(0.999) = 357 clicks, 89 s at the sustained 4 clicks/s (§1), 30 s at the cap. Active
+  play helps research a little and can never replace the line (pillar 1).
+- The Hopper was the target because it is where research is paid, and a click there needs no new
+  building. Before Act II a Hopper click still opens research.
+
+### Notation and readability
+- `Num.format` writes four notations, chosen in Options and kept in localStorage (a player
+  setting, never sim state): **standard** (12.3K … 999Dc, then scientific past 1e36),
+  **scientific** (1.23e4), **engineering** (12.3e3, exponents in threes) and **letters** (the named
+  suffixes to Dc, then aa, ab … zz, aaa … one per thousand). All four write plain whole numbers
+  with commas below 10,000 and floor (never more than you have).
+- **One helper** (`src/engine/fmt.ts`): amounts, rates per minute (480, 37.5, 0.75), power
+  (300 kW, 1,200 kW, 12.5 MW), shares (41%), multipliers (x1.25) and durations (4m 10s, 2h 05m,
+  3d 4h). The HUD's coin counter, rates and kW, the coin pops, the hover report and the store's
+  per-minute figures go through it, so the notation reaches them and no `toFixed` noise
+  ("1.20M", "37.50") reaches the player.
+
+### The background tab
+- A hidden tab gets no animation frames. The sim keeps running on a **1 s timer** (what browsers
+  allow a hidden tab), each pump running the ticks owed since the last within **40 ms**, or up to
+  **4%** of the time since the last pump when the browser has throttled the timer (Chrome: once a
+  minute after 5 min hidden; 1,200 ticks at 0.05 ms is 60 ms of the 2.4 s allowed), never more than
+  **250 ms** at once. A pump **2 min late** means the tab or the machine slept: that gap is time
+  away (the offline model), not ticks owed. Sparks pause (`visible: false`).
+- **On return**: up to **60 s** owed is run live, **40 extra ticks a frame** (about 2 ms), so it
+  clears in half a second with no stutter; more goes through the offline path, as a closed game.
+- *Measured* (Chrome, the Act II bot's 2 h factory, 20 s hidden): 20 pumps, 400 ticks (20 a
+  second, as live), **1.0–1.4 ms of work a second (0.10–0.14% of a core)**, the longest pump
+  2–4 ms; owed on return 0; the 90 frames after the return were no longer than ordinary frames.
+  In node a tick of the Act II factory costs 0.031–0.040 ms (1 h to 5 h): 0.6–0.8 ms per hidden
+  second, a hidden hour about 2.5 s of work.
+
+### Saves
+- **Autosave every 30 s of real time** (not sim time: fast-forward would save every frame), and on
+  `visibilitychange` (hidden), `pagehide` and `beforeunload`. Closing loses nothing when any of
+  those fires, and at most 30 s when none does (a crash); the save-cadence test checks both.
+- **Three rolling backups**, at most one every **10 min**, taken from the save being replaced and
+  only if it loads: a save broken by a bug is at most 10–30 min behind a good one, and a broken save
+  never pushes a good backup out. Out of room, the oldest backup goes first.
+- **Corruption recovery**: on load the save is parsed, migrated and rebuilt (`checkSave`); if any
+  step fails, the raw string is kept aside (Options can copy it), the newest backup that loads is
+  used, and the player is told in plain words ("Your last save could not be loaded (it was cut
+  short or garbled). Loaded the backup from 12 minutes ago; the damaged one is kept in Options.").
+- Size: the Act II bot's save is 81–102 KB of JSON from 1 h to 5 h (128 KB as an export string at
+  2 h), and checking one loads takes 3–4 ms; four copies fit well inside a browser's 5 MB.
+- **Saves v5**: the state gains `inspire` (Inspiration given per node); `paused` on machines and
+  modules and the Night Shift in `upgrades` need no migration (absent means none).
+
+### Measured (pace tests, `tests/pace-idle-*.test.ts`, seed 1000)
+From the Act II bot's state at each whole hour: **active** is what the bot earned in the next 30
+min; **idle** is the same state open with no input (live, tick by tick) for 30 min and for 8 h;
+**offline** is the same state closed for 8 h (`runOffline`).
+
+| Stage | active 30 min | idle 30 min | active / idle | 8 h idle | 8 h offline at 0.5 | at 0.75 | active rate / offline rate |
+|---|---|---|---|---|---|---|---|
+| 1 h | 365K | 239K | 1.53 | 3.22M | 1.87M (0.58) | 2.54M (0.79) | 3.1 |
+| 2 h | 353K | 198K | 1.78 | 3.17M | 1.78M (0.56) | 2.47M (0.78) | 3.2 |
+| 3 h | 118K | 30K | 3.94 | 530K | 300K (0.57) | 415K (0.78) | 6.3 |
+| 4 h | 133K | 34K | 3.90 | 540K | 309K (0.57) | 425K (0.79) | 6.9 |
+| 5 h | 123K | 34K | 3.61 | 540K | 306K (0.57) | 423K (0.78) | 6.4 |
+
+- **Rule 4 holds at every stage** (active 1.53–3.94× idle), and **offline pays 0.56–0.58 of open
+  idle at 0.5 and 0.78–0.79 at the 0.75 ceiling**: closing the game never pays more than leaving
+  it open. At the slice end (§13 check 12) offline is 0.58–0.59 of idle and 3.94 h of active.
+- **Two margins to watch**: rule 4's ratio is 1.53 at 1 h (the floor is 1.5) and 3.90–3.94 at
+  3–4 h (the ceiling is 4). At 3–5 h the bot has cleared the Gizmo chains for the Bay floor, so the
+  idle factory earns a fifth of what it did and the active bot's Overdrive is most of the
+  difference. Against a *closed* game the active rate is 6.3–6.9× at 3–5 h at 0.5 (4.2–4.6× at
+  0.75): Milestone 5's Patents toward 0.75 are what bring idling-while-closed back near rule 4's 4×.
+- The exit's "every stage to 15 h" is measured to 5 h (what the bots reach); the lead extends it
+  after Milestone 5.

@@ -5,16 +5,21 @@
 import { Input } from '../engine/input';
 import { GameLoop } from '../engine/loop';
 import { Audio } from '../engine/audio/audio';
-import { readSave, writeSave, exportString, importString, store } from '../engine/save';
+import { readSave, exportString, importString, store, loadSave, writeSaveSafe, badSave, AutoSave, type LoadResult } from '../engine/save';
 import { Num } from '../engine/num';
 import { TICK_RATE } from '../engine/time';
 import { UI } from '../ui/ui';
 import { C } from '../data/palette';
 import { Game, type Cmd, type ActResult } from '../sim/Game';
-import { savePayload, restore } from '../sim/snapshot';
+import { savePayload, restore, checkSave } from '../sim/snapshot';
 import { DX, DY, type Dir, type Floor } from '../sim/world';
 import { FACTORY } from '../data/land';
-import { runOffline, type OfflineReport } from '../sim/offline';
+import { OfflineRun, type OfflineReport } from '../sim/offline';
+// ---- Milestone 6 (idle and offline): the background tab, robust saves, settings
+import { Background } from './background';
+import { IDLE } from '../data/idle';
+import { loadSettings } from './settings';
+import { stepJob } from './offlinereport';
 import { foldRefusal, gradedAudit } from '../sim/systems/audits';
 import { RULES } from '../data/rules';
 import { ffoldRefusal } from '../sim/systems/nested';
@@ -31,13 +36,15 @@ import { TILE } from '../render/ground';
 import { drawHud, drawTitle, newHudState, banner, type HudState } from './hud';
 import { TOWN_ROWS } from '../render/town';
 import { ICON } from '../ui/font';
-import { nine } from './chrome';
-import { sheet, hasArt } from '../render/sprites';
+import { plateRaw } from './chrome';
 import { layout, type Layout } from './layout';
 import { Gazette } from './gazette';
 import type { ScreenName } from './screens';
 import { TROPHY } from '../data/trophies';
 import { Bot, type Policy } from '../sim/bot';
+// Milestone 5: Reorganize, the Patent tree and blueprints (src/app/reorganize.ts, patents.ts, blueprints.ts)
+import { blueprintInput, blueprintPreview, blueprintHud, bpBoxOk, ghostClick } from './blueprints';
+import { prules } from '../sim/patents';
 
 export type Mode =
   | { k: 'idle' }
@@ -47,14 +54,18 @@ export type Mode =
   | { k: 'fold' }
   /** the Factory floor: laying trunk belts, or placing a module design */
   | { k: 'ftrunk' }
-  | { k: 'fmodule'; design: number };
+  | { k: 'fmodule'; design: number }
+  /** Milestone 5: dragging a box to save a blueprint; placing one as ghosts */
+  | { k: 'bpsave' }
+  | { k: 'bpplace'; id: number };
 
 export type Panel = ScreenName | null;
 
 export interface Toast { title: string; text: string; color: string; t: number; life: number; icon?: string }
 
 const SAVE_SLOT = 1;
-const AUTOSAVE_S = 30;
+/** a save loads only if the game rebuilds from it (DESIGN.md §20, corruption recovery) */
+const validSave = (d: unknown) => void checkSave(d as never);
 
 export class App {
   ctx: CanvasRenderingContext2D;
@@ -106,16 +117,24 @@ export class App {
   offline: OfflineReport | null = null;
   /** a bot playing this game (debug handle and the e2e scripts) */
   bot: Bot | null = null;
-  private sinceSave = 0;
   private hasSave = false;
+  // ---- Milestone 6 (DESIGN.md §20): autosave by the real clock, the background tab, offline runs
+  /** autosave every 30 s of real time (not sim time: fast-forward must not save every frame) */
+  autosave = new AutoSave(IDLE.autosaveSeconds.value * 1000, Date.now());
+  /** keeps the sim running on a coarse timer while the tab is hidden */
+  bg = new Background(() => this.tick());
+  /** an offline run spread over frames (the report card shows its progress) */
+  offlineJob: OfflineRun | null = null;
+  /** how the last load went: a damaged save and the backup used, in plain words */
+  loadNote: string | null = null;
   /** what the title screen offers */
   titleInfo: { hasSave: boolean; coin: string } = { hasSave: false, coin: '0' };
   /** the town piece under the mouse: its one-line label */
   townTip: string | null = null;
   /** the slice-end card waits for the Gizmo parade (UI time it opens at) */
   sliceAt: number | null = null;
-  /** the mouse is over the canvas (edge-scrolling stops when it leaves) */
-  private mouseIn = false;
+  /** the mouse is over the canvas (edge-scrolling and the coin drop-down stop when it leaves) */
+  mouseIn = false;
   /** seconds the mouse has rested at an edge of the floor view */
   private edgeT = 0;
 
@@ -130,26 +149,45 @@ export class App {
     canvas.addEventListener('pointerleave', () => { this.mouseIn = false; });
     window.addEventListener('blur', () => { this.mouseIn = false; });
     this.ui.sfx = (id) => this.audio.sfx(id);
-    this.ui.tipSkin = (ctx, x, y, w, h) => {
-      if (!hasArt('ui_tip')) return void ((ctx.fillStyle = C.ink), ctx.fillRect(x, y, w, h));
-      nine(ctx, sheet('ui_tip'), 0, x, y, w, h);
-    };
+    // tooltips wear the HUD's plate (the UI redesign: one calm panel language)
+    this.ui.tipSkin = (ctx, x, y, w, h) => plateRaw(ctx, x, y, w, h);
     window.addEventListener('resize', () => this.resize());
     document.addEventListener('visibilitychange', () => this.visibility());
     window.addEventListener('pointerdown', () => this.audio.unlock(), { once: false });
     window.addEventListener('keydown', () => this.audio.unlock(), { once: false });
     window.addEventListener('beforeunload', () => { if (this.screen === 'play') this.save(); });
+    // pagehide fires where beforeunload does not (mobile, bfcache): closing never loses more than
+    // the last 30 s, and usually nothing (DESIGN.md §20)
+    window.addEventListener('pagehide', () => { if (this.screen === 'play') this.save(); });
+    loadSettings();
     this.resize();
-    const d = readSave(SAVE_SLOT);
-    this.hasSave = !!d;
-    if (d) {
+    const r = this.readSlot();
+    this.hasSave = !!r.data;
+    if (r.data) {
       try {
-        const g = restore(d as never);
+        const g = restore(r.data as never);
         this.titleInfo = { hasSave: true, coin: g.s.coin.format() };
       } catch {
         this.hasSave = false;
       }
     }
+  }
+
+  /** Read the save slot, falling back to the newest good backup (DESIGN.md §20). */
+  private readSlot(): LoadResult {
+    const r = loadSave(SAVE_SLOT, validSave, IDLE.backups.value);
+    if (r.problem && r.data) {
+      const ago = Math.max(0, Date.now() - (r.data.saved ?? Date.now())) / 60000;
+      const when = ago < 1 ? 'less than a minute' : ago < 120 ? `${Math.round(ago)} minutes` : `${Math.round(ago / 60)} hours`;
+      this.loadNote = `Your last save could not be loaded (${r.problem}). Loaded the backup from ${when} ago; the damaged one is kept in Options.`;
+    } else if (r.problem) this.loadNote = `Your save could not be loaded (${r.problem}) and no backup loads. It is kept in Options.`;
+    else this.loadNote = null;
+    return r;
+  }
+
+  /** The damaged save kept aside by the last failed load, if any. */
+  damagedSave(): string | null {
+    return badSave(SAVE_SLOT);
   }
 
   start() {
@@ -176,7 +214,7 @@ export class App {
   }
 
   continueGame() {
-    const d = readSave(SAVE_SLOT);
+    const d = this.readSlot().data;
     if (!d) return this.newGame();
     try {
       this.game = restore(d as never);
@@ -188,14 +226,13 @@ export class App {
     this.renderer.ground = null;
     this.setFloor('workshop', true);
     this.fitCamera(true);
+    if (this.loadNote) {
+      this.toasts.push({ title: 'Save recovered', text: this.loadNote, color: C.amber, t: 0, life: 16 });
+      this.loadNote = null;
+    }
     // offline progress (DESIGN.md §12): the clock is read here, in the app, never in the sim
     const away = (Date.now() - (d.saved ?? Date.now())) / 1000;
-    if (away >= 60) {
-      this.offline = runOffline(this.game, away);
-      this.game.events.drain();
-      this.panel = 'offline';
-      this.save();
-    }
+    if (away >= 60) this.startOffline(away);
     this.hud = newHudState();
     this.hud.coinShown = this.game.s.coin.toNumber();
     // a saved game past its first Miner never celebrates it again
@@ -250,10 +287,31 @@ export class App {
 
   save(): boolean {
     if (this.screen !== 'play') return false;
-    const ok = writeSave(SAVE_SLOT, savePayload(this.game, Date.now()) as never);
-    this.sinceSave = 0;
-    this.hasSave = ok || this.hasSave;
-    return ok;
+    // mid offline run the state is between two moments: the save before it stands until it ends
+    if (this.offlineJob) return false;
+    const now = Date.now();
+    const r = writeSaveSafe(SAVE_SLOT, savePayload(this.game, now) as never, { now, backupMs: IDLE.backupMinutes.value * 60000, backups: IDLE.backups.value, validate: validSave });
+    this.autosave.mark(now);
+    this.hasSave = r.ok || this.hasSave;
+    return r.ok;
+  }
+
+  /** Offline progress for `away` seconds (DESIGN.md §12), spread over frames with the report card
+   * showing its progress, then the report. */
+  startOffline(away: number) {
+    const run = new OfflineRun(this.game, away);
+    this.offlineJob = run;
+    this.offline = null;
+    this.panel = 'offline';
+    this.loop.job = () => {
+      if (!stepJob(run)) return false;
+      this.offlineJob = null;
+      this.offline = run.report;
+      this.panel = 'offline';
+      this.game.events.drain();
+      this.save();
+      return true;
+    };
   }
 
   exportSave(): string {
@@ -280,32 +338,36 @@ export class App {
   private visibility() {
     if (this.screen !== 'play') return;
     const hidden = document.hidden;
-    this.game.act({ k: 'visible', v: !hidden });
     if (hidden) {
+      this.game.act({ k: 'visible', v: false });
       this.hiddenAt = Date.now();
       this.save();
+      // the sim keeps running on a coarse timer, Sparks paused (DESIGN.md §20); an offline run
+      // already going carries on when the tab is back
+      if (!this.offlineJob && !this.frozen) this.bg.hide(this.hiddenAt);
       return;
     }
-    // a background tab stops the frame loop: the time away is offline progress, like a reload
-    // (the critic's Milestone 1-2 review: it was lost)
-    const away = this.hiddenAt ? (Date.now() - this.hiddenAt) / 1000 : 0;
+    const back = this.bg.show();
     this.hiddenAt = 0;
-    if (away >= 60 && !this.bot) {
-      this.offline = runOffline(this.game, away);
-      this.game.events.drain();
-      this.panel = 'offline';
-      this.save();
-    }
+    this.game.act({ k: 'visible', v: true });
+    // what the pump could not run: a little is caught up live over the next frames; a long sleep
+    // (or a lot owed) is time away, through the offline path (DESIGN.md §20)
+    const live = back.owed <= IDLE.catchUpLiveSeconds.value;
+    const away = back.away + (live ? 0 : back.owed);
+    this.loop.catchUpPerFrame = IDLE.catchUpTicksPerFrame.value;
+    if (live) this.loop.catchUp += Math.round(back.owed * TICK_RATE);
+    if (away >= 60 && !this.bot) this.startOffline(away);
+    else if (away > 0) this.loop.catchUp += Math.round(away * TICK_RATE);
   }
 
   // ------------------------------------------------------------------ the loop
 
   private tick() {
-    if (this.screen !== 'play' || this.frozen) return;
+    if (this.screen !== 'play' || this.frozen || this.offlineJob) return;
     this.bot?.update();
     this.game.tick();
-    this.sinceSave += 1 / TICK_RATE;
-    if (this.sinceSave >= AUTOSAVE_S && store()) this.save();
+    // autosave by the real clock, checked once a game second (DESIGN.md §20)
+    if (this.game.s.tick % TICK_RATE === 0 && this.autosave.due(Date.now()) && store()) this.save();
   }
 
   private frame(dt: number, alpha: number) {
@@ -335,6 +397,7 @@ export class App {
     this.renderer.drawScreenFx(ctx, this.uiScale);
     this.ui.begin(ctx, this.input, this.uiScale, dt, false);
     drawHud(this, dt);
+    blueprintHud(this); // Milestone 5
     this.ui.end();
     this.worldInput();
     this.audio.update(this.busyShare());
@@ -406,6 +469,7 @@ export class App {
           const c = CUSTOMERS[d.customer];
           const n = this.game.s.orders.done.length;
           this.toast(`${d.name}: filled!`, `+${Num.of(d.pays).format()} coin, +${d.rep} reputation. "${c.thanks[(n - 1) % c.thanks.length]}"`, C.lime, 'crate');
+          this.gazette.push(`EXTRA! ${d.name} delivered to ${c.name}. ${Num.of(d.pays).format()} coin changes hands.`);
           // a reputation level: a fanfare and a banner naming what it gives
           const rep = this.game.s.orders.rep[d.customer];
           const reward = c.rewards.find((q) => q.rep === rep);
@@ -493,6 +557,11 @@ export class App {
           a.sfx('milestone');
           this.renderer.fx.kick(5);
           // the card waits for the Gizmo parade into the Factory Dock to finish
+          if (this.game.s.meta.runs > 0) {
+            // a later run (DESIGN.md §19): the Festival again, celebrated briefly
+            this.toast('The Gizmo Festival, again', 'Bramble throws it every run. The swamp has learned to expect it.', C.gold, 'star');
+            break;
+          }
           if (this.renderer.parade && this.floor === 'factory') this.sliceAt = this.ui.time + Math.max(0.5, 3.6 - this.renderer.parade.t);
           else {
             this.panel = 'sliceEnd';
@@ -578,7 +647,9 @@ export class App {
           }
           continue;
         }
-        // keys 1-9 pick from the store tab that is open (Build, Power, Heavy)
+        // keys 1-9 pick from the build bar's open tab (Build, Power, Heavy); from Upgrades they
+        // go back to the last building tab
+        if (this.hud.storeTab === 'upgrades') this.hud.storeTab = 'build';
         const tab = STORE_TABS.find((q) => q.id === this.hud.buildTab) ?? STORE_TABS[0];
         const kind = tab.kinds[i];
         if (kind) this.pickBuild(kind);
@@ -637,11 +708,12 @@ export class App {
       return;
     }
     if (this.floor !== 'workshop') this.setFloor('workshop', true);
-    if (this.game.s.audits.length >= RULES.maxAudits.value) {
+    const maxAudits = prules(this.game).maxAudits; // Milestone 5: More Auditors raises it
+    if (this.game.s.audits.length >= maxAudits) {
       const ga = gradedAudit(this.game);
       this.panel = ga ? 'grade' : null;
       if (ga) { this.gradeId = ga.id; this.gradeAt = this.ui.time; this.hud.stamped = false; this.nameDraft = null; }
-      return this.refuse(ga ? 'Fold or cancel a graded line first' : `${RULES.maxAudits.value} audits are running: wait for a grade`);
+      return this.refuse(ga ? 'Fold or cancel a graded line first' : `${maxAudits} audits are running: wait for a grade`);
     }
     this.setMode(this.mode.k === 'fold' ? { k: 'idle' } : { k: 'fold' });
   }
@@ -743,7 +815,8 @@ export class App {
       drag: this.floor === 'workshop' && this.drag ? this.drag.path : null,
       remove: this.mode.k === 'remove',
       selected: this.selected,
-      box: this.foldDrag && this.floor === 'workshop' ? { ...this.foldDrag, ok: !foldRefusal(this.game, this.dragBox()!) } : null,
+      box: this.foldDrag && this.floor === 'workshop' ? { ...this.foldDrag, ok: this.mode.k === 'bpsave' ? bpBoxOk(this) : !foldRefusal(this.game, this.dragBox()!) } : null,
+      bp: blueprintPreview(this), // Milestone 5
       flow: this.flowOverlay,
       floor: this.floor,
       factory: {
@@ -801,6 +874,7 @@ export class App {
 
     if (this.floor === 'factory') return this.factoryInput(t, overUI, pt);
     if (this.mode.k === 'fold') return this.foldInput(t, overUI, pt);
+    if (blueprintInput(this, t, overUI, pt)) return; // Milestone 5: the blueprint tools
     if (this.mode.k === 'build' && this.mode.kind === 'belt') return this.beltDrag(t, overUI, pt);
     if (!inp.mouse.pressed[0] || overUI) return;
     if (!g.inb(t.x, t.y)) {
@@ -821,6 +895,7 @@ export class App {
       if (ch) this.act({ k: 'land', id: ch.id });
       return;
     }
+    if (ghostClick(this, t.x, t.y)) return; // Milestone 5: a click on a ghost builds it
     const e = g.entAt(t.x, t.y);
     const r = g.act({ k: 'click', x: t.x, y: t.y });
     if (r.ok) return;
@@ -894,7 +969,7 @@ export class App {
     if (this.mode.k === 'remove') { this.act({ k: 'fremove', x: t.x, y: t.y }); return; }
     const e = g.fentAt(t.x, t.y);
     if (e?.kind === 'fdock') this.togglePanel('orders');
-    else if (e?.kind === 'fhopper') this.togglePanel('research');
+    else if (e?.kind === 'fhopper') { if (!g.act({ k: 'fclick', x: t.x, y: t.y }).ok) this.togglePanel('research'); } // Inspiration (§20)
     else if (e?.kind === 'fbay') this.togglePanel('mega');
     else if (e?.kind === 'module' && g.done('overdrive') && g.act({ k: 'fclick', x: t.x, y: t.y }).ok) return;
     else this.fselected = e && this.fselected !== e.id ? e.id : null;

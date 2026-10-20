@@ -7,10 +7,11 @@ import { ORDER, ORDERS } from '../../data/orders';
 import type { ItemId } from '../../data/items';
 import { RULES } from '../../data/rules';
 import { TICK_RATE } from '../../engine/time';
+import { customerMet } from '../reorganize';
 
 /** Special orders on offer right now (requirements met, not done). */
 export function offeredOrders(g: Game) {
-  return ORDERS.filter((o) => !g.s.orders.done.includes(o.id) && o.requires.every((r) => g.done(r)));
+  return ORDERS.filter((o) => !g.s.orders.done.includes(o.id) && o.requires.every((r) => g.done(r)) && customerMet(g, o.customer));
 }
 
 export function orderFrac(g: Game, id: string): number {
@@ -34,7 +35,9 @@ export function runOrders(g: Game) {
       o.done.push(d.id);
       (o.doneAt ??= {})[d.id] = g.s.tick;
       o.active = null;
-      g.earn(Num.of(d.pays), true);
+      if (d.pays) g.earn(Num.of(d.pays), true);
+      // the Committee pays in Raccoon Bearings, kept across every Reorganize (DESIGN.md §19)
+      if (d.bearings) g.s.meta.bearings = g.s.meta.bearings.add(d.bearings);
       o.rep[d.customer] = (o.rep[d.customer] ?? 0) + d.rep;
       g.emit({ type: 'order', id: d.id, value: d.pays });
       // reputation can change the rules the layout runs by (Voltaire's rep 3 extends pole reach)

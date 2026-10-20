@@ -1,9 +1,10 @@
-// The HUD's chrome: framed wood-and-brass panels, chunky buttons with icons, cards, counters,
-// sparklines and badges (STYLE.md UI: the screen is full and every clickable thing reacts). Uses
-// the art director's ui_* sprites when they exist (9-slices from src/art), and code-drawn frames
-// in the same colours until then.
+// The UI kit's chrome, in the redesign's two weights (docs/ui-redesign.md): the calm code-drawn
+// plate for every HUD piece, and the ornate wood-and-brass 9-slice (the art director's ui_panel)
+// only for full-screen menus and celebration cards. Buttons, cards, bars, sparklines, badges,
+// counters and portraits draw from the palette's C slots, so a new palette restyles them; sprites
+// are found by name, never by their pixels.
 import { C, rgba } from '../data/palette';
-import { ICON } from '../ui/font';
+import { ICON, smallWidth } from '../ui/font';
 import { sheet, hasArt, type SpriteSheet } from '../render/sprites';
 import type { UI, TipLine } from '../ui/ui';
 
@@ -13,6 +14,8 @@ export const UICON = {
   factory: 10, workshop: 11, coin: 12, heart: 13, clock: 14, lock: 15, star: 16, play: 17, pause: 18, ff: 19,
   // Act II (append-only, STYLE.md)
   power: 20, heavy: 21, codex: 22, survey: 23, mega: 24, kit: 25, claim: 26, overdrive: 27, mode: 28,
+  // Milestones 5 and 6 (append-only)
+  patents: 29, blueprint: 30, reset: 31, overnight: 32,
 } as const;
 export type UIconName = keyof typeof UICON;
 
@@ -22,7 +25,16 @@ const GLYPH: Record<UIconName, string> = {
   flow: '~', remove: ICON.cross, rotate: '@', factory: ICON.module, workshop: ICON.cog, coin: ICON.coin, heart: ICON.heart,
   clock: ICON.clock, lock: ICON.lock, star: ICON.star, play: ICON.right, pause: '|', ff: '>',
   power: ICON.bolt, heavy: ICON.cog, codex: '?', survey: ICON.flask, mega: ICON.star, kit: ICON.crate, claim: '^', overdrive: ICON.bolt, mode: '=',
+  patents: ICON.star, blueprint: ICON.module, reset: '@', overnight: ICON.clock,
 };
+
+/** What each accent colour means (docs/ui-redesign.md): gold is coin and "you can buy this", teal
+ * research, leaf orders and customers, copper heat and jams, violet Patents and resets, blue power. */
+export const ACCENT = { coin: C.gold, research: C.teal1, orders: C.leaf, heat: C.copper2, reset: C.violet, power: C.pipBlue, plain: C.hull1 } as const;
+
+/** Spacing (docs/ui-redesign.md): a 4 px grid, 4 px between cards, 6 px inside them. */
+export const GAP = 4;
+export const PAD = 6;
 
 /** Draw a 9-slice sheet's frame tiled to w x h (edges and centre repeat, never stretch). */
 export function nine(ctx: CanvasRenderingContext2D, s: SpriteSheet, f: number, x: number, y: number, w: number, h: number) {
@@ -49,9 +61,96 @@ export function nine(ctx: CanvasRenderingContext2D, s: SpriteSheet, f: number, x
   part(s.w - r, s.h - b, r, b, x + w - r, y + h - b, r, b);
 }
 
+/** Draw a plate straight to a context (no UI bookkeeping): for tooltips and floating cards. */
+export function plateRaw(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, accent?: string, fill: string = C.ink, a = 0.94) {
+  ctx.fillStyle = rgba(fill, a);
+  ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+  ctx.fillStyle = C.hull0;
+  ctx.fillRect(x + 2, y, w - 4, 1);
+  ctx.fillRect(x + 2, y + h - 1, w - 4, 1);
+  ctx.fillRect(x, y + 2, 1, h - 4);
+  ctx.fillRect(x + w - 1, y + 2, 1, h - 4);
+  ctx.fillRect(x + 1, y + 1, 1, 1);
+  ctx.fillRect(x + w - 2, y + 1, 1, 1);
+  ctx.fillRect(x + 1, y + h - 2, 1, 1);
+  ctx.fillRect(x + w - 2, y + h - 2, 1, 1);
+  ctx.fillStyle = accent ?? rgba(C.hull1, 0.7);
+  ctx.fillRect(x + 2, y + 1, w - 4, 1);
+}
+
+/** A plate: the HUD's one panel (docs/ui-redesign.md, "two weights"). Ink at 90%, a 1 px outline,
+ * a 1 px lighter top edge (the accent colour when given), 2 px notched corners. No wood, no
+ * rivets: calm, so the world and the numbers carry the colour. */
+export function plate(ui: UI, x: number, y: number, w: number, h: number, o: { accent?: string; blocking?: boolean; alpha?: number; hover?: boolean; kind?: 'panel' | 'button'; fill?: string } = {}) {
+  x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
+  ui.region(x, y, w, h, o.kind ?? 'panel', o.blocking ?? true);
+  const ctx = ui.ctx;
+  const a = o.alpha ?? 0.9;
+  ctx.fillStyle = rgba(o.fill ?? (o.hover ? C.shadow : C.ink), a);
+  ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+  // the outline, its corners notched
+  ctx.fillStyle = o.hover ? C.hull1 : C.hull0;
+  ctx.fillRect(x + 2, y, w - 4, 1);
+  ctx.fillRect(x + 2, y + h - 1, w - 4, 1);
+  ctx.fillRect(x, y + 2, 1, h - 4);
+  ctx.fillRect(x + w - 1, y + 2, 1, h - 4);
+  ctx.fillRect(x + 1, y + 1, 1, 1);
+  ctx.fillRect(x + w - 2, y + 1, 1, 1);
+  ctx.fillRect(x + 1, y + h - 2, 1, 1);
+  ctx.fillRect(x + w - 2, y + h - 2, 1, 1);
+  // the lighter top edge, or the accent
+  ctx.fillStyle = o.accent ?? rgba(C.hull1, 0.7);
+  ctx.fillRect(x + 2, y + 1, w - 4, 1);
+}
+
+/** A section inside a full-screen menu: a flat dark well with a hairline outline, lighter than the
+ * ornate frame around it (menus no longer nest wood inside wood). */
+export function section(ui: UI, x: number, y: number, w: number, h: number, accent?: string) {
+  x = Math.round(x); y = Math.round(y);
+  ui.region(x, y, w, h, 'panel', true);
+  const ctx = ui.ctx;
+  ctx.fillStyle = rgba(C.ink, 0.6);
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = rgba(C.hull0, 0.9);
+  ctx.fillRect(x, y, w, 1);
+  ctx.fillRect(x, y + h - 1, w, 1);
+  ctx.fillRect(x, y, 1, h);
+  ctx.fillRect(x + w - 1, y, 1, h);
+  if (accent) {
+    ctx.fillStyle = accent;
+    ctx.fillRect(x + 1, y + 1, w - 2, 1);
+  }
+}
+
+/** A small-caps label (a card's or a group's title) in its accent colour. Returns its width. */
+export function label(ui: UI, s: string, x: number, y: number, col: string = C.hull2, align: 'left' | 'center' | 'right' = 'left'): number {
+  return ui.small(s.toUpperCase(), x, y, col, { align, shadow: C.ink });
+}
+
+/** A badge dot: "something new here" on an icon button, a tab or a slot. */
+export function dot(ui: UI, x: number, y: number, col: string = C.pipRed) {
+  const ctx = ui.ctx;
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(x - 1, y, 5, 3);
+  ctx.fillRect(x, y - 1, 3, 5);
+  ctx.fillStyle = col;
+  ctx.fillRect(x, y, 3, 3);
+  ctx.fillStyle = rgba(C.bone, 0.6);
+  ctx.fillRect(x, y, 1, 1);
+}
+
+/** A key cap: the hotkey letter or number in a slot's or a button's corner. */
+export function keycap(ui: UI, k: string, x: number, y: number, col: string = C.hull2) {
+  const w = smallWidth(k) + 2;
+  ui.ctx.fillStyle = rgba(C.ink, 0.85);
+  ui.ctx.fillRect(x, y, w, 7);
+  ui.small(k, x + 1, y + 1, col);
+}
+
 export type FrameStyle = 'wood' | 'paper' | 'inset';
 
-/** A framed panel: dark wood with brass trim and rivets (or the art's 9-slice). */
+/** A framed panel: the ornate dark wood with brass trim and rivets (or the art's 9-slice). The
+ * redesign keeps it for full-screen menus and celebration cards only; HUD pieces use `plate`. */
 export function frame(ui: UI, x: number, y: number, w: number, h: number, style: FrameStyle = 'wood', blocking = true) {
   x = Math.round(x); y = Math.round(y);
   ui.region(x, y, w, h, 'panel', blocking);
@@ -83,69 +182,71 @@ export function frame(ui: UI, x: number, y: number, w: number, h: number, style:
   for (const [a, b] of [[3, 3], [w - 5, 3], [3, h - 5], [w - 5, h - 5]]) { f(C.brass1, a, b, 2, 2); f(C.hot, a, b, 1, 1); }
 }
 
-/** A card: a frame with a title strip. Returns the inner content origin. */
+/** A card inside a menu: a section with its title in small capitals over an accent hairline.
+ * Returns the inner content origin (5 px in, the content starting under the title). */
 export function card(ui: UI, x: number, y: number, w: number, h: number, title: string, accent: string = C.brass1, icon?: UIconName) {
-  frame(ui, x, y, w, h);
-  ui.fill(x + 3, y + 3, w - 6, 11, C.shadow);
-  ui.fill(x + 3, y + 13, w - 6, 1, accent);
-  let tx = x + 6;
-  if (icon) { uiIcon(ui, icon, x + 4, y + 2, 0.5); tx += 10; }
-  ui.text(title, tx, y + 4, accent, { shadow: C.ink });
+  section(ui, x, y, w, h);
+  let tx = x + 5;
+  if (icon) { uiIcon(ui, icon, x + 4, y + 3, 0.5); tx += 10; }
+  label(ui, title, tx, y + 5, accent);
+  ui.fill(x + 4, y + 12, w - 8, 1, accent, 0.45);
   return { x: x + 5, y: y + 17, w: w - 10, h: h - 20 };
 }
 
 /** One UI icon at (x, y). `half` draws the 16x16 icon at 8x8 via the glyph fallback when small. */
 export function uiIcon(ui: UI, name: UIconName, x: number, y: number, half = 0) {
-  if (hasArt('ui_icons') && !half) {
-    ui.ctx.drawImage(sheet('ui_icons').frames[UICON[name]], Math.round(x), Math.round(y));
+  // an icon the atlas doesn't have yet (appended names wait for the art) falls back to its glyph
+  const big = hasArt('ui_icons') ? sheet('ui_icons').frames[UICON[name]] : undefined;
+  const small = hasArt('ui_icons_small') ? sheet('ui_icons_small').frames[UICON[name]] : undefined;
+  if (big && !half) {
+    ui.ctx.drawImage(big, Math.round(x), Math.round(y));
     return;
   }
-  if (half && hasArt('ui_icons_small')) {
+  if (half && small) {
     // the 8x8 drawings (drawn for that size, not a squeezed 16x16)
-    ui.ctx.drawImage(sheet('ui_icons_small').frames[UICON[name]], Math.round(x), Math.round(y));
+    ui.ctx.drawImage(small, Math.round(x), Math.round(y));
     return;
   }
-  if (hasArt('ui_icons') && half) {
-    ui.ctx.drawImage(sheet('ui_icons').frames[UICON[name]], Math.round(x), Math.round(y), 8, 8);
+  if (big && half) {
+    ui.ctx.drawImage(big, Math.round(x), Math.round(y), 8, 8);
     return;
   }
   const g = GLYPH[name];
   ui.text(g, Math.round(x) + (half ? 1 : 3), Math.round(y) + (half ? 1 : 4), name === 'coin' ? C.gold : name === 'heart' ? C.pipRed : C.bone, { shadow: C.ink });
 }
 
-/** A chunky button with an optional icon; returns true when clicked. */
+/** A button with an optional icon; returns true when clicked. Code-drawn in the plate language:
+ * a dark key with a lighter top edge; `gold` is the call to buy or to do (gold means coin and
+ * "you can buy this"), `active` a tool or tab that is on (teal). */
 export function button(ui: UI, id: string, x: number, y: number, w: number, h: number, label: string, opts: { icon?: UIconName; disabled?: boolean; active?: boolean; gold?: boolean; tip?: TipLine[] | string; key?: string; pulse?: boolean } = {}): boolean {
   ui.mark(id, x, y, w, h);
   x = Math.round(x); y = Math.round(y);
   const hov = ui.hover(x, y, w, h) && !opts.disabled;
   const down = hov && ui.input.mouse.down[0];
   ui.region(x, y, w, h, 'button');
-  const art = opts.gold ? 'ui_button_gold' : 'ui_button';
   const pulse = opts.pulse && Math.floor(ui.time * 2.5) % 2 === 0;
-  if (hasArt(art)) {
-    nine(ui.ctx, sheet(art), down ? 2 : hov || opts.active || pulse ? 1 : 0, x, y, w, h);
-    if (opts.disabled) ui.fill(x, y, w, h, C.ink, 0.45);
-  } else {
-    const base = opts.disabled ? C.shadow : opts.gold ? (hov || pulse ? C.glow : C.brass1) : opts.active ? C.copper1 : hov ? C.hull1 : C.hull0;
-    const hi = opts.disabled ? C.hull0 : opts.gold ? C.hot : opts.active ? C.copper2 : hov ? C.hull2 : C.hull1;
-    ui.fill(x, y, w, h, C.ink);
-    ui.fill(x + 1, y + 1, w - 2, h - 2, base);
-    if (!down) {
-      ui.fill(x + 1, y + 1, w - 2, 1, hi);
-      ui.fill(x + 1, y + h - 2, w - 2, 1, opts.gold ? C.brass0 : C.shadow);
-    }
+  const base = opts.disabled ? C.shadow : opts.gold ? (hov || pulse ? C.gold : C.brass1) : opts.active ? C.teal0 : hov ? C.hull0 : C.shadow;
+  const hi = opts.disabled ? C.shadow : opts.gold ? C.hot : opts.active ? C.teal1 : hov ? C.hull1 : C.hull0;
+  ui.fill(x, y, w, h, C.ink);
+  ui.fill(x + 1, y + 1, w - 2, h - 2, base);
+  if (!down) {
+    ui.ctx.fillStyle = hi;
+    ui.ctx.fillRect(x + 1, y + 1, w - 2, 1);
+    if (h > 8) { ui.ctx.fillStyle = opts.gold ? C.brass0 : rgba(C.ink, 0.6); ui.ctx.fillRect(x + 1, y + h - 2, w - 2, 1); }
   }
   const dy = down ? 1 : 0;
   let cx = x + w / 2;
-  const tcol = opts.disabled ? C.hull1 : opts.gold ? C.ink : C.bone;
+  const tcol = opts.disabled ? C.hull1 : opts.gold ? C.ink : opts.active ? C.hot : C.bone;
+  if (opts.disabled) ui.ctx.globalAlpha = 0.45;
   if (opts.icon && label) {
     uiIcon(ui, opts.icon, x + 3, y + Math.floor((h - 16) / 2) + dy);
     cx = x + 20 + (w - 22) / 2;
   } else if (opts.icon) {
     uiIcon(ui, opts.icon, x + Math.floor((w - 16) / 2), y + Math.floor((h - 16) / 2) + dy);
   }
+  ui.ctx.globalAlpha = 1;
   if (label) ui.text(label, cx, y + Math.floor((h - 7) / 2) + dy, tcol, { align: 'center', shadow: opts.gold || opts.disabled ? undefined : C.ink });
-  if (opts.key) ui.text(opts.key, x + w - 2, y + h - 9 + dy, opts.disabled ? C.hull1 : C.hull2, { align: 'right' });
+  if (opts.key) ui.small(opts.key, x + w - 2, y + h - 7 + dy, opts.disabled ? C.hull1 : C.hull2, { align: 'right', shadow: C.ink });
   if (hov) {
     ui.hoverId = id;
     if (opts.tip) ui.tip(typeof opts.tip === 'string' ? [{ text: opts.tip }] : opts.tip);
@@ -165,7 +266,7 @@ export function bar(ui: UI, x: number, y: number, w: number, h: number, frac: nu
   const fw = Math.round((w - 2) * frac);
   if (fw > 0) {
     ui.fill(x + 1, y + 1, fw, h - 2, col);
-    ui.fill(x + 1, y + 1, fw, 1, rgba(C.bone, 0.45));
+    if (h > 3) ui.fill(x + 1, y + 1, fw, 1, rgba(C.bone, 0.45));
     // a glint that runs along the filled part
     const g = Math.floor((ui.time * 40) % (w + 20)) - 10;
     if (g > 0 && g < fw - 2) ui.fill(x + 1 + g, y + 1, 2, h - 2, rgba(C.bone, 0.35));
@@ -188,12 +289,12 @@ export function sparkline(ui: UI, x: number, y: number, w: number, h: number, va
   }
 }
 
-/** A little "NEW!" style pill. */
+/** A little "NEW" style pill, in the small capitals. */
 export function badge(ui: UI, x: number, y: number, text: string, col: string = C.pipRed) {
-  const w = text.length * 5 + 4;
+  const w = smallWidth(text.toUpperCase()) + 4;
   ui.fill(x, y, w, 9, C.ink);
   ui.fill(x + 1, y + 1, w - 2, 7, col);
-  ui.text(text, x + 2, y + 1, C.bone);
+  ui.small(text.toUpperCase(), x + 2, y + 2, col === C.gold || col === C.hot || col === C.pipYellow ? C.ink : C.bone);
 }
 
 /** The spinning coin (art: ui_coin, 6 frames). */
@@ -217,7 +318,7 @@ export function coinIcon(ui: UI, x: number, y: number, big = true) {
 /** A customer portrait (art: portrait_<who>), or a code-drawn frog for Bramble. */
 export function portrait(ui: UI, who: string, x: number, y: number, size: 48 | 24) {
   const name = size === 48 ? `portrait_${who}` : `portrait_${who}_small`;
-  frame(ui, x - 2, y - 2, size + 4, size + 4, 'inset', false);
+  ui.fill(x - 1, y - 1, size + 2, size + 2, C.ink);
   if (hasArt(name)) {
     const s = sheet(name);
     const blink = s.frames.length > 1 && Math.floor(ui.time * 10) % 47 === 0;

@@ -11,6 +11,8 @@ import { FACTORY } from '../data/land';
 import { ORDER } from '../data/orders';
 import { RESEARCH } from '../data/research';
 import { RULES, SCORE_WEIGHTS } from '../data/rules';
+import { prules } from '../sim/patents'; // Milestone 5: the Patent rules (More Auditors, Quick Audits)
+import type { Game } from '../sim/Game';
 import { megaStage } from '../data/megaprojects';
 import { ICON, textWidth, wrapText } from '../ui/font';
 import { TICK_RATE } from '../engine/time';
@@ -23,7 +25,7 @@ import { gradeFAudit } from '../sim/systems/nested';
 import { inBill, defaultName, stampCost, stampRefusal, unfoldRefusal, fname, feedsDock, productCopies, kitsFor, mainItem, sliceEndParts } from '../sim/systems/modules';
 import { claimsHeld, claimsUsed, oresOf, copiesOf } from '../sim/systems/claims';
 import type { AuditResult, AuditState, Box, FAuditState, FEnt, ModuleDesign } from '../sim/world';
-import { frame, card, button, bar, uiIcon, portrait, coinIcon } from './chrome';
+import { frame, card, button, bar, uiIcon, portrait, coinIcon, plate } from './chrome';
 import { icon, perMin as perMinW, screenHeader, cells, fmt, rays } from './widgets';
 import type { Layout } from './layout';
 import type { App } from './app';
@@ -58,7 +60,7 @@ function drawPlus(ctx: CanvasRenderingContext2D, x: number, y: number, size: num
 
 export const perMin = perMinW;
 
-const warmTicks = () => RULES.auditWarmup.value * TICK_RATE;
+const warmTicks = (g?: Game) => (g ? prules(g).auditWarmup : RULES.auditWarmup.value) * TICK_RATE; // Quick Audits (§19)
 
 /** Coin a minute a set of outputs is worth at the Dock (rates per second). */
 function coinPerMin(outs: Partial<Record<ItemId, number>>, mult = 1): number {
@@ -151,7 +153,7 @@ export function auditBadge(app: App, L: Layout) {
   const c = L.center;
   const here: AnyAudit[] = ws ? g.s.audits : g.s.faudit ? [g.s.faudit] : [];
   const there: AnyAudit[] = ws ? (g.s.faudit ? [g.s.faudit] : []) : g.s.audits;
-  let topY = c.y + 20;
+  let topY = c.y + 4;
   // the other floor: one chip, top right
   if (there.length) {
     const graded = there.filter((a) => a.result).length;
@@ -160,8 +162,8 @@ export function auditBadge(app: App, L: Layout) {
     const where = ws ? 'Factory floor' : 'Workshop';
     const s = graded ? `${graded} graded on the ${where}` : there.length > 1 ? `${there.length} audits on the ${where}` : `Audit on the ${where}: ${left} s`;
     const w = Math.min(c.w - 8, textWidth(s) + 52);
-    const x = c.x + c.w - w - 4, y = c.y + 4;
-    frame(ui, x, y, w, 18);
+    const x = c.x + Math.floor((c.w - w) / 2), y = c.y + 4;
+    plate(ui, x, y, w, 18, { accent: graded ? C.gold : C.teal1 });
     ui.clip(x + 4, y, w - 44, 18);
     ui.text(s, x + 6, y + 6, graded ? C.gold : C.teal1);
     ui.unclip();
@@ -188,13 +190,13 @@ export function auditBadge(app: App, L: Layout) {
   // "2/3 audits": a tab on the row's corner
   if (ws) {
     const graded = here.filter((a) => a.result).length;
-    const s = `Audits ${n}/${RULES.maxAudits.value}${graded ? `  ${graded} graded` : ''}`;
+    const s = `Audits ${n}/${prules(g).maxAudits}${graded ? `  ${graded} graded` : ''}`;
     const tw = textWidth(s) + 8;
     ui.fill(x0, y - 11, tw, 11, C.ink);
     ui.fill(x0 + 1, y - 10, tw - 2, 10, C.shadow);
     ui.fill(x0 + 1, y - 10, tw - 2, 1, graded ? C.brass1 : C.teal0);
     ui.text(s, x0 + 4, y - 9, graded ? C.gold : C.teal1);
-    ui.hint(x0, y - 11, tw, 11, `Up to ${RULES.maxAudits.value} lines can be audited at once, in boxes that never overlap. Click a graded badge to fold it.`, 180);
+    ui.hint(x0, y - 11, tw, 11, `Up to ${prules(g).maxAudits} lines can be audited at once, in boxes that never overlap. Click a graded badge to fold it.`, 180);
   }
   here.forEach((a, i) => auditChip(app, a, ws, x0 + i * (bw + gap), y, bw, bh));
 }
@@ -204,13 +206,12 @@ function auditChip(app: App, a: AnyAudit, ws: boolean, x: number, y: number, w: 
   const ui = app.ui;
   const g = app.game;
   const ctx = ui.ctx;
-  const total = auditTicks();
+  const total = auditTicks(g);
   const f = Math.min(1, a.t / total);
-  const warm = !a.result && a.t < warmTicks();
-  const res: AuditResult | null = a.result ?? (ws ? projectAudit(g, a as AuditState) : a.t > warmTicks() + TICK_RATE ? gradeFAudit(g) : null);
+  const warm = !a.result && a.t < warmTicks(g);
+  const res: AuditResult | null = a.result ?? (ws ? projectAudit(g, a as AuditState) : a.t > warmTicks(g) + TICK_RATE ? gradeFAudit(g) : null);
   const hov = ui.hover(x, y, w, h);
-  frame(ui, x, y, w, h);
-  ui.region(x, y, w, h, 'button');
+  plate(ui, x, y, w, h, { accent: a.result ? C.gold : warm ? C.hull1 : C.teal1, hover: hov, kind: 'button' });
   if (a.result) {
     // a graded badge glows gold and asks to be clicked
     ui.fill(x + 3, y + 3, w - 6, h - 6, C.gold, 0.12 + 0.1 * Math.sin(ui.time * 6));
@@ -251,7 +252,7 @@ function auditChip(app: App, a: AnyAudit, ws: boolean, x: number, y: number, w: 
   } else if (res) {
     ui.text('so far', tx, y + 13, C.hull2);
     ui.text(res.grade.letter, tx + textWidth('so far') + 4, y + 13, GRADE_COL[res.grade.letter] ?? C.bone);
-  } else ui.text(warm ? `${Math.ceil((warmTicks() - a.t) / TICK_RATE)} s, then 60` : 'measuring', tx, y + 13, C.hull1);
+  } else ui.text(warm ? `${Math.ceil((warmTicks(g) - a.t) / TICK_RATE)} s, then ${prules(g).auditWindow}` : 'measuring', tx, y + 13, C.hull1);
   ui.unclip();
   // the score as one bar: U, W and C stacked in their weights
   const bw = tr - tx;
@@ -831,89 +832,6 @@ function ledger(app: App, x: number, y: number, w: number, h: number, foot = 0) 
     const tip = 'Stamps grow by product, not design: a better line for the same product doesn\'t reset the price.';
     if (yy + wrapText(tip, inner.w).length * 10 <= end) ui.para(tip, inner.x, yy, inner.w, C.hull2);
   }
-}
-
-// ------------------------------------------------------------------ the Factory store column
-
-export function factoryStore(app: App, L: Layout) {
-  const ui = app.ui;
-  const g = app.game;
-  const r = L.right;
-  frame(ui, r.x, r.y, r.w, r.h);
-  ui.fill(r.x + 3, r.y + 3, r.w - 6, 13, C.shadow);
-  ui.text('Factory', r.x + 7, r.y + 6, C.hot, { shadow: C.ink });
-  if (button(ui, 'openModules', r.x + r.w - 60, r.y + 3, 56, 13, 'Modules', { active: app.panel === 'modules', tip: 'The inventory: stamp copies, unfold, rename (I).' })) app.togglePanel('modules');
-  let y = r.y + 20;
-  const rowH = 30;
-  // quick links along the bottom: the Survey Office, the Codex, the Drill
-  const links: { id: 'survey' | 'codex' | 'mega'; ic: 'survey' | 'codex' | 'mega'; tip: string }[] = [];
-  if (g.done('coalSeams')) links.push({ id: 'survey', ic: 'survey', tip: 'The Survey Office: ore claims' }, { id: 'codex', ic: 'codex', tip: "Unit 7's Codex" });
-  if (g.done('greatDrill')) links.push({ id: 'mega', ic: 'mega', tip: 'The Great Drill' });
-  const linkY = r.y + r.h - 22;
-  const bottom = links.length ? linkY - 2 : r.y + r.h - 4;
-  if (links.length) {
-    const lw = Math.floor((r.w - 8 - (links.length - 1) * 3) / links.length);
-    links.forEach((l, i) => {
-      if (button(ui, 'flink:' + l.id, r.x + 4 + i * (lw + 3), linkY, lw, 18, '', { tip: l.tip })) app.togglePanel(l.id);
-      icon(app, l.ic, r.x + 4 + i * (lw + 3) + Math.floor((lw - 16) / 2), linkY + 1);
-    });
-  }
-  // the trunk belt
-  const tr = app.mode.k === 'ftrunk';
-  const rowFrame = (yy: number, active: boolean, hov: boolean) => {
-    if (hasArt('ui_row')) {
-      const s = sheet('ui_row');
-      ui.ctx.drawImage(s.frames[hov ? 1 : 0], r.x + 4, yy, r.w - 8, rowH - 2);
-    } else ui.fill(r.x + 4, yy, r.w - 8, rowH - 2, hov ? C.ground1 : C.ground0);
-    if (active) ui.fill(r.x + 5, yy + 1, 2, rowH - 4, C.gold);
-  };
-  {
-    const hov = ui.hover(r.x + 4, y, r.w - 8, rowH - 2);
-    ui.region(r.x + 4, y, r.w - 8, rowH - 2, 'button');
-    rowFrame(y, tr, hov);
-    ui.fill(r.x + 8, y + 3, 22, 22, C.ink);
-    ui.ctx.drawImage(sheet('trunk').frames[0], r.x + 11, y + 6);
-    ui.text('1', r.x + 6, y + 2, C.hull2);
-    ui.text('Trunk belt', r.x + 34, y + 4, C.bone);
-    coinIcon(ui, r.x + 34, y + 15, false);
-    ui.text(`${FACTORY.trunkCost}  ${FACTORY.trunkSpeed * 60}/min`, r.x + 44, y + 15, g.s.coin.gte(FACTORY.trunkCost) ? C.gold : C.pipRed);
-    if (hov) ui.tip([{ text: 'Trunk belt (key 1)', color: C.gold }, { text: `Carries ${FACTORY.trunkSpeed * 60} items a minute from a module's front to the next module's back, the Factory Dock, the Hopper or the Megaproject Bay. A trunk leaving a module's side takes its slag or oil. Drag to lay a line.` }], 190);
-    if (hov && ui.clicked) { ui.eat(); app.setMode(tr ? { k: 'idle' } : { k: 'ftrunk' }); }
-    y += rowH;
-  }
-  if (!g.s.designs.length) {
-    ui.para('Fold a line on the Workshop (F) to get your first module.', r.x + 8, y + 4, r.w - 16, C.hull2);
-    return;
-  }
-  ui.text('Your modules', r.x + 8, y + 2, C.hull2);
-  y += 11;
-  g.s.designs.forEach((d, i) => {
-    if (y + rowH > bottom) return;
-    const active = app.mode.k === 'fmodule' && app.mode.design === d.id;
-    const hov = ui.hover(r.x + 4, y, r.w - 8, rowH - 2);
-    ui.region(r.x + 4, y, r.w - 8, rowH - 2, 'button');
-    rowFrame(y, active, hov);
-    ui.fill(r.x + 8, y + 3, 22, 22, d.depth === 2 ? C.teal0 : C.ink);
-    ui.ctx.drawImage(sheet('module').frames[0], r.x + 11, y + 6);
-    const out = mainOutput(g, d.id);
-    if (out) ui.ctx.drawImage(itemIcon(out), r.x + 15, y + 10);
-    if (i < 8) ui.text(String(i + 2), r.x + 6, y + 2, C.hull2);
-    ui.clip(r.x + 34, y, r.w - 52, rowH);
-    ui.text(d.name, r.x + 34, y + 4, d.spare ? C.bone : C.hull2);
-    ui.unclip();
-    ui.text(d.grade.letter, r.x + r.w - 12, y + 4, GRADE_COL[d.grade.letter], { align: 'right' });
-    const cost = stampCost(g, d);
-    const why = stampRefusal(g, d);
-    const bwid = Math.min(54, Math.max(40, textWidth(`+${cost.format()}`) + 8));
-    const bx = r.x + r.w - 8 - bwid;
-    ui.clip(r.x + 34, y + 13, bx - (r.x + 34) - 2, 12);
-    ui.text(`${d.spare} spare`, r.x + 34, y + 15, d.spare ? C.leaf : C.hull1);
-    ui.unclip();
-    if (button(ui, 'fstamp:' + d.id, bx, y + 13, bwid, 12, `+${cost.format()}`, { disabled: !!why, tip: why ?? `Stamp a copy for ${cost.format()} coin: bill x (1 + 0.5 x ${productCopies(g, d)} copies of this product).` })) app.act({ k: 'stamp', id: d.id });
-    if (hov) ui.tip([{ text: d.name + (d.depth === 2 ? ' (depth 2)' : ''), color: C.gold }, { text: `Grade ${d.grade.letter} (x${d.grade.mult.toFixed(2)}). Makes ${Object.entries(d.outs).map(([k, v]) => `${perMin(v ?? 0)} ${ITEMS[k as ItemId].name.toLowerCase()}`).join(', ')} a minute.` }, { text: Object.keys(d.ins).length ? `Takes ${Object.entries(d.ins).map(([k, v]) => `${perMin(v ?? 0)} ${ITEMS[k as ItemId].name.toLowerCase()}`).join(', ')} a minute at its back.` : 'A source: it takes nothing in.', color: C.hull2 }, { text: 'Click, then click the floor. R rotates: the gold mark is its front.', color: C.hull2 }], 200);
-    if (hov && ui.clicked) { ui.eat(); app.pickModule(d.id); }
-    y += rowH;
-  });
 }
 
 /** Why a module's output backs up, with both rates when the module downstream takes less than
