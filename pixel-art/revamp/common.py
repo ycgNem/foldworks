@@ -227,7 +227,7 @@ def export(name, rows, fps=0, anchor=(0, 0), facings=None, extra=None, check=Tru
         meta.update(extra)
     for d in ([OUT, SRC_ART] if to_src else [OUT]):
         img.save(d / f"{name}.png")
-        (d / f"{name}.json").write_text(json.dumps(meta) + "\n")
+        (d / f"{name}.json").write_text(json.dumps(meta) + "\n", newline="\n")
     scale(on_bg(img, P["wood2"]), 4).save(OUT / f"{name}@4x.png")
     return img
 

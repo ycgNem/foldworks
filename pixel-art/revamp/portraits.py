@@ -4,13 +4,34 @@ top of a bounce, 1 px up) and a 24x24 small version.
 Bramble: PixelLab img2img over his Milestone 1 portrait (same face, richer shading), cheer the
 same over his cheer. The Committee: PixelLab's raccoon in a fedora and trench coat, and the gag
 finished by hand: a second raccoon peeking between the lapels and a third one's ringed tail out
-of the hem (three raccoons, one coat). Unit 7 and Dame Voltaire keep their hand-drawn portraits,
-recoloured into Lantern Bayou (img2img lost Unit 7's screen face and changed Voltaire's skin)."""
+of the hem (three raccoons, one coat); its 24 px version is drawn for its size
+(committee_small.py). Unit 7 and Dame Voltaire are their hand-drawn recipes redrawn in B by role
+(cast_draw.py: Voltaire's peach skin, Unit 7's screen face and five-step steel), with the lantern
+rim light on their right edge (img2img had lost Unit 7's screen face and changed Voltaire's skin)."""
 from PIL import Image
 
-from common import P, RAW, SRC_ART, new, draw, export, snap, from_rows, get, halve, rgb, OUT, scale, on_bg
+from common import P, RAW, SRC_ART, new, draw, export, snap, from_rows, get, halve, rgb, OUT, scale, on_bg, lum
+from committee_small import committee_small
 
 PR = RAW / "portraits"
+INK_RGB = rgb(P["ink"])
+
+
+def rim(im, warm=(P["lamp0"], P["lamp1"], P["lamp2"])):
+    """The lantern's rim light: the last pixel inside the right-hand outline turns warm (dark
+    pixels to lamp0, mid to lamp1, light to lamp2), as if a lantern hung just off the card."""
+    out = im.copy()
+    a = im.load()
+    w, h = im.size
+    for y in range(h):
+        for x in range(w - 2):
+            p = a[x, y]
+            if not p[3] or p[:3] == INK_RGB:
+                continue
+            if a[x + 1, y][3] and a[x + 1, y][:3] == INK_RGB and not a[x + 2, y][3]:
+                L = lum(p)
+                draw(out, [(x, y)], warm[0 if L < 90 else 1 if L < 160 else 2])
+    return out
 
 
 def load(p):
@@ -98,13 +119,18 @@ def build():
     export("portrait_committee", [c, c_blink])
     cc = committee_extras(load(PR / "committee_cheer.png"), (19, 35), (1, 39))
     export("portrait_committee_cheer", [cc, bounce(cc)])
-    export("portrait_committee_small", [small(c, 0, 1)])
-    # Unit 7 and Dame Voltaire: their own portraits (recoloured), plus small versions
+    export("portrait_committee_small", [committee_small()])
+    # Unit 7 and Dame Voltaire: their own recipes redrawn in B (cast_draw.py), lit by the lantern
+    cast = {}
     for who in ("unit7", "voltaire"):
-        fr = old(f"portrait_{who}")
+        fr = [rim(Image.open(RAW / "cast" / f"{who}_{i}.png").convert("RGBA")) for i in range(2)]
+        ch = [rim(Image.open(RAW / "cast" / f"{who}_cheer_{i}.png").convert("RGBA")) for i in range(2)]
+        export(f"portrait_{who}", fr)
+        export(f"portrait_{who}_cheer", ch, 4)
         export(f"portrait_{who}_small", [small(fr[0])])
+        cast[who] = fr[0]
     look = new(52 * 8, 52)
-    ims = [b, b_blink, bc, c, c_blink, cc, old("portrait_unit7")[0], old("portrait_voltaire")[0]]
+    ims = [b, b_blink, bc, c, c_blink, cc, cast["unit7"], cast["voltaire"]]
     for i, im in enumerate(ims):
         look.alpha_composite(im, (i * 52 + 2, 2))
     scale(on_bg(look, P["ink1"]), 4).save(OUT / "portraits_look@4x.png")
