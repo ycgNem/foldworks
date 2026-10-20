@@ -433,9 +433,11 @@ export function runModules(g: Game) {
     const d = g.design(m.design);
     if (!d) continue;
     // the Great Drill boosts modules with miners inside, but never one under audit: its rate is
-    // being measured, and a depth-2 module folded from it gets the boost again (Milestone 4 review)
+    // being measured, and a depth-2 module folded from it gets the boost again (Milestone 4 review).
+    // Overdrive likewise never reaches an audited module (the final round: an overdriven group
+    // folded 3x into the nested window)
     const audited = !!g.s.faudit && !g.s.faudit.result && g.s.faudit.ids.includes(m.id);
-    const k = (drill > 1 && !audited && Object.keys(oresOf(g, d)).length ? drill : 1) * ((m.od ?? 0) > 0 ? RULES.overdriveMult.value : 1);
+    const k = (drill > 1 && !audited && Object.keys(oresOf(g, d)).length ? drill : 1) * ((m.od ?? 0) > 0 && !audited ? RULES.overdriveMult.value : 1);
     if (m.od) { m.od--; if (!m.od) m.cool = Math.round(pr.overdriveCool * TICK_RATE); } else if (m.cool) m.cool--;
     // stopped by the player (DESIGN.md §20): runs at 0, takes nothing, holds its buffers
     if (m.paused) {

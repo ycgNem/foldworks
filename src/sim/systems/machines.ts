@@ -38,9 +38,19 @@ export function veinBoost(g: Game, m: Ent): number {
   return RULES.veinMult.value;
 }
 
-/** Crafting speed this tick, before power: kind x mode x Overdrive. */
-export function baseSpeed(m: Ent): number {
-  return (BUILD[m.kind].speed ?? 1) * modeSpeed(m) * ((m.od ?? 0) > 0 ? RULES.overdriveMult.value : 1);
+/** Overdrive's multiplier for this machine or Miner now: 1 when it is not overdriven, or while it
+ * is being audited. Only starting Overdrive on an audited line was refused before, and with Quick
+ * Audits the 5 s warm-up is shorter than Overdrive's 10 s, so an overdriven line folded 3x into its
+ * window and +25% for good (every stamp inherits it): the final round, DESIGN.md §10. */
+export function odBoost(g: Game, m: Ent): number {
+  if (!((m.od ?? 0) > 0)) return 1;
+  if (isAudited(g, m.id)) return 1;
+  return RULES.overdriveMult.value;
+}
+
+/** Crafting speed this tick, before power: kind x mode x Overdrive (never while audited). */
+export function baseSpeed(g: Game, m: Ent): number {
+  return (BUILD[m.kind].speed ?? 1) * modeSpeed(m) * odBoost(g, m);
 }
 
 /** Count down Overdrive, then its cooling, and a Lucky Vein's boost (both systems that run
@@ -74,7 +84,7 @@ export function runMachines(g: Game) {
       const hand = m.kind === 'furnace' && !bellows;
       if (!hand) {
         const pf = powerFactor(g, m);
-        const sp = baseSpeed(m) * veinBoost(g, m) * pf;
+        const sp = baseSpeed(g, m) * veinBoost(g, m) * pf;
         if (sp > 0) {
           m.prog += sp;
           progressed = true;
