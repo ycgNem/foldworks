@@ -1,10 +1,11 @@
-// Shared pieces for the Act II screens (Milestone 4): icons found by their atlas name (the atlas is
-// append-only, STYLE.md), the screen header with its row of linked-screen tabs, tabs, a stamp
-// that slams down, star bursts and number formatting for rates. Presentation only.
+// Shared pieces for the screens: icons found by their atlas name (the atlas is append-only,
+// STYLE.md), tabs, the one full-screen menu template (docs/ui-redesign.md: header bar with icon,
+// title, the menu's tabs and close; content; an optional detail panel on the right), a stamp that
+// slams down, star bursts, meters and number formatting for rates. Presentation only.
 import { C, rgba } from '../data/palette';
-import { ICON, textWidth } from '../ui/font';
+import { ICON, textWidth, smallWidth } from '../ui/font';
 import { sheet, hasArt } from '../render/sprites';
-import { nine, button, frame } from './chrome';
+import { button, frame, label } from './chrome';
 import type { App } from './app';
 import type { ScreenName } from './screens';
 import type { Rect, TipLine } from '../ui/ui';
@@ -44,36 +45,39 @@ export function perMin(r: number): string {
 /** A whole number with separators. */
 export const fmt = (n: number) => Math.floor(n).toLocaleString('en-US');
 
-/** A tab: the art's 9-slice (frame 1 when active), a label, an optional icon. Returns true on click. */
+/** A tab, code-drawn in the plate language: a dark key, lit with a gold underline when active.
+ * An optional icon and a badge (a count or "!") on its corner. Returns true on click. */
 export function tab(app: App, id: string, x: number, y: number, w: number, h: number, label: string, o: { active?: boolean; icon?: IconName; disabled?: boolean; tip?: TipLine[] | string; badge?: string } = {}): boolean {
   const ui = app.ui;
   ui.mark(id, x, y, w, h);
   ui.region(x, y, w, h, 'button');
-  const hov = ui.hover(x, y, w, h);
-  if (hasArt('ui_tab')) nine(ui.ctx, sheet('ui_tab'), o.active || (hov && !o.disabled) ? 1 : 0, x, y, w, h);
-  else {
-    ui.fill(x, y, w, h, C.ink);
-    ui.fill(x + 1, y + 1, w - 2, h - 1, o.active ? C.ground1 : hov ? C.hull1 : C.hull0);
-  }
-  if (o.active) ui.fill(x + 3, y + h - 2, w - 6, 1, C.gold);
+  const hov = ui.hover(x, y, w, h) && !o.disabled;
+  const ctx = ui.ctx;
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = o.active ? C.hull0 : hov ? C.shadow : rgba(C.shadow, 0.6);
+  ctx.fillRect(x + 1, y + 1, w - 2, h - 1);
+  ctx.fillStyle = o.active ? C.hull1 : C.hull0;
+  ctx.fillRect(x + 1, y + 1, w - 2, 1);
+  if (o.active) { ctx.fillStyle = C.gold; ctx.fillRect(x + 2, y + h - 2, w - 4, 1); }
   let tx = x + Math.floor(w / 2);
   if (o.icon) {
-    const iw = 9 + textWidth(label);
+    const iw = label ? 9 + textWidth(label) : 8;
     const ix = x + Math.floor((w - iw) / 2);
-    ui.ctx.globalAlpha = o.disabled ? 0.4 : 1;
+    ctx.globalAlpha = o.disabled ? 0.4 : 1;
     icon(app, o.icon, ix, y + Math.floor((h - 8) / 2), true);
-    ui.ctx.globalAlpha = 1;
+    ctx.globalAlpha = 1;
     tx = ix + 9 + Math.floor(textWidth(label) / 2);
   }
-  ui.text(label, tx, y + Math.floor((h - 7) / 2), o.disabled ? C.hull1 : o.active ? C.gold : C.bone, { align: 'center', shadow: C.ink });
+  if (label) ui.text(label, tx, y + Math.floor((h - 7) / 2), o.disabled ? C.hull1 : o.active ? C.gold : C.bone, { align: 'center', shadow: C.ink });
   if (o.badge) {
-    const bw = textWidth(o.badge) + 4;
+    const bw = smallWidth(o.badge) + 4;
     ui.fill(x + w - bw - 1, y - 3, bw, 8, C.ink);
     ui.fill(x + w - bw, y - 2, bw - 2, 6, C.pipRed);
-    ui.text(o.badge, x + w - bw + 1, y - 3, C.bone);
+    ui.small(o.badge, x + w - bw + 1, y - 2, C.bone);
   }
   if (hov && o.tip) ui.tip(typeof o.tip === 'string' ? [{ text: o.tip }] : o.tip, 190);
-  if (hov && ui.clicked && !o.disabled) {
+  if (hov && ui.clicked) {
     ui.eat();
     ui.sfx('click');
     return true;
@@ -81,40 +85,87 @@ export function tab(app: App, id: string, x: number, y: number, w: number, h: nu
   return false;
 }
 
-/** The linked screens shown as tabs in every Act II screen's header (only the open ones). */
-function linked(app: App): { id: ScreenName; label: string; icon: IconName; tip: string }[] {
+/** A tab in a menu's header bar. */
+export interface MenuTab { id: string; label: string; icon?: IconName; tip?: string; active: boolean; onClick: () => void; badge?: string; disabled?: boolean }
+
+/** The screens that share a header's tabs: switching among them keeps the menu open. */
+const GROUPS: ScreenName[][] = [
+  ['orders', 'modules', 'codex', 'survey', 'mega'],
+  ['stats', 'trophies', 'options'],
+];
+
+/** The linked screens shown as tabs in a screen's header (only the open ones of its group). */
+function linked(app: App): MenuTab[] {
   const g = app.game;
-  const out: { id: ScreenName; label: string; icon: IconName; tip: string }[] = [{ id: 'orders', label: 'Orders', icon: 'orders', tip: 'Customers and their orders (O)' }];
-  if (g.done('folding')) out.push({ id: 'modules', label: 'Modules', icon: 'fold', tip: 'Your folded designs: stamp, place, unfold (I)' });
-  if (g.done('coalSeams')) out.push({ id: 'codex', label: 'Codex', icon: 'codex', tip: "Unit 7's Codex: a first delivery of each item pays 30x" });
-  if (g.done('coalSeams')) out.push({ id: 'survey', label: 'Survey', icon: 'survey', tip: 'The Survey Office: deposit claims for source modules' });
-  if (g.done('greatDrill') || g.s.mega.stage > 0) out.push({ id: 'mega', label: 'Drill', icon: 'mega', tip: 'The Megaproject: the Great Drill' });
-  return out;
+  const p = app.panel;
+  const group = GROUPS.find((q) => p && q.includes(p as ScreenName));
+  if (!group) return [];
+  const all: { id: ScreenName; label: string; icon: IconName; tip: string; open: boolean }[] = [
+    { id: 'orders', label: 'Orders', icon: 'orders', tip: 'Customers and their orders (O)', open: true },
+    { id: 'modules', label: 'Modules', icon: 'fold', tip: 'Your folded designs: stamp, place, unfold (I)', open: g.done('folding') },
+    { id: 'codex', label: 'Codex', icon: 'codex', tip: "Unit 7's Codex: a first delivery of each item pays 30x", open: g.done('coalSeams') },
+    { id: 'survey', label: 'Survey', icon: 'survey', tip: 'The Survey Office: deposit claims for source modules', open: g.done('coalSeams') },
+    { id: 'mega', label: 'Drill', icon: 'mega', tip: 'The Megaproject: the Great Drill', open: g.done('greatDrill') || g.s.mega.stage > 0 },
+    { id: 'stats', label: 'Stats', icon: 'stats', tip: 'Statistics', open: true },
+    { id: 'trophies', label: 'Trophies', icon: 'trophies', tip: 'The Trophy Shelf', open: true },
+    { id: 'options', label: 'Options', icon: 'options', tip: 'Sound, saves, keys (/)', open: true },
+  ];
+  const tabs = all.filter((t) => group.includes(t.id) && t.open);
+  if (tabs.length < 2) return [];
+  return tabs.map((t) => ({ id: 'nav:' + t.id, label: t.label, icon: t.icon, tip: t.tip, active: app.panel === t.id, onClick: () => { if (app.panel !== t.id) { app.panel = t.id; app.audio.sfx('open'); } } }));
 }
 
-/** A screen's title strip: icon, title, the linked-screen tabs and Close. Returns the strip's
- * free width left of the tabs (for callers that add their own controls). */
-export function screenHeader(app: App, r: Rect, title: string, accent: string, ic: IconName): number {
+/** The header bar's height: content starts below it (r.y + MENU_HEAD + 2). */
+export const MENU_HEAD = 20;
+
+/** Draw the menu template's frame and header bar: the ornate frame (menus are the rare, special
+ * weight), the icon, the title in the accent colour, the tabs, Esc and close. Returns the header's
+ * free width left of the tabs. */
+function menuHead(app: App, r: Rect, title: string, accent: string, ic: IconName, tabs: MenuTab[]): number {
   const ui = app.ui;
   frame(ui, r.x, r.y, r.w, r.h);
-  ui.fill(r.x + 3, r.y + 3, r.w - 6, 15, C.shadow);
-  ui.fill(r.x + 3, r.y + 17, r.w - 6, 1, accent);
+  ui.fill(r.x + 3, r.y + 3, r.w - 6, MENU_HEAD - 4, C.ink, 0.7);
+  ui.fill(r.x + 3, r.y + MENU_HEAD - 2, r.w - 6, 1, accent);
   icon(app, ic, r.x + 6, r.y + 2);
   ui.text(title, r.x + 26, r.y + 7, accent, { shadow: C.ink });
-  if (button(ui, 'closeScreen', r.x + r.w - 46, r.y + 4, 40, 12, 'close', { tip: 'Close (Esc)' })) app.panel = null;
-  const tabs = linked(app);
-  const tw = r.w >= 600 ? 58 : 50;
-  let x = r.x + r.w - 50 - tabs.length * (tw + 2);
-  const left = x - (r.x + 26 + textWidth(title)) - 6;
-  if (left < 0) return 0;
+  // close: an x key at the right, with its key named beside it
+  const cx = r.x + r.w - 20;
+  if (button(ui, 'closeScreen', cx, r.y + 4, 14, 12, ICON.cross, { tip: 'Close (Esc)' })) app.panel = null;
+  label(ui, 'esc', cx - 3, r.y + 8, C.hull1, 'right');
+  const right = cx - 3 - smallWidth('ESC') - 6;
+  const titleEnd = r.x + 26 + textWidth(title) + 8;
+  if (!tabs.length) return right - titleEnd;
+  const want = (lab: boolean) => tabs.reduce((s, t) => s + (lab ? Math.max(40, 22 + textWidth(t.label)) : 18) + 2, 0);
+  const lab = right - titleEnd >= want(true);
+  if (!lab && right - titleEnd < want(false)) return right - titleEnd;
+  let x = right - want(lab);
+  const left = x - titleEnd;
   for (const t of tabs) {
-    if (tab(app, 'nav:' + t.id, x, r.y + 4, tw, 13, t.label, { icon: t.icon, active: app.panel === t.id, tip: t.tip }) && app.panel !== t.id) {
-      app.panel = t.id;
-      app.audio.sfx('open');
-    }
+    const tw = lab ? Math.max(40, 22 + textWidth(t.label)) : 18;
+    if (tab(app, t.id, x, r.y + 4, tw, 13, lab ? t.label : '', { icon: t.icon, active: t.active, tip: t.tip, badge: t.badge, disabled: t.disabled })) t.onClick();
     x += tw + 2;
   }
   return left;
+}
+
+/** A screen's title strip: the template's header, with the tabs of the screen's group. Returns the
+ * strip's free width left of the tabs (for callers that add their own controls). */
+export function screenHeader(app: App, r: Rect, title: string, accent: string, ic: IconName): number {
+  return menuHead(app, r, title, accent, ic, linked(app));
+}
+
+/** The one full-screen menu template (docs/ui-redesign.md): the ornate frame, a header bar (icon,
+ * title, the menu's tabs, Esc and close), the content, and an optional detail panel `detail` px
+ * wide on the right (the research tree's node card is the model). Returns where to draw.
+ *   const { body, detail } = menuTemplate(app, r, { title: 'Patents', accent: C.violet, icon: 'star', detail: 170 });
+ */
+export function menuTemplate(app: App, r: Rect, o: { title: string; accent: string; icon: IconName; tabs?: MenuTab[]; detail?: number }): { body: Rect; detail: Rect | null; free: number } {
+  const free = menuHead(app, r, o.title, o.accent, o.icon, o.tabs ?? linked(app));
+  const top = r.y + MENU_HEAD + 4, h = r.h - MENU_HEAD - 10;
+  const dw = o.detail ? Math.min(o.detail, Math.floor(r.w * 0.4)) : 0;
+  const body = { x: r.x + 8, y: top, w: r.w - 16 - (dw ? dw + 6 : 0), h };
+  const detail = dw ? { x: r.x + r.w - 8 - dw, y: top, w: dw, h } : null;
+  return { body, detail, free };
 }
 
 /** The stamp's scale at time t after it starts falling: 3x down to 1x in whole steps. */

@@ -4,7 +4,7 @@
 // (src/ui/audit.ts, npm run screens).
 import { C, rgba } from '../data/palette';
 import type { Input } from '../engine/input';
-import { drawText, textWidth, wrapText, LINE_H, FONT_H } from './font';
+import { drawText, drawSmall, textWidth, smallWidth, wrapText, LINE_H, FONT_H, SMALL_H } from './font';
 import type { AuditRec, AuditKind } from './audit';
 
 export interface Rect { x: number; y: number; w: number; h: number }
@@ -148,13 +148,22 @@ export class UI {
     }
   }
 
-  text(s: string, x: number, y: number, c: string = C.bone, opts: { scale?: number; shadow?: string; align?: 'left' | 'center' | 'right' } = {}) {
+  text(s: string, x: number, y: number, c: string = C.bone, opts: { scale?: number; shadow?: string; align?: 'left' | 'center' | 'right'; small?: boolean } = {}) {
+    if (opts.small) return this.small(s, x, y, c, opts);
     const sc = opts.scale ?? 1;
     let tx = x;
     if (opts.align === 'center') tx = x - Math.floor((textWidth(s) * sc) / 2);
     else if (opts.align === 'right') tx = x - textWidth(s) * sc;
     if (this.audit && s.trim()) this.rec('text', Math.round(tx), Math.round(y), textWidth(s) * sc, FONT_H * sc, s);
     return drawText(this.ctx, s, Math.round(tx), Math.round(y), c, sc, opts.shadow ?? null);
+  }
+
+  /** Small-font text (5 px capitals: labels, keys, prices). Returns the width drawn. */
+  small(s: string, x: number, y: number, c: string = C.hull2, opts: { shadow?: string; align?: 'left' | 'center' | 'right' } = {}) {
+    const w = smallWidth(s);
+    const tx = opts.align === 'center' ? x - Math.floor(w / 2) : opts.align === 'right' ? x - w : x;
+    if (this.audit && s.trim()) this.rec('text', Math.round(tx), Math.round(y), w, SMALL_H, s);
+    return drawSmall(this.ctx, s, Math.round(tx), Math.round(y), c, opts.shadow ?? null);
   }
 
   /** wrapped paragraph; returns height used */
@@ -240,10 +249,21 @@ export class UI {
     this.auditLayer = prev;
   }
 
+  /** Queue something to draw over everything at the end of the frame, on the tooltip layer (a
+   * rich hover card, a drop-down): it floats, so the overlap audit treats it like a tooltip. A
+   * floating card replaces the plain tooltip for that frame. */
+  later(draw: () => void) {
+    this.deferred.push(draw);
+  }
+  private deferred: (() => void)[] = [];
+
   end() {
     // the tooltip floats above the UI on purpose
     this.auditLayer = 'tip';
-    if (this.tooltip && this.tooltip.length) this.drawTip(this.tooltip);
+    const d = this.deferred;
+    this.deferred = [];
+    for (const f of d) f();
+    if (!d.length && this.tooltip && this.tooltip.length) this.drawTip(this.tooltip);
     this.auditLayer = 'ui';
   }
 
