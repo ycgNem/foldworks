@@ -2,7 +2,79 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
-## Status (2026-10-20): Milestones 0–2 built, the Milestone 3 gate passed with conditions, Milestone 4 (Act II) built and reviewed
+## Status (2026-10-20, session 2): Milestones 5 and 6 built and reviewed, the UI redone, the art revamped (Lantern Bayou)
+
+The owner asked for Milestones 5 and 6, a complete art revamp with PixelLab (up to 1,000
+generations), and a UI redo ("crowded but not in a good way"). Built in parallel tracks on branch
+`m5-m6-revamp` (agents in worktrees, merged by the lead), reviewed by the idle-critic and the
+pacing-auditor, and revised in a review round (DECISIONS.md: "The UI redesign", "Milestone 6",
+"Milestone 5", "The art revamp: Lantern Bayou", and the three "review round" sections).
+
+### What this session added
+
+- **The UI redesign** (`docs/ui-redesign.md`): a thin top bar (the coin counter as the one loud
+  number, Kits, power, Patents, the line-health chip, floor tabs, icon menus), floating Goal /
+  Order / Research / Megaproject cards, a centred build bar (category tabs over slots, a rich hover
+  card), toasts and the pinned report on the right, the Gazette as a bottom crawl, the floor at
+  ~80% of the width. Two panel weights: calm code-drawn plates for the HUD, the ornate frame only
+  for full-screen menus and celebrations, which all use one template (`menuTemplate`). An order
+  flag over the Dock and a research ring over the Hopper. All the juice kept.
+- **Milestone 5, Reorganize** (DESIGN.md §19): the Reorganize card (gain by term, keep, lose,
+  goals that raise it); **Patents are filed, not re-earned** (each product's best value = steps
+  folded x grade x rate tier, paid only for the rise over the record on file, plus the Great Drill
+  term and a minor term for the bills standing and running); the Patent tree (29 nodes, 40
+  Patents: head starts, rules, automation, offline); **the Patent Drawer** (keep folded designs
+  through a reset, unfold them whole for their bill; the Draughtsman unfolds a queue; FWD1 share
+  strings) in place of blueprint ghosts and drones; **the Committee** (three raccoons in a coat)
+  whose reputation opens the Great Drill's stages 2 and 3 (completable across three runs); **the
+  Factory annex** (coin buys Factory-floor land at linear prices: the coin sink, and the coin chains
+  keep running beside the Bay floor). The campaign bot plays three runs and spends Patents.
+- **Milestone 6, Idle and offline** (DESIGN.md §12, §20): time away up to 7 days; offline
+  efficiency 0.5, +0.1 from the coin Night Shift (kept through resets), +0.15 from Patents (0.75
+  cap, refusals at the cap); offline run in segments that end when a heap fills, the Bay is
+  satisfied, an order fills or research finishes; the report as a timeline grouped by line (cause
+  and fix, jump-to); **safe for overnight** (a headless forecast with Stop line / machine, a logged
+  command); **Inspiration** (clicking a Hopper credits research, capped at 30% a node); notation
+  (standard, scientific, engineering, letters) and one number helper; the background tab keeps the
+  sim running cheaply with no catch-up stutter; autosave every 30 s plus on hide/unload, three
+  rolling backups, corruption recovery. Saves are v7.
+- **The art revamp: Lantern Bayou** (STYLE.md): a new 48-colour palette (every `C` slot name kept);
+  3/4-view machines with four facings and work animations, on steel base plates so they read on the
+  plank deck; PixelLab terrain (deck, water, shore, ore), hand-drawn items, a new Dock and Hopper,
+  portraits (the Committee new; Bramble, Unit 7, Voltaire redrawn), the town, FX and Sparks, the
+  Megaproject and research pictures, UI art, and a title key-art scene. **PixelLab: 241 of the
+  1,000 generations** (81 style test, 157 the revamp, 3 the title); no USD credit spent.
+
+### Measured (seeds 1000 and 8919)
+
+Act I unchanged (DESIGN.md §13). Reorganize: first reset at 4:08-4:13 for 15 Patents; run 2
+resets at ~3:00 for 7; run 3 files 9 at its 4 h cap; the designed run files ~3.1 Patents/h against
+1.1-1.3/h for any reset loop (slice end, 1 h, 2 h). Rule 3: run 2 passes run 1's peak at 0:16-0:17
+(limit 1:22-1:24); run 3 passes run 2's at 0:28 on seed 8919 and ties it on seed 1000 (open). The
+Great Drill reaches stage 3 by the end of run 3; Committee reputation 2, 4, 6. Rule 2 without
+Sparks: 4-10.5 min (<= 15). Offline: never more than open idle, never less than its efficiency, at
+every stage measured (runs 1-3, ~11 stages up to ~12 h of play, both seeds); check 12 holds at 0.5
+and 0.75.
+
+### Open
+
+- **Rule 1** (a goal within ~3 min active): goals the bot reaches come 11-25 min apart before the
+  Bay floor and 34-43 min apart while it fills (the `it.todo` in `tests/pace-act2-run.test.ts`).
+  Annex blocks and claims are affordable throughout but the bot defers them; coin still piles up
+  (0.6-1.3M on hand at 4-7 h).
+- **Rule 3, run 3 vs run 2 on seed 1000**: the peaks tie (17.3K vs 17.4K coin/min): both runs fill
+  the same floor. The lever is keeping (some) annex through a reset (`RULE3_OPEN`).
+- **Rule 4** (active 1.5-4x open idle): five readings at 1.47-1.49 (Overdrive's own 1.5x ceiling
+  is all active play adds at those stages) and run 3 at 1 h (0.72-0.77, the Bay floor rebuild),
+  listed in `RULE4_OPEN` with reasons. A 20 s Overdrive cooldown fixed the first and broke three
+  other targets; reverted.
+- Milestone 6's exit asks for 8 h offline at every stage to 15 h; measured to ~12 h (the campaign's
+  three runs).
+- Derivative flags waiting for the owner: DECISIONS.md "Flagged as derivative" in each new section
+  (the Patent tree's shape, autobuyer nodes, the Founders' Grant, share strings, the Reorganize
+  card, the annex, the UI's genre conventions).
+
+## Earlier status (2026-10-20, session 1): Milestones 0–2 built, the Milestone 3 gate passed with conditions, Milestone 4 (Act II) built and reviewed
 
 The owner asked for Milestones 0–4 in one autonomous session. Milestones 0, 1 and 2 are built.
 The critic's Milestone 1–2 review and the Milestone 3 gate reviews (idle-critic: pass with
