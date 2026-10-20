@@ -846,3 +846,35 @@ at `offlineEfficiency(g)` and the save version, which the lead renumbers at the 
 - **The Patents formula was checked and is not derivative**: CC's heavenly chips and AD's infinity
   points are a root or log of currency earned; ours counts distinct folded products by recipe
   depth and audit grade, with coin as a minor log term.
+
+## The art revamp: Lantern Bayou (2026-10-20)
+
+- 2026-10-20: **The owner picked direction B, "Lantern Bayou", from the three-way style test**
+  (`pixel-art/revamp-test/`, commit faa0736), and **3/4-view machines with four facings**. This
+  supersedes the Milestone 0 entry "Palette A, Foundry, picked" and "Machine art turns with its
+  rotation, light included" for every machine sheet that ships facings. Why: the bayou at dusk
+  gives the game a place (the frog town, the water round each floor) where A was a floor in a
+  void; the lantern light makes the warm cues (fire, coin, windows) carry the scene; 3/4 view
+  gives machines a front face for their family cue (the mouth, the ram, the drill, the arms).
+- 2026-10-20: **The palette changed (the owner's ask-first item, answered by the pick).**
+  `src/data/palette.ts` is B: 51 art colours (phase 1's 48 plus `wood5` for the lit deck board,
+  `violet` for Patents and plastic, `teal` for glass and research) and the five pip colours,
+  unchanged from A so their lightness order holds. **Every palette-A slot name in `C` is kept**,
+  mapped to the B colour that plays its role (`ground0-2` → `wood0-2`, `hull0-3` → `steel1-4`,
+  `glow` → `lamp1`, `hot` → `lamp3`, `gold` → `lamp2`, `teal0` → `water3`, and so on; the table
+  is `pixel-art/revamp/pal.py` `ROLES`), so code and the HUD plates needed no edit. Sprites not
+  redrawn were recoloured A → B role by role (`recolor_old.py`), so nothing in `src/art` uses A.
+- 2026-10-20: **Machine sheets may ship four facings** (`"facings": 4` in the JSON; rows east,
+  south, west, north; frames left to right). `src/render/sprites.ts` draws the row for the
+  entity's rotation without rotating it, so the 3/4 view and the top-left light hold in all four.
+  Sheets without `facings` (belts, splitter, merger, modules) still turn by code.
+- 2026-10-20: **PixelLab drafted, the scripts finished.** PixelLab drafted the machines (eleven
+  8-direction objects at 32 px, five working animations), the docks, hoppers, crate, pole and
+  town buildings (one 64-candidate review pack), and the Bramble and Committee portraits
+  (img2img over the hand-drawn ones). Every draft is finished in `pixel-art/revamp/*.py`: dark
+  rim stripped, fitted to the footprint, outline cleaned, 1 px shadow baked, snapped to the
+  palette, fire flicker and blinks animated by hand. Terrain, belts, the 22 item icons, the module
+  tile, the heap and the new UI icons are hand-drawn. **Phase 2 used 157 generations** (balance
+  2,178.90 → 2,021.90; the phase-1 style test used 81); no USD credit spent. Every job is in
+  `pixel-art/revamp/prompts.md`. Unit 7's and Voltaire's img2img portraits lost their identity
+  (the screen face, the skin tone) and were dropped for their recoloured hand-drawn ones.

@@ -1,128 +1,128 @@
 # Foldworks — Style
 
-Written after the Milestone 0 palette test (`pixel-art/palette-test/`, `DECISIONS.md`
-2026-10-20). Owned by the `art-director`. The game's look in one line: **a warm, cosy workshop
-floor where only the things that matter carry colour — blue iron, orange copper, glowing heat,
-brass modules and coin — framed by a dense, brass-and-wood UI that is always full of things to
-read and click.**
+Rewritten for the art revamp (DECISIONS.md, "The art revamp: Lantern Bayou", 2026-10-20). Owned
+by the `art-director`. The game's look in one line: **a lantern-lit plank deck on a dusk bayou;
+the deck is warm and calm, machines are blue-grey steel seen from above and in front, and the
+colour goes to what matters (ore, items, fire, brass modules, coin, the lanterns of the frog
+town round the floors).**
 
-## Palette: A, "Foundry" (32 colours)
+The build scripts live in `pixel-art/revamp/` (one module per family, `build_all`-style:
+`terrain.py`, `machines.py`, `items.py`, `buildings.py`, `modules.py`, `portraits.py`, `ui.py`,
+and `recolor_old.py` for everything not redrawn yet). `prompts.md` there logs every PixelLab job
+and its cost.
 
-`src/data/palette.ts` is the source of truth (`PALETTE` for the art scripts, `C` for code).
+## Palette: B, "Lantern Bayou" (51 colours + 5 pips)
 
-| Slots | Use |
-|---|---|
-| `ink` `shadow` `bone` | outlines and the darkest UI; shadow-side darks; text and highlights |
-| `ground0-2` | the Workshop floor (packed earth) and wood UI frames |
-| `hull0-3` | machine steel (Mk1 bodies), UI buttons |
-| `iron0-2` | iron ore, ingots, plates; the Hopper's blue |
-| `copper0-2` | copper ore, ingots, wire; firebrick |
-| `slag` `violet` | slag and its bricks; rare accents |
-| `brass0-1` `gold` | modules, coin, UI frames and their rivets; `gold` is reserved for coin numbers and the best moments |
-| `glow` `hot` | heat: smelter mouths, embers, sparks of light |
-| `teal0-1` | glass and Act II; the research tree's light |
-| `moss` `leaf` | Mayor Bramble, the Dock's pennant, orders |
-| `pipGreen` `pipYellow` `pipRed` `pipGrey` `pipBlue` | **status pips only** (working, starved, blocked, unconnected, unpowered). Never in sprite art. |
+`src/data/palette.ts` is the source of truth (`PALETTE` for the art scripts and the import
+snapper, `C` for code); `pixel-art/revamp/pal.py` mirrors it for the Python scripts.
+
+| Ramp | Colours | Use |
+|---|---|---|
+| `ink` `ink1` `ink2` | 3 | outlines, night, the darkest UI; violet-leaning so the dark reads as dusk |
+| `water0-4` | 5 | the bayou round every floor; town waterlines; `water3` is A's `teal0` |
+| `moss0-5` `lily` | 7 | swamp plants, Mayor Bramble, the Dock's pennant, orders (`moss3`/`moss5` are A's `moss`/`leaf`) |
+| `wood0-5` | 6 | the Workshop deck (`wood3-5`), pilings and frames (`wood0-2`, A's `ground0-2`) |
+| `earth0-3` | 4 | ore beds, unowned land |
+| `steel0-4` | 5 | machine bodies, the Factory's plate floor, buttons (`steel1-4` are A's `hull0-3`) |
+| `iron0-2` `copper0-3` | 7 | iron and copper ore, ingots, plates, wire; firebrick |
+| `lamp0-3` | 4 | heat and lantern light; `lamp1` is `glow`, `lamp3` is `hot`, `lamp2` is `gold` (coin) |
+| `brass0-3` | 4 | modules, coin frames, rivets (`brass1-2` are A's `brass0-1`) |
+| `slag0-1` `violet` `teal` `bone` `red` | 6 | slag and bricks; Patents, plastic; glass and research; text and highlights; danger |
+| `pipGreen` `pipYellow` `pipRed` `pipGrey` `pipBlue` | 5 | **status pips only**, unchanged from palette A. Never in sprite art. |
 
 Rules:
-- **Chroma only where the player looks.** The floor is low-chroma earth; machines are neutral
-  hull steel with one family accent; items and pips carry the saturated colour.
-- Every pixel snaps to the palette (`scripts/lib/pixel.mjs`, the art director's `build.py`
-  checks). No semi-transparent pixels in sprites; fades are done by code.
-- Pips differ by lightness as well as hue (yellow 0.92 > green 0.76 > blue 0.64 > red 0.55 >
-  grey 0.36 in OKLab L), and code adds shape: blocked pips blink.
+- **Every palette-A slot name still exists** in `C`, mapped to the B colour that plays its role,
+  so code and the code-drawn HUD plates keep working (`pal.ROLES`). New code may use the B names.
+- **The deck is light and quiet**: 8 px boards in `wood3-4`, seams in `wood2`, few board ends.
+  Seams never run as bright lines, so belts (dark steel with lit chevrons) and items win.
+- **Chroma only where the player looks.** Steel is low-chroma blue-grey; ore, items, fire and
+  pips carry the saturated colour.
+- Every pixel snaps to the palette (`scripts/lib/pixel.mjs`; `common.export` checks). No
+  semi-transparent pixels in sprites; fades are done by code.
+- Pips differ by lightness as well as hue (yellow > green > blue > red > grey in OKLab L), and
+  code adds shape: blocked pips blink.
 
 ## Sizes and grid
 
-- Tiles 16×16; machines Mk1 16×16, Mk2 32×32 (Act II); the Dock and Hopper 32×32.
-- Item icons 8×8 in `src/art/items.png`, one cell per item in `src/data/items.ts` order.
-- Portraits: 48×48 for cards, 24×24 for rows. UI icons 16×16 (buttons) and 8×8 (inline text).
+- Tiles 16×16; machines Mk1 16×16, Mk2 32×32; the Dock, Hopper and their Factory versions 32×32;
+  the Pole 16×24 (it overhangs the tile above; anchor `[0, 8]`).
+- Item icons 8×8 in `items.png` (the first 10) and `items2.png` (the rest), `src/data/items.ts`
+  order.
+- Portraits: 48×48 for cards (frame 0 face, frame 1 blink; `_cheer` frame 1 is the top of a
+  bounce), 24×24 `_small` for rows. UI icons 16×16 and 8×8.
 - Integer zoom only (1×–4×); `imageSmoothingEnabled = false` everywhere.
 
-## Light, outline, silhouette
+## 3/4 view and facings
 
-- Light from the top-left; a 1 px `ink` outline outside every standing object; selective inner
-  lines in the family's dark.
-- Machines face **right** (their output side). The renderer turns them in 90° steps, so the
-  light turns with them; it is subtle at 1×–2× and accepted for Mk1 (DECISIONS.md). The top-right
-  4×4 is kept calm on every machine (and, because of rotation, every corner) for the pip.
-- Families by silhouette and motion: miners have a turning cutter, smelters a glowing mouth and
-  a chimney, presses a ram, assemblers arms. Working machines animate; stopped ones hold frame 0.
-- Items by shape first: ore = lumps, ingots = slanted bars, plates = flat squares, gears = teeth
-  with a hole, wire = a coil, slag = a crumbly lump, the Gizmo = its own odd box with an antenna.
-- Modules: a bold brass frame with rivets and a dog-eared fold seam, the output icon in a well.
+- Machines are drawn **from above and in front** (high top-down 3/4): a lit top, a front face,
+  a 1 px `wood1` shadow down-right baked in. Light from the top-left.
+- **Facing contract**: a machine sheet with `"facings": 4` in its JSON has four rows, **east,
+  south, west, north** (the output side), frames left to right. `src/render/sprites.ts` picks the
+  row by the entity's rotation and never rotates the bitmap, so the light stays top-left in all
+  four. Sheets without `facings` are rotated by code as before (belts, splitter, merger).
+- **The pip corner stays calm**: the top-right 4×4 of every facing has no bright detail and no
+  animation.
+- Mk1 machines are fitted to 15×15 inside the tile (east and west share a scale so they are the
+  same size turned round); a long, low facing may grow up to 1.35× and is cropped at the back.
+- Families by silhouette and motion: miners a conical drill that spins; smelters, furnaces,
+  boilers, kilns, generators and refineries a lit mouth that flickers (the lamp ramp stepped
+  +1/0/−1/0); presses a ram that strokes; assemblers arms that reach; the mixer a turning drum;
+  the steam engine its flywheel. **Working machines animate; stopped ones hold frame 0.** Mk2 is
+  the same machine at 32×32 with more detail.
+
+## Items
+
+By shape first: ore = lumps, ingots = slanted bars, plates = flat squares, gears = teeth with a
+hole, wire = a coil, slag = a crumbly lump, bricks = a coursed block, the Gizmo = its own odd box
+with an antenna, steel = an I-beam end-on, glass = a pane with a shine, concrete = a cinder block
+with two holes, plastic = a little moulded bottle, oil = a drop, the machine kit = a crate with a
+gear stamp, the drill bit = a spiral cone. Colour is the second cue.
+
+## Modules
+
+A bold 2 px brass band lit from the top-left, rivets on three corners (never the top-right: the
+pip), a deep `ink1` well for the output icon (code draws it at x+4, y+4) and the fold seam as a
+dog-eared paper corner bottom-left. `module_glow` and `module_od` heat the band, never the well.
+
+## Floors and ground
+
+- **Workshop**: the plank deck on pilings over the bayou; the shore's north face shows plank
+  ends and pilings, the south a mossy lip. Ore patches are 32×32 seamless deposits (lumps 4–6 px,
+  each ore its own lump shape and colour) on an `earth` bed. Unowned land is darker earth.
+- **Factory**: riveted `steel` plates, two variants; belts and trunks sit on it as on the deck.
+- **Water** animates in 4 frames, phase-shifted per tile.
+
+## The town (Bramble's Town)
+
+Night water, so the town is read by **warm lantern windows** and lit rims. Everything standing
+in the water ends in two waterline rows (a `water3` ripple and a `water2` shadow), so any two town
+sprites bottom-aligned on a row share a waterline. Houses (`town_house` order: hut, gable, lily,
+tall, brick, bramble) are 32×32; the stall's and the lamps' lanterns flicker. Unit 7's tower and
+Voltaire's pavilion keep their Milestone 4 drawings, recoloured.
+
+## Portraits
+
+Bramble keeps his Milestone 1 face with PixelLab's richer shading over it (img2img). The
+Committee is three raccoons in one trench coat: the one in the hat, a second peeking between the
+lapels and a third one's ringed tail out of the hem (the last two drawn by hand, so the joke
+reads at 24×24). Unit 7 and Dame Voltaire keep their hand-drawn portraits, recoloured.
+**Cheer portraits** keep the body and costume; the face turns to joy and frame 1 bounces 1 px.
+
+## Atlases
+
+**UI icon atlases are append-only.** Code finds icons by the JSON `names` list; new icons go on
+the end and nothing moves. `ui_icons` / `ui_icons_small` 29–33: patents (a sealed deed), blueprint
+(a plan on blue), reset (a turning violet arrow), overnight (a moon and a lantern), bearings (the
+Committee's Raccoon Bearings, a steel ring with balls).
 
 ## UI
 
-The owner's direction (2026-10-20): the screen is **full** — framed panels on every side, a
-store column of large illustrated rows, tabs and buttons everywhere, a news ticker, big counters
-that roll and bump, pops and flying coins on every sale. Never a bare map with a thin bar.
-- Frames: dark wood (`ground0-1`) with brass (`brass0-1`) corners and rivets, 9-slice sprites
-  (`src/art/ui_*.png` with a `slice` in the JSON) or code-drawn in the same colours.
-- Text: the bitmap font (`src/ui/font.ts`); `bone` on dark, `gold` for coin, `fog` (hull2) for
-  secondary lines; numbers through `Num.format`.
-- Every clickable thing reacts on hover (lighter fill, a 1 px lift) and on click (a sound, a
-  1 px press).
-
-## Act II (Milestone 4) additions
-
-- **The Megaproject Bay** (`mega_bay`, 32×32, named frames `empty`, `stage1`–`stage3`, `run1`,
-  `run2`) is the only floor object with a tall structure: a blue-steel crane gantry framing a
-  lighter concrete pad with a hazard-striped front. It must out-shout the 16×16 brass modules
-  by size and silhouette, not by gold alone. Construction stages grow the drill upward; only
-  the run frames light up (vents, beacon, pit glow, sparks).
-- **Overdrive** (`fx_overdrive` 16×16, `fx_overdrive_big` 32×32, 4 frames at 12 fps) is a ring
-  overlay: a rounded hot rim with marching hot/gold dashes, a flicker of copper one pixel in,
-  and sparks rising up the sides. The middle stays clear, so the machine under it still reads.
-- **Cheer portraits** keep the base portrait's body and costume. The face turns to joy,
-  the arms go up, and one comic prop moves (Unit 7's blazing antenna, Voltaire's popped
-  monocle and handkerchief). Frame 2 is the top of a bounce: head and props 1 px up.
-- **UI icon atlases are append-only.** Code finds icons by the JSON `names` list, so new icons
-  go on the end and the first 20 never move. 16×16 drawings live in
-  `pixel-art/ui/icons_m4.py`, 8×8 ones in `pixel-art/m2/sprites.py`.
-
-## Juice round additions (`pixel-art/m5/`, the S+ frame in `pixel-art/ui/letters.py`)
-
-- **S+** is `ui_grade` frame 6 (`order` gains `"S+"`; frames 1-5 never move). It is the only
-  grade with a mark outside its letter: a narrower S with a superscript gold plus. The plus is
-  the cue that survives colour blindness; the brighter face is the second cue.
-- **Paper is the fold's material.** `fx_fold` folds a bone sheet over the box (crease sweep,
-  corners in, sealed envelope, flash, sparkles); hull3/hull2 are the paper's back and shade.
-- **Overlays keep the read.** `module_od` (like `fx_overdrive`) never touches a module's icon
-  well (x, y 3..12) or the pip's top-right 5x5; it heats the brass band instead, redder than the
-  machine ring (copper1 bodies, glow and hot heads).
-- **Panel pictures are scenes, not sprites on a plate** (`mega_stage1` 48x48 at a whole 8x in
-  the Megaproject panel, `research_lab` 64x48 in the research card): a backdrop, a floor, one
-  lit subject, and 2-4 frames of small motion. They may use more colours (up to ~26).
-- **Research node icons** that had none live in their own named atlas `ui_research` (16x16),
-  not appended to `ui_icons`, so the 8x8 `ui_icons_small` list does not have to follow.
-
-## Bramble's Town (`pixel-art/town/`)
-
-The frog town that grows in the swamp round the floors. It is night-time water, so the town is
-read by **warm windows** (glow glass with a hot corner) and lit rims, not by its ink outlines.
-- **One footing for everything that stands in the water**: the last two rows of the sprite are
-  the waterline (iron0/teal0 ripples round each piling, a shadow pixel under it), pilings are
-  2 px wood (ground1 lit, ground0 shade) above that, and a plank deck (ground2 lit top, ground1
-  and ground0 face) above them. So any two town sprites bottom-aligned on one tile row share a
-  waterline. Houses' deck top is row 23 of 32; the tall buildings' row 39 of 48.
-- **Roofs carry the variety** (`town_house` order: hut thatch in brass tiers, gable copper tiles,
-  a lily pad with a lotus, tin over teal boards, turf over slag bricks, and the Mayor's). The
-  Mayor's house is the widest: navy boards (his coat), a slate roof with his copper sash and gold
-  badge across it, and a top hat for a chimney (shadow crown with a hull rim so it reads on ink).
-- **Customers' buildings quote their portraits**: Unit 7's observatory is its own head on a
-  shaft (the screen, teal eye, gold 7, a shop window of one of every item colour), with a dish
-  that turns and an eye that follows it; Dame Voltaire's pavilion is violet ironwork, bone
-  stone, a teal glass dome and a gold bolt, under a three-bladed turbine (30 degrees a frame).
-- **Boardwalk tiles** run a 6 px plank band to the tile edge on each connected side; planks
-  cross the direction of travel with seams every 4 px; open bottom edges get a front face and
-  pilings. Names in the JSON `order` (h, v, corners, ends, tees, cross).
-- **Frogs** are lit from above (moss back, leaf front) so the game mirrors `town_frog` for
-  walking left; feet are on the frame's bottom row.
-- Decorations (`town_lily`) have no outline: pads are leaf with a moss rim and a notch; reeds and
-  cattails stand on a ripple.
+See `docs/ui-redesign.md`.
 
 ## Tools
 
-pixel-art-studio for everything (`pixel-art/<slug>/build.py`, every pixel placed on purpose).
-PixelLab later, within a stated cap. Never SpriteCook. Export contract: `.claude/agents/art-director.md`.
+pixel-art-studio for everything (`pixel-art/<slug>/*.py`, never a hand-edited PNG). PixelLab only
+within the session's stated cap, logged in the slug's `prompts.md` with each job's cost; its
+drafts are finished by hand in the scripts (rim stripped, fitted, outline cleaned, shadow baked,
+animation added). Never SpriteCook. Export contract: `.claude/agents/art-director.md`, plus the
+facing contract above.
