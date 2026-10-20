@@ -1,0 +1,10 @@
+node_modules
+dist
+e2e/out
+*.log
+foldworks-web.zip
+.claude/settings.local.json
+.playwright-mcp/
+__pycache__/
+*.pyc
+*.blend1
