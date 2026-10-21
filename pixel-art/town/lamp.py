@@ -1,83 +1,75 @@
-"""town_lamp: a lamp post on a piling, 16x32, 4 frames of a lit flicker (fps 6).
+"""town_lamp: a lamp post on the Boardwalk, 16x32, 4 frames of a lantern flicker (fps 6).
 
-An iron shepherd's crook on a fat wooden piling, a brass lantern hanging from the hook (so the
-silhouette says "lamp post" at 1x, not "pole"), and its light laid on the water under it. The
-flicker moves the flame's hot core and the reflection's dashes; the shape never moves.
+A brass-and-glass lantern on a turned wooden post standing on a stone foot, so at 1x it says
+"lamp post", not "pole". It stands on the promenade's railing line (src/render/town.ts puts its
+bottom row on the deck's fascia), in front of the rail. The lantern is lit even by day (they
+are lanterns, and the island is proud of them): warm glass with a hot core that moves; the
+shape never moves. The bunting the Festival strings between lamps hangs from the lantern's
+hook (sprite row 4, the middle column).
 """
-from common_town import new, ascii_, KEY, INK, SH, G0, G1, G2, H0, H1, H2, B0, B1, GOLD, GLOW, HOT, I0, T0
+from common_town import new, ascii_, P
 
 LANTERN = [
-    "...k...",
-    "..kYk..",
-    ".kYYYk.",
-    "kYYYYyk",
-    "kY...yk",
-    "kY...yk",
-    "kY...yk",
-    "kyyyyyk",
-    ".kyyyk.",
-    "..kok..",
-    "...k...",
+    "....kk....",
+    "...kZYk...",
+    "..kZzzYk..",
+    ".kzzzzzYk.",
+    ".kkkkkkkk.",
+    ".kz....Yk.",
+    ".kz....Yk.",
+    ".kz....Yk.",
+    ".kz....Yk.",
+    ".kz....Yk.",
+    ".kkkkkkkk.",
+    "..kYzzYk..",
+    "...kkkk...",
 ]
-# the flame's 3x3 core per frame (H hot, g gold, o glow)
-FLAME = [
-    ["HHo", "HgH", "oHo"],
-    ["HHH", "gHg", "oHo"],
-    ["oHH", "HHg", "ooH"],
-    ["HHo", "HHH", "ogo"],
-]
-# the reflection on the water: (dx, dy, colour) per frame, under the lantern
-REFL = [
-    [(0, 0, "o"), (-1, 1, "y"), (1, 1, "o"), (2, 1, "y"), (-2, 2, "y"), (0, 2, "o"), (3, 2, "y")],
-    [(0, 0, "o"), (1, 0, "y"), (-1, 1, "o"), (0, 1, "y"), (2, 1, "y"), (-1, 2, "y"), (1, 2, "o")],
-    [(0, 0, "y"), (-1, 1, "y"), (0, 1, "o"), (1, 1, "o"), (-2, 2, "o"), (2, 2, "y")],
-    [(0, 0, "o"), (1, 1, "o"), (-1, 1, "y"), (-1, 2, "o"), (1, 2, "y"), (3, 2, "o")],
+# the glass's 4x5 inside per frame: W white glint, H lamp3, g lamp2, o lamp1
+GLASS = [
+    ["WgHg", "gHHg", "gHHo", "ogHo", "oggo"],
+    ["WgHg", "gHHH", "gHHg", "ogHo", "oggo"],
+    ["Wggg", "gHHg", "HHHg", "ogHg", "oggo"],
+    ["WgHg", "gHgg", "gHHg", "oHHo", "oogo"],
 ]
 
 
 def draw(s, f):
-    # the piling: 4 px of wood, lit left, a brass band, from row 22 to the water
-    for y in range(22, 29):
-        s.px(3, y, G2)
-        s.px(4, y, G1)
-        s.px(5, y, G1)
-        s.px(6, y, G0)
-    s.line(3, 22, 6, 22, G2)
-    s.px(5, 25, G0)
-    s.px(4, 27, G0)
-    # the iron post and its crook
-    for y in range(4, 22):
-        s.px(4, y, H2)
-        s.px(5, y, H0)
-    s.line(4, 20, 5, 20, B1)
-    s.line(4, 21, 5, 21, B0)
-    ascii_(s, 4, 1, [
-        "..1111..",
-        ".12..01.",
-        "12....0.",
-        "2.......",
-    ])
-    s.px(10, 2, H0)
-    s.px(11, 3, H0)
-    # outline everything drawn so far (the lantern brings its own ink)
-    s.outline(INK)
-    ascii_(s, 8, 4, LANTERN)
-    for j, row in enumerate(FLAME[f]):
-        ascii_(s, 10, 8 + j, [row])
-    # waterline ripples round the piling
-    for x in (1, 2, 7, 8):
-        s.px(x, 30, P_I0)
-    s.px(1, 30, T0)
-    s.px(3, 30, SH)
-    s.px(6, 30, SH)
-    s.px(2, 31, P_I0)
-    s.px(7, 31, P_I0)
-    # the lantern's light on the water
-    for dx, dy, ch in REFL[f]:
-        s.px(11 + dx, 29 + dy, KEY["o"] if ch == "o" else KEY["y"])
-
-
-P_I0 = I0
+    # the post: a turned wooden post, lit left, with an iron collar
+    for y in range(13, 27):
+        s.px(7, y, P["wood4"])
+        s.px(8, y, P["wood2"])
+    s.px(7, 13, P["wood5"])
+    for x in (6, 9):
+        for y in range(13, 27):
+            s.px(x, y, P["ink"])
+    s.rect(6, 19, 9, 20, P["steel3"])
+    s.px(6, 19, P["steel4"])
+    s.px(9, 20, P["steel2"])
+    s.px(5, 19, P["ink"])
+    s.px(5, 20, P["ink"])
+    s.px(10, 19, P["ink"])
+    s.px(10, 20, P["ink"])
+    # the stone foot
+    ascii_(s, 4, 26, [
+        "kkkkkkkk",
+        "k999988k",
+        "k888887k",
+        "k888777k",
+        "k777776k",
+        "kkkkkkkk",
+    ], key={"k": P["ink"], "9": P["pave3"], "8": P["pave2"], "7": P["pave1"], "6": P["pave0"]})
+    s.px(4, 26, None)
+    s.px(11, 26, None)
+    # the lantern
+    ascii_(s, 3, 1, LANTERN, key={"k": P["ink"], "Z": P["brass3"], "z": P["brass2"], "Y": P["brass1"]})
+    rows = GLASS[f]
+    key = {"W": P["cloud3"], "H": P["lamp3"], "g": P["lamp2"], "o": P["lamp1"]}
+    for j, row in enumerate(rows):
+        for i, ch in enumerate(row):
+            s.px(6 + i, 6 + j, key[ch])
+    # the hook ring on top (the bunting's anchor)
+    s.px(7, 0, P["ink"])
+    s.px(8, 0, P["ink"])
 
 
 def build():

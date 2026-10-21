@@ -4,9 +4,17 @@ Feet on the bottom row (row 15) so the anchor [0, 0] at (x, deckTop - 15) stands
 A big head with two eye bumps (pupils looking the way it walks), a wide mouth line, a copper
 scarf whose tail flaps behind, a bone belly, two flipper feet. Contact, pass (body 1 px up),
 contact, pass. Lit from straight above, so the game mirrors it for walking left (drawSprite's
-flip): no light side to give it away.
+flip): no light side to give it away. Unchanged on the sky island: it never stood in water.
+Its own keys (the Milestone 4 map): k ink, b bone, l moss5 (leaf), m moss3, c copper0, C copper1.
 """
-from common_town import new, ascii_, KEY
+from common_town import new, ascii_ as _ascii, P
+
+KEY = {".": None, "k": P["ink"], "b": P["bone"], "l": P["moss5"], "m": P["moss3"],
+       "c": P["copper0"], "C": P["copper1"]}
+
+
+def ascii_(s, x, y, rows):
+    _ascii(s, x, y, rows, key=KEY)
 
 HEAD = [
     ".....kk..kk.....",

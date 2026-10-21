@@ -5,7 +5,7 @@
    32
   ],
   "frames": 6,
-  "colours": 26,
+  "colours": 46,
   "fps": 0,
   "order": [
    "hut",
@@ -22,7 +22,7 @@
    16
   ],
   "frames": 13,
-  "colours": 8,
+  "colours": 7,
   "fps": 0,
   "order": [
    "h",
@@ -46,7 +46,7 @@
    32
   ],
   "frames": 4,
-  "colours": 15,
+  "colours": 17,
   "fps": 6
  },
  "town_stall": {
@@ -55,7 +55,7 @@
    32
   ],
   "frames": 4,
-  "colours": 21,
+  "colours": 24,
   "fps": 6
  },
  "town_frog": {
@@ -73,7 +73,7 @@
    48
   ],
   "frames": 4,
-  "colours": 25,
+  "colours": 27,
   "fps": 4
  },
  "town_voltaire": {
@@ -82,7 +82,7 @@
    48
   ],
   "frames": 4,
-  "colours": 17,
+  "colours": 18,
   "fps": 8
  },
  "town_lily": {
@@ -101,5 +101,28 @@
    "cattails",
    "buds"
   ]
+ },
+ "town_rail": {
+  "frame": [
+   16,
+   16
+  ],
+  "frames": 3,
+  "colours": 8,
+  "fps": 0,
+  "order": [
+   "h",
+   "end_w",
+   "end_e"
+  ]
+ },
+ "town_tuft": {
+  "frame": [
+   16,
+   8
+  ],
+  "frames": 4,
+  "colours": 4,
+  "fps": 0
  }
 }

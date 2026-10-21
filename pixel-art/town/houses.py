@@ -1,247 +1,390 @@
-"""town_house: frog houses on stilts over the swamp, 32x32, one variant per frame (fps 0).
+"""town_house: the frog town's houses on the sky island, 32x32, one variant per frame (fps 0).
 
-Every house shares the same footing so they can stand in a row: a plank deck whose lit top is
-row 23 (face rows 24-25), 2 px pilings from row 26 to 28, the ink line under them on row 29 and
-the waterline ripples on rows 30-31. Roofs carry the variety (thatch, copper tiles, a lily pad,
-tin, turf, the Mayor's slate with his sash); walls change material with them, and every house
-has at least one warm window so the town reads as lived-in at 1x.
+Order (src/render/town.ts picks by name): hut, gable, lily, tall, brick, bramble.
+
+Every house stands on the same footing so they share a ground line: a stone foundation whose
+lit cap is row 27 (faces 28-30), the ink outline on row 31, and a stone step (or a two-tier
+stair) in front of the door. Walls stop on row 26, a step in from the foundation's ends, so the
+foundation shows as a ledge. Daylight from the top-left: lit left edges and slopes, the roof's
+shadow along the wall's top, glass that reflects the sky.
+
+Silhouettes first, so they tell apart at 1x: the hut is a thatch dome, the gable a copper
+triangle with a chimney, the lily house a wide flat pad with a flower on top, the tall house a
+narrow blue tower in a tin hat, the brick cottage a turf hump, and the Mayor's house the widest,
+two storeys under a teal hip roof with his flag.
 """
-from common_town import (new, ell, ascii_, piling, ripple, window, planks_v, deck, gable, KEY,
-                         INK, SH, BONE, G0, G1, G2, H0, H1, H2, H3, I0, I1, I2, C0, C1, C2, SLAG, VIO,
-                         B0, B1, GOLD, GLOW, HOT, T0, T1, MOSS, LEAF)
+from common_town import (new, ascii_, ell, window, door, stone_base, step, planks_v, siding, P, KEY)
 
 ORDER = ["hut", "gable", "lily", "tall", "brick", "bramble"]
-DECK_Y = 23
-PILE_Y0, PILE_Y1 = 26, 28
+INK = P["ink"]
+F_TOP, F_BOT = 27, 30   # the foundation's cap row and its last row (row 31 is the outline)
+WALL_BOT = 26
 
 
-def footing(s, x0, x1, piles):
-    deck(s, x0, x1, DECK_Y)
-    for x in piles:
-        piling(s, x, PILE_Y0, PILE_Y1)
+def stair(s, x0, x1):
+    """A two-tier stone stair from a door spanning x0..x1: a top slab one wider each side on rows
+    27-28, a lower slab two wider on rows 29-30."""
+    step(s, x0 - 2, x1 + 2, 29, rows=2)
+    step(s, x0 - 1, x1 + 1, 27, rows=2)
 
 
-def finish(s, piles):
+def eave_shadow(s, x0, x1, y, col):
+    s.line(x0, y, x1, y, col)
+
+
+def finish(s):
     s.outline(INK)
-    for x in piles:
-        ripple(s, x, PILE_Y1 + 2)
 
 
-def door(s, x, y0, w=2, y1=22, knob=True):
-    s.rect(x, y0, x + w - 1, y1, G0)
-    s.line(x, y0, x + w - 1, y0, SH)
-    if knob:
-        s.px(x + w - 1, (y0 + y1) // 2 + 1, B1)
-    s.rect(x - 1, y0 - 1, x + w, y0 - 1, INK)
-    s.line(x - 1, y0, x - 1, y1, INK)
-    s.line(x + w, y0, x + w, y1, INK)
-
-
-# ------------------------------------------------------------------ 0. hut: reed thatch dome
+# ------------------------------------------------------------------ hut: thatch dome
 def hut(s):
-    piles = (8, 15, 22)
-    # thatch dome: the top half of an ellipse, brass with brass0 straw lines
-    ell(s, 16, 15.5, 10.5, 10, B1)
-    s.rect(0, 16, 31, 31, None)
-    footing(s, 5, 26, piles)
-    planks_v(s, 9, 16, 22, 22, G1, G0, lit=G2, step=3)
-    # three tiers of straw: each tier's last row is brass0 with a ragged fringe hanging into
-    # the tier below; the right third of the dome sits in shade
-    for yb in (8, 11, 15):
-        for x in range(0, 32):
-            if s.get(x, yb):
-                s.px(x, yb, B0)
-                if x % 2 == 0 and s.get(x, yb + 1) and yb < 15:
-                    s.px(x, yb + 1, B0)
-    for y in range(5, 16):
-        for x in range(20, 28):
-            if s.get(x, y) and (x - 20) + (y - 5) // 2 > 4 and (x + y) % 2 == 0:
-                s.px(x, y, B0)
-    for x in range(7, 26, 2):
-        s.px(x, 16, B0)
-    # sunlit straw on the top-left of each tier
-    for (x, y) in ((11, 6), (12, 6), (13, 5), (9, 9), (10, 9), (8, 12), (9, 12)):
-        s.px(x, y, P_HOT_STRAW)
-    # sprout on top
-    s.px(16, 4, LEAF)
-    s.px(15, 3, LEAF)
-    s.px(17, 2, LEAF)
-    s.px(16, 3, MOSS)
-    # round window and door
-    window(s, 11, 18, 3, 2)
-    door(s, 17, 18)
-    finish(s, piles)
+    # walls first (the thatch's fringe overlaps their top), then the dome, then the foundation
+    planks_v(s, 8, 18, 23, WALL_BOT, P["wood3"], P["wood2"], lit=P["wood4"], step_=3, off=1)
+    s.line(23, 18, 23, WALL_BOT, P["wood2"])
+    s.line(22, 18, 22, WALL_BOT, P["wood2"])
+    s.line(8, 20, 23, 20, P["wood2"])
+    # thatch: a dome of golden straw, lit top-left, shaded right, a ragged fringe
+    cx = 16.0
+    for r in range(3, 20):
+        t = (19.5 - r) / 17.0
+        hw = 12.5 * max(0.0, 1 - t * t) ** 0.5
+        a, b = int(round(cx - hw)), int(round(cx + hw)) - 1
+        for x in range(a, b + 1):
+            nx = (x + 0.5 - cx) / max(hw, 1)
+            c = P["brass2"]
+            if nx < -0.15 and r < 17 and nx + (17 - r) / 30 > -0.9:
+                c = P["brass3"]
+            if nx > 0.5 or (r >= 17 and nx > 0.2):
+                c = P["brass1"]
+            s.px(x, r, c)
+    # straw strokes: short vertical dashes, staggered by row band
+    for (x, y0, n) in ((6, 15, 3), (9, 12, 3), (12, 15, 3), (11, 8, 2), (14, 11, 3), (17, 14, 3),
+                       (16, 6, 2), (19, 9, 3), (21, 13, 3), (24, 15, 3), (8, 17, 2), (26, 16, 2)):
+        for k in range(n):
+            if s.get(x, y0 + k) is not None:
+                s.px(x, y0 + k, P["brass1"] if x > 15 else P["brass2"])
+    for x in range(4, 28):
+        if x % 3 == 1:
+            s.px(x, 19, None)
+    s.line(5, 18, 26, 18, P["brass1"])
+    for x in range(6, 26, 3):
+        s.px(x, 17, P["brass1"])
+    # a knot of straw at the top, tied with a cord
+    ascii_(s, 14, 1, [
+        ".Zz.",
+        "zZzY",
+        "cccb",
+    ])
+    stone_base(s, 7, 24, F_TOP, F_BOT, seed=1)
+    # the door (arched) and two little windows
+    door(s, 14, 21, 17, WALL_BOT, arch=True)
+    window(s, 10, 22, 2, 2)
+    window(s, 20, 22, 2, 2)
+    step(s, 13, 18, 28)
+    # a pot of reeds on the ground beside the house
+    ascii_(s, 25, 23, [
+        ".n.l",
+        "nl.n",
+        ".nn.",
+        "RpPR",
+        "RppR",
+        ".RR.",
+    ])
+    finish(s)
 
 
-P_HOT_STRAW = "#ffeca0"  # hot: the sunlit straw (same slot as the windows' hot)
+# ------------------------------------------------------------------ gable: copper roof, chimney
+def gable(s):
+    stone_base(s, 5, 26, F_TOP, F_BOT, seed=2)
+    siding(s, 6, 17, 25, WALL_BOT, P["wood4"], P["wood3"], lit=P["wood5"], step_=2)
+    s.line(25, 17, 25, WALL_BOT, P["wood3"])
+    # corner posts
+    s.line(6, 17, 6, WALL_BOT, P["wood2"])
+    s.line(25, 17, 25, WALL_BOT, P["wood1"])
+    s.line(7, 17, 7, WALL_BOT, P["wood5"])
+    # the chimney (behind the roof's right slope)
+    s.rect(20, 3, 23, 10, P["copper1"])
+    s.line(20, 3, 20, 10, P["copper2"])
+    for y in (5, 7, 9):
+        s.line(21, y, 23, y, P["copper0"])
+    s.rect(19, 2, 24, 3, P["pave2"])
+    s.line(19, 2, 24, 2, P["pave3"])
+    # the roof: a steep hip in copper shingles, ridge on row 3
+    for r in range(3, 18):
+        hw = 1.5 + (r - 3) * 12.0 / 14
+        a, b = int(round(15.5 - hw)) + 1, int(round(15.5 + hw))
+        s.line(a, r, b, r, P["copper2"])
+        # shingle courses: every other row a scalloped darker line
+        if r % 2 == 0:
+            for x in range(a, b + 1):
+                if (x + r // 2) % 3 != 0:
+                    s.px(x, r, P["copper1"])
+        s.px(a, r, P["copper3"])
+        if a + 1 < b:
+            s.px(a + 1, r, P["copper3"] if r % 2 else P["copper2"])
+        s.px(b, r, P["copper0"])
+        if b - 1 > a + 1:
+            s.px(b - 1, r, P["copper1"])
+    # the lit left half: a lighter wedge
+    for r in range(4, 17):
+        hw = 1.5 + (r - 3) * 12.0 / 14
+        a = int(round(15.5 - hw)) + 1
+        for x in range(a + 2, min(15, a + 2 + (r - 3) // 3)):
+            if r % 2:
+                s.px(x, r, P["copper3"])
+    # the eave: a fascia board and its shadow on the wall
+    s.line(2, 17, 29, 17, P["copper0"])
+    s.line(3, 17, 28, 17, P["copper1"])
+    s.line(6, 18, 25, 18, P["wood2"])
+    # a dormer window in the roof
+    s.rect(13, 9, 18, 13, P["wood4"])
+    s.line(13, 9, 18, 9, P["copper1"])
+    window(s, 14, 11, 4, 2)
+    s.line(12, 9, 19, 9, P["copper0"])
+    s.px(12, 10, P["copper0"])
+    s.px(19, 10, P["copper0"])
+    s.line(13, 8, 18, 8, P["copper2"])
+    # walls: door, two windows with shutters
+    door(s, 14, 20, 17, WALL_BOT, base=P["copper1"], lit=P["copper2"])
+    s.line(15, 20, 15, WALL_BOT, P["copper0"])
+    s.line(17, 20, 17, WALL_BOT, P["copper0"])
+    window(s, 9, 20, 3, 3, cross=False, shutters=P["moss3"], sill=P["wood2"])
+    window(s, 21, 20, 3, 3, cross=False, shutters=P["moss3"], sill=P["wood2"])
+    stair(s, 14, 17)
+    finish(s)
 
 
-# ------------------------------------------------------------------ 1. gable: copper tiles
-def gable_house(s):
-    piles = (8, 15, 22)
-    footing(s, 6, 25, piles)
-    planks_v(s, 10, 14, 21, 22, G2, G1, lit=None, step=3, off=1)
-    s.line(10, 14, 21, 14, G0)
-    gable(s, 16, 6, 1, 9, C1, C2, C0)
-    # tile courses: every other row a darker band with gaps
-    for y in range(8, 15, 2):
-        for x in range(0, 32):
-            if s.get(x, y) and s.get(x, y)[:3] != (0xec, 0x9e, 0x78) and (x + y // 2) % 3 == 0:
-                s.px(x, y, C0)
-    s.line(5, 14, 26, 14, C0)
-    # brick chimney behind the right slope
-    s.rect(19, 3, 21, 8, C0)
-    s.line(19, 3, 21, 3, SLAG)
-    s.px(20, 5, SLAG)
-    s.px(19, 7, SLAG)
-    s.px(20, 2, H1)  # a wisp of smoke
-    s.px(21, 1, H0)
-    window(s, 11, 16, 2, 3, sill=G0)
-    window(s, 19, 16, 2, 3, sill=G0)
-    door(s, 15, 17)
-    finish(s, piles)
-
-
-# ------------------------------------------------------------------ 2. lily: a pad for a roof
+# ------------------------------------------------------------------ lily: a pad roof, a flower
 def lily(s):
-    piles = (8, 15, 22)
-    footing(s, 6, 25, piles)
-    planks_v(s, 10, 13, 21, 22, G1, G0, lit=G2, step=4, off=2)
-    # the pad: a wide flat ellipse, its rim curling down; a V notch at the front-right
-    ell(s, 16, 11, 13, 4, MOSS)
-    ell(s, 16, 10, 12.5, 3.2, LEAF)
-    for y in range(9, 16):
-        for x in range(19, 23):
-            d = y - 9
-            if 20 + d // 2 <= x <= 20 + d // 2 + (1 if d > 2 else 0) and s.get(x, y):
-                s.rect(x, y, x, y, None)
-    # veins
-    for (x, y) in ((10, 10), (12, 9), (8, 11), (22, 9), (24, 10), (14, 8)):
-        s.px(x, y, MOSS)
-    s.px(16, 9, MOSS)
-    # a lotus on top, slightly left
-    ascii_(s, 11, 4, [
-        "..b..",
-        ".bpb.",
-        "bpHpb",
-        ".CpC.",
+    stone_base(s, 8, 23, F_TOP, F_BOT, seed=3)
+    # the round wall: bone plaster, shaded like a barrel
+    s.rect(9, 15, 22, WALL_BOT, P["bone"])
+    s.line(9, 15, 9, WALL_BOT, P["pave3"])
+    s.line(10, 15, 10, WALL_BOT, WHITE_ := P["cloud3"])
+    for x, c in ((19, P["pave3"]), (20, P["pave3"]), (21, P["pave2"]), (22, P["pave1"])):
+        s.line(x, 15, x, WALL_BOT, c)
+    s.line(9, 17, 22, 17, P["pave2"])
+    # the pad: a wide flat ellipse, lit top-left, its thick rim underneath
+    ell(s, 16, 13.5, 15, 4.6, P["moss2"])
+    ell(s, 15.6, 12.6, 14.4, 3.9, P["moss4"])
+    ell(s, 12.5, 11.6, 9, 2.4, P["moss5"], only=P["moss4"])
+    ell(s, 9.5, 11.2, 4, 1.2, P["lily"], only=P["moss5"])
+    # veins from the centre
+    for (x, y) in ((8, 13), (11, 13), (13, 14), (22, 13), (25, 12), (20, 14), (5, 12), (27, 13)):
+        s.px(x, y, P["moss3"])
+    # the notch: a V cut toward the front-right
+    for (x, y) in ((19, 13), (20, 14), (20, 15), (21, 15), (21, 16)):
+        s.px(x, y, P["moss1"])
+    s.px(22, 16, None)
+    s.px(21, 17, P["moss1"])
+    # under the pad: its shadow on the wall
+    s.line(9, 18, 22, 18, P["pave2"])
+    # the flower: bone petals tipped violet, a gold heart
+    ascii_(s, 17, 2, [
+        "...vB...",
+        ".vBBvBv.",
+        "vBBgBBBv",
+        "BBgHgBvB",
+        ".BBgBBv.",
+        "..vBBv..",
     ])
-    window(s, 12, 15, 3, 3, cross=True)
-    door(s, 17, 17)
-    s.rect(18, 22, 19, 22, G0)
-    finish(s, piles)
+    s.line(20, 8, 20, 9, P["moss3"])
+    s.px(21, 9, P["moss2"])
+    # a round door and a porthole window
+    door(s, 14, 21, 17, WALL_BOT, base=P["moss2"], lit=P["moss3"], arch=True)
+    s.line(15, 21, 15, WALL_BOT, P["moss1"])
+    s.line(17, 21, 17, WALL_BOT, P["moss1"])
+    s.px(16, 23, P["brass3"])
+    ascii_(s, 10, 20, [
+        ".kkk.",
+        "kWJ~k",
+        "kJ~Ik",
+        ".kkk.",
+    ])
+    step(s, 13, 18, 28)
+    finish(s)
 
 
-# ------------------------------------------------------------------ 3. tall: teal boards, tin roof
+# ------------------------------------------------------------------ tall: blue tower, tin hat
 def tall(s):
-    piles = (9, 15, 21)
-    footing(s, 7, 24, piles)
-    planks_v(s, 11, 8, 20, 22, T0, I0, lit=T1, step=3, off=1)
-    # floor band between storeys
-    s.line(11, 14, 20, 14, G1)
-    s.line(11, 15, 20, 15, G0)
-    gable(s, 16, 1, 1, 7, H2, H3, H0)
-    for y in range(2, 8):
-        for x in range(0, 32):
-            if s.get(x, y) and s.get(x, y)[:3] == (0xb4, 0xad, 0xa9) and x % 3 == 1:
-                s.px(x, y, H1)
-    # stovepipe with a cap
-    s.rect(19, 0, 19, 4, H0)
-    s.px(18, 0, H1)
-    s.px(20, 0, H0)
-    window(s, 14, 9, 3, 3, cross=True, sill=G1)
-    window(s, 12, 17, 2, 3)
-    door(s, 17, 17)
-    # a little balcony rail on the upper floor
-    s.line(10, 12, 10, 13, G2)
-    s.line(21, 12, 21, 13, G0)
-    finish(s, piles)
+    stone_base(s, 8, 23, F_TOP, F_BOT, seed=4)
+    planks_v(s, 9, 9, 22, WALL_BOT, P["iron1"], P["iron0"], lit=P["iron2"], step_=3, off=0)
+    s.line(22, 9, 22, WALL_BOT, P["iron0"])
+    s.line(21, 9, 21, WALL_BOT, P["iron0"])
+    # floor beams
+    for y in (15, 21):
+        s.line(9, y, 22, y, P["wood2"])
+        s.px(9, y, P["wood3"])
+    s.line(9, 10, 22, 10, P["iron0"])
+    # the tin hat: a steep pyramid, corrugated
+    for r in range(2, 10):
+        hw = 2 + (r - 2) * 7.5 / 7
+        a, b = int(round(15.5 - hw)) + 1, int(round(15.5 + hw))
+        for x in range(a, b + 1):
+            s.px(x, r, P["steel4"] if (x % 2 == 0 and x < 17) else P["steel3"])
+        s.px(b, r, P["steel1"])
+        if b - 1 > a:
+            s.px(b - 1, r, P["steel2"])
+        s.px(a, r, P["cloud3"] if r < 6 else P["steel4"])
+    s.line(6, 9, 25, 9, P["steel2"])
+    s.line(7, 9, 24, 9, P["steel3"])
+    s.px(6, 9, P["steel4"])
+    # a stovepipe with a cap
+    s.rect(19, 1, 20, 4, P["steel1"])
+    s.px(19, 1, P["steel2"])
+    s.line(18, 1, 21, 1, P["steel0"])
+    # windows: one up top with a flower box, two on the middle floor, the door
+    window(s, 14, 11, 4, 3)
+    s.line(13, 14, 18, 14, P["copper1"])
+    for x in (14, 16, 18):
+        s.px(x, 14, P["red"] if x != 16 else P["lamp2"])
+    window(s, 11, 17, 2, 3)
+    window(s, 19, 17, 2, 3)
+    door(s, 14, 22, 17, WALL_BOT, base=P["wood3"], lit=P["wood4"])
+    s.line(16, 22, 16, WALL_BOT, P["wood2"])
+    step(s, 13, 18, 28)
+    finish(s)
 
 
-# ------------------------------------------------------------------ 4. brick: slag bricks, turf roof
+# ------------------------------------------------------------------ brick: turf hump, chimney
 def brick(s):
-    piles = (8, 15, 22)
-    footing(s, 6, 25, piles)
-    # slag-brick walls (the swamp town loves a brick)
-    s.rect(9, 12, 22, 22, SLAG)
-    for y in range(12, 23):
-        if y % 2 == 1:
-            s.line(9, y, 22, y, SH)
+    stone_base(s, 5, 26, F_TOP, F_BOT, seed=5)
+    # walls: bricks in staggered courses
+    s.rect(6, 15, 25, WALL_BOT, P["copper1"])
+    for y in range(15, WALL_BOT + 1):
+        if (y - 15) % 2 == 1:
+            s.line(6, y, 25, y, P["copper0"])
         else:
-            for x in range(9 + (y // 2) % 2 * 2, 23, 4):
-                s.px(x, y, SH)
-    s.line(9, 13, 9, 22, H1)
-    for x in range(10, 23, 2):
-        s.px(x, 13, H1)
-    # turf roof: a flat slab with grass hanging over the edge, tufts and a flower
-    s.rect(7, 9, 24, 11, MOSS)
-    s.line(7, 9, 24, 9, LEAF)
-    s.line(8, 8, 23, 8, LEAF)
-    for x in range(8, 24, 3):
-        s.px(x, 12, MOSS)
-    for x in (9, 13, 20):
-        s.px(x, 7, LEAF)
-    s.px(21, 6, LEAF)
-    s.px(17, 6, C2)
-    s.px(17, 7, MOSS)
-    window(s, 11, 15, 3, 3, cross=True, sill=B1)
-    door(s, 17, 16)
-    finish(s, piles)
+            off = 0 if ((y - 15) // 2) % 2 == 0 else 2
+            for x in range(6 + off, 26, 4):
+                s.px(x, y, P["copper0"])
+            for x in range(7 + off, 26, 8):
+                s.px(x, y, P["copper2"])
+    s.line(6, 15, 6, WALL_BOT, P["copper2"])
+    s.line(25, 15, 25, WALL_BOT, P["copper0"])
+    # a stone chimney poking out of the turf
+    s.rect(20, 2, 23, 8, P["pave2"])
+    s.line(20, 2, 20, 8, P["pave3"])
+    s.line(23, 2, 23, 8, P["pave1"])
+    s.line(21, 4, 23, 4, P["pave1"])
+    s.line(20, 6, 22, 6, P["pave1"])
+    s.line(19, 2, 24, 2, P["pave3"])
+    # the turf roof: a hump of sod, dirt along its eave
+    ell(s, 16, 17.5, 14.5, 11, P["moss3"])
+    for y in range(18, 32):
+        for x in range(32):
+            if s.get(x, y) == tuple(int(P["moss3"][i:i + 2], 16) for i in (1, 3, 5)) + (255,):
+                s.px(x, y, None)
+    s.rect(6, 18, 25, WALL_BOT, P["copper1"])
+    for y in range(18, WALL_BOT + 1):
+        if (y - 15) % 2 == 1:
+            s.line(6, y, 25, y, P["copper0"])
+        else:
+            off = 0 if ((y - 15) // 2) % 2 == 0 else 2
+            for x in range(6 + off, 26, 4):
+                s.px(x, y, P["copper0"])
+            for x in range(7 + off, 26, 8):
+                s.px(x, y, P["copper2"])
+    s.line(6, 18, 6, WALL_BOT, P["copper2"])
+    s.line(25, 18, 25, WALL_BOT, P["copper0"])
+    stone_base(s, 5, 26, F_TOP, F_BOT, seed=5)
+    ell(s, 14.5, 14.5, 11.5, 8, P["moss4"], only=P["moss3"])
+    ell(s, 12.5, 12.0, 7.5, 4.5, P["moss5"], only=P["moss4"])
+    s.line(2, 17, 29, 17, P["earth2"])
+    s.line(3, 16, 28, 16, P["moss2"])
+    for x in range(3, 29, 4):
+        s.px(x, 17, P["earth1"])
+        s.px(x + 2, 16, P["moss3"])
+    # flowers in the turf
+    for (x, y, c) in ((9, 10, P["violet"]), (14, 8, P["bone"]), (19, 11, P["lamp2"]), (7, 14, P["bone"]),
+                      (24, 13, P["violet"]), (12, 13, P["lamp2"]), (17, 14, P["bone"]), (26, 15, P["bone"])):
+        s.px(x, y, c)
+    # the eave's shadow on the bricks
+    s.line(6, 18, 25, 18, P["copper0"])
+    # an arched door, two windows with moss-green shutters
+    door(s, 14, 21, 17, WALL_BOT, base=P["wood2"], lit=P["wood3"], arch=True)
+    window(s, 9, 21, 2, 3, shutters=P["moss3"])
+    window(s, 21, 21, 2, 3, shutters=P["moss3"])
+    step(s, 13, 18, 28)
+    finish(s)
 
 
-# ------------------------------------------------------------------ 5. bramble: the Mayor's house
+# ------------------------------------------------------------------ bramble: the Mayor's house
 def bramble(s):
-    piles = (3, 10, 20, 27)
-    footing(s, 1, 30, piles)
-    # navy boards (his coat), iron2 light on the left
-    planks_v(s, 4, 13, 27, 22, I1, I0, lit=I2, step=3, off=1)
-    # slate roof
-    gable(s, 16, 4, 6, 9, H0, H1, SH)
-    for y in range(5, 13, 2):
-        for x in range(0, 32):
-            if s.get(x, y) and s.get(x, y)[:3] == (0x46, 0x3f, 0x50) and (x + y) % 4 == 0:
-                s.px(x, y, SH)
-    s.line(2, 12, 29, 12, SH)
-    # his sash across the roof: copper, light edge on top, a gold badge in the middle
-    for i in range(0, 14):
-        x, y = 8 + i * 1.0, 5 + i * 0.5
-        s.px(int(x), int(y), C1)
-        s.px(int(x), int(y) + 1, C0)
-        s.px(int(x), int(y) - 1, C2) if i % 3 == 0 and int(y) - 1 > 4 else None
-    ascii_(s, 14, 7, [
-        ".g.",
-        "gHg",
-        ".Y.",
+    stone_base(s, 2, 29, F_TOP, F_BOT, seed=6)
+    # two storeys of bone plaster in a timber frame
+    s.rect(3, 13, 28, WALL_BOT, P["bone"])
+    s.line(4, 13, 4, WALL_BOT, P["cloud3"])
+    for x in (3, 15, 16, 28):
+        s.line(x, 13, x, WALL_BOT, P["wood2"])
+    s.line(28, 13, 28, WALL_BOT, P["wood1"])
+    s.line(24, 13, 27, 13, P["pave3"])
+    for x in (25, 26, 27):
+        s.line(x, 14, x, WALL_BOT, P["pave3"])
+    s.line(3, 19, 28, 19, P["wood2"])
+    s.line(3, 20, 28, 20, P["wood1"])
+    s.px(3, 19, P["wood3"])
+    # the chimney (stone), left
+    s.rect(6, 1, 9, 6, P["pave2"])
+    s.line(6, 1, 6, 6, P["pave3"])
+    s.line(9, 1, 9, 6, P["pave1"])
+    s.line(7, 3, 9, 3, P["pave1"])
+    s.line(5, 1, 10, 1, P["pave3"])
+    # the flagpole and Bramble's green pennant, right
+    s.line(24, 1, 24, 6, P["wood2"])
+    s.px(24, 1, P["lamp2"])
+    ascii_(s, 25, 1, [
+        "LLLl",
+        "lLln",
+        "nn..",
     ])
-    # top-hat chimney: ink crown, brass band, a brim
-    s.rect(21, 0, 25, 5, SH)
-    s.line(21, 0, 21, 3, H1)
-    s.line(21, 0, 25, 0, H0)
-    s.px(21, 0, H2)
-    s.line(21, 4, 25, 4, B1)
-    s.px(21, 4, GOLD)
-    s.line(20, 5, 26, 5, H0)
-    s.px(20, 5, H1)
-    # windows and the grand double door
-    window(s, 6, 15, 4, 4, cross=True, sill=B1)
-    window(s, 22, 15, 4, 4, cross=True, sill=B1)
-    door(s, 14, 15, w=4, knob=False)
-    s.line(16, 15, 16, 22, INK)
-    s.px(15, 19, GOLD)
-    s.px(17, 19, GOLD)
-    s.line(13, 13, 18, 13, B1)  # a brass plaque over the door
-    s.px(13, 13, B0)
-    # a pennant on the gable end
-    s.line(29, 2, 29, 11, H2)
-    ascii_(s, 30, 2, [
-        "l",
-        "l",
-        "m",
-    ])
-    finish(s, piles)
+    # the hip roof: teal slate, ridge on row 5
+    for r in range(5, 13):
+        a, b = 6 - (r - 5) * 5 // 7, 25 + (r - 5) * 5 // 7
+        a = max(1, a)
+        b = min(30, b)
+        s.line(a, r, b, r, P["water3"])
+        if r % 2 == 0:
+            for x in range(a, b + 1):
+                if (x + r // 2) % 3 == 0:
+                    s.px(x, r, P["water2"])
+        s.px(a, r, P["water4"])
+        s.px(a + 1, r, P["water4"])
+        s.px(b, r, P["water2"])
+        s.px(b - 1, r, P["water2"])
+    s.line(6, 5, 25, 5, P["teal"])
+    s.line(5, 6, 13, 6, P["water4"])
+    s.line(4, 8, 9, 8, P["water4"])
+    s.line(1, 12, 30, 12, P["water2"])
+    s.line(3, 13, 28, 13, P["wood1"])
+    # a gold finial on the ridge
+    s.px(15, 4, P["lamp2"])
+    s.px(16, 4, P["brass2"])
+    # upper windows: three, the middle one wide over a little balcony
+    window(s, 6, 15, 3, 3, cross=True)
+    window(s, 22, 15, 3, 3, cross=True)
+    window(s, 13, 15, 6, 3, cross=True)
+    s.line(12, 18, 19, 18, P["wood3"])
+    for x in range(12, 20, 2):
+        s.px(x, 18, P["wood1"])
+    # ground floor: two windows, the double door under a gold plaque
+    window(s, 6, 22, 3, 3, shutters=P["moss3"])
+    window(s, 22, 22, 3, 3, shutters=P["moss3"])
+    door(s, 13, 23, 18, WALL_BOT, base=P["moss2"], lit=P["moss3"], knob=P["lamp2"])
+    s.line(15, 23, 16, 23, P["moss1"])
+    s.line(15, 23, 15, WALL_BOT, P["moss1"])
+    s.line(16, 23, 16, WALL_BOT, P["moss1"])
+    s.px(17, 25, P["lamp2"])
+    s.px(14, 25, P["lamp2"])
+    s.rect(13, 21, 18, 21, P["brass2"])
+    s.line(14, 21, 17, 21, P["lamp2"])
+    s.px(13, 21, P["brass1"])
+    s.px(18, 21, P["brass1"])
+    stair(s, 13, 18)
+    finish(s)
 
 
-DRAW = {"hut": hut, "gable": gable_house, "lily": lily, "tall": tall, "brick": brick, "bramble": bramble}
+DRAW = {"hut": hut, "gable": gable, "lily": lily, "tall": tall, "brick": brick, "bramble": bramble}
 
 
 def build():
