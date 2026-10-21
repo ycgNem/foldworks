@@ -55,7 +55,7 @@ export function reorganizeCard(app: App, r: Rect) {
   }
   if (!p.lines.length) line('No modules folded this run', '+0', C.hull1);
   if (p.mega > 0.01) line('The Great Drill, delivered this run', `+${p1(p.mega)}`, C.gold);
-  line(`Running: ${Num.of(Math.floor(p.billValue)).format()} coin of buildings`, `+${p1(p.bills)}`, C.hull3);
+  line(`Running (last 5 min): ${Num.of(Math.floor(p.billValue)).format()} coin of buildings`, `+${p1(p.bills)}`, C.hull3);
   ui.fill(gin.x + 2, yy, gin.w - 4, 1, C.hull0);
   yy += 3;
   line('Total (rounded down)', `${p1(p.total)}`, C.gold);

@@ -45,34 +45,58 @@ pacing-auditor, and revised in a review round (DECISIONS.md: "The UI redesign", 
   Megaproject and research pictures, UI art, and a title key-art scene. **PixelLab: 241 of the
   1,000 generations** (81 style test, 157 the revamp, 3 the title); no USD credit spent.
 
-### Measured (seeds 1000 and 8919)
+### Measured (seeds 1000 and 8919, after the final round)
 
-Act I unchanged (DESIGN.md §13). Reorganize: first reset at 4:08-4:13 for 15 Patents; run 2
-resets at ~3:00 for 7; run 3 files 9 at its 4 h cap; the designed run files ~3.1 Patents/h against
-1.1-1.3/h for any reset loop (slice end, 1 h, 2 h). Rule 3: run 2 passes run 1's peak at 0:16-0:17
-(limit 1:22-1:24); run 3 passes run 2's at 0:28 on seed 8919 and ties it on seed 1000 (open). The
-Great Drill reaches stage 3 by the end of run 3; Committee reputation 2, 4, 6. Rule 2 without
-Sparks: 4-10.5 min (<= 15). Offline: never more than open idle, never less than its efficiency, at
-every stage measured (runs 1-3, ~11 stages up to ~12 h of play, both seeds); check 12 holds at 0.5
-and 0.75.
+Act I unchanged (DESIGN.md §13). **Reorganize**: run 1 resets at 4:24 / 4:21 for 14 Patents (peak
+14.8K / 14.3K coin/min); run 2 at 3:02 / 2:50 for 7 (peak 21.1K / 21.2K); run 3 plays to its 4 h
+cap (card 9, peak 21.4K / 21.2K). The Great Drill reaches stage 1, 2, 3 after runs 1, 2, 3 on both
+seeds. **Patents per hour** (seed 1000, 7:26): the designed run 2.83; reset loops at every slice
+end 1.21, every hour 1.08, every 2 h 1.35; a coin-burning loop 0.40; a brownout farm of 239
+refineries adds 0.09. Overdrive never reaches an audited machine. **Rule 3**: run 2 passes run 1's
+peak at 0:27 / 0:16 (limits 1:28 / 1:27). **Rule 2** (Sparks and belt relays not counted): 12.4-12.5
+min up to the Bay floor. The bot buys claims and annex blocks (all three annex blocks before the Bay
+floor in later runs) and keeps 7 designs in the Patent Drawer, unfolding 5 a run (5-6 refold after
+the 10 s check). **Offline**: 8 h measured at every stage to ~14 h of play (runs 1-4); it pays
+0.56-0.61 of open idle at efficiency 0.5 and 0.78-0.81 at 0.75; check 12 holds everywhere. Saves
+lose at most 30 s.
 
-### Open
+### Open (decisions for the owner, with the measurements)
 
-- **Rule 1** (a goal within ~3 min active): goals the bot reaches come 11-25 min apart before the
-  Bay floor and 34-43 min apart while it fills (the `it.todo` in `tests/pace-act2-run.test.ts`).
-  Annex blocks and claims are affordable throughout but the bot defers them; coin still piles up
-  (0.6-1.3M on hand at 4-7 h).
-- **Rule 3, run 3 vs run 2 on seed 1000**: the peaks tie (17.3K vs 17.4K coin/min): both runs fill
-  the same floor. The lever is keeping (some) annex through a reset (`RULE3_OPEN`).
-- **Rule 4** (active 1.5-4x open idle): five readings at 1.47-1.49 (Overdrive's own 1.5x ceiling
-  is all active play adds at those stages) and run 3 at 1 h (0.72-0.77, the Bay floor rebuild),
-  listed in `RULE4_OPEN` with reasons. A 20 s Overdrive cooldown fixed the first and broke three
-  other targets; reverted.
-- Milestone 6's exit asks for 8 h offline at every stage to 15 h; measured to ~12 h (the campaign's
-  three runs).
-- Derivative flags waiting for the owner: DECISIONS.md "Flagged as derivative" in each new section
-  (the Patent tree's shape, autobuyer nodes, the Founders' Grant, share strings, the Reorganize
-  card, the annex, the UI's genre conventions).
+- **Rule 3, run 3 vs run 2**: run 3 only matches run 2's peak (it passes at 1:22 against a 0:56-1:00
+  limit, both seeds). Not claims (the bot buys them now): both runs fill the same room (the 12x8
+  floor and three annex blocks). Levers: keep the annex through a Reorganize (a reset-layer
+  change: the owner's call), or more room/depth in later runs (nested folds, the District).
+- **Rule 4's floor sits on Overdrive's duty cycle**: (10 s x 3 + 30 s) / 40 s = 1.5x exactly, so
+  stages where clicking is all there is read 1.48-1.49 (six of 26 stage readings, plus run 4 at
+  1 h, 0.97-0.98, the Bay floor rebuild; `RULE4_OPEN`). The floor was not lowered (the critic: that
+  would be tuning the test). A 25 s cooldown was tried and rejected (it broke rule 1 before the
+  Bay floor and rule 3 on seed 8919).
+- **Rules 1 and 2 while the Megaproject Bay fills**: 27-48 min between goals; the plan has nothing
+  left to buy then (the `it.todo` in `tests/pace-act2-run.test.ts`). Needs content in that stretch
+  (the critic's suggestion: the Bay as a throughput puzzle with its own goals).
+- **Coin piles up again after ~7 h** (passes 2M by 11 h), and a fourth run files about 1 Patent:
+  everything is on file and the Drill is done. The tree (29 nodes, 40 Patents) is 30/40 bought by
+  9.9 h. Both want the next floor's content (Milestone 7, the District).
+- **Derivative flags waiting for the owner** (DECISIONS.md, each new section's "Flagged as
+  derivative"): the Patent tree's shape (Cookie Clicker's heavenly upgrades, Antimatter
+  Dimensions' trees), the automation nodes (autobuyers), the Founders' Grant (start with X coin),
+  FWD1 share strings (blueprint strings), the Reorganize card (Ascend / Big Crunch screens), the
+  annex (a genre convention), the UI's genre conventions (hotbar, top bar, tabbed menus), and the
+  line-health chip (Factorio's alerts). Removed after review: blueprint ghosts and the Builder
+  Dragonfly (Factorio's construction robots), Raccoon Bearings (a new currency).
+
+### Start here next session
+
+- **Branch:** everything is on `m5-m6-revamp` (not merged to `main`, so the live build at
+  https://ycgnem.github.io/foldworks/ still shows Milestone 4). Local: `Play.bat`, or the dev
+  server on port 5210.
+- **Tests:** `npm test` 37 files (the pace suite takes ~6-8 min); `npm run screens` clean at three
+  sizes; `npm run smoke` green; `npm run shots` reaches every moment.
+- **Bots:** `src/sim/bot.ts` (Act I), `src/sim/bot2.ts` (Act II), `src/sim/campaign.ts` (runs
+  1-4 with Reorganize, Patents, claims, annex and the Drawer).
+- **Art:** `pixel-art/revamp/` builds everything in Lantern Bayou (STYLE.md lists the order);
+  PixelLab log in `pixel-art/revamp/prompts.md` (241 generations used of the 1,000 allowed).
+- **Next:** the owner's calls above, then Milestone 7 (the District).
 
 ## Earlier status (2026-10-20, session 1): Milestones 0–2 built, the Milestone 3 gate passed with conditions, Milestone 4 (Act II) built and reviewed
 
@@ -178,7 +202,7 @@ The owner plays the slice and Act II and rules on the flagged items. Then Milest
 (Reorganize): its Patents formula, coin sinks for Act II's late hour, and rule 1 while the Bay
 fills.
 
-### Start here next session
+### Where session 1 left off
 
 - **Live build:** https://ycgnem.github.io/foldworks/ (deployed from `main` by the Pages
   workflow on every push). Local: `Play.bat`, or the dev server on port 5210.

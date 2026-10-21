@@ -169,11 +169,13 @@ New thinking: **when to reset, and what to keep**.
 Exit: the bot's runs 2 and 3 pass run 1's peak in ≤ ⅓ of its time (rule 3); the first reset is
 worth taking at 4–6 h, and not taking it still progresses (rule 6).
 
-**Status: built 2026-10-20, reviewed (idle-critic, pacing-auditor) and revised in a review round.**
-Patents are filed (paid for a product's rise over the record), blueprints became the Patent
-Drawer, Raccoon Bearings became the Committee's reputation gating the Drill, and a Factory annex
-was added (DESIGN.md §19). First reset 4:08–4:13 for 15 Patents; run 2 passes run 1's peak at
-0:16–0:17. Open: run 3 vs run 2 ties on seed 1000 (`RULE3_OPEN`), rule 1's goal gaps (PROGRESS.md).
+**Status: built 2026-10-20, reviewed twice (idle-critic, pacing-auditor) and revised in two
+rounds.** Patents are filed (paid for a product's rise over the record; farm-proof against reset
+loops, coin burning and brownout farms), blueprints became the Patent Drawer, Raccoon Bearings
+became the Committee's reputation gating the Drill, and a Factory annex was added (DESIGN.md §19).
+First reset 4:21–4:24 for 14 Patents; run 2 passes run 1's peak at 0:16–0:27; the Drill is done by
+the end of run 3. Open: run 3 only matches run 2's peak (room-capped; owner's call), rule 1 while
+the Bay fills (PROGRESS.md).
 
 ## Milestone 6 — Idle and offline, finished
 
@@ -190,11 +192,11 @@ was added (DESIGN.md §19). First reset 4:08–4:13 for 15 Patents; run 2 passes
 Exit: 8 h offline at every stage from 1 h to 15 h matches rule 4's ratios in the pace tests;
 closing and reopening never loses more than 30 s of progress.
 
-**Status: built 2026-10-20, reviewed and revised.** Offline never pays more than open idle nor less
-than its efficiency at every stage measured (runs 1–3 on two seeds, to ~12 h of play); check 12
+**Status: built 2026-10-20, reviewed and revised.** 8 h offline is measured at every stage to ~14 h
+of play (runs 1–4, two seeds): never more than open idle, never less than its efficiency; check 12
 restated for efficiencies above 0.5; saves lose at most 30 s (0 when an unload hook fires). Open:
-rule 4's active/idle ratio at a few stages (`RULE4_OPEN`), and stages past ~12 h are not reached by
-the bots yet.
+rule 4's active/idle ratio reads 1.48–1.49 where Overdrive (exactly 1.5×) is the only active lever
+(`RULE4_OPEN`).
 
 ## Milestone 7 — Act III: the District (15–40 h)
 
