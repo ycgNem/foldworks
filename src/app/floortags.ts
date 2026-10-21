@@ -1,7 +1,7 @@
 // The floor's numbers (docs/hud-180.md "The floor's numbers"): small paper tags on strings, drawn
 // in world space each frame and anchored to what they measure. The Dock (coin a minute, the active
-// order's portrait and bars), the Hopper (the research node and its %), lines where a belt enters
-// the Dock or the Hopper (the item and how many a minute), each power grid (Act II), the
+// order's portrait and bars, and what the lines bring a minute), the Hopper (the research node and
+// its %, and what the lines bring), each power grid (Act II), the
 // Megaproject Bay (the Factory). Culled to the view, hung above their anchor so they never cover
 // it, nudged apart, an icon and a number at zoom 1. They are floor, not HUD: drawn under every
 // piece of the HUD, never blocking a click, outside the overlap audit.
@@ -51,6 +51,30 @@ export function floorTags(app: App, L: Layout) {
   const onScreen = (r: Rect) => r.x + r.w > 0 && r.y + r.h > 0 && r.x < ui.w && r.y < ui.h;
   const near = (e: { x: number; y: number; w: number; h: number }) => worldRect(app, e.x, e.y, e.w, e.h);
 
+  // ---- what the lines bring: each item a minute into the Dock and into the Hopper, one row on
+  // that destination's own tag (a tag per belt crowded a busy Dock under eight labels)
+  const inflow = { dock: new Map<string, number>(), hopper: new Map<string, number>() };
+  if (!fac && !compact) {
+    const rates = shipRates(app);
+    const entries: { dest: 'dock' | 'hopper'; item: string }[] = [];
+    for (const b of g.belts) {
+      const to = g.entAt(b.x + DX[b.rot], b.y + DY[b.rot]);
+      if (!to || (to.kind !== 'dock' && to.kind !== 'hopper')) continue;
+      if (b.item) lastItem.set(b.id, b.item);
+      const item = b.item ?? lastItem.get(b.id);
+      if (item) entries.push({ dest: to.kind, item });
+    }
+    const per = new Map<string, number>();
+    for (const e of entries) per.set(e.item, (per.get(e.item) ?? 0) + 1);
+    for (const e of entries) {
+      const m = inflow[e.dest];
+      m.set(e.item, (m.get(e.item) ?? 0) + (rates.get(e.item as ItemId) ?? 0) / (per.get(e.item) ?? 1));
+    }
+  }
+  /** an inflow row: up to four items, the busiest first, each its icon and how many a minute */
+  const inflowRow = (m: Map<string, number>) =>
+    [...m.entries()].sort((p, q) => q[1] - p[1]).slice(0, 4).map(([it, pm]) => `{i:${it}} ${pm > 0 ? fmtRate(pm) : '{warn:0}'}`).join('  ') + (m.size ? ' {soft:/min}' : '');
+
   // ---- the Dock: coin a minute; the active order's portrait and bars; orders waiting
   const dock: Ent | FEnt | undefined = fac ? g.s.factory.ents.find((e) => e.kind === 'fdock') : g.s.ents.find((e) => e.kind === 'dock');
   const selling = g.incomePerMin() > 0 || !!g.s.orders.active || offeredOrders(g).length > 0;
@@ -72,11 +96,15 @@ export function floorTags(app: App, L: Layout) {
       else if (here) { cw = Math.max(cw, (portrait ? 28 : 0) + 74); ch += 3 + Math.max(portrait ? 24 : 0, wants.length * 9); }
       const chipS = offered ? `{chip:good:${offered} offered}` : '';
       if (offered) { cw = Math.max(cw, richWidth(chipS)); ch += CHIP_H + 2; }
+      const inS = inflow.dock.size ? inflowRow(inflow.dock) : '';
+      const il = inS ? layoutRich(inS) : null;
+      if (il) { cw = Math.max(cw, il.w); ch += LINE_H; }
       tags.push({
         id: 'dock', near: r, cw, ch,
         draw: (x, y) => {
           drawLayout(ui, hl, x, y);
           let yy = y + LINE_H;
+          if (il) { drawLayout(ui, il, x, yy, T.inkSoft); yy += LINE_H; }
           if (here && compact) { drawLayout(ui, layoutRich(pctS), x, yy); yy += LINE_H; }
           else if (here) {
             yy += 1;
@@ -109,42 +137,21 @@ export function floorTags(app: App, L: Layout) {
         const p = `{research:${Math.floor(f * 100)}%}`;
         const name = compact ? p : `${RESEARCH[sel].name} ${p}`;
         const nl = layoutRich(name);
-        const cw = 10 + nl.w, ch = compact ? LINE_H - 2 : LINE_H + 6;
+        const il = inflow.hopper.size ? layoutRich(inflowRow(inflow.hopper)) : null;
+        const cw = Math.max(10 + nl.w, il?.w ?? 0), ch = (compact ? LINE_H - 2 : LINE_H + 6) + (il ? LINE_H : 0);
         tags.push({
           id: 'hopper', near: r, cw, ch,
           draw: (x, y) => {
             nodeIcon(ui, sel as ResearchId, x, y, true);
             drawLayout(ui, nl, x + 10, y);
             if (!compact) meter(ui, x, y + LINE_H, cw, 5, f, { role: 'research', glint: false });
+            if (il) drawLayout(ui, il, x, y + LINE_H + 7, T.inkSoft);
           },
         });
       } else if (!fac && g.s.research.done.length < Object.keys(RESEARCH).length && g.has('bellows') && Object.keys(RESEARCH).some((id) => available(g, id as ResearchId))) {
         const t = textTag(app, compact ? '{chip:warn:pick} {k:T}' : '{u:research} {chip:warn:pick research} {k:T}');
         tags.push({ id: 'hopper', near: r, cw: t.cw, ch: CHIP_H, draw: t.draw });
       }
-    }
-  }
-
-  // ---- lines: where a belt enters the Dock or the Hopper, the item and how many a minute
-  if (!fac && !compact) {
-    const rates = shipRates(app);
-    const entries: { b: Ent; item: string }[] = [];
-    for (const b of g.belts) {
-      const to = g.entAt(b.x + DX[b.rot], b.y + DY[b.rot]);
-      if (!to || (to.kind !== 'dock' && to.kind !== 'hopper')) continue;
-      if (b.item) lastItem.set(b.id, b.item);
-      const item = b.item ?? lastItem.get(b.id);
-      if (item) entries.push({ b, item });
-    }
-    const per = new Map<string, number>();
-    for (const e of entries) per.set(e.item, (per.get(e.item) ?? 0) + 1);
-    for (const { b, item } of entries.slice(0, 8)) {
-      const r = near(b);
-      if (!onScreen(r)) continue;
-      const pm = (rates.get(item as ItemId) ?? 0) / (per.get(item) ?? 1);
-      const s = pm > 0 ? `{i:${item}} ${fmtRate(pm)}/min` : `{i:${item}} {warn:0/min}`;
-      const t = textTag(app, s);
-      tags.push({ id: 'line' + b.id, near: r, cw: t.cw, ch: t.ch, draw: t.draw, below: DY[b.rot] < 0 });
     }
   }
 

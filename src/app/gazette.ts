@@ -134,19 +134,23 @@ export function newspaper(app: App, L: Layout, left: number) {
   const room = R.x + 4 - left;
   if (room > 70) {
     const sw = Math.min(room, L.wide ? 250 : 210);
-    const sx = R.x + 4 - sw, sy = R.y + 7;
     const { kick, rest } = split(gz.text);
     const inner = sw - 14 - 4;
     const kw = kick ? textWidth(kick) + 5 : 0;
-    const line = kick ? `{bad:${kick}} ${ellipsize(rest, inner - kw)}` : ellipsize(rest, inner);
+    // the whole headline on up to two lines (the joke is in its last words), else cut to one
+    const full = kick ? `{bad:${kick}} ${rest}` : rest;
+    const two = layoutRich(full, inner);
+    const lay = two.lines.length <= 2 ? two : layoutRich(kick ? `{bad:${kick}} ${ellipsize(rest, inner - kw)}` : ellipsize(rest, inner));
+    const sh = 17 + (lay.lines.length - 1) * LINE_H;
+    const sx = R.x + 4 - sw, sy = R.y + 24 - sh;
     const k = Math.min(1, t / 0.25);
-    ui.mark('gazetteSlip', sx, sy, sw, 17);
-    const r = slip(ui, sx, sy + Math.round((1 - k) * 4), sw, 17, { blocking: true });
+    ui.mark('gazetteSlip', sx, sy, sw, sh);
+    const r = slip(ui, sx, sy + Math.round((1 - k) * 4), sw, sh, { blocking: true });
     ui.ctx.globalAlpha = k;
-    drawLayout(ui, layoutRich(line), r.x, r.y);
+    drawLayout(ui, lay, r.x, r.y);
     ui.ctx.globalAlpha = 1;
-    if (ui.hover(sx, sy, sw, 17)) ui.tip([{ text: '{big:The Swamp Gazette}' }, { text: gz.text }, { text: '{k:LMB} the front page' }], 240);
-    if (ui.hover(sx, sy, sw, 17) && ui.clicked) { ui.eat(); app.togglePanel('gazette'); }
+    if (ui.hover(sx, sy, sw, sh)) ui.tip([{ text: '{big:The Swamp Gazette}' }, { text: gz.text }, { text: '{k:LMB} the front page' }], 240);
+    if (ui.hover(sx, sy, sw, sh) && ui.clicked) { ui.eat(); app.togglePanel('gazette'); }
   }
   // the paper: it lifts and turns as the headline changes
   if (hasArt('h180_newspaper')) {

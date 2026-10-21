@@ -2,7 +2,83 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
-## Status (2026-10-20, session 2): Milestones 5 and 6 built and reviewed, the UI redone, the art revamped (Lantern Bayou)
+## Status (2026-10-21): the 180 (text and HUD turned away from Last Watt) and the ore revamp
+
+The owner: the ores made the game look bland, and "all the text in this game mirrors" Last Watt
+(their tower defense, `Documents/candlepower`, grown from the same engine layer): "do a 180 to that
+game's format, revamp completely". Asked how far, they picked **text and the whole HUD**, then
+"make all the rest of the decisions by yourself and run autonomously then commit". Built on
+branch `hud-180` by agents in worktrees in two phases (fonts, kit, art, words; then the screen,
+the wheel, the book's pages, the fold's paperwork), merged and integrated by the lead.
+DECISIONS.md: "The ore revamp" and "The 180: text and HUD turned away from Last Watt". The plan
+and every rule: `docs/hud-180.md`. The look: STYLE.md "UI: paper and ink".
+
+### What this session added
+
+- **The ores** (`pixel-art/revamp/ores.py`, `src/render/orefx.ts`): outcrops instead of square
+  patches (each ore its own rock and colour, a spill tile around the edge, glints), redrawn after a
+  first pass read iron as steel crates and copper as a tomato bush. The title scene got the new iron
+  outcrop under its miner.
+- **Three fonts drawn for Foldworks** (Reed, Bullfrog, Pip), **ink on paper** colour roles with a
+  contrast test, **rich text** (icons, keycaps, coin chips, colour spans, status chips inline) and
+  **the paper kit** (tags on strings, speech bubbles, ribbons, the ledger book, stamps, paper
+  meters and buttons), 29 pieces of UI art and **the Inspector's portraits**. PixelLab: 0
+  generations.
+- **The words**: blurbs became icon equations and rows; every goal is a line in a character's
+  mouth (Bramble, the Inspector, Voltaire, the Committee, a customer) with its bar and chips; land
+  chunks have names.
+- **The screen**: no top strip, no hotbar. The floor runs edge to edge; **the Purse** (top-left) is
+  the one loud number; **the trouble bell** under it; **the lift** (W/F) top-right with **slips**
+  under it; **the speaker's corner** bottom-left with the toolbox; **the notebook and the Gazette**
+  bottom-right. **The floor carries the numbers**: tags on the Dock (coin/min, the order, what
+  flows in), the Hopper (node, %, what flows in), grids and the Bay; land for sale on signs.
+  **Reports are tags** on strings, pinned ones docked at the side.
+- **The Workbench Wheel** replaces the build bar: a right tap, `Q` or `Space` opens it at the
+  cursor; petals fan their items. Zoom out moved from `Q` to `Z`.
+- **Every page is the ledger book**: research in pencil, a statistics ledger, a trophy sticker
+  page, a drawn keyboard on a new Keys page, Unit 7's Codex of pinned specimens, deed slips for
+  claims, orders in customers' bubbles, the Patent Office, the Drawer's folded cards, Reorganize as
+  the Committee's contract, the offline report as a letter from Bramble, the overnight forecast on
+  the Inspector's clipboard, the grade as a red rubber stamp on his report.
+- **World doors**: Unit 7's observatory opens the Codex, Voltaire's pavilion the orders.
+- **e2e**: the harness drives the new screen (the wheel by mouse in `smoke`, `01b-wheel` in
+  `shots`, the Keys and Gazette states in `screens`); new `e2e/wheelcheck.mjs` and
+  `e2e/gallery.mjs` (the kit gallery, `gallery.html`, dev only).
+
+### Measured
+
+No sim, data number or save changed (saves still v7; the sim and its tests untouched apart from
+strings the app reads). `npm test` 38 files, 662 passed and 1 todo (the pace suite reads as before: run 1 resets at 4:21-4:24 for 14 Patents on both seeds, run 2 passes run 1's peak at 0:16 / 0:27); `npm run screens` clean at three sizes; `npm run smoke` green (the wheel by mouse included); `npm run shots` reaches every moment.
+
+### Open
+
+- **Pause (`P`)** is bound but still does nothing (as before the 180).
+- **Some sim strings are still prose** (pinned by sim tests); the app shows them as chips and tips.
+  Turning them into data the app writes would let every one go into rows.
+- **Voltaire's Boiler goal also shows on the Factory floor** (the goal chain, pre-existing).
+- **Derivative flags for the owner** (DECISIONS.md, the 180's list): the radial build menu, the
+  mascot's speech corner, diegetic menus, the headline, the alert bell, edge arrows, pinned tips
+  (genre conventions) and **the red rubber stamp** (Papers, Please's look; here it only reveals a
+  computed grade).
+- The earlier session's open items below still stand (rule 3 run 3, rule 4 on Overdrive, the Bay
+  stretch, coin after ~7 h).
+
+### Start here next session
+
+- **Branch:** `hud-180` is merged into `main` locally; **not pushed**, so the live build still
+  shows the old screen until `main` is pushed.
+- **Tests:** `npm test`; `npm run screens`, `npm run smoke`, `npm run shots` (set `BASE` to point
+  at another dev server than 5210). Don't edit `src/` while an e2e script runs: Vite reloads the
+  page and the run dies with "Execution context was destroyed".
+- **UI code:** the kit in `src/ui/` (`font.ts`, `theme.ts`, `rich.ts`, `paper.ts`) and
+  `src/app/chrome.ts`, `widgets.ts`; the screen in `layout.ts`, `hud.ts`, `topbar.ts` (the Purse,
+  the bell, the lift), `rail.ts` (the speaker's corner), `gazette.ts`, `floortags.ts`, `tags.ts`,
+  `wheel.ts`; the pages through `menuTemplate`.
+- **Art:** `pixel-art/hud180/` (`python build.py`), `pixel-art/fonts/sheet.py` for the contact
+  sheet.
+- **Next:** the owner's look at the new screen, then the open items above and Milestone 7.
+
+## Earlier status (2026-10-20, session 2): Milestones 5 and 6 built and reviewed, the UI redone, the art revamped (Lantern Bayou)
 
 The owner asked for Milestones 5 and 6, a complete art revamp with PixelLab (up to 1,000
 generations), and a UI redo ("crowded but not in a good way"). Built in parallel tracks on branch

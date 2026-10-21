@@ -1561,3 +1561,17 @@ revamp above).
 - **A red rubber stamp on an inspector's report resembles Papers, Please's visa stamp** in look.
   Here it only reveals a computed grade; the player never stamps anything.
 - A drawn keyboard on the help page, a sticker album for trophies: generic metaphors.
+
+### Integration (the lead, after both phases)
+- **Line tags joined the Dock's and the Hopper's tags** as an inflow row (the top four items by
+  rate, each with its `/min`). A tag at each belt's mouth stacked six deep over the Dock's own tag
+  at a busy Dock, so the floor read as clutter.
+- **Slips and trophy ribbons wait while a page is open** (the last four and two kept) and arrive
+  when it closes: they covered the book's header.
+- **The Gazette's slip wraps to two lines before it cuts**: one line cut the punchline of most
+  headlines to "...".
+- **Clipboards keep clear of the corner pieces** (the bubble, the Purse, the Gazette) at twice the
+  cost of the floor, and get a second ring of spots further along each side, so three audits at
+  once no longer cover the speaker's bubble or each other.
+- **The book's header shows the coin you hold**: the book covers the Purse and pages sell things.
+- **No edge-scroll while the mouse is over a HUD piece**, so reaching for the notebook doesn't pan.

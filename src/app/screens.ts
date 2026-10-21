@@ -985,7 +985,7 @@ function optionsScreen(app: App, r: Rect) {
 const KEY_WORD: Record<string, string> = {
   zoomIn: 'IN', zoomOut: 'OUT',
   rotate: 'TURN', remove: 'SELL', fold: 'FOLD', floor: 'LIFT', research: 'LAB', orders: 'DOCK', modules: 'MODS',
-  cancel: 'BACK', pause: 'STOP', help: 'HELP', mute: 'MUTE', hud: 'HUD', flow: 'FLOW', debug: 'DBG', wheel: 'WHEL',
+  cancel: 'BACK', pause: 'STOP', help: 'HELP', mute: 'MUTE', hud: 'HUD', flow: 'FLOW', debug: 'DBG', wheel: 'WHEEL',
 };
 /** The pan keys draw an arrow (Reed's) instead of a word. */
 const KEY_ARROW: Record<string, string> = { panUp: ICON.up, panDown: ICON.down, panLeft: ICON.left, panRight: ICON.right };

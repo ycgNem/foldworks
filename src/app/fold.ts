@@ -9,23 +9,21 @@
 // game only through App.act.
 import { C, rgba } from '../data/palette';
 import { ITEMS, itemName, type ItemId } from '../data/items';
-import { FACTORY } from '../data/land';
 import { ORDER } from '../data/orders';
 import { RULES, SCORE_WEIGHTS, GRADES } from '../data/rules';
 import { prules } from '../sim/patents'; // Milestone 5: the Patent rules (More Auditors, Quick Audits)
 import type { Game } from '../sim/Game';
-import { megaStage } from '../data/megaprojects';
 import { ICON, textWidth, bigWidth, smallWidth, ellipsize, LINE_H } from '../ui/font';
 import { TICK_RATE } from '../engine/time';
 import { Num } from '../engine/num';
 import { sheet, itemIcon, hasArt, spriteName, frameNamed } from '../render/sprites';
-import { mainOutput, megaFrac } from '../render/factory';
+import { mainOutput } from '../render/factory';
 import { auditTicks, projectAudit, entsIn, gradedAudit } from '../sim/systems/audits';
 import { BUILD } from '../data/machines';
 import { gradeFAudit } from '../sim/systems/nested';
 import { inBill, defaultName, stampCost, stampRefusal, unfoldRefusal, fname, feedsDock, productCopies, kitsFor, mainItem, sliceEndParts } from '../sim/systems/modules';
 import { claimsHeld, claimsUsed, oresOf, copiesOf } from '../sim/systems/claims';
-import type { AuditResult, AuditState, Box, FAuditState, FEnt, ModuleDesign } from '../sim/world';
+import type { AuditResult, AuditState, Box, FAuditState, ModuleDesign } from '../sim/world';
 import { frame, button, uiIcon, portrait, coinIcon, clipboard, chip, chipWidth, meter, tag, tagSize, bubble, ribbon, rule, twine, RIBBON_H, CHIP_H, T, type Role } from './chrome';
 import { perMin as perMinW, menuTemplate, cells, fmt, rays, slamScale } from './widgets';
 import { drawRich, layoutRich, richWidth, richHeight } from '../ui/rich';
@@ -182,15 +180,6 @@ function coinPerMin(outs: Partial<Record<ItemId, number>>, mult = 1): number {
   return c;
 }
 
-/** A grade letter as the art's sprite drawn at `size` (its colours: the build bar, the floor). */
-function gradeIcon(app: App, letter: string, x: number, y: number, size: number) {
-  if (hasArt('ui_grade')) {
-    const f = gradeFrame(letter);
-    app.ui.ctx.drawImage(f.img, x, y, size, size);
-    if (f.plus) drawPlus(app.ui.ctx, x, y, size);
-  } else app.ui.big(letter, x + size / 2, y + size / 2 - 5, GRADE_INK[letter] ?? T.ink, { align: 'center' });
-}
-
 /** The next grade up from `letter` and the score it starts at (null at the top). */
 function nextGrade(letter: string): { letter: string; min: number } | null {
   const i = GRADES.findIndex((q) => q.letter === letter);
@@ -314,16 +303,22 @@ export function auditBadge(app: App, L: Layout) {
 /** Where a clipboard goes beside box b: the candidate covering the least of the boxes and the
  * clipboards already placed, kept inside the view. */
 function placeClip(b: Rect, boxes: Rect[], placed: Rect[], view: Rect, soft: Rect[] = []): Rect {
-  const cands = [
+  const near = [
     { x: b.x + b.w + 10, y: b.y }, { x: b.x - CB_W - 10, y: b.y },
     { x: b.x + b.w / 2 - CB_W / 2, y: b.y + b.h + 10 }, { x: b.x + b.w / 2 - CB_W / 2, y: b.y - CB_H - 10 },
     { x: b.x + b.w + 10, y: b.y + b.h - CB_H }, { x: b.x - CB_W - 10, y: b.y + b.h - CB_H },
   ];
+  // one clipboard further along each side, for when the near spots are taken (a longer string
+  // costs a little, so these only win over something covered)
+  const far = near.flatMap((p, i) => i === 2 || i === 3
+    ? [{ x: p.x - CB_W - 6, y: p.y }, { x: p.x + CB_W + 6, y: p.y }]
+    : [{ x: p.x, y: p.y - CB_H - 6 }, { x: p.x, y: p.y + CB_H + 6 }]);
+  const cands = [...near.map((p) => ({ ...p, step: 0 })), ...far.map((p) => ({ ...p, step: 150 }))];
   let best: Rect | null = null, bestCost = Infinity;
   for (const p of cands) {
     const x = Math.round(clampN(p.x, view.x, view.x + view.w - CB_W)), y = Math.round(clampN(p.y, view.y, view.y + view.h - CB_H));
     const r = { x, y, w: CB_W, h: CB_H };
-    const cost = boxes.reduce((s, q) => s + overlapArea(q, r) * 3, 0) + placed.reduce((s, q) => s + overlapArea(q, { x: x - 2, y: y - 2, w: CB_W + 4, h: CB_H + 4 }) * 6, 0) + soft.reduce((s, q) => s + overlapArea(q, r), 0) + Math.abs(x - p.x) + Math.abs(y - p.y);
+    const cost = boxes.reduce((s, q) => s + overlapArea(q, r) * 3, 0) + placed.reduce((s, q) => s + overlapArea(q, { x: x - 2, y: y - 2, w: CB_W + 4, h: CB_H + 4 }) * 6, 0) + soft.reduce((s, q) => s + overlapArea(q, r) * 2, 0) + Math.abs(x - p.x) + Math.abs(y - p.y) + p.step;
     if (cost < bestCost) { bestCost = cost; best = r; }
   }
   return best!;
@@ -358,7 +353,6 @@ function auditClip(app: App, a: AnyAudit, ws: boolean, r: Rect, b: Rect, n: numb
   const ui = app.ui;
   const g = app.game;
   const total = auditTicks(g);
-  const warm = !a.result && a.t < warmTicks(g);
   const res = auditResult(g, a, ws);
   const left = Math.max(0, Math.ceil((total - a.t) / TICK_RATE));
   const aid = 'id' in a ? a.id : -1;

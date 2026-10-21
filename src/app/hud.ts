@@ -235,15 +235,22 @@ const TOAST_ICON: Record<string, UIconName> = { flask: 'research', crate: 'order
  * centre. A slip that has landed is on the audit's 'float' layer. */
 function slips(app: App, L: Layout, dt: number) {
   const ui = app.ui;
+  // a page open: the slips wait (the book is the whole screen and they covered what you read);
+  // the newest four land when it closes
+  if (app.panel) {
+    if (app.toasts.length > 4) app.toasts = app.toasts.slice(-4);
+    if (app.trophyPops.length > 2) app.trophyPops = app.trophyPops.slice(-2);
+    return;
+  }
   for (const t of app.toasts) t.t += dt;
   app.toasts = app.toasts.filter((t) => t.t < t.life);
   for (const p of app.trophyPops) p.t += dt;
   app.trophyPops = app.trophyPops.filter((p) => p.t < 4);
   const S = L.slips;
   const w = S.w;
-  let y = app.panel ? L.overlay.y + 26 : S.y;
-  const x0 = app.panel ? L.overlay.x + L.overlay.w - w - 10 : S.x;
-  const bottom = app.panel ? L.overlay.y + L.overlay.h - 8 : Math.min(S.y + S.h, pinTop - 4);
+  let y = S.y;
+  const x0 = S.x;
+  const bottom = Math.min(S.y + S.h, pinTop - 4);
   for (const t of app.toasts.slice().reverse()) {
     const icon = t.icon ? (TOAST_ICON[t.icon] ?? (t.icon in UICON ? (t.icon as UIconName) : null)) : null;
     const tx = icon ? 12 : 0;

@@ -50,8 +50,16 @@ await frames(page, 2);
 // cursor; the Build petal fans its items; the Miner follows the cursor to its tile)
 const cssOf = (id) => page.evaluate((id) => { const a = window.__app; const r = a.ui.ids.get(id); return r ? a.uiToCss(r.x + r.w / 2, r.y + r.h / 2) : null; }, id);
 await page.evaluate(() => { window.__app.grant(100); });
-await hoverTile(page, 4, 5);
-await frames(page, 2);
+// an empty deck tile the corner pieces don't cover (Bramble's bubble grows a Buy button once the
+// Bellows can be bought)
+let tapAt = null;
+for (const [x, y] of [[4, 1], [3, 1], [5, 2], [4, 5]]) {
+  await hoverTile(page, x, y);
+  await frames(page, 2);
+  const free = await page.evaluate(([x, y]) => { const a = window.__app; return !a.ui.overUI && !a.game.s.ents.some((e) => e.x === x && e.y === y); }, [x, y]);
+  if (free) { tapAt = [x, y]; break; }
+}
+check(!!tapAt, `an open deck tile to tap (${tapAt})`);
 // a frame between press and release, as a hand's tap has (the game reads the press on a frame)
 await page.mouse.down({ button: 'right' });
 await frames(page, 2);

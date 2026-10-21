@@ -187,7 +187,8 @@ The Megaproject and research scenes sit under the bayou's night (ink violets fal
 violet, the town black against it with lit windows). Brass that is meant to look folded or
 struck (the logo, coins, grade letters, the menu frame's rod and plates) uses all four brass
 steps, `brass0` at the deepest fold and lantern gold (`lamp2`/`lamp3`) only on the lit face and
-glints. The ornate menu frame stays ornate: brass rod, warm wood frame, a night-violet face.
+glints. The ornate menu frame (brass rod, warm wood, a night-violet face) is retired with the
+180: every page is now the ledger book below.
 
 ## Atlases
 
@@ -196,9 +197,44 @@ the end and nothing moves. `ui_icons` / `ui_icons_small` 29–33: patents (a sea
 (a plan on blue), reset (a turning violet arrow), overnight (a moon and a lantern), bearings (the
 Committee's Raccoon Bearings, a steel ring with balls).
 
-## UI
+## UI: paper and ink (the 180, 2026-10-21)
 
-See `docs/ui-redesign.md`.
+The screen, the voice and every rule are in `docs/hud-180.md` (it replaced `docs/ui-redesign.md`'s
+screen so the game stops reading like Last Watt). The look in one line: **warm paper and wood
+hung on the floor with shadows, dark ink on cream, the cast talking in speech bubbles, and the
+floor edge to edge under it.**
+
+- **Typography** (`src/ui/font.ts`, contact sheet `pixel-art/fonts/out/fonts.png` built by
+  `pixel-art/fonts/sheet.py`): three bold faces drawn for Foldworks, none sharing a shape with the
+  Sprocket & Sprout font. **Reed** for everything read (cap 7, x-height 5, 2 px verticals, rounded
+  bowls, LINE_H 11), **Bullfrog** for the Purse, titles, names and grades (cap 9, 2 px everywhere,
+  soft corners, the round lowercase 1 px low), **Pip** for prices, keycap letters and chip counts
+  (caps, cap 5). Figures are tabular in all three.
+- **Ink on paper** (`src/ui/theme.ts`, `T`): text is `ink` or `inkSoft` on `bone` paper (7:1 or
+  more); accent inks (good moss, bad red-brown, warn copper, coin dark brass, research teal, power
+  blue, reset violet) at 4.4:1 or more. Light text only over the floor, with an ink outline.
+- **Rich text** (`src/ui/rich.ts`): icons, keycaps and coin chips inline; sentences only in a
+  character's mouth; no semicolons, at most one colon a line, no keys or prices in parentheses.
+- **The kit** (`src/ui/paper.ts`, `src/app/chrome.ts`, `src/app/widgets.ts`): tags on strings,
+  speech bubbles, ribbons, the Purse sign, the ledger book for every page, keycaps, chips, paper
+  meters, red rubber stamps, paper buttons that press 1 px. The gallery (`gallery.html`, dev only,
+  `e2e/gallery.mjs`) shows every piece.
+- **The art** (`pixel-art/hud180/`, `python build.py`; full manifest in its `README.md`):
+  - **Paper** is `bone`, lit `lamp3` top-left inside, shaded `wood5` bottom-right, edged `wood2`;
+    its shadow is `ink1`, 1 px down-right, straight (it ignores the deckle).
+  - **Centres are plain** (one flat colour) so ink sits on nothing; texture lives in the edges,
+    which tile with their own period; a feature that must appear once lives in a corner.
+  - **Wood** is the deck's ramp (the Purse is `wood2`, so gold digits with an ink outline pop);
+    **brass** the module brass; **leather** (the ledger, the notebook) oxblood `copper0` lit
+    `copper1`, shaded `wood0`.
+  - **Raised things cast a 1 px `ink1` shadow** (petals, discs, the notebook, the toolbox, the
+    Gazette), so a button reads as a button, not a coin.
+  - **Role colours** for ribbons and bookmarks: moss, copper, teal, violet, brass ramps, `bone`
+    text on the body.
+- **The Inspector** (`portrait_inspector*`, `pixel-art/hud180/inspector.py`): an olive frog a step
+  darker than Bramble, a black bowler with a brass band, a monocle on a chain, a drooping brown
+  moustache (it curls up when he cheers), half-lidded eyes, a grey suit, a red bow tie, the
+  clipboard held up; the cast's lantern rim light.
 
 ## Tools
 
