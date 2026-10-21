@@ -20,6 +20,7 @@ import { onPaper } from '../ui/theme';
 import { TICK_RATE } from '../engine/time';
 import { sheet, drawRot, frameAt, itemIcon, hasArt } from './sprites';
 import { TILE } from './ground';
+import { art, artSig, canvas } from './skyart';
 
 const PIP: Record<string, string> = { work: C.pipGreen, starved: C.pipYellow, blocked: C.pipRed, idle: C.pipGrey };
 
@@ -85,14 +86,98 @@ function feedsInto(a: FEnt, b: FEnt): boolean {
   return a.x + DX[a.rot] === b.x && a.y + DY[a.rot] === b.y;
 }
 
+/** The deck round the hall, in tiles (docs/sky-island.md): north wide enough for the town (its
+ *  footing rows -3..-1, its sprites up to row -5), east for the annex block for sale, south for
+ *  the row-99 houses. */
+export const PLAT = { n: 5, s: 2, w: 4, e: 4 };
+const PLAT_ART = ['fplat_edge', 'fplat_under'] as const;
+
+/** The Factory floor's riveted sky platform (docs/sky-island.md): a steel deck round the hall with a
+ *  brass-trimmed girder rim (fplat_edge by neighbour mask, frame 15 the plain deck), the girder face
+ *  and a truss under its south edge (fplat_under), and brass rotor pods hung under the truss,
+ *  spinning (fplat_rotor, live). Baked per floor size, so annex blocks bolt on as they are bought. */
+export class Platform {
+  private c: HTMLCanvasElement | null = null;
+  private key = '';
+  private ox = 0;
+  private oy = 0;
+  private rotors: { x: number; y: number }[] = [];
+  private b = { x0: 0, y0: 0, x1: 0, y1: 0 };
+  /** world px under the floor's south edge the camera may show: the deck, the girder, the rotors */
+  readonly below = (PLAT.s + 4) * TILE;
+
+  bounds() {
+    return this.b;
+  }
+
+  draw(ctx: CanvasRenderingContext2D, fw: number, fh: number, time: number) {
+    const key = `${fw}x${fh}:${artSig(PLAT_ART)}`;
+    if (!this.c || key !== this.key) {
+      this.bake(fw, fh);
+      this.key = key;
+    }
+    ctx.drawImage(this.c!, this.ox, this.oy);
+    const r = art('fplat_rotor');
+    for (let i = 0; i < this.rotors.length; i++) {
+      const p = this.rotors[i];
+      ctx.drawImage(r.frames[(Math.floor(time * (r.fps || 12)) + i) % r.frames.length], p.x - r.ax, p.y - r.ay);
+    }
+  }
+
+  private bake(fw: number, fh: number) {
+    // a wide north deck for the town; a narrow walk round the hall, wider east for the annex block
+    // for sale and south for the row-99 houses; outer corners chamfered
+    const NX0 = -PLAT.w, NX1 = fw + PLAT.e, BX0 = -1, BX1 = fw + 3, Y0 = -PLAT.n, Y1 = fh + PLAT.s;
+    const on = (x: number, y: number) => {
+      if (y < Y0 || y >= Y1) return false;
+      const x0 = y < 0 ? NX0 : BX0, x1 = y < 0 ? NX1 : BX1;
+      if (x < x0 || x >= x1) return false;
+      // chamfers: the north deck's top corners and its wings' undersides, the body's foot
+      const cx = Math.min(x - x0, x1 - 1 - x);
+      if (y === Y0 && cx === 0) return false;
+      if (y === -1 && cx === 0 && (x < BX0 || x >= BX1)) return false;
+      if (y === Y1 - 1 && cx === 0) return false;
+      return true;
+    };
+    const X0 = Math.min(NX0, BX0), X1 = Math.max(NX1, BX1);
+    const cols = X1 - X0, rows = Y1 - Y0 + 3;
+    const c = canvas(cols * TILE, rows * TILE + 24);
+    const ctx = c.getContext('2d')!;
+    this.ox = X0 * TILE;
+    this.oy = Y0 * TILE;
+    const put = (img: CanvasImageSource, x: number, y: number) => ctx.drawImage(img, x * TILE - this.ox, y * TILE - this.oy);
+    const edge = art('fplat_edge'), under = art('fplat_under');
+    // under each column's south edge the girder face; under the body, the truss, inset a tile
+    const bottom = (x: number) => { let b = Y1 - 1; while (b >= Y0 && !on(x, b)) b--; return b; };
+    for (let x = X0; x < X1; x++) {
+      const b = bottom(x);
+      if (b < Y0) continue;
+      const f = !on(x - 1, b) || bottom(x - 1) < b ? 0 : !on(x + 1, b) || bottom(x + 1) < b ? 2 : 1;
+      put(under.frames[f % under.frames.length], x, b + 1);
+      if (x > BX0 && x < BX1 - 1) put(under.frames[(x === BX0 + 1 ? 3 : x === BX1 - 2 ? 5 : 4) % under.frames.length], x, Y1 + 1);
+    }
+    for (let y = Y0; y < Y1; y++)
+      for (let x = X0; x < X1; x++) {
+        if (!on(x, y) || (x >= 0 && y >= 0 && x < fw && y < fh)) continue;
+        const m = (on(x, y - 1) ? 1 : 0) | (on(x + 1, y) ? 2 : 0) | (on(x, y + 1) ? 4 : 0) | (on(x - 1, y) ? 8 : 0);
+        put(edge.frames[m % edge.frames.length], x, y);
+      }
+    this.c = c;
+    // a rotor pod every five tiles or so along the truss
+    const span = BX1 - BX0 - 2;
+    const n = Math.max(2, Math.round(span / 5));
+    this.rotors = [];
+    for (let i = 0; i < n; i++) this.rotors.push({ x: Math.round((BX0 + 1 + ((i + 0.5) * span) / n) * TILE), y: (Y1 + 2) * TILE - 3 });
+    this.b = { x0: X0 * TILE, y0: Y0 * TILE, x1: X1 * TILE, y1: (Y1 + 2) * TILE + 24 };
+  }
+}
+
 /** `viewRight`: the view's right edge in world px, so the annex block's label slides into view
  * while its outline is cut by the screen edge (the Milestone 5-6 final round, 1024x640). */
 export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number, ov: FactoryOverlay, viewRight = Infinity) {
   // the annex (DESIGN.md §19, the Milestone 5-6 review round): the hall grows east by the blocks bought
   const W = g.fw, H = g.fh;
-  // the hall: a shadow, a riveted wall, then the floor plates
-  ctx.fillStyle = rgba(C.ink, 0.6);
-  ctx.fillRect(4, 4, W * TILE, H * TILE);
+  // the hall on its platform: a riveted wall, then the floor plates
   ctx.fillStyle = C.hull0;
   ctx.fillRect(-3, -3, W * TILE + 6, H * TILE + 6);
   ctx.fillStyle = C.brass0;
@@ -116,7 +201,8 @@ export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number
   const next = annexPrice(g);
   if (next && g.done(ANNEX.requires)) {
     const ax = W * TILE + 4, aw = ANNEX.cols * TILE;
-    antsBox(ctx, W + 4 / TILE, 0, ANNEX.cols, H, rgba(C.bone, 0.45), rgba(C.bone, 0.04), time);
+    // on the platform's pale deck: dark dashes over a slight shade (the sky island)
+    antsBox(ctx, W + 4 / TILE, 0, ANNEX.cols, H, rgba(C.steel0, 0.75), rgba(C.steel0, 0.12), time);
     const lw = Math.max(textWidth('annex'), textWidth(next.format())) + 6;
     const cx = viewRight > ax + 4 ? Math.max(ax + 4 - lw / 2, Math.min(ax + aw / 2, viewRight - lw / 2 - 2)) : ax + aw / 2;
     label(ctx, 'annex', cx, H * TILE / 2 - 12, C.bone);

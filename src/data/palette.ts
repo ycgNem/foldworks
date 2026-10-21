@@ -20,7 +20,24 @@ export const PALETTE = [
   '#eee2c6', '#c2db74', '#c43a32',
   // status pips: code-only, never in sprite art (unchanged from palette A)
   '#66cc50', '#ffe466', '#c8362e', '#3d3c42', '#4a8fe2',
+  // the sky island (docs/sky-island.md, 2026-10-21): palette B extended for the world. Appended
+  // after the pips so no earlier index moves (theme.ts reads PALETTE[40]); proposed hexes, the
+  // style test tunes them. Code reads them only through C (sky0.., cloud0.., grass0.., pave0.., sun).
+  '#3a78d4', '#5893e3', '#7fb2ee', '#a9d0f5', '#d4ebfb',
+  '#9cb4da', '#c3d6ef', '#e6f0fb', '#ffffff',
+  '#2f6e36', '#4c9a3e', '#73c14e', '#a3dd68',
+  '#7d7468', '#a3988a', '#c4b8a5', '#ddd2bd',
+  '#ffe9c2',
 ] as const;
+
+/** The sky island's ramps (docs/sky-island.md, Palette): dark to light, the sky zenith to horizon. */
+const SKY = {
+  sky0: '#3a78d4', sky1: '#5893e3', sky2: '#7fb2ee', sky3: '#a9d0f5', sky4: '#d4ebfb',
+  cloud0: '#9cb4da', cloud1: '#c3d6ef', cloud2: '#e6f0fb', cloud3: '#ffffff',
+  grass0: '#2f6e36', grass1: '#4c9a3e', grass2: '#73c14e', grass3: '#a3dd68',
+  pave0: '#7d7468', pave1: '#a3988a', pave2: '#c4b8a5', pave3: '#ddd2bd',
+  sun: '#ffe9c2',
+} as const;
 
 /** Lantern Bayou's own slots (what the art scripts use): ramps dark to light. */
 const LB = {
@@ -61,6 +78,7 @@ const A = {
 export const C = {
   ...LB,
   ...A,
+  ...SKY,
   // semantic aliases (UI, placeholders), darkest neutral first
   night: A.shadow, slate: A.hull0, iron: A.hull1, steel: A.hull1, fog: A.hull2, mist: A.hull3,
   bark: A.ground0, umber: A.ground1, clay: A.ground2,
