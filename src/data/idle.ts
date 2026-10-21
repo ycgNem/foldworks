@@ -65,12 +65,12 @@ export interface IdleUpgrade {
 export const IDLE_UPGRADES: IdleUpgrade[] = [
   {
     id: 'nightForeman', name: 'Night Foreman', cost: 150_000, eff: 0.05, requires: 'steamPower',
-    blurb: 'Someone minds the lines while you sleep: offline efficiency +5 points.',
+    blurb: '{u:overnight} offline efficiency {good:+5} points · someone minds the lines',
     derivation: '§20 Night Shift: a night is the first hour in full and 7 h at e, so +0.05 pays 0.05 x the 7 h of open idle after the first; measured from the Act II bot\'s factory at 1 h (Steam Power is done by then), 0.05 x (3.22M - 446K) = 139K a night (tests/pace-idle-early.test.ts): paid back in 1.1 nights. About 12 min of early Act II income',
   },
   {
     id: 'nightRota', name: 'Night Shift Rota', cost: 250_000, eff: 0.05, requires: 'circuits',
-    blurb: 'Two crews in turn: offline efficiency +5 more points.',
+    blurb: '{u:overnight} offline efficiency {good:+5} more points · two crews in turn',
     derivation: '§20 Night Shift: offered with Circuits, done by 2 h; the factory then idles 3.17M in 8 h, 396K of it the first hour, so +0.05 is 0.05 x 2.77M = 139K a night (measured, tests/pace-idle-early.test.ts): 250K pays back in 1.8 nights (400K took 2.9). Re-derived from measured idle (6,600-8,000/min before the Bay floor), not the 12,500/min of active play the old price assumed',
   },
 ];
