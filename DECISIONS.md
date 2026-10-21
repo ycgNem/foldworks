@@ -1575,3 +1575,51 @@ revamp above).
   once no longer cover the speaker's bubble or each other.
 - **The book's header shows the coin you hold**: the book covers the Purse and pages sell things.
 - **No edge-scroll while the mouse is over a HUD piece**, so reaching for the notebook doesn't pan.
+
+## The sky island: the world redesigned (2026-10-21)
+
+The owner: *"full redesign the way the gameplay/game looks, the planks and worlds … the
+surrounding ocean isn't gonna cut it, I'm thinking Cookie Clicker combined with those factory
+Roblox games, tycoon things, Miner's Haven … 300 PixelLab limit, run autonomously."* Asked the two
+things CLAUDE.md reserves or that decide everything else, they picked **a floating sky island**
+(over a grassy tycoon plot or an underground mine) and **palette B extended** (over a new palette
+or keeping B as it was). The plan and the as-built art and code contract: `docs/sky-island.md`.
+The look: STYLE.md, "Floors and ground", "The town". Built on branch `sky-island` by a style test
+then five agents in worktrees (renderer code; ground, island, sky and ores; the Factory platform;
+the town; the title), merged by the lead. Pillar: the plot you watch grow (the tycoon's pleasure),
+and readability (DESIGN.md §17).
+
+- **Palette B extended, not replaced** (an "ask before" item, asked): 18 colours appended after
+  the pips (sky, cloud, grass, paving, sun; no index moved). Machines, items, the cast and the HUD
+  keep every pixel. The style test darkened the meadow from the first proposal: with it a
+  deuteranope saw meadow and paving as one beige; `pixel-art/sky/pal.py` tests that now.
+- **Owned land is paving, land for sale is meadow** with its plot marked out: the old "deck
+  darkened and hatched" became two materials told apart by hue and lightness. Paving C (painted
+  concrete with a dotted build grid) over flagstones (charming, the busiest joints) and a riveted
+  plate (it blurred into the Factory's steel). Buying a lot paves it in a wave from the middle.
+- **The island** (a rim of grass with the town on the north, the south cliff in 3/4 view with the
+  floor's ores as veins, an underside tapering to a point, waterfalls into the cloud sea) and
+  **the sky** (a dithered gradient, parallax clouds, far islets, birds) replace the water and the
+  shore. **The Factory is a riveted sky platform** held up by brass rotors, higher up.
+- **The town stands on footings** on the rim (and on the platform's plaza); the Boardwalk is a
+  railed promenade, and the order's pitch became "My frogs keep falling off the edge!". Strings
+  that put the town in a swamp were rewritten; ids are unchanged (trophy ids are save keys); the
+  Swamp Gazette keeps its name as a joke it can tell.
+- **Buildings drop in**: anything that stands up falls 14 px and lands with a squash, its dust and
+  thump on the landing (belts are laid flat). Presentation only.
+- **No sim or data number changed**; saves are unchanged. The old revamp scripts no longer write
+  the sprites the sky island took over (`pixel-art/revamp/common.py` `SUPERSEDED`).
+- **PixelLab: 2 generations of the 300 allowed** (two tree drafts: one rejected, one became the oak
+  and, turned and recoloured, the blossom), counted from each call's own result (the
+  account balance moved by ~205 during the work from another session on the same account).
+
+### Flagged as derivative (owner to decide)
+- **A floating sky island as your base, other islands on the horizon**: Roblox *Islands* (once
+  Skyblock) and Minecraft's Skyblock maps. The owner's pick; our art and rules.
+- **The plot you buy paving itself in**: the tycoon genre's "buy a plot, the floor builds in";
+  no buy-pads, no walls rising, no Roblox studs or baseplates, nothing from Miner's Haven (no
+  droppers, no upgraders, no neon conveyors), nothing from Cookie Clicker (no cookie, no milk, no
+  building rows, no wallpaper).
+- **Brass rotor pods under a sky platform**: the steampunk family (*BioShock Infinite*'s
+  Columbia). Generic.
+- **Squash-and-stretch on placement**: a generic animation principle, common in builders.
