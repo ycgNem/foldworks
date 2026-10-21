@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { MIGRATIONS, SAVE_VERSION, migrate, readSave, writeSave, listSlots, deleteSave, exportString, importString } from '../src/engine/save';
 import { EventQueue } from '../src/engine/events';
-import { hasGlyph, textWidth, hasSmallGlyph, smallWidth } from '../src/ui/font';
+import { hasGlyph, textWidth, hasSmallGlyph, smallWidth, hasBigGlyph, bigWidth, ICON, FACES, FONT_H, LINE_H, BIG_H, BIG_LINE_H, SMALL_H, SMALL_LINE } from '../src/ui/font';
 import { findIssues, AuditRec } from '../src/ui/audit';
 import fs from 'node:fs';
 
@@ -67,14 +67,16 @@ describe('event queue', () => {
 });
 
 describe('font', () => {
-  // every literal the HUD can draw must be in the glyph table (an unknown char draws as '?')
-  it('covers the HUD strings and every name and line in the data', () => {
+  // Reed, the body face: every literal the HUD can draw must be in its table (an unknown char
+  // draws as '?'). Rich-text markup (docs/hud-180.md "Rich text") is stripped first: a `{name:`
+  // opener, a whole `{name}` token such as `{coin}`, and the closing `}`; what is left is drawn.
+  it('covers the HUD strings and every name and line in the data, markup stripped', () => {
     const files = [...fs.readdirSync('src/app').filter((f) => f.endsWith('.ts')).map((f) => 'src/app/' + f), ...fs.readdirSync('src/data').map((f) => 'src/data/' + f)];
     // derivation strings are for DESIGN.md, never drawn
     const src = files.map((f) => fs.readFileSync(f, 'utf8')).join('\n')
       .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '')
       .split('\n').filter((l) => !l.includes('derivation:') && !l.includes('§')).join('\n');
-    const literals = [...src.matchAll(/'([^'\\]*)'|`([^`]*)`/g)].map((m) => (m[1] ?? m[2]).replace(/\$\{[^}]*\}/g, ''));
+    const literals = [...src.matchAll(/'([^'\\]*)'|`([^`]*)`/g)].map((m) => stripMarkup((m[1] ?? m[2]).replace(/\$\{[^}]*\}/g, '')));
     const chars = new Set(literals.join('') + '0123456789.:-x%°');
     for (const ch of chars) {
       if (ch === "'" || ch === '\\' || /\s/.test(ch)) continue;
@@ -82,13 +84,53 @@ describe('font', () => {
     }
     expect(textWidth('Coin 20/20')).toBeGreaterThan(0);
   });
-  // the small font (labels, keys, prices: the UI redesign's third size) covers capitals, figures
-  // and the punctuation prices and labels use; lowercase draws as capitals
-  it('has a small glyph for every capital, figure and price mark', () => {
-    for (const ch of 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:/+-%()!?\'#=&<>') expect(hasSmallGlyph(ch), `small glyph for ${ch}`).toBe(true);
+  it('strips rich-text markup before the coverage check', () => {
+    expect(stripMarkup('{i:ironOre} → {i:ironIngot}  {coin:25} {k:LMB} shovel {coin} {bad:CHOKED}')).toBe('ironOre → ironIngot  25 LMB shovel  CHOKED');
+    expect(stripMarkup('{big:S+} {good:+7.0K}/min')).toBe('S+ +7.0K/min');
+  });
+  it('draws every printable ASCII char, the marks and every ICON in Reed', () => {
+    for (let c = 32; c < 127; c++) expect(hasGlyph(String.fromCharCode(c)), `Reed ${String.fromCharCode(c)}`).toBe(true);
+    for (const ch of '°×·÷→←↑↓—–…') expect(hasGlyph(ch), `Reed ${ch}`).toBe(true);
+    for (const ch of Object.values(ICON)) expect(hasGlyph(ch), `Reed icon ${ch.charCodeAt(0)}`).toBe(true);
+  });
+  // Bullfrog, the display face: the Purse, titles, names, grade letters and big numbers
+  it('has a Bullfrog glyph for every letter, figure, grade and number mark', () => {
+    for (const ch of 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:;!?\'"-+/%()&#$×→' + ICON.coin) expect(hasBigGlyph(ch), `Bullfrog ${ch}`).toBe(true);
+    expect(bigWidth('S+')).toBeGreaterThan(textWidth('S+'));
+  });
+  // Pip, the small face (prices, keycap letters, chip counts); lowercase draws as capitals
+  it('has a Pip glyph for every capital, figure and price mark', () => {
+    for (const ch of 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:/+-%()!?\'#=&<>$×→*' + ICON.coin) expect(hasSmallGlyph(ch), `small glyph for ${ch}`).toBe(true);
     expect(smallWidth('1.2K')).toBeLessThan(textWidth('1.2K'));
+    expect(smallWidth('q')).toBe(smallWidth('Q'));
+  });
+  // the metrics docs/hud-180.md fixes, and figures that line up in columns
+  it('keeps each face to its metrics, with tabular figures', () => {
+    expect([FONT_H, LINE_H, BIG_H, BIG_LINE_H, SMALL_H, SMALL_LINE]).toEqual([9, 11, 11, 13, 5, 7]);
+    const faces: [string, Record<string, string>, number, number, number][] = [
+      // name, table, cap height, cell height (a glyph may hang 1 px below Pip), figure width
+      ['Reed', FACES.reed, 7, FONT_H, 5], ['Bullfrog', FACES.bullfrog, 9, BIG_H, 7], ['Pip', FACES.pip, 5, SMALL_H + 1, 4],
+    ];
+    for (const [name, table, cap, cell, fig] of faces) {
+      for (const [ch, def] of Object.entries(table)) {
+        const rows = def.split('|');
+        expect(new Set(rows.map((r) => r.length)).size, `${name} ${JSON.stringify(ch)} rows all one width`).toBe(1);
+        expect(rows.length, `${name} ${JSON.stringify(ch)} fits the cell`).toBeLessThanOrEqual(cell);
+        expect(/^[#.|]+$/.test(def), `${name} ${JSON.stringify(ch)} only # and .`).toBe(true);
+      }
+      for (const d of '0123456789') expect(table[d].split('|')[0].length, `${name} figure ${d}`).toBe(fig);
+      // capitals stand on the baseline: their last cap row has ink
+      for (const ch of 'EHLTZ') expect(table[ch].split('|')[cap - 1].includes('#'), `${name} ${ch} on the baseline`).toBe(true);
+    }
+    expect(textWidth('1,234,567')).toBe(textWidth('9,876,543'));
+    expect(bigWidth('1.58M')).toBe(bigWidth('8.88M'));
   });
 });
+
+/** The coverage scan's view of a rich-text string: markup gone, the drawn text left. */
+function stripMarkup(s: string): string {
+  return s.replace(/\{[A-Za-z]+\}/g, '').replace(/\{[A-Za-z]+:/g, '').replace(/\}/g, '');
+}
 
 describe('overlap audit', () => {
   const rec = (kind: AuditRec['kind'], x: number, y: number, w: number, h: number, seq: number, s?: string): AuditRec => ({ kind, x, y, w, h, s, layer: 'ui', seq });
