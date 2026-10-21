@@ -210,33 +210,34 @@ COAL = [
 
 
 # The four ore icons match their deposits (the ore revamp, ores.py): still lumps by silhouette,
-# each its own lump. Iron: an angular banded slab and a chip, blue tops, rust layers in the dark
-# face. Copper: a bubbly verdigris crust with a native-copper nugget breaking out of the top.
-# Coal: two jagged black shards with a cool sheen on their lit edges and an ember in the crack.
-# Sand: a little dune heap, pale gold, its crest bone-bright and one ripple across it.
+# each its own lump. Iron: an angular boulder and a chip, rust-red lit facets over a dark
+# hematite body with a jasper layer, one silver glint on an edge. Copper: an angular crusted
+# rock, verdigris over grey-brown, a vein of native copper across it. Coal: two jagged black
+# shards with a cool sheen on their lit edges and an ember in the crack. Sand: a little dune
+# heap, pale gold, its crest bone-bright and one ripple across it.
 IRON_ORE = [
-    "..ooo...",
-    ".o332oo.",
-    "o3221o2o",
-    "o2211o1o",
-    "oaaa0aao",
-    "o0000o0o",
+    ".oooo...",
+    "o2s21oo.",
+    "o2211o2o",
+    "o1hhho1o",
+    "ohbbhbbo",
+    "ohhhhoho",
     ".oooo.o.",
     "........",
 ]
-IRON_KEY = {"o": o, "3": P["steel3"], "2": P["iron2"], "1": P["iron1"], "0": P["steel0"], "a": P["copper1"]}
+IRON_KEY = {"o": o, "2": P["copper2"], "1": P["copper1"], "s": P["steel4"], "h": P["iron0"], "b": P["copper0"]}
 COPPER_ORE = [
-    "...oo...",
-    "..ohCo..",
-    ".oTCkoo.",
-    "oTttoTto",
-    "otTttCto",
-    "ottwttwo",
-    ".owwwwo.",
+    "..ooo...",
+    ".oTThoo.",
+    "oTtCCtTo",
+    "oCCttwto",
+    "otwwCCwo",
+    "orrrwCro",
+    ".orrqqo.",
     "..oooo..",
 ]
-COPPER_KEY = {"o": o, "h": P["copper3"], "C": P["copper2"], "k": P["copper1"], "T": P["teal"], "t": P["water4"],
-              "w": P["water3"]}
+COPPER_KEY = {"o": o, "h": P["copper3"], "C": P["copper2"], "T": P["teal"], "t": P["water4"], "w": P["water3"],
+              "r": P["earth2"], "q": P["earth1"]}
 COAL_ORE = [
     "..o.....",
     ".oso....",

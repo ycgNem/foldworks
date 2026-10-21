@@ -86,8 +86,9 @@ Rules:
 
 ## Items
 
-By shape first: ore = lumps that match their deposits (iron an angular slab and chip, blue with a
-rust layer; copper a teal crust lump with a copper nugget on top; coal two jagged shards with
+By shape first: ore = lumps that match their deposits (iron an angular boulder and chip, rust
+lit facets over a dark hematite body, one silver glint; copper a crusted rock, verdigris over
+grey-brown, a copper vein across it; coal two jagged shards with
 sheen and an ember; sand a low pale-gold heap with a ripple), ingots = slanted bars, plates = flat squares, gears = teeth with a
 hole, wire = a coil, slag = a crumbly lump, bricks = a coursed block, the Gizmo = its own odd box
 with an antenna, steel = an I-beam end-on, glass = a pane with a shine, concrete = a cinder block
@@ -125,10 +126,15 @@ flickering lantern.
 - **Ore deposits** (`ores.py`, the ore revamp) are outcrops, not tiles: each ore is one 32×32
   drawn for its 2×2 patch in the 3/4 view (lit tops, shadowed front faces, a shadow cast
   down-right on the planks), breaking up through a ragged hole in the deck so the boards show at
-  its corners and it never reads as a square. Told apart by silhouette first: **iron** blocky
-  slabs (blue hematite tops with `steel3` rims, dark faces with wavering rust and blue layers),
-  **copper** a bubbly verdigris crust ringed like malachite with native-copper nuggets breaking
-  out (the most colourful thing on the deck), **coal** tall faceted anthracite shards (flat
+  its corners and it never reads as a square. Told apart by silhouette first: **iron** a cluster
+  of irregular angular boulders of several sizes, some leaning (convex faceted rocks: no right
+  angles, no flat tops), lit facets rust-red and ochre, the turned-away facets a dark hematite
+  body (`ink`-`iron0`) striped by rust jasper layers, rust in the crevices, blue-grey metal only
+  on lit ridges and as glints (never a whole face: blue-grey steel is the machines' language),
+  **copper** one cracked, faceted mound of hard rock (grey-brown `earth` faces on its steep
+  sides) under a verdigris/malachite skin, with native copper as zigzag veins along three
+  cracks and small angular nuggets catching the light (the most colourful thing on the deck),
+  **coal** tall faceted anthracite shards (flat
   facets, `steel2`-`steel3` sheen on the lit ridges, splinters on the hole's rim, embers in the
   cracks), **sand** a soft dune heap with no ink outline (long windward slope, a shaded slip face
   east, wind ripples, two shells). Each has a spill sheet: a few pebbles, rust or verdigris stains,

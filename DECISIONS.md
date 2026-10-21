@@ -1413,8 +1413,8 @@ emberrock), which Foldworks should stop resembling.
 - **Each ore is an outcrop with its own geology and silhouette** (`pixel-art/revamp/ores.py`,
   replacing `deposit()` in `terrain.py`): one 32×32 drawn for its 2×2 patch (patches are always
   2×2) in the machines' 3/4 view, light top-left, breaking up through a ragged hole in the deck.
-  Iron: blocky banded-iron slabs. Copper: a bubbly verdigris/malachite crust with native-copper
-  nuggets. Coal: tall faceted anthracite shards with a cool sheen, embers in the cracks. Sand: a
+  Iron: a cluster of angular banded-iron boulders. Copper: one cracked mound of rock under a
+  verdigris/malachite skin, native copper in its veins. Coal: tall faceted anthracite shards with a cool sheen, embers in the cracks. Sand: a
   soft dune heap, no outline. Shape first, colour second (DESIGN.md §17); all four read apart at
   1×, on owned and unowned land, and with a Miner on one tile. The minable footprint is unchanged.
 - **The square is broken** by drawing the outcrop transparent over the deck (ground.ts now bakes
@@ -1431,6 +1431,14 @@ emberrock), which Foldworks should stop resembling.
   Survey Office, which draws frame 0, shows the ore rather than its top-left corner.
 - **The ground re-bakes when the Great Drill's stage changes**, so the stage-3 deep deposits
   appear on chunk D's deck (the chunk cache was keyed on ownership only).
+- **Revision (the lead's look at the first pass)**: iron read as a stack of blue steel crates
+  (rectangular blocks with flat blue tops: the machines' shape and colour) and copper as a round
+  green bush with orange fruit. Iron is now irregular faceted boulders (convex rocks cut by
+  tilted planes, several sizes, some leaning), rust and ochre on the lit facets and in the
+  crevices, dark hematite on the rest, blue-grey only on lit ridges and glints. Copper is one
+  faceted mound of grey-brown rock under a verdigris skin, with copper as veins along three
+  zigzag cracks and small angular nuggets. Their item icons follow. Coal's 16x16 Survey frame
+  lifts every step of its sheen one lighter, so it reads on the Office's dark rows.
 - **The four ore item icons** match their deposits and stay lumps (an angular slab and chip, a
   crust lump with a nugget, two shards, a low heap); no other item cell changed.
 - Palette B only, no colour added. PixelLab: **0 generations** (its service returned a database

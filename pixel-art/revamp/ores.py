@@ -6,10 +6,13 @@ shadow down-right on the deck. The outcrop breaks up through a hole in the plank
 shows round it and the patch never reads as a square tile. The four ores are told apart by
 silhouette first, colour second:
 
-- iron:   blocky banded-iron slabs, flat tops (blue metallic hematite, lit rims in steel) and dark
-          front faces striped by thin rust-red jasper layers; silver glints.
-- copper: a bubbly verdigris/malachite crust (teal, ringed like malachite) with bright native
-          copper nuggets breaking out of it: the most colourful thing on the deck.
+- iron:   a cluster of irregular angular boulders, several sizes, some leaning (convex faceted
+          rocks, no right angles, no flat tops): rust-red and ochre lit facets, a dark hematite
+          body striped by rust jasper layers, rust in the crevices; blue-grey metal only on lit
+          ridges and as glints (blue-grey steel is the machines' language).
+- copper: one cracked, faceted mound of grey-brown rock under a verdigris/malachite skin, native
+          copper as zigzag veins along its cracks and small angular nuggets: the most colourful
+          thing on the deck.
 - coal:   a black seam cracked up through the planks: tall jagged faceted anthracite shards with
           a cool sheen on their lit edges, splinters round the hole, embers deep in the cracks.
 - sand:   a barchan dune (a crescent: long windward slope, steep slip face, horns downwind) in
@@ -34,7 +37,7 @@ from collections import deque
 
 from PIL import Image
 
-from common import P, OUT, new, draw, export, scale, rgb, rng
+from common import P, OUT, new, draw, export, scale, rgb, rng, recolor
 from terrain import deck_tile
 
 S = 32
@@ -155,134 +158,233 @@ def nearest_top(info, gx, gy, kinds, mats=None):
     return best if bd < 5 else None
 
 
+# ---------------------------------------------------------------- faceted rock (iron, copper)
+def rock(cx, cy, r, h, sides, seed, tilt=(0.0, 0.0), slope=2.2, jag=0.28, tops=1, topslope=0.45):
+    """A convex faceted boulder as a height field: the lowest of a few steep side planes round
+    an irregular polygon and one or more tilted top planes, so its outline has no right angles,
+    its top is not flat and it can lean. Returns f(x, y) -> (h, gx, gy, facet) or None."""
+    rr = rng(seed)
+    planes = []
+    a0 = rr.random() * 6.283
+    for i in range(sides):
+        a = a0 + i * 6.283 / sides + rr.uniform(-0.3, 0.3)
+        planes.append((math.cos(a), math.sin(a), r * (1 + rr.uniform(-jag, jag)), slope * rr.uniform(0.75, 1.35)))
+    tp = [(h, tilt[0], tilt[1])]
+    for _ in range(tops - 1):
+        a = rr.random() * 6.283
+        tp.append((h * rr.uniform(0.9, 1.15), tilt[0] + math.cos(a) * topslope, tilt[1] + math.sin(a) * topslope))
+
+    def f(x, y):
+        dx, dy = x - cx, y - cy
+        best = None
+        for i, (c, s, ri, k) in enumerate(planes):
+            v = k * (ri - (dx * c + dy * s))
+            if best is None or v < best[0]:
+                best = (v, -k * c, -k * s, i)
+        for j, (hh, tx, ty) in enumerate(tp):
+            v = hh + tx * dx + ty * dy
+            if v < best[0]:
+                best = (v, tx, ty, sides + j)
+        return best if best[0] > 0.3 else None
+    return f
+
+
+def facing(gx, gy):
+    n = (-gx, -gy, 1.0)
+    m = math.sqrt(sum(k * k for k in n))
+    return sum(p * q for p, q in zip(n, L)) / m, 1.0 / m      # (to the light, how much it faces up)
+
+
+def vnoise(seed, scale):
+    """Smooth value noise in [0, 1) (bilinear over a hashed lattice)."""
+    def lat(i, j):
+        return rng(seed * 7919 + i * 131 + j * 977).random()
+
+    def f(x, y):
+        x, y = x / scale, y / scale
+        i, j = math.floor(x), math.floor(y)
+        u, v = x - i, y - j
+        u, v = u * u * (3 - 2 * u), v * v * (3 - 2 * v)
+        a, b, c, d = lat(i, j), lat(i + 1, j), lat(i, j + 1), lat(i + 1, j + 1)
+        return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v
+    return f
+
+
+def step(ramp, lev):
+    return ramp[3 if lev > 0.78 else 2 if lev > 0.5 else 1 if lev > 0.18 else 0]
+
+
+def ridges(img, info, H, pick, col, kinds=("top",), lit=0.55, drop=0.45):
+    """1 px highlights on a rock's lit ridges: a pixel on a lit facet (lev > lit) whose facet
+    faces the light clearly more than the facet just below or right of it (same rock), when
+    pick(pixel info) allows. Only the ridges that catch the light, so they stay few."""
+    out = []
+    for (x, y), v in info.items():
+        if v[0] not in kinds or not pick(v):
+            continue
+        cell = H[v[4]][v[3]]
+        if cell[3] < lit:
+            continue
+        for dx, dy in ((1, 0), (0, 1)):
+            q = info.get((x + dx, y + dy))
+            if q and q[0] in ("top", "face") and q[2] == v[2]:
+                c2 = H[q[4]][q[3]]
+                if c2[4] != cell[4] and cell[3] - c2[3] > drop:
+                    out.append((x, y))
+                    break
+    draw(img, out, col)
+    return out
+
+
 # ---------------------------------------------------------------- iron
 def iron():
+    """Banded-iron boulders: irregular, angular, some leaning, of several sizes. The body is dark
+    hematite; rust-red and ochre weathering is the warm colour on the faces and in the crevices;
+    blue-grey metal shows only on lit ridges (cleavage edges) and as glints."""
     mask = blob_mask(16, 16.5, 14.8, 14.4, 11, 0.12, 4)
-    # three big slabs and their rubble: (cx, cy, rx, ry, height, tilt x, tilt y), chamfered flat
-    # tops tipped a little, so the layers cross them as thin lines
     rocks = [
-        (10.0, 12.5, 8.0, 6.0, 9.0, -0.10, 0.06),
-        (23.5, 10.5, 6.0, 4.8, 6.0, 0.10, -0.04),
-        (19.5, 22.5, 8.5, 6.0, 7.5, 0.06, 0.10),
-        (6.5, 24.5, 4.0, 3.5, 3.5, -0.10, 0.0),
-        (28.0, 21.5, 2.4, 2.2, 2.4, 0, 0),
-        (11.5, 28.5, 2.4, 1.8, 1.6, 0, 0),
+        rock(10.5, 13.0, 7.4, 7.5, 6, 101, tilt=(-0.30, 0.20), tops=2),
+        rock(21.5, 10.5, 5.6, 5.8, 5, 102, tilt=(0.35, -0.10), tops=2),
+        rock(19.5, 22.0, 7.2, 7.5, 6, 103, tilt=(0.15, 0.30), tops=2),
+        rock(7.0, 24.5, 4.6, 4.5, 5, 104, tilt=(-0.35, 0.05)),
+        rock(27.0, 20.0, 2.8, 3.0, 5, 105, tilt=(0.3, 0.2)),
+        rock(3.5, 16.0, 2.4, 2.4, 4, 107, tilt=(-0.3, 0.1)),
     ]
 
     def hf(x, y):
-        best = (0, None, -1)
-        for i, (cx, cy, rx, ry, h0, tx, ty) in enumerate(rocks):
-            dx, dy = (x - cx) / rx, (y - cy) / ry
-            d = (abs(dx) ** 3.0 + abs(dy) ** 3.0) ** (1 / 3.0)          # a blocky superellipse
-            if d >= 1:
-                continue
-            h = h0 * min(1, (1 - d) / 0.2) + tx * (x - cx) + ty * (y - cy)
-            if h > best[0]:
-                best = (h, "iron", i)
+        best = (0, None, -1, 0, -1)
+        for i, f in enumerate(rocks):
+            v = f(x, y)
+            if v and v[0] > best[0]:
+                lev, up = facing(v[1], v[2])
+                best = (v[0], "iron", i, lev, i * 16 + v[3])
         return best
     H = field(hf)
-
-    def band(z, x):
-        # banded iron: layers 1 px thick, wavering along the rock, every 4th a rust-red jasper
-        # and one a blue hematite seam; 0 jasper, 2 seam, else plain dark hematite
-        return int(math.floor(z + 0.7 * math.sin(x * 0.55) + 0.4 * math.sin(x * 0.21 + 1))) % 4
-
-    def rust(z, x, w):
-        return band(z, x) == 0 and (w >= 1 or (z + 0.7 * math.sin(x * 0.55) + 0.4 * math.sin(x * 0.21 + 1)) % 1 < w)
+    weather = vnoise(5, 3.2)
+    RUST = (P["copper0"], P["copper1"], P["lamp0"], P["copper2"])
+    OCHRE = (P["copper0"], P["lamp0"], P["brass1"], P["brass2"])
+    HEM = (P["ink"], P["ink1"], P["ink2"], P["iron0"])
 
     def colour(kind, mat, lev, z, x, y):
-        if kind == "top":
-            if rust(z, x, 0.4) and lev > 0.4:
-                return P["copper1"]
-            return P["iron2"] if lev > 0.8 else P["iron1"] if lev > 0.45 else P["iron0"] if lev > 0.2 else P["steel0"]
-        # front faces: dark hematite striped by its rust layers
-        if rust(z, x, 1.0):
-            return P["copper1"] if lev == 1 else P["copper0"]
-        if band(z, x) == 2:
-            return P["iron1"] if lev == 1 else P["iron0"]
-        return P["steel1"] if lev == 1 else P["steel0"] if lev < 6 else P["ink1"]
+        # each facet weathers as a whole (so a rock reads as a few planes, not as noise): the
+        # facets that face the light are rust or ochre (the warm colour, and what the eye
+        # meets first), the ones turned away are the dark hematite body striped by rust-red
+        # jasper layers, and the foot of every rock, down in the crevices, is rust
+        cell = H[y][x]
+        zz = cell[0] if kind == "top" else z
+        lv = cell[3] - (0.2 if kind == "face" and lev >= 2 else 0)
+        k = rng(cell[4] * 31 + 7).random()
+        if zz < 1.2:
+            return step(RUST, lv - 0.3)
+        if cell[3] > 0.45:
+            return step(OCHRE if k < 0.22 else RUST, lv)
+        band = (zz + 0.5 * math.sin(x * 0.45)) % 3.0 < 0.7
+        return step(RUST, lv + 0.25) if band else step(HEM, lv + 0.3)
 
     def inside(x, y):
-        return P["earth1"] if (x * 5 + y * 3) % 7 else P["earth2"]
-    img, info = render(H, colour, hole_ground(mask, inside, P["earth0"], P["wood1"], P["earth0"]))
-    # hand finish: the slabs' lit back-left rims (cleavage edges catching the light) in steel3
+        return P["copper0"] if (x * 5 + y * 3) % 7 == 0 else P["earth0"]
+    img, info = render(H, colour, hole_ground(mask, inside, P["ink1"], P["wood1"], P["earth0"]), gap_col=P["ink"])
+    # each boulder its own: an ink seam on the farther rock wherever a nearer one meets it
+    seam = []
     for (x, y), v in info.items():
-        if v[0] != "top":
+        if v[0] not in ("top", "face"):
             continue
-        up, lf = info.get((x, y - 1)), info.get((x - 1, y))
-        rim = (not up or up[0] in ("ground", "outline")) or (not lf or lf[0] in ("ground", "outline"))
-        if rim and img.getpixel((x, y))[:3] in (rgb(P["iron1"]), rgb(P["iron2"])):
-            draw(img, [(x, y)], P["steel3"])
+        for dx, dy in ((1, 0), (-1, 0), (0, 1)):
+            q = info.get((x + dx, y + dy))
+            if q and q[0] in ("top", "face") and q[2] != v[2] and q[4] > v[4] + 1:
+                seam.append((x, y))
+                break
+    draw(img, seam, P["ink"])
+    # metal only on the cleavage edges: lit ridges in steel, a few silver glints
+    edges = ridges(img, info, H, lambda v: True, P["steel2"])
     glints = []
-    for gx, gy in ((5, 4), (12, 3), (20, 4), (14, 15), (6, 19), (25, 15)):
-        p = nearest_top(info, gx, gy, ("top",))
-        if p:
+    for gx, gy in ((6, 3), (13, 4), (20, 3), (24, 5), (16, 13), (6, 19), (26, 15)):
+        p = min(edges, key=lambda e: abs(e[0] - gx) + abs(e[1] - gy), default=None)
+        if p and abs(p[0] - gx) + abs(p[1] - gy) < 6 and p not in glints:
             glints.append(p)
-    draw(img, glints[:2], P["steel4"])
+    draw(img, glints[:3], P["steel4"])
     return img, glints, [], mask
 
 
 # ---------------------------------------------------------------- copper
 def copper():
-    mask = blob_mask(16, 16.5, 15.8, 15.0, 22, 0.14, 5)
-    r = rng(5)
-    # the crust: a cluster of bubbles (botryoidal malachite), bigger in the middle
-    bubbles = [(16, 15, 9, 5.5), (9, 12, 6, 4.5), (23, 11, 6, 4.0), (10, 22, 6, 4.5), (22, 22, 7, 5.0),
-               (16, 26, 5, 3.0), (4, 18, 3.5, 2.0), (28, 18, 3.5, 2.5), (15, 7, 4.5, 3.0)]
-    for _ in range(10):
-        bubbles.append((r.uniform(5, 27), r.uniform(9, 27), r.uniform(2.0, 3.2), r.uniform(1.5, 2.5)))
-    # the native copper: knobbly nuggets standing out of the crust
-    nuggets = [(12, 13, 3.3, 3.6), (14, 15.5, 2.2, 2.4), (21, 19, 3.0, 3.4), (24, 21, 2.0, 2.0),
-               (7, 20, 2.4, 2.4), (19, 9, 2.2, 2.4), (26, 13, 1.7, 1.6), (15, 24, 2.0, 2.0)]
+    """One cracked, crusted mound of hard rock: grey-brown faceted rock showing on its steep
+    sides, a verdigris/malachite skin over its upper facets, and native copper as metal veins in
+    the cracks and a few angular nuggets that catch the light."""
+    mask = blob_mask(16, 16.5, 15.4, 14.8, 22, 0.14, 5)
+    body = rock(16.0, 17.0, 12.5, 8.0, 9, 201, tilt=(0.05, 0.05), slope=1.7, tops=4, topslope=0.5)
+    flank = rock(26.0, 23.5, 3.6, 3.4, 5, 202, tilt=(0.3, 0.1))
 
     def hf(x, y):
-        h = 0
-        for cx, cy, rr, hh in bubbles:
-            d2 = ((x - cx) ** 2 + (y - cy) ** 2) / (rr * rr)
-            if d2 < 1:
-                h = max(h, hh * math.sqrt(1 - d2))
-        best = (h, "crust", 0)
-        for i, (cx, cy, rr, hh) in enumerate(nuggets):
-            d2 = ((x - cx) ** 2 + (y - cy) ** 2) / (rr * rr)
-            if d2 < 1:
-                v = h * 0.6 + hh * (1 - d2) ** 0.6 + 1.0
-                if v > best[0]:
-                    best = (v, "cu", 10 + i)
+        best = (0, None, -1, 0, -1)
+        for i, f in enumerate((body, flank)):
+            v = f(x, y)
+            if v and v[0] > best[0]:
+                best = (v[0], "rock", i, facing(v[1], v[2])[0], i * 16 + v[3])
         return best
     H = field(hf)
+    crust = vnoise(9, 3.6)
+    ROCK = (P["ink2"], P["earth0"], P["earth1"], P["earth2"])
+    ROCKL = (P["earth1"], P["earth2"], P["earth3"], P["steel3"])
+    CRUST = (P["water2"], P["water3"], P["water4"], P["teal"])
+    CU = (P["copper0"], P["copper1"], P["copper2"], P["copper3"])
 
     def colour(kind, mat, lev, z, x, y):
+        cell = H[y][x]
+        lv = cell[3] - (0.25 if kind == "face" and lev >= 2 else 0)
         if mat == "cu":
-            if kind == "top":
-                return P["copper3"] if lev > 0.78 else P["copper2"] if lev > 0.45 else P["copper1"]
-            return P["copper1"] if lev == 1 else P["copper0"]
-        if kind == "top":
-            ring = int(z * 1.6) % 3 == 0           # malachite's rings: z contours a step darker
-            k = 3 if lev > 0.8 else 2 if lev > 0.58 else 1 if lev > 0.3 else 0
-            if ring and k > 0:
-                k -= 1
-            return (P["water2"], P["water3"], P["water4"], P["teal"])[k]
-        # a south-facing slope too steep to show as top: its own light, a step darker (no stripes)
-        fl = diffuse(H, x, y) - 0.3
-        return P["water4"] if fl > 0.58 else P["water3"] if fl > 0.25 else P["water2"] if fl > -0.1 else P["water1"]
+            return step(CU, lv + 0.15)
+        # the skin: verdigris over the upper, gentler facets; rock where it flakes off, and on
+        # the steep sides and the front
+        n = crust(x, y)
+        upper = kind == "top" and cell[0] > 2.2
+        if upper and n > 0.3:
+            # malachite's bands: on the lit crust only, a thin ring a step darker
+            ring = lv > 0.6 and (cell[0] * 1.2) % 3 < 0.35
+            return step(CRUST, lv - (0.3 if ring else 0))
+        if kind == "face" and n > 0.82 and z > 2:
+            return step(CRUST, lv - 0.2)          # a drip of crust down a face
+        return step(ROCKL if lv > 0.6 else ROCK, lv)
 
     def inside(x, y):
-        return P["earth1"] if (x * 3 + y * 5) % 9 else P["water2"]   # verdigris-stained earth
-    img, info = render(H, colour, hole_ground(mask, inside, P["earth0"], P["wood1"], P["earth0"]),
-                       gap_col=P["water1"])
-    # each nugget casts a 1 px shadow on the crust (right and below) and has a hot specular
-    for (x, y), v in list(info.items()):
-        if v[1] == "cu" and v[0] in ("top", "face"):
-            for dx, dy in ((1, 0), (0, 1)):
-                q = info.get((x + dx, y + dy))
-                if q and q[1] == "crust":
-                    draw(img, [(x + dx, y + dy)], P["copper0"])
+        return P["water2"] if (x * 3 + y * 5) % 9 == 0 else P["earth0"]
+    img, info = render(H, colour, hole_ground(mask, inside, P["ink1"], P["wood1"], P["earth0"]), gap_col=P["ink1"])
+    ridges(img, info, H, lambda v: v[1] == "rock", P["earth3"], lit=0.6)
+    # three cracks across the crust, each with a vein of native copper bared along its lower lip
+    # (drawn on the rendered outcrop, as lines, so they stay unbroken), a nugget where each
+    # widens, and the metal's glints
+    on = lambda q: q in info and info[q][0] in ("top", "face") and info[q][1] == "rock"
+    cracks = [[(5, 11), (8, 9), (10, 10), (13, 8), (15, 10), (18, 9), (21, 11)],
+              [(11, 17), (13, 15), (16, 16), (18, 14), (23, 15)],
+              [(6, 19), (8, 21), (11, 20), (13, 23)]]
+    veins = []
+    for line in cracks:
+        pts = []
+        for (x0, y0), (x1, y1) in zip(line, line[1:]):
+            n = max(abs(x1 - x0), abs(y1 - y0))
+            for t in range(n):
+                pts.append((round(x0 + (x1 - x0) * t / n), round(y0 + (y1 - y0) * t / n)))
+        for k, (x, y) in enumerate(pts):
+            if not on((x, y)):
+                continue
+            draw(img, [(x, y)], P["ink1"])
+            if on((x, y + 1)):
+                draw(img, [(x, y + 1)], P["copper3"] if k % 4 == 1 else P["copper2"])
+                veins.append((x, y + 1))
+            if 2 <= k < len(pts) - 2 and on((x, y + 2)):
+                draw(img, [(x, y + 2)], P["copper1"])
+    NUG = {"3": P["copper3"], "2": P["copper2"], "1": P["copper1"], "0": P["copper0"]}
+    shapes = [["..3.", ".332", "3221", ".210", "..0."], [".3.", "322", "210"], ["32", "10"]]
     glints = []
-    for cx, cy, rr, hh in nuggets:
-        p = nearest_top(info, cx - rr * 0.4, cy - rr * 0.5 - hh, ("top",), ("cu",))
-        if p:
-            glints.append(p)
-    draw(img, glints[:4], P["lamp2"])
+    for (nx, ny), sh in zip(((12, 9), (17, 14), (9, 20)), shapes):
+        for j, row in enumerate(sh):
+            for i, ch in enumerate(row):
+                q = (nx + i, ny + j)
+                if ch != "." and on(q):
+                    draw(img, [q], NUG[ch])
+        glints.append((nx + (1 if len(sh) > 2 else 0), ny + (1 if len(sh) > 3 else 0)))
+    glints += veins[::6][:4]
+    draw(img, glints[:2], P["lamp3"])
     return img, glints, [], mask
 
 
@@ -560,6 +662,11 @@ def mini(img):
     return out
 
 
+# coal's mini is shown on the Survey Office's dark rows: every step of its sheen one lighter
+COAL_LIFT = {P["ink1"]: P["ink2"], P["ink2"]: P["steel0"], P["steel0"]: P["steel1"], P["steel1"]: P["steel2"],
+             P["steel2"]: P["steel3"], P["steel3"]: P["steel4"]}
+
+
 def deck(w, h):
     out = Image.new("RGBA", (w * 16, h * 16))
     for y in range(h):
@@ -590,7 +697,8 @@ def build():
         extra = {"glints": [list(p) for p in glints]}
         if embers:
             extra["embers"] = [list(p) for p in embers]
-        export(f"tile_ore_{k}", [mini(img)] + quadrants(img), extra=extra)
+        m = mini(img)
+        export(f"tile_ore_{k}", [recolor(m, COAL_LIFT) if k == "coal" else m] + quadrants(img), extra=extra)
         export(f"tile_ore_{k}_spill", frames)
         scene = deck(4, 4)
         scene.alpha_composite(apron)
