@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Foldworks kit gallery</title>
+    <!-- The 180's UI kit on one canvas (dev only: vite build bundles index.html alone). -->
+    <style>
+      html, body { margin: 0; height: 100%; background: #0e0b12; overflow: hidden; }
+      canvas { position: absolute; inset: 0; display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
+    </style>
+  </head>
+  <body>
+    <canvas id="kit"></canvas>
+    <script type="module" src="/src/gallery.ts"></script>
+  </body>
+</html>
