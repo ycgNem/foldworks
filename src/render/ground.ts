@@ -1,9 +1,12 @@
 // The Workshop ground, baked once per land chunk into a canvas (the chunked-ground pattern from
-// Trotline). Readability first (DESIGN.md §17): ore patches are lumpy and bright, owned floor is
-// warm and plain, land you don't own is dark, cool and hatched. Imported tile art
-// (src/art/tile_*.png, a strip of variants) is used when present, else code draws it.
-// Re-baked when land is bought.
-import { PATCHES } from '../data/land';
+// Trotline). Readability first (DESIGN.md §17): ore patches are outcrops standing up out of the
+// deck, owned floor is warm and plain, land you don't own is dark, cool and hatched. Imported tile
+// art (src/art/tile_*.png, a strip of variants) is used when present, else code draws it.
+// Each ore's outcrop (tile_ore_<ore>, ores.py) is one 32x32 cut in quadrants and drawn over the
+// deck; its spill sheet (tile_ore_<ore>_spill, the 4x4 tiles round the patch) puts a few pebbles,
+// stains, cracks or drift on the deck tiles beside it (never on another patch). Re-baked when land
+// is bought or the Great Drill opens the deep deposits.
+import { PATCHES, patchOpen } from '../data/land';
 import { C, rgba } from '../data/palette';
 import { CHUNKS } from '../data/land';
 import type { Game } from '../sim/Game';
@@ -23,7 +26,7 @@ export function hash2(x: number, y: number, s = 0): number {
 }
 
 export class Ground {
-  private chunks = new Map<string, { c: HTMLCanvasElement; owned: boolean }>();
+  private chunks = new Map<string, { c: HTMLCanvasElement; owned: boolean; stage: number }>();
   constructor(public game: Game) {}
 
   invalidate() {
@@ -34,8 +37,9 @@ export class Ground {
   chunk(id: string): HTMLCanvasElement {
     const ch = CHUNKS.find((c) => c.id === id)!;
     const owned = this.game.s.land.includes(id);
+    const stage = this.game.s.mega?.stage ?? 0;
     let e = this.chunks.get(id);
-    if (e && e.owned === owned) return e.c;
+    if (e && e.owned === owned && e.stage === stage) return e.c;
     const c = document.createElement('canvas');
     c.width = ch.w * TILE;
     c.height = ch.h * TILE;
@@ -46,7 +50,7 @@ export class Ground {
     ctx.fillStyle = rgba(C.ink, owned ? 0.35 : 0.6);
     ctx.fillRect(0, 0, c.width, 1);
     ctx.fillRect(0, 0, 1, c.height);
-    e = { c, owned };
+    e = { c, owned, stage };
     this.chunks.set(id, e);
     return c;
   }
@@ -59,15 +63,26 @@ export class Ground {
     };
     const ore = g.oreAt(x, y);
     const art = ore ? ORE_ART[ore] ?? 'tile_ore_copper' : 'tile_floor';
-    if (hasArt(art)) {
-      const s = sheet(art);
-      let fr = Math.floor(hash2(x, y, 91) * s.frames.length);
+    if (hasArt(art) && hasArt('tile_floor')) {
+      const fl = sheet('tile_floor');
+      ctx.drawImage(fl.frames[Math.floor(hash2(x, y, 91) * fl.frames.length) % fl.frames.length], px, py);
       if (ore) {
-        // ore art is one 2x2 deposit in four quadrants (TL, TR, BL, BR): pick by place in the patch
+        // the outcrop is one 32x32 in four quadrants (TL, TR, BL, BR) after frame 0 (the whole
+        // outcrop at 16x16, for the Survey Office): pick by place in the patch
         const p = PATCHES[g.patchOf[y * g.W + x]];
-        if (p) fr = ((x - p.x) % 2) + 2 * ((y - p.y) % 2);
+        const s = sheet(art);
+        const fr = (p ? ((x - p.x) % 2) + 2 * ((y - p.y) % 2) : 0) + (s.frames.length >= 5 ? 1 : 0);
+        ctx.drawImage(s.frames[fr % s.frames.length], px, py);
+      } else {
+        // scatter from any open patch whose 4x4 apron holds this tile
+        const stage = g.s.mega?.stage ?? 0;
+        for (const p of PATCHES) {
+          const dx = x - p.x, dy = y - p.y;
+          if (dx < -1 || dy < -1 || dx > 2 || dy > 2 || !patchOpen(p, stage)) continue;
+          const sp = (ORE_ART[p.item] ?? 'tile_ore_copper') + '_spill';
+          if (hasArt(sp)) ctx.drawImage(sheet(sp).frames[(dy + 1) * 4 + (dx + 1)], px, py);
+        }
       }
-      ctx.drawImage(s.frames[fr % s.frames.length], px, py);
     } else {
       // packed workshop floor: warm earth with flecks and a faint board line every other row
       f(C.umber, 0, 0, 16, 16);

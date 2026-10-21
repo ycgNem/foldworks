@@ -85,3 +85,9 @@ Milestone 1-5 recipe (recipes.py). Balance before and after phase 3: **2,021.90*
 | a title-screen dusk swamp with strings of lanterns | 7 | `5fbd10e7-75bb-464b-a19e-db8db1c7a3a1` | 1 | no (no town) |
 
 Balance after the title scene: **2,018.90** (2,021.90 − 3).
+
+## The ore revamp (2026-10-21)
+
+No PixelLab jobs: the four outcrops, their spill sheets and the four ore icons are drawn by
+`ores.py` and `items.py`. `get_balance` failed before the work (the service's database refused the
+connection), so no balance was read; nothing was spent.

@@ -17,6 +17,7 @@ import { TICK_RATE } from '../engine/time';
 import type { GameEvent } from '../engine/events';
 import { drawText, textWidth, ICON } from '../ui/font';
 import { Ground, TILE } from './ground';
+import { drawOreFx } from './orefx';
 import { sheet, drawRot, frameAt, itemIcon, hasArt, spriteName } from './sprites';
 import { Fx, FOLD_DUR, FOLD_FLASH } from './fx';
 import { onGridKind, powered, gridIndex, cheb, wirePairs, reached, capacity } from './powerview';
@@ -383,6 +384,7 @@ export class Renderer {
     for (const ch of CHUNKS) ctx.drawImage(this.ground.chunk(ch.id), ch.x * TILE, ch.y * TILE);
     this.landLabels(g);
     this.veins(g);
+    drawOreFx(ctx, g, this.time, -ox / z, -oy / z, this.W / z, this.H / z);
 
     if (this.turnsV !== g.version) this.computeTurns(g);
 
