@@ -1,45 +1,53 @@
-// The Orders screen (DESIGN.md §7, §18 Customers): a tab per customer met (Mayor Bramble from the
-// start, Unit 7 after Coal Seams, Dame Voltaire after Steam Power), each with a portrait that
-// cheers when one of their orders has just been filled, their reputation and its rewards (reached
-// ones lit, the next one with what it takes), their orders, and the Dock's standing prices below.
+// The Orders page of the ledger (DESIGN.md §7, §18 Customers; docs/hud-180.md "Full-screen menus"):
+// the left page is the open customer's orders as slips (the name in the display face, the wants as
+// item meters with counts, the pay as chips, Accept or Set aside), the ones still locked as faint
+// wells naming the research they wait for, the filled ones stamped, and the Dock's prices under
+// them. The right page is the customers: four portraits to pick from (a red count on the ones with
+// open orders), then the open one at 48 px (cheering when an order of theirs was just filled), their
+// line in a speech bubble in their own voice, their reputation as hearts and its rewards ticked
+// off, the next one with what it takes, and their perks at work now.
 import { C } from '../data/palette';
 import { MEGA } from '../data/megaprojects';
 import { RESEARCH } from '../data/research';
 import { ORDERS, CUSTOMERS, ORDER, type CustomerId, type OrderDef } from '../data/orders';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { RULES } from '../data/rules';
-import { ICON, textWidth, ellipsize } from '../ui/font';
-import { itemIcon, sheet, hasArt } from '../render/sprites';
+import { ICON, textWidth, bigWidth, BIG_H } from '../ui/font';
+import { itemIcon } from '../render/sprites';
 import { orderFrac } from '../sim/systems/orders';
 import { customerMet } from '../sim/reorganize';
 import { saleValue } from '../sim/systems/docks';
 import { Num } from '../engine/num';
-import { frame, card, button, bar, portrait } from './chrome';
-import { screenHeader, tab, icon, fmt } from './widgets';
+import { button, meter, chip, chipWidth, ribbon, section, slip, rule, pencil, stamp, dot, uiIcon, bubble, CHIP_H } from './chrome';
+import { menuTemplate, fmt } from './widgets';
+import { layoutRich, drawLayout, richWidth } from '../ui/rich';
+import { T } from '../ui/theme';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
 import { committeeFallback } from './reorganize';
+import { bookArea, castPortrait, bubbleHeight, heading, ROW_H, tick } from './ledger';
 
-// Milestone 5: the Committee joins as a fourth tab (met through src/sim/reorganize.ts customerMet)
+// Milestone 5: the Committee is the fourth customer (met through src/sim/reorganize.ts customerMet)
 const CUSTOMER_IDS: CustomerId[] = ['bramble', 'unit7', 'voltaire', 'committee'];
-const ACCENT: Record<CustomerId, string> = { bramble: C.leaf, unit7: C.teal1, voltaire: C.hot, committee: C.violet };
-/** When a customer not yet met turns up, in words (Milestone 5) */
-const arrives = (c: CustomerId) => (CUSTOMERS[c].afterReset ? 'with the Great Drill, or after your first Reorganize' : `with ${RESEARCH[CUSTOMERS[c].meets!].name}`);
+/** Each customer's ink on paper: Bramble moss, Unit 7 teal, Voltaire copper, the Committee violet */
+const INK: Record<CustomerId, string> = { bramble: T.good, unit7: T.research, voltaire: T.warn, committee: T.reset };
+/** When a customer not yet met turns up, as a row */
+const arrives = (c: CustomerId) => (CUSTOMERS[c].afterReset ? '{u:mega} with the Great Drill · or after a {u:reset} Reorganize' : `{u:research} with {research:${RESEARCH[CUSTOMERS[c].meets!].name}}`);
 
-/** the open tab, and the customer cheering after a fill (until when, in UI seconds) */
+/** the open customer, and the customer cheering after a fill (until when, in UI seconds) */
 const st = { tab: 'bramble' as CustomerId, seen: -1, cheer: null as null | { who: CustomerId; until: number } };
 
 export function met(app: App, c: CustomerId): boolean {
   return customerMet(app.game, c);
 }
 
-/** Open the Orders screen on a customer's tab (the Great Drill's locked stage: the Committee). */
+/** Open the Orders page on a customer (the Great Drill's locked stage: the Committee). */
 export function openOrders(app: App, who: CustomerId) {
   st.tab = who;
   if (app.panel !== 'orders') app.togglePanel('orders');
 }
 
-/** Make a customer cheer on the Orders screen (an order of theirs was just filled). */
+/** Make a customer cheer on the Orders page (an order of theirs was just filled). */
 export function cheerFor(app: App, who: CustomerId, secs = 5) {
   st.cheer = { who, until: app.ui.time + secs };
   st.tab = who;
@@ -47,318 +55,363 @@ export function cheerFor(app: App, who: CustomerId, secs = 5) {
 
 /** A customer's portrait, 48 or 24 px, cheering (the art's cheer frames bounce) when asked. */
 export function customerPortrait(app: App, who: CustomerId, x: number, y: number, size: 48 | 24, cheer = false) {
-  const ui = app.ui;
-  const base = `portrait_${who}`;
-  if (!hasArt(base) && who === 'bramble') return portrait(ui, who, x, y, size);
-  // Milestone 5: the Committee's code-drawn stand-in until portrait_committee lands
-  if (!hasArt(base) && who === 'committee') {
-    frame(ui, x - 2, y - 2, size + 4, size + 4, 'inset', false);
-    return committeeFallback(ui, x, y, size);
-  }
-  frame(ui, x - 2, y - 2, size + 4, size + 4, 'inset', false);
-  const ctx = ui.ctx;
-  if (cheer && hasArt(base + '_cheer')) {
-    const s = sheet(base + '_cheer');
-    ctx.drawImage(s.frames[Math.floor(ui.time * 4) % s.frames.length], x, y, size, size);
-    return;
-  }
-  if (size === 24 && hasArt(base + '_small')) return void ctx.drawImage(sheet(base + '_small').frames[0], x, y);
-  if (hasArt(base)) {
-    const s = sheet(base);
-    const blink = s.frames.length > 1 && Math.floor(ui.time * 10 + who.length * 7) % 53 === 0;
-    ctx.drawImage(s.frames[blink ? 1 : 0], x, y, size, size);
-    return;
-  }
-  ui.fill(x, y, size, size, ACCENT[who]);
-  ui.text(CUSTOMERS[who].name[0], x + size / 2, y + size / 2 - 4, C.ink, { align: 'center' });
+  castPortrait(app, who, x, y, size, cheer, who === 'committee' ? committeeFallback : undefined);
 }
 
-/** Hearts for a reputation level: filled up to rep, hollow to 3. */
-function hearts(app: App, x: number, y: number, rep: number, big = false) {
+/** Hearts for a reputation level: red ink up to rep, faint to `of`. Returns the width. */
+function hearts(app: App, x: number, y: number, rep: number, of = 3): number {
   const ui = app.ui;
-  for (let i = 0; i < 3; i++) {
-    if (big) {
-      ui.ctx.globalAlpha = i < rep ? 1 : 0.25;
-      icon(app, 'heart', x + i * 11, y, true);
-      ui.ctx.globalAlpha = 1;
-    } else ui.text(ICON.heart, x + i * 7, y, i < rep ? C.pipRed : C.hull0);
-  }
+  for (let i = 0; i < of; i++) ui.text(ICON.heart, x + i * 8, y, i < rep ? T.bad : T.paperEdge);
+  return of * 8 - 1;
 }
 
-export function ordersScreen(app: App, r: Rect) {
+export function ordersScreen(app: App, r0: Rect) {
   const ui = app.ui;
   const g = app.game;
   const o = g.s.orders;
-  // a newly filled order: its customer cheers and their tab opens
+  // a newly filled order: its customer cheers and their page opens
   if (st.seen >= 0 && o.done.length > st.seen) {
     const last = ORDER[o.done[o.done.length - 1]];
     if (last) cheerFor(app, last.customer);
   }
   st.seen = o.done.length;
   if (!met(app, st.tab)) st.tab = 'bramble';
+  const r = bookArea(r0);
+  const { body, detail } = menuTemplate(app, r, { title: 'Orders', accent: C.leaf, icon: 'orders', detail: Math.floor(r.w * 0.4) });
+  ordersPage(app, body);
+  if (detail) customerPage(app, detail);
+}
+
+// ------------------------------------------------------------------ the left page: the orders
+
+function ordersPage(app: App, p: Rect) {
+  const g = app.game;
+  const o = g.s.orders;
   const who = st.tab;
-  const cu = CUSTOMERS[who];
-  const accent = ACCENT[who];
-  screenHeader(app, r, `Orders: ${cu.name}`, accent, 'orders');
-  // ---- the customer tabs
-  const y0 = r.y + 22;
-  const tw = Math.floor((r.w - 16 - 4 * (CUSTOMER_IDS.length - 1)) / CUSTOMER_IDS.length);
-  // a narrow tab (1024x640: "Mayor Brambl") keeps the whole name: every tab's hearts move onto its
-  // portrait's foot, on a dark strip, when any name would be cut (the Milestone 5-6 final round)
-  const heartsOnFace = CUSTOMER_IDS.some((c) => met(app, c) && textWidth(CUSTOMERS[c].name) > tw - 33 - 30);
-  CUSTOMER_IDS.forEach((c, i) => {
-    const x = r.x + 8 + i * (tw + 4);
-    const isMet = met(app, c);
-    const active = c === who;
-    const d = CUSTOMERS[c];
-    const open = ORDERS.filter((q) => q.customer === c && !o.done.includes(q.id) && q.requires.every((rq) => g.done(rq))).length;
-    if (tab(app, 'cust:' + c, x, y0, tw, 30, '', { active, disabled: !isMet, tip: isMet ? `${d.name}: ${d.title}` : `Not met yet: arrives ${arrives(c)}` })) st.tab = c;
-    const cheer = st.cheer?.who === c && ui.time < st.cheer.until;
-    if (isMet) customerPortrait(app, c, x + 4, y0 + 3, 24, cheer);
-    else {
-      ui.fill(x + 4, y0 + 3, 24, 24, C.ink);
-      icon(app, 'lock', x + 8, y0 + 7);
-    }
-    const tx = x + 33;
-    const name = isMet ? d.name : '???';
-    ui.clip(tx, y0, x + tw - tx - (heartsOnFace ? 3 : 30), 14);
-    ui.text(name, tx, y0 + 4, isMet ? (active ? ACCENT[c] : C.bone) : C.hull1, { shadow: C.ink });
-    ui.unclip();
-    // the title gets the tab's whole width ("Baroness of the swamp's wires" was cut by the badge)
-    const title = isMet ? d.title : d.afterReset ? 'With the Great Drill' : `After ${RESEARCH[d.meets!].name}`;
-    ui.clip(tx, y0 + 14, x + tw - tx - 4, 14);
-    ui.text(textWidth(title) <= x + tw - tx - 4 ? title : ellipsize(title, x + tw - tx - 4), tx, y0 + 18, C.hull2);
-    ui.unclip();
-    if (heartsOnFace && isMet) {
-      ui.fill(x + 4, y0 + 19, 24, 8, C.ink, 0.85);
-      hearts(app, x + 6, y0 + 20, o.rep[c] ?? 0);
-    } else if (isMet) hearts(app, x + tw - 26, y0 + 4, o.rep[c] ?? 0);
-    // open orders: a red count on the portrait's corner, bouncing now and then
-    if (isMet && open && !active) {
-      const s = String(open);
-      const bw = Math.max(9, textWidth(s) + 4);
-      const bob = Math.floor(ui.time * 2 + i) % 4 === 0 ? 1 : 0;
-      ui.fill(x + 22, y0 + 1 - bob, bw, 9, C.ink);
-      ui.fill(x + 23, y0 + 2 - bob, bw - 2, 7, C.pipRed);
-      ui.text(s, x + 22 + Math.floor((bw - textWidth(s)) / 2), y0 + 2 - bob, C.bone);
-      ui.hint(x + 22, y0, bw, 10, `${open} open order${open > 1 ? 's' : ''} from ${d.name}`, 150);
-    }
-  });
-  const y1 = y0 + 34;
-  const bottom = r.y + r.h - 6;
-  // ---- the customer card
-  const leftW = Math.min(184, Math.floor(r.w * 0.34));
-  const pc = card(app.ui, r.x + 8, y1, leftW, bottom - y1, cu.title, accent);
-  const cheer = st.cheer?.who === who && ui.time < st.cheer.until;
-  const big = pc.h >= 250 && pc.w >= 170;
-  const ps = big ? 96 : 48;
-  const rep = o.rep[who] ?? 0;
   const mine = ORDERS.filter((q) => q.customer === who);
-  const filled = mine.filter((q) => o.done.includes(q.id)).length;
-  if (big) {
-    // the portrait at 2x, centred, in its own frame
-    const px = pc.x + Math.floor((pc.w - 96) / 2);
-    frame(ui, px - 3, pc.y, 102, 102, 'inset', false);
-    const base = `portrait_${who}`;
-    const s = cheer && hasArt(base + '_cheer') ? sheet(base + '_cheer') : hasArt(base) ? sheet(base) : null;
-    if (s) ui.ctx.drawImage(s.frames[cheer ? Math.floor(ui.time * 4) % s.frames.length : 0], px, pc.y + 3, 96, 96);
-    else customerPortrait(app, who, px + 24, pc.y + 27, 48, cheer);
-    if (cheer) ui.text('Delighted!', pc.x + pc.w / 2, pc.y + 104, C.gold, { align: 'center', shadow: C.ink });
-  } else customerPortrait(app, who, pc.x + 2, pc.y + 3, 48, cheer);
-  const ix = big ? pc.x : pc.x + 58;
-  const iy = big ? pc.y + (cheer ? 114 : 106) : pc.y;
-  ui.text('Reputation', ix, iy + 2, C.hull2);
-  hearts(app, big ? pc.x + pc.w - 33 : ix, big ? iy + 1 : iy + 12, rep, true);
-  ui.text(`${filled}/${mine.length} filled`, big ? ix : ix, big ? iy + 12 : iy + 24, C.bone);
-  if (cheer && !big) ui.text('Delighted!', ix, pc.y + 36, C.gold, { shadow: C.ink });
-  let y = big ? iy + 26 : pc.y + 56;
-  const active = o.active ? ORDER[o.active] : null;
-  const quote = active && active.customer === who ? active.pitch : filled ? cu.thanks[(filled - 1) % cu.thanks.length] : who === 'bramble' ? 'Got anything for me? The swamp is always buying.' : mine[0].pitch;
-  y += ui.para(`"${quote}"`, pc.x, y, pc.w, C.bone) + 5;
-  ui.text('Reputation rewards', pc.x, y, accent);
-  y += 11;
-  for (const rw of cu.rewards) {
-    const got = rep >= rw.rep;
-    const next = rw.rep === rep + 1;
-    const col = got ? C.leaf : next ? C.gold : C.hull1;
-    ui.text(`${rw.rep}${ICON.heart}`, pc.x, y, got ? C.pipRed : col);
-    const h = ui.para(`${got ? ICON.check + ' ' : ''}${rw.text}`, pc.x + 14, y, pc.w - 14, col);
-    y += h;
-    if (next && y < bottom - 24) {
-      const can = mine.find((q) => !o.done.includes(q.id) && q.requires.every((rq) => g.done(rq)));
-      const later = mine.find((q) => !o.done.includes(q.id));
-      const how = can ? `Fill one more order (${can.name})` : later ? `Next order needs ${later.requires.filter((rq) => !g.done(rq)).map((rq) => RESEARCH[rq].name).join(', ')}` : 'No orders left';
-      y += ui.para(`${ICON.right} ${how}`, pc.x + 14, y, pc.w - 14, C.hull2);
-    }
-    y += 2;
-  }
-  // what the customer has paid, and their perks working right now
-  const paid = mine.filter((q) => o.done.includes(q.id)).reduce((n, q) => n + q.pays, 0);
-  const perks: [string, string][] = [['Paid you', Num.of(paid).format()]];
-  // the Milestone 5-6 review round: the Committee's reputation opens the Great Drill's stages
-  if (who === 'committee') for (const m of MEGA) if (m.rep) perks.push([`Drill stage ${m.stage} (reputation ${m.rep})`, rep >= m.rep ? 'open' : `${m.rep - rep} more`]);
-  if (who === 'bramble') {
-    if (rep >= 1) perks.push(['Iron plates sell for', `${fmt(saleValue(g, 'ironPlate'))} each`]);
-    if (rep >= 2) perks.push(['Free crates waiting', `${g.s.freeCrates}/${RULES.repCrateMax.value}`]);
-  } else if (who === 'unit7') perks.push(['Codex entries', `${g.s.codex.length}`]);
-  else if (who === 'voltaire') perks.push(['Grids on the Workshop', `${g.grids.length}`]);
-  const foot = who === 'unit7' ? 16 : 0;
-  let py = Math.max(y + 3, pc.y + pc.h - foot - perks.length * 10);
-  for (const [k, v] of perks) {
-    if (py + 9 > pc.y + pc.h - foot) break;
-    ui.text(k, pc.x, py, C.hull2);
-    ui.text(v, pc.x + pc.w, py, C.gold, { align: 'right' });
-    py += 10;
-  }
-  if (who === 'unit7' && py + 15 <= pc.y + pc.h + 1) {
-    if (button(ui, 'openCodex', pc.x, pc.y + pc.h - 15, pc.w, 14, `Open the Codex`, { gold: rep >= 1, icon: undefined, tip: 'Every item, with its story. A first delivery of each pays 30x its value once Unit 7 likes you.' })) app.panel = 'codex';
-  }
-  // ---- the orders, then the Dock's price board
-  const ox = r.x + 8 + leftW + 6, ow = r.x + r.w - 8 - ox;
-  let oy = y1;
   const offered = mine.filter((q) => !o.done.includes(q.id) && q.requires.every((rq) => g.done(rq)));
   const locked = mine.filter((q) => !o.done.includes(q.id) && !offered.includes(q));
   const done = mine.filter((q) => o.done.includes(q.id));
+  const bottom = p.y + p.h;
+  let y = p.y;
   for (const d of offered) {
-    if (oy + 46 > bottom) break;
-    orderCard(app, d, ox, oy, ow, 46);
-    oy += 49;
+    const h = orderSlipH(d, p.w);
+    if (y + h > bottom) break;
+    orderSlip(app, d, p.x, y, p.w, h);
+    y += h + 4;
   }
   for (const d of locked) {
-    if (oy + 28 > bottom) break;
-    lockedCard(app, d, ox, oy, ow);
-    oy += 31;
+    if (y + 30 > bottom) break;
+    lockedSlip(app, d, p.x, y, p.w);
+    y += 33;
   }
   for (const d of done) {
-    if (oy + 18 > bottom) break;
-    doneRow(app, d, ox, oy, ow);
-    oy += 20;
+    if (y + 20 > bottom) break;
+    doneRow(app, d, p.x, y, p.w);
+    y += 21;
   }
-  if (bottom - oy >= 44) priceBoard(app, ox, oy, ow, bottom - oy);
+  if (bottom - y >= 40) priceBoard(app, p.x, y + 2, p.w, bottom - y - 2);
 }
 
-function wantsLine(app: App, d: OrderDef, x: number, y: number, maxX: number, done: boolean) {
-  const ui = app.ui;
-  const p = app.game.s.orders.progress[d.id] ?? {};
-  let ix = x;
+/** One want's cell on a slip: icon, count, and a meter under the count. */
+function wantW(have: number, n: number): number {
+  return 11 + Math.max(30, textWidth(`${fmt(have)}/${fmt(n)}`));
+}
+
+/** The pay chips of an order (coin, reputation; the Factory Dock when only it counts). */
+function payChips(d: OrderDef): { text: string; role: 'coin' | 'bad' | 'warn'; tip?: string; icon?: 'factory' }[] {
+  const out: { text: string; role: 'coin' | 'bad' | 'warn'; tip?: string; icon?: 'factory' }[] = [];
+  if (d.at === 'factory') out.push({ text: 'Factory Dock', role: 'warn', icon: 'factory', tip: '{u:factory} only the Factory Dock counts · trunk your modules into it · the Workshop Dock just sells' });
+  out.push({ text: `{coin:${Num.of(d.pays).format()}}`, role: 'coin', tip: `{coin:${Num.of(d.pays).format()}} when it fills` });
+  out.push({ text: `+${d.rep} ${ICON.heart}`, role: 'bad', tip: `+${d.rep} reputation with ${CUSTOMERS[d.customer].name}` });
+  return out;
+}
+
+/** Lay the wants and pay chips out in lines `w` wide; returns each piece's place. */
+function flow(app: App | null, d: OrderDef, w: number) {
+  const p = app?.game.s.orders.progress[d.id] ?? {};
+  const pieces: { kind: 'want' | 'chip'; w: number; item?: ItemId; have?: number; n?: number; c?: ReturnType<typeof payChips>[number] }[] = [];
   for (const [item, n] of Object.entries(d.wants) as [ItemId, number][]) {
-    const have = done ? n : Math.min(n, Math.floor(p[item]?.toNumber() ?? 0));
-    const s = `${fmt(have)}/${fmt(n)}`;
-    const name = ITEMS[item].name.toLowerCase();
-    const full = ix + 10 + textWidth(s + ' ' + name) <= maxX;
-    if (ix + 10 + textWidth(s) > maxX) break;
-    const label = full ? `${s} ${name}` : s;
-    ui.ctx.drawImage(itemIcon(item), ix, y);
-    ui.text(label, ix + 10, y, have >= n ? C.moss : C.shadow);
-    ui.hint(ix, y - 1, 10 + textWidth(label), 10, `${ITEMS[item].name}: ${fmt(have)} of ${fmt(n)} delivered`, 160);
-    ix += 16 + textWidth(label);
+    const have = Math.min(n, Math.floor(p[item]?.toNumber() ?? 0));
+    pieces.push({ kind: 'want', w: wantW(have, n), item, have, n });
   }
+  for (const c of payChips(d)) pieces.push({ kind: 'chip', w: chipWidth(c.text, { icon: c.icon }), c });
+  const placed: { x: number; line: number; piece: (typeof pieces)[number] }[] = [];
+  let x = 0, line = 0;
+  // the chips sit after the wants, right-aligned on the last line when they fit there
+  for (const pc of pieces) {
+    if (x > 0 && x + pc.w > w) { x = 0; line++; }
+    placed.push({ x, line, piece: pc });
+    x += pc.w + 6;
+  }
+  return { placed, lines: line + 1 };
 }
 
-function orderCard(app: App, d: OrderDef, x: number, y: number, w: number, h: number) {
+const SLIP_HEAD = BIG_H + 5;
+const FLOW_H = 17;
+
+function orderSlipH(d: OrderDef, w: number): number {
+  return 5 + SLIP_HEAD + flow(null, d, w - 12).lines * FLOW_H + 3;
+}
+
+function orderSlip(app: App, d: OrderDef, x: number, y: number, w: number, h: number) {
   const ui = app.ui;
   const g = app.game;
   const o = g.s.orders;
   const active = o.active === d.id;
-  frame(ui, x, y, w, h, 'paper');
+  const c = slip(ui, x, y, w, h, { blocking: true });
+  const ink = INK[d.customer];
+  // the active order: a ribbon of the customer's ink down its edge, breathing a little
   if (active) {
-    ui.fill(x + 2, y + 2, 3, h - 4, ACCENT[d.customer]);
-    // the active order breathes a little
-    if (Math.floor(ui.time * 2) % 2 === 0) ui.fill(x + 2, y + 2, w - 4, 1, C.gold);
+    ui.fill(x + 1, y + 3, 2, h - 6, ink);
+    if (Math.floor(ui.time * 2) % 2 === 0) ui.fill(x + 3, y + 3, 1, h - 6, ink);
   }
-  ui.text(d.name, x + 9, y + 5, C.ink);
-  const pay = `${ICON.coin} ${Num.of(d.pays).format()}  +${d.rep}${ICON.heart}`;
-  ui.text(pay, x + w - 8, y + 5, C.brass0, { align: 'right' });
-  if (active) ui.text('ACTIVE', x + 13 + textWidth(d.name), y + 5, C.moss);
-  let wx = x + w - 8;
-  if (d.at === 'factory') {
-    // only deliveries to the Factory Dock count: a plate on the card says so
-    const s = 'Factory Dock only';
-    const sw = textWidth(s) + 6;
-    wx -= sw + 4;
-    ui.fill(wx + 4, y + 15, sw, 11, C.ink);
-    ui.fill(wx + 5, y + 16, sw - 2, 9, C.copper0);
-    ui.text(s, wx + 7, y + 17, C.hot);
-    ui.hint(wx + 4, y + 15, sw, 11, 'Only what reaches the Factory Dock counts toward this order: trunk your modules into the Factory Dock on the Factory floor. The Workshop Dock just sells.', 180);
-  }
-  wantsLine(app, d, x + 9, y + 17, wx, false);
   const f = orderFrac(g, d.id);
-  bar(ui, x + 9, y + 32, w - 114, 7, f, ACCENT[d.customer], C.shadow);
-  ui.text(`${Math.floor(f * 100)}%`, x + w - 82, y + 32, C.shadow, { align: 'right' });
-  if (button(ui, 'ord:' + d.id, x + w - 76, y + 29, 68, 13, active ? 'Set aside' : 'Accept', { gold: !active, active, pulse: !active && !o.active, tip: active ? 'Stop filling it; progress is kept.' : `"${d.pitch}" Items sent to a Dock fill it first, then sell.` })) app.act({ k: 'order', id: active ? null : d.id });
+  // the head: the name, ACTIVE, the share filled, the button
+  const bw = Math.max(54, textWidth(active ? 'Set aside' : 'Accept') + 14);
+  const bx = x + w - 6 - bw;
+  ui.big(d.name, c.x, y + 5, T.ink);
+  let hx = c.x + bigWidth(d.name) + 5;
+  if (active && hx + chipWidth('ACTIVE') < bx - 30) { hx += chip(ui, hx, y + 4, 'ACTIVE', { role: 'good', solid: true }) + 4; }
+  const pc = `${Math.floor(f * 100)}%`;
+  ui.text(pc, bx - 5, y + 6, f >= 1 ? T.good : T.inkSoft, { align: 'right' });
+  if (button(ui, 'ord:' + d.id, bx, y + 3, bw, 15, active ? 'Set aside' : 'Accept', { gold: !active, active, pulse: !active && !o.active, tip: active ? [{ text: '{u:pause} stop filling it · progress is kept' }] : [{ text: d.pitch }, { text: '{u:orders} what reaches a Dock fills it first, then sells', color: T.inkSoft }] })) app.act({ k: 'order', id: active ? null : d.id });
+  // the wants (icon, count, meter) and the pay chips, flowing
+  const fl = flow(app, d, w - 12);
+  const fy = y + 5 + SLIP_HEAD;
+  for (const pl of fl.placed) {
+    const px = c.x + pl.x, py = fy + pl.line * FLOW_H;
+    const pz = pl.piece;
+    if (pz.kind === 'want') {
+      const n = pz.n!, have = pz.have!;
+      ui.ctx.drawImage(itemIcon(pz.item!), px, py + 1);
+      ui.text(`${fmt(have)}/${fmt(n)}`, px + 11, py, have >= n ? T.good : T.ink);
+      meter(ui, px + 11, py + 10, pz.w - 11, 4, have / n, { role: have >= n ? 'good' : 'warn', glint: false });
+      ui.hint(px, py - 1, pz.w, 16, `{i:${pz.item}} ${ITEMS[pz.item!].name} · ${fmt(have)} of ${fmt(n)} delivered`, 170);
+    } else {
+      const cc = pz.c!;
+      chip(ui, px, py + 1, cc.text, { role: cc.role, icon: cc.icon });
+      if (cc.tip) ui.hint(px, py + 1, pz.w, CHIP_H, cc.tip, 180);
+    }
+  }
 }
 
-function lockedCard(app: App, d: OrderDef, x: number, y: number, w: number) {
+function lockedSlip(app: App, d: OrderDef, x: number, y: number, w: number) {
   const ui = app.ui;
   const g = app.game;
-  frame(ui, x, y, w, 28, 'inset');
-  ui.text(`${ICON.lock} ${d.name}`, x + 8, y + 5, C.hull2);
-  ui.text(`${ICON.coin} ${Num.of(d.pays).format()}`, x + w - 8, y + 5, C.brass1, { align: 'right' });
-  let ix = x + 8;
+  section(ui, x, y, w, 30);
+  uiIcon(ui, 'lock', x + 5, y + 4, 1);
+  ui.text(d.name, x + 16, y + 4, T.inkSoft);
+  const pay = `{coin:${Num.of(d.pays).format()}}`;
+  drawLayout(ui, layoutRich(pay), x + w - 5, y + 4, T.inkSoft, { align: 'right' });
+  // what it wants (faded), then what it waits for as chips
+  let ix = x + 5;
+  ui.ctx.globalAlpha = 0.6;
   for (const [item, n] of Object.entries(d.wants) as [ItemId, number][]) {
     if (ix + 30 > x + w / 2) break;
-    ui.ctx.globalAlpha = 0.6;
-    ui.ctx.drawImage(itemIcon(item), ix, y + 16);
-    ui.ctx.globalAlpha = 1;
-    ix += 14 + ui.text(fmt(n), ix + 10, y + 16, C.hull2);
+    ui.ctx.drawImage(itemIcon(item), ix, y + 17);
+    ix += 14 + ui.text(fmt(n), ix + 10, y + 17, T.inkSoft);
   }
-  const need = `Needs ${d.requires.filter((q) => !g.done(q)).map((q) => RESEARCH[q].name).join(', ')}${d.at === 'factory' ? '; Factory Dock only' : ''}`;
-  ui.clip(ix + 4, y, x + w - 8 - ix - 4, 28);
-  ui.text(need, x + w - 8, y + 16, C.hull1, { align: 'right' });
-  ui.unclip();
+  ui.ctx.globalAlpha = 1;
+  const need = d.requires.filter((q) => !g.done(q)).map((q) => ({ text: RESEARCH[q].name, role: 'research' as const }));
+  if (d.at === 'factory') need.push({ text: 'Factory Dock', role: 'warn' as never });
+  let cx = x + w - 5;
+  for (const n of [...need].reverse()) {
+    const cw = chipWidth(n.text);
+    if (cx - cw < ix + 4) break;
+    cx -= cw;
+    chip(ui, cx, y + 15, n.text, { role: n.role });
+    cx -= 3;
+  }
+  ui.hint(x, y, w, 30, [{ text: `{u:lock} ${d.name}` }, { text: `waits for ${d.requires.filter((q) => !g.done(q)).map((q) => `{research:${RESEARCH[q].name}}`).join(' · ')}` }], 190);
 }
 
 function doneRow(app: App, d: OrderDef, x: number, y: number, w: number) {
   const ui = app.ui;
-  frame(ui, x, y, w, 18, 'inset');
-  ui.fill(x + 1, y + 1, 3, 16, C.leaf);
-  ui.text(`${ICON.check} ${d.name}`, x + 8, y + 5, C.leaf);
-  let ix = x + 14 + textWidth(`${ICON.check} ${d.name}`);
+  tick(ui, x + 1, y + 3);
+  ui.text(d.name, x + 16, y + 5, T.good);
+  let ix = x + 20 + textWidth(d.name);
   for (const item of Object.keys(d.wants) as ItemId[]) {
-    if (ix + 10 > x + w - 90) break;
+    if (ix + 10 > x + w - 110) break;
     ui.ctx.drawImage(itemIcon(item), ix, y + 5);
     ix += 10;
   }
-  // a little rubber stamp
-  const sx = x + w - 82;
-  ui.fill(sx, y + 3, 36, 12, C.leaf);
-  ui.fill(sx + 1, y + 4, 34, 10, C.shadow);
-  ui.text('FILLED', sx + 18, y + 5, C.leaf, { align: 'center' });
-  ui.text(`+${Num.of(d.pays).format()}`, x + w - 6, y + 5, C.gold, { align: 'right' });
+  const pay = `+{coin:${Num.of(d.pays).format()}}`;
+  const pw = richWidth(pay);
+  drawLayout(ui, layoutRich(pay), x + w - 2, y + 5, T.coin, { align: 'right' });
+  stamp(ui, 'FILLED', x + w - pw - 36, y + 9, { col: T.goodFill, angle: -0.05 });
+  rule(ui, x, y + 20, w);
 }
 
 /** The standing order: what the Dock pays for each item, lit for the ones you have delivered. */
 function priceBoard(app: App, x: number, y: number, w: number, h: number) {
   const ui = app.ui;
   const g = app.game;
-  const inner = card(ui, x, y, w, h, 'The Dock buys everything at its value', C.brass1, 'coin');
+  const hh = heading(ui, 'Dock prices', x, y, w, 'coin', '{soft:every item at its value}');
+  const top = y + hh + 2;
   const items = ITEM_IDS.filter((id) => ITEMS[id].value > 0);
-  const roomy = inner.h >= 40;
-  const cw = roomy ? 98 : 58, rh = roomy ? 21 : 11;
-  const cols = Math.max(1, Math.floor(inner.w / cw));
-  const rows = Math.max(1, Math.floor((inner.h + 1) / rh));
+  const roomy = h - hh >= 48 && w >= 240;
+  const cw = roomy ? 92 : 50, rh = roomy ? 21 : 12;
+  const cols = Math.max(1, Math.floor(w / cw));
+  const rows = Math.max(0, Math.floor((y + h - top + 1) / rh));
   // the ones you have sold first, then the rest
   const sorted = [...items.filter((id) => g.s.delivered[id]?.gt(0)), ...items.filter((id) => !g.s.delivered[id]?.gt(0))];
   sorted.slice(0, cols * rows).forEach((id, i) => {
-    const cx = inner.x + (i % cols) * cw, cy = inner.y + Math.floor(i / cols) * rh;
+    const cx = x + (i % cols) * cw, cy = top + Math.floor(i / cols) * rh;
     const got = !!g.s.delivered[id]?.gt(0);
     const v = saleValue(g, id);
     const bonus = v > ITEMS[id].value;
-    if (roomy) {
-      ui.fill(cx, cy, 18, 18, got ? C.ground1 : C.ink);
-      ui.ctx.globalAlpha = got ? 1 : 0.35;
-      ui.ctx.drawImage(itemIcon(id), cx + 1, cy + 1, 16, 16);
-      ui.ctx.globalAlpha = 1;
-      ui.clip(cx + 21, cy, cw - 24, 20);
-      ui.text(ITEMS[id].name, cx + 21, cy, got ? C.bone : C.hull1);
-      ui.text(`${ICON.coin}${fmt(v)}${got ? `  ${g.s.delivered[id]!.format()} sold` : ''}`, cx + 21, cy + 10, bonus ? C.leaf : got ? C.gold : C.hull1);
-      ui.unclip();
-    } else {
-      ui.ctx.globalAlpha = got ? 1 : 0.35;
-      ui.ctx.drawImage(itemIcon(id), cx, cy);
-      ui.ctx.globalAlpha = 1;
-      ui.text(fmt(v), cx + 10, cy, bonus ? C.leaf : got ? C.gold : C.hull1);
-    }
-    ui.hint(cx, cy - 1, cw - 2, rh, [{ text: ITEMS[id].name, color: C.gold }, { text: `${fmt(v)} coin each at the Dock${bonus ? ` (+${Math.round(RULES.repPlateBonus.value * 100)}%: Bramble's reputation)` : ''}.` }, { text: got ? `Delivered so far: ${g.s.delivered[id]!.format()}` : 'Not delivered yet.', color: C.hull2 }], 170);
+    ui.ctx.globalAlpha = got ? 1 : 0.4;
+    if (roomy) ui.ctx.drawImage(itemIcon(id), cx, cy + 1, 16, 16);
+    else ui.ctx.drawImage(itemIcon(id), cx, cy + 1);
+    ui.ctx.globalAlpha = 1;
+    const tx = cx + (roomy ? 19 : 10);
+    if (roomy) ui.text(ITEMS[id].name, tx, cy, got ? T.ink : T.inkSoft);
+    const price = `{coin:${fmt(v)}}`;
+    drawLayout(ui, layoutRich(price), tx, roomy ? cy + 10 : cy + 1, bonus ? T.good : T.coin);
+    if (roomy && got) ui.text(g.s.delivered[id]!.format(), cx + cw - 6, cy + 10, T.inkSoft, { align: 'right' });
+    ui.hint(cx, cy - 1, cw - 2, rh, [{ text: `{i:${id}} {big:${ITEMS[id].name}}` }, { text: `{coin:${fmt(v)}} each at the Dock${bonus ? ` · {good:+${Math.round(RULES.repPlateBonus.value * 100)}%} {u:heart} Bramble` : ''}` }, { text: got ? `{u:orders} ${g.s.delivered[id]!.format()} delivered` : '{soft:not delivered yet}' }], 180);
   });
+}
+
+// ------------------------------------------------------------------ the right page: the customers
+
+function customerPage(app: App, p: Rect) {
+  const ui = app.ui;
+  const g = app.game;
+  const o = g.s.orders;
+  // ---- the four customers, a portrait each; the open one underlined in red pencil
+  const cw = Math.floor(p.w / CUSTOMER_IDS.length);
+  CUSTOMER_IDS.forEach((c, i) => {
+    const cx = p.x + i * cw + Math.floor((cw - 24) / 2), cy = p.y + 1;
+    const isMet = met(app, c);
+    const active = c === st.tab;
+    const d = CUSTOMERS[c];
+    ui.mark('cust:' + c, cx - 2, cy - 1, 28, 38);
+    ui.region(cx - 2, cy - 1, 28, 38, 'button');
+    const hov = ui.hover(cx - 2, cy - 1, 28, 38) && isMet;
+    const cheer = st.cheer?.who === c && ui.time < st.cheer.until;
+    if (isMet) {
+      customerPortrait(app, c, cx, cy + (hov && !active ? -1 : 0), 24, cheer);
+      const of = Math.min(3, d.rewards.length);
+      hearts(app, cx + 12 - Math.floor((of * 8 - 1) / 2), cy + 27, Math.min(of, o.rep[c] ?? 0), of);
+    } else {
+      section(ui, cx, cy, 24, 24);
+      uiIcon(ui, 'lock', cx + 4, cy + 4);
+    }
+    if (active) pencil(ui, cx - 3, cy + 35, 30, T.badFill);
+    // open orders: a red count on the portrait's corner, bobbing now and then
+    const open = ORDERS.filter((q) => q.customer === c && !o.done.includes(q.id) && q.requires.every((rq) => g.done(rq))).length;
+    if (isMet && open && !active) {
+      const bob = Math.floor(ui.time * 2 + i) % 4 === 0 ? 1 : 0;
+      dot(ui, cx + 21, cy - bob);
+      ui.small(String(open), cx + 27, cy - 2 - bob, T.bad);
+    }
+    if (ui.hover(cx - 2, cy - 1, 28, 38)) {
+      ui.tip(isMet ? [{ text: `{big:${d.name}}` }, { text: d.title, color: T.inkSoft }, ...(open ? [{ text: `{u:orders} ${open} open` }] : [])] : [{ text: '{u:lock} {big:???}' }, { text: arrives(c) }], 190);
+      if (isMet && ui.clicked) { ui.eat(); ui.sfx('click'); st.tab = c; }
+    }
+  });
+  let y = p.y + 40;
+  rule(ui, p.x, y - 2, p.w, true);
+  const who = st.tab;
+  const cu = CUSTOMERS[who];
+  const rep = o.rep[who] ?? 0;
+  const mine = ORDERS.filter((q) => q.customer === who);
+  const filled = mine.filter((q) => o.done.includes(q.id)).length;
+  const cheer = st.cheer?.who === who && ui.time < st.cheer.until;
+  const bottom = p.y + p.h;
+  // ---- what they say: the active order's pitch, else a thank-you, else their opening line
+  const active = o.active ? ORDER[o.active] : null;
+  const quote = cheer && filled ? cu.thanks[(filled - 1) % cu.thanks.length]
+    : active && active.customer === who ? active.pitch
+      : filled ? cu.thanks[(filled - 1) % cu.thanks.length]
+        : who === 'bramble' ? 'Got anything for me? The swamp is always buying!' : mine[0].pitch;
+  // the perks and rewards decide whether the portrait fits at 48
+  let perks = perkRows(app, who, rep);
+  const foot = who === 'unit7' ? 18 : 0;
+  // every reward row is a fact to keep: the rows (and the next one's "how") come first, then the
+  // portrait at 48, then the Drill-stage perks (they repeat the Committee's reward rows)
+  const rewardH = cu.rewards.reduce((s, rw) => s + layoutRich(rw.text, p.w - 24).h + 2, 0) + 13;
+  const fixed = 8 + bubbleHeight(quote, p.w - 12) + 6 + BIG_H + 4 + rewardH + foot;
+  const room = (ps: number, n: number) => bottom - y - (ps + fixed + n * ROW_H);
+  if (room(24, perks.length) < 0) perks = perks.filter((q) => !q[0].startsWith('{u:mega}'));
+  const big = room(48, perks.length) >= 0;
+  const ps = big ? 48 : 24;
+  customerPortrait(app, who, p.x + 1, y + 1, ps, cheer);
+  const nx = p.x + ps + 7;
+  ui.big(cu.name, nx, y + 1, INK[who]);
+  if (big) {
+    drawLayout(ui, layoutRich(`{soft:${cu.title}}`, p.x + p.w - nx), nx, y + 14, T.inkSoft);
+    const hy = y + 14 + layoutRich(`{soft:${cu.title}}`, p.x + p.w - nx).h + 3;
+    const hw = hearts(app, nx, hy, rep, cu.rewards.length);
+    chip(ui, nx + hw + 5, hy - 2, `${filled}/${mine.length} filled`, { role: filled === mine.length ? 'good' : 'ink' });
+  } else {
+    const hw = hearts(app, nx, y + 14, rep, cu.rewards.length);
+    const cw = chip(ui, nx + hw + 5, y + 12, `${filled}/${mine.length}`, { role: filled === mine.length ? 'good' : 'ink' });
+    // no room for the ribbon on a 24 px portrait: the cheer is a gold chip after the count
+    if (cheer && nx + hw + 5 + cw + 4 + chipWidth('Yay!') <= p.x + p.w) chip(ui, nx + hw + 5 + cw + 4, y + 12, 'Yay!', { role: 'coin', solid: true });
+  }
+  if (cheer && big) ribbon(ui, p.x - 3, y + ps - 6, ps + 8, 'Yay!', { color: 'gold', tails: 'in', big: false });
+  y += ps + 8;
+  // ---- the speech bubble, its tail up at the portrait
+  const L = layoutRich(quote, p.w - 12);
+  const bh = L.h + 9;
+  const bc = bubble(ui, p.x, y + 5, p.w, bh, { side: 'top', at: Math.floor(ps / 2) + 1 });
+  drawLayout(ui, L, bc.x, bc.y, T.ink);
+  y += bh + 10;
+  // ---- reputation and its rewards
+  y += heading(ui, 'Reputation', p.x, y, p.w, 'bad');
+  for (const rw of cu.rewards) {
+    const got = rep >= rw.rep;
+    const next = rw.rep === rep + 1;
+    const RL = layoutRich(rw.text, p.w - 24);
+    if (y + RL.h > bottom - foot - perks.length * ROW_H) break;
+    ui.text(`${rw.rep}${ICON.heart}`, p.x, y, got ? T.bad : next ? T.coin : T.inkSoft);
+    drawLayout(ui, RL, p.x + 16, y, got ? T.good : next ? T.ink : T.inkSoft);
+    if (got) ui.text(ICON.check, p.x + p.w - 6, y, T.good);
+    y += RL.h + 2;
+    if (next && y + 11 <= bottom - foot - perks.length * ROW_H) {
+      const can = mine.find((q) => !o.done.includes(q.id) && q.requires.every((rq) => g.done(rq)));
+      const later = mine.find((q) => !o.done.includes(q.id));
+      const how = can ? `→ fill {coinc:${can.name}}` : later ? `→ needs ${later.requires.filter((rq) => !g.done(rq)).map((rq) => `{research:${RESEARCH[rq].name}}`).join(' · ')}` : '{soft:no orders left}';
+      const HL = layoutRich(how, p.w - 24);
+      drawLayout(ui, HL, p.x + 16, y, T.inkSoft);
+      y += HL.h + 2;
+    }
+  }
+  // ---- their perks at work now, ruled rows at the foot
+  let py = Math.max(y + 2, bottom - foot - perks.length * ROW_H);
+  for (const [k, v] of perks) {
+    if (py + ROW_H > bottom - foot + 1) break;
+    py += kvRowSafe(app, p.x, py, p.w, k, v);
+  }
+  if (who === 'unit7' && bottom - 15 >= py - 1) {
+    if (button(ui, 'openCodex', p.x, bottom - 16, p.w, 16, '{u:codex} The Codex', { gold: rep >= 1, tip: [{ text: '{u:codex} every item, with its story' }, { text: `a first delivery of each pays {coinc:30×} · {u:heart} 1` }] })) app.panel = 'codex';
+  }
+}
+
+function kvRowSafe(app: App, x: number, y: number, w: number, k: string, v: string): number {
+  const ui = app.ui;
+  drawLayout(ui, layoutRich(k), x, y + 2, T.inkSoft);
+  drawLayout(ui, layoutRich(v), x + w, y + 2, T.ink, { align: 'right' });
+  rule(ui, x, y + ROW_H - 2, w);
+  return ROW_H;
+}
+
+/** What a customer has paid, and their perks working right now: [label, value] rows. */
+function perkRows(app: App, who: CustomerId, rep: number): [string, string][] {
+  const g = app.game;
+  const o = g.s.orders;
+  const mine = ORDERS.filter((q) => q.customer === who);
+  const paid = mine.filter((q) => o.done.includes(q.id)).reduce((n, q) => n + q.pays, 0);
+  const rows: [string, string][] = [['{u:coin} paid you', `{coin:${Num.of(paid).format()}}`]];
+  // the Committee's reputation opens the Great Drill's stages
+  if (who === 'committee') for (const m of MEGA) if (m.rep) rows.push([`{u:mega} Drill stage ${m.stage} · ${m.rep}${ICON.heart}`, rep >= m.rep ? '{good:open}' : `{warn:${m.rep - rep} more ${ICON.heart}}`]);
+  if (who === 'bramble') {
+    if (rep >= 1) rows.push(['{i:ironPlate} sells for', `{coin:${fmt(saleValue(g, 'ironPlate'))}}`]);
+    if (rep >= 2) rows.push(['{u:kit} free Buffer Crates', `${g.s.freeCrates}/${RULES.repCrateMax.value}`]);
+  } else if (who === 'unit7') rows.push(['{u:codex} Codex entries', `${g.s.codex.length}`]);
+  else if (who === 'voltaire') rows.push(['{u:power} grids on the Workshop', `${g.grids.length}`]);
+  return rows;
 }

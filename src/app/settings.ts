@@ -28,11 +28,13 @@ export function loadSettings() {
   if (s.notation && NOTATIONS.includes(s.notation)) setNotation(s.notation);
 }
 
+/** Each notation's name and a sample, as a row (docs/hud-180.md: no parentheses, one colon at
+ * most): the Options page's button carries it. */
 export const NOTATION_LABEL: Record<Notation, string> = {
-  standard: 'Standard (12.3K, 4.56M)',
-  scientific: 'Scientific (1.23e4)',
-  engineering: 'Engineering (12.3e3)',
-  letters: 'Letters (after Dc: aa, ab)',
+  standard: 'Standard {soft:12.3K · 4.56M}',
+  scientific: 'Scientific {soft:1.23e4}',
+  engineering: 'Engineering {soft:12.3e3}',
+  letters: 'Letters {soft:Dc → aa · ab}',
 };
 
 /** Step to the next notation and remember it. */

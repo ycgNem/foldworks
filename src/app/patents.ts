@@ -1,16 +1,16 @@
-// The Patent Office (DESIGN.md §19, Milestone 5): the Patent tree. Head starts run along the top,
-// one row per line of research; rules, automation and offline efficiency sit in three boxes under
-// it. A node shows its own icon, its price on a chip and a short label under it; owned nodes are
-// lit in their branch's colour, ones you can buy now pulse teal, locked ones are dim with their
-// lines to what they need. The node under the mouse (or the one clicked) is described on the right
-// in numbers: what it does, what it changes in this run, its price and what it needs, with its Buy
-// button. Presentation only: buying is the `patent` command.
+// The Patent Office (DESIGN.md §19, Milestone 5), a page of the ledger (docs/hud-180.md): the
+// Patent tree drawn in pencil on paper. Head starts run along the top, rules, automation and
+// offline efficiency in three groups under them; each node is a paper disc with its own picture and
+// its price on a little chip (a gold rim when you can buy it now, dim paper when its lines lead to
+// nodes not yet bought), owned ones stamped with the green tick, the selected one circled in red
+// pencil. The right page is the node in numbers, as rows: what it does, what buying it changes in
+// this run, its price and what it needs, its flavour line and the Buy button; the Committee speaks
+// at its top. Presentation only: buying is the `patent` command.
 //
-// The UI legibility round (2026-10-20): the node data in src/data/patents.ts is read generically
-// (`effect.k` and its fields, prules() by field name), so the screen keeps working when nodes,
-// effects or prices change; a node this file has no icon or label for gets one from its effect
-// and its name.
-import { C, rgba } from '../data/palette';
+// The node data in src/data/patents.ts is read generically (`effect.k` and its fields, prules() by
+// field name), so the page keeps working when nodes, effects or prices change; a node this file
+// has no picture or label for gets one from its effect and its name.
+import { C } from '../data/palette';
 import { PATENTS, PATENT_LIST, BRANCH_NAMES, type PatentId, type PatentBranch, type PatentDef } from '../data/patents';
 import { ITEMS } from '../data/items';
 import { RESEARCH } from '../data/research';
@@ -18,16 +18,20 @@ import { UPGRADES, BUILD } from '../data/machines';
 import { CHUNKS } from '../data/land';
 import { RULES } from '../data/rules';
 import { IDLE } from '../data/idle';
-import { ICON, textWidth, smallWidth } from '../ui/font';
+import { ICON, smallWidth, bigWidth, SMALL_H } from '../ui/font';
 import { itemIcon, sheet, hasArt, spriteName } from '../render/sprites';
 import { amount, pct } from '../engine/fmt';
 import { hasPatent, patentRefusal, prules } from '../sim/patents';
 import { offlineEfficiency } from '../sim/offline';
 import { previewPatents } from '../sim/reorganize';
-import { frame, card, button, uiIcon, label, UICON, type UIconName } from './chrome';
-import { screenHeader } from './widgets';
+import { button, uiIcon, chip, chipWidth, rule, stamp, UICON, type UIconName } from './chrome';
+import { menuTemplate } from './widgets';
+import { layoutRich, drawLayout } from '../ui/rich';
+import { T, roleInk, type Role } from '../ui/theme';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
+import { bookArea, heading, disc, tick, pencilCircle, speak, ROW_H } from './ledger';
+import { committeeFallback } from './reorganize';
 
 /** A node's picture: an item icon, a UI icon, or a building's sprite (frame f). */
 type NodeIcon = { item: string } | { ui: UIconName } | { sprite: string; f?: number };
@@ -58,16 +62,14 @@ const EFFECT_ICON: Record<string, NodeIcon> = {
   drone: { ui: 'build' }, offline: { ui: 'overnight' },
 };
 
-/** Short labels under the nodes (8 small capitals or fewer, so they fit a column at 1024x640). A
- * list is tried in order, the first that fits its column wins (the final round: "Overdrive" where
- * there is room, "Overdrv" at 1024x640). */
+/** Short labels under the nodes. A list is tried in order, the first that fits its room wins. */
 const SHORT: Partial<Record<string, string | string[]>> = {
   bellows: 'Bellows', starterLine: 'Miner', notebooks: 'Notes', copperDeeds: 'Copper', gearPatterns: 'Gears', gizmoPatent: 'Gizmo',
-  foldingPatent: 'Folding', grant: 'Grant', overdriveHabit: ['Overdrive', 'Overdrv'], coalRights: 'Coal', steelCharter: 'Steel', glassNotes: 'Glass',
-  circuitPatent: 'Circuit',
-  surveyCharter: 'Claims', widerBox: 'Wider', quickAudit: 'Quick', moreAuditors: 'Auditors', sideIntake: 'Intake',
-  nestedBoxes: 'Nesting', freshDies: 'Dies',
-  shovelFrog: 'Shovel', labAssistant: 'Lab', orderClerk: 'Clerk', stampPress: 'Press', draughtsman: 'Drafter', drawerSpace: 'Drawer',
+  foldingPatent: ['Folding', 'Fold'], grant: 'Grant', overdriveHabit: ['Overdrive', 'Drive'], coalRights: 'Coal', steelCharter: 'Steel', glassNotes: 'Glass',
+  circuitPatent: ['Circuit', 'Chip'],
+  surveyCharter: 'Claims', widerBox: 'Wider', quickAudit: 'Quick', moreAuditors: ['Auditors', 'Audit'], sideIntake: ['Intake', 'Side'],
+  nestedBoxes: ['Nesting', 'Nest'], freshDies: 'Dies',
+  shovelFrog: ['Shovel', 'Dig'], labAssistant: 'Lab', orderClerk: 'Clerk', stampPress: 'Press', draughtsman: ['Drafter', 'Draft'], drawerSpace: ['Drawer', 'Slots'],
   nightShift: 'Shift', nightWatch: 'Watch', lightsOn: 'Lights',
 };
 
@@ -82,60 +84,99 @@ function shortLabel(p: PatentDef, room = Infinity): string {
   return words[0] ?? p.name;
 }
 
-const BRANCH_COL: Record<string, string> = { head: C.gold, rule: C.teal1, auto: C.leaf, offline: C.violet };
-const branchCol = (b: string) => BRANCH_COL[b] ?? C.hull2;
+/** Each branch's ink on paper. */
+const BRANCH_ROLE: Record<string, Role> = { head: 'coin', rule: 'research', auto: 'good', offline: 'reset' };
+const branchRole = (b: string): Role => BRANCH_ROLE[b] ?? 'ink';
 const branchName = (b: string) => (BRANCH_NAMES as Record<string, string>)[b] ?? b;
 
 /** the node pinned by a click (the hovered one wins while the mouse is on a node) */
 const st = { pinned: 'bellows' as PatentId };
 
+/** a node's disc */
 const N = 20;
 
-export function patentsScreen(app: App, r: Rect) {
+/** How a branch's nodes lay out in a box w wide: the column width, and the labels (one row, two
+ * staggered rows, or none when even two columns are too narrow for them). */
+function branchLayout(nodes: PatentDef[], w: number, grow = 0) {
+  const cols = Math.max(...nodes.map((p) => p.pos[0])) + 1, rows = Math.max(...nodes.map((p) => p.pos[1])) + 1;
+  const cw = Math.floor(w / cols);
+  const fits = (room: number) => nodes.every((p) => smallWidth(shortLabel(p, room).toUpperCase()) <= room);
+  const labels: 'one' | 'two' | 'none' = fits(cw - 3) ? 'one' : fits(2 * cw - 6) ? 'two' : 'none';
+  const rh = N + (labels === 'one' ? SMALL_H + 6 : labels === 'two' ? 2 * SMALL_H + 9 : 5) + grow;
+  return { cols, rows, cw, labels, rh, h: rows * rh };
+}
+
+export function patentsScreen(app: App, r0: Rect) {
   const ui = app.ui;
   const g = app.game;
   const m = g.s.meta;
-  screenHeader(app, r, 'The Patent Office', C.violet, 'star');
-  const y0 = r.y + 22, bottom = r.y + r.h - 6;
-  const dw = Math.min(176, Math.floor(r.w * 0.33));
-  const tw = r.w - dw - 22;
+  const r = bookArea(r0);
+  const { body, detail } = menuTemplate(app, r, { title: 'The Patent Office', accent: C.violet, icon: 'star', detail: Math.max(150, Math.min(200, Math.floor(r.w * 0.34))) });
   if (!PATENTS[st.pinned]) st.pinned = PATENT_LIST[0].id;
-  // the bank
-  const bank = `${m.patents.format()} ${m.patents.eq(1) ? 'Patent' : 'Patents'} to spend.`;
-  ui.text(`${ICON.star} ${bank}`, r.x + 10, y0 + 1, C.gold, { shadow: C.ink });
+  // ---- the bank: the Patents to spend, the runs, what this run would bank, and the way to Reorganize
   const pv = previewPatents(g);
-  const sub = `${m.runs} ${m.runs === 1 ? 'Reorganize' : 'Reorganizes'}; this run would bank ${pv.now}`;
-  const sx = r.x + 16 + textWidth(`${ICON.star} ${bank}`);
-  if (sx + textWidth(sub) < r.x + 8 + tw - 92) ui.text(sub, sx, y0 + 1, C.hull3);
-  if (button(ui, 'toReorganize', r.x + 8 + tw - 86, y0 - 2, 86, 12, 'Reorganize...', { tip: 'The Reorganize card: what a reset gives, keeps and loses' })) app.panel = 'reorganize';
-  // the tree: head starts on top, the other branches below
-  const ty = y0 + 14;
-  const headH = Math.floor((bottom - ty) * 0.42);
+  let x = body.x;
+  ui.big(m.patents.format(), x, body.y + 1, T.reset);
+  x += bigWidth(m.patents.format()) + 4;
+  ui.text(m.patents.eq(1) ? 'Patent to spend' : 'Patents to spend', x, body.y + 3, T.ink);
+  const bankW = bigWidth(m.patents.format()) + 4 + layoutRich(m.patents.eq(1) ? 'Patent to spend' : 'Patents to spend').w;
+  const bw = layoutRich('{u:reset} Reorganize').w + 14;
+  const bx = body.x + body.w - bw;
+  if (button(ui, 'toReorganize', bx, body.y - 1, bw, 15, '{u:reset} Reorganize', { tip: [{ text: '{u:reset} {big:Reorganize}' }, { text: 'what a reset gives, keeps and loses' }] })) app.panel = 'reorganize';
+  const runChips = [
+    { text: `${m.runs} ${m.runs === 1 ? 'reset' : 'resets'}`, role: 'soft' as Role, tip: '{u:reset} Reorganizes so far' },
+    { text: `+${pv.now} this run`, role: 'reset' as Role, tip: `{u:reset} a Reorganize now banks {reset:+${pv.now}}` },
+  ];
+  let cx = body.x + bankW + 8;
+  for (const c of runChips) {
+    const cw = chipWidth(c.text);
+    if (cx + cw > bx - 4) break;
+    chip(ui, cx, body.y, c.text, { role: c.role });
+    ui.hint(cx, body.y, cw, 12, c.tip, 180);
+    cx += cw + 3;
+  }
+  // ---- the tree: head starts on top, the other branches side by side below
+  const ty = body.y + 17, bottom = body.y + body.h;
   let hover: PatentId | null = null;
-  const boxes: { b: PatentBranch; x: number; y: number; w: number; h: number }[] = [];
   const branches = [...new Set(PATENT_LIST.map((p) => p.branch))];
   const lower = branches.filter((b) => b !== 'head');
-  if (branches.includes('head' as PatentBranch)) boxes.push({ b: 'head' as PatentBranch, x: r.x + 8, y: ty, w: tw, h: headH });
-  const lw = Math.floor((tw - 4 * (lower.length - 1)) / Math.max(1, lower.length));
-  lower.forEach((b, i) => boxes.push({ b, x: r.x + 8 + i * (lw + 4), y: ty + headH + 4, w: lw, h: bottom - (ty + headH + 4) }));
-  for (const bx of boxes) {
-    const col = branchCol(bx.b);
-    const inner = card(ui, bx.x, bx.y, bx.w, bx.h, branchName(bx.b), col);
-    const nodes = PATENT_LIST.filter((p) => p.branch === bx.b);
+  const boxes: { b: PatentBranch; x: number; y: number; w: number; h: number }[] = [];
+  const headNodes = PATENT_LIST.filter((p) => p.branch === 'head');
+  const gap = 8;
+  const lw = Math.floor((body.w - gap * (lower.length - 1)) / Math.max(1, lower.length));
+  // spare height spreads into the rows (a roomy page breathes; at most 12 px a row)
+  const headL = headNodes.length ? branchLayout(headNodes, body.w) : null;
+  const lowL = lower.map((b) => branchLayout(PATENT_LIST.filter((p) => p.branch === b), lw));
+  const lowRows = Math.max(0, ...lowL.map((l) => l.rows));
+  const need = (headL ? 15 + headL.h + 3 : 0) + 15 + Math.max(0, ...lowL.map((l) => l.h));
+  const grow = Math.max(0, Math.min(12, Math.floor((bottom - ty - need - 4) / Math.max(1, (headL?.rows ?? 0) + lowRows))));
+  let headH = 0;
+  if (headNodes.length) {
+    headH = 15 + branchLayout(headNodes, body.w, grow).h;
+    boxes.push({ b: 'head' as PatentBranch, x: body.x, y: ty, w: body.w, h: headH });
+  }
+  lower.forEach((b, i) => boxes.push({ b, x: body.x + i * (lw + gap), y: ty + headH + 3, w: lw, h: bottom - (ty + headH + 3) }));
+  for (const bx0 of boxes) {
+    const role = branchRole(bx0.b);
+    const ink = roleInk(role);
+    heading(ui, branchName(bx0.b), bx0.x, bx0.y, bx0.w, role);
+    const nodes = PATENT_LIST.filter((p) => p.branch === bx0.b);
     if (!nodes.length) continue;
-    const cols = Math.max(...nodes.map((p) => p.pos[0])) + 1, rows = Math.max(...nodes.map((p) => p.pos[1])) + 1;
-    const cw = Math.floor(inner.w / cols), rh = Math.min(38, Math.floor(inner.h / rows));
+    const L = branchLayout(nodes, bx0.w, grow);
+    // a box too short for its labels drops them (the name is on the right page and the tip)
+    const labels = bx0.y + 15 + L.h <= bx0.y + bx0.h + 1 ? L.labels : 'none';
+    const rh = labels === L.labels ? L.rh : N + 5;
     const at = (id: PatentId) => {
       const p = PATENTS[id];
-      return { x: inner.x + p.pos[0] * cw + Math.floor((cw - N) / 2), y: inner.y + p.pos[1] * rh + Math.max(0, Math.floor((rh - N - 9) / 2)) };
+      return { x: bx0.x + p.pos[0] * L.cw + Math.floor((L.cw - N) / 2), y: bx0.y + 16 + p.pos[1] * rh };
     };
-    // lines to prerequisites first, under the nodes
+    // pencil lines to prerequisites first, under the nodes
     for (const p of nodes) {
       const a = at(p.id);
       for (const q of p.requires) {
-        if (!PATENTS[q] || PATENTS[q].branch !== bx.b) continue;
+        if (!PATENTS[q] || PATENTS[q].branch !== bx0.b) continue;
         const b = at(q);
-        link(app, b.x + N / 2, b.y + N / 2, a.x + N / 2, a.y + N / 2, b.x + N / 2 + Math.floor(cw / 2), hasPatent(g, q) ? col : C.hull0);
+        link(app, b.x + N / 2, b.y + N / 2, a.x + N / 2, a.y + N / 2, b.x + N / 2 + Math.floor(L.cw / 2), hasPatent(g, q) ? T.good : T.paperEdge);
       }
     }
     for (const p of nodes) {
@@ -145,39 +186,38 @@ export function patentsScreen(app: App, r: Rect) {
       const locked = !own && p.requires.some((q) => !hasPatent(g, q));
       const can = !own && !why;
       const sel = st.pinned === p.id;
-      // the node and its label are one button (the label is as wide as the column)
-      const bx0 = Math.min(a.x - 1, a.x + N / 2 - Math.floor((cw - 2) / 2)), bw0 = Math.max(N + 2, cw - 2);
-      ui.region(bx0, a.y - 1, bw0, N + 11, 'button');
-      const hov = ui.hover(bx0, a.y - 1, bw0, N + 11);
+      // the node and its label are one button
+      const stag = labels === 'two' && p.pos[0] % 2 === 1;
+      const lh = labels === 'none' ? 0 : stag ? 2 * SMALL_H + 7 : SMALL_H + 4;
+      const bw0 = Math.max(N + 2, L.cw - 2), bx1 = a.x + N / 2 - Math.floor(bw0 / 2);
+      ui.region(a.x - 1, a.y - 1, N + 7, N + 4, 'button');
+      const hov = ui.hover(bx1, a.y - 1, bw0, N + 1 + lh);
       ui.mark('patent_' + p.id, a.x - 1, a.y - 1, N + 2, N + 2);
       if (hov) hover = p.id;
-      const edge = sel || hov ? C.bone : own ? col : can ? (Math.sin(ui.time * 5) > 0 ? C.teal1 : C.teal0) : C.ink;
-      ui.fill(a.x - 1, a.y - 1, N + 2, N + 2, edge);
-      ui.fill(a.x, a.y, N, N, own ? C.ground1 : locked ? C.shadow : C.hull0);
-      ui.ctx.globalAlpha = locked ? 0.5 : 1;
+      disc(ui, a.x, a.y, N, hov ? 'hover' : own ? 'owned' : can ? 'afford' : locked ? 'locked' : 'normal');
+      // one you can buy now glints round its gold rim
+      if (can) {
+        const t = ui.time * 3 + p.pos[0];
+        ui.ctx.fillStyle = T.paperHi;
+        ui.ctx.fillRect(Math.round(a.x + N / 2 + Math.cos(t) * (N / 2 - 1.5)), Math.round(a.y + N / 2 + Math.sin(t) * (N / 2 - 1.5)), 1, 1);
+      }
+      ui.ctx.globalAlpha = locked ? 0.45 : 1;
       drawNodeIcon(app, p, a.x + 2, a.y + 2);
       ui.ctx.globalAlpha = 1;
-      // the price on a chip at the corner, or a tick when owned
-      if (own) {
-        ui.fill(a.x + N - 7, a.y + N - 7, 8, 8, C.ink);
-        ui.text(ICON.check, a.x + N - 7, a.y + N - 8, col);
-      } else {
-        const ps = `${p.cost}`;
-        const pw = smallWidth(ps) + 3;
-        ui.fill(a.x + N - pw + 1, a.y + N - 6, pw, 7, C.ink);
-        ui.small(ps, a.x + N - pw + 3, a.y + N - 5, can ? C.gold : C.hull2);
+      if (own) tick(ui, a.x + N - 8, a.y + N - 9);
+      else priceTag(app, String(p.cost), a.x + N - 4, a.y + N - 5, can ? 'reset' : 'soft');
+      if (sel) pencilCircle(ui, a.x, a.y, N);
+      if (labels !== 'none') {
+        const room = (labels === 'two' ? 2 * L.cw - 6 : L.cw - 3);
+        const lab = shortLabel(p, room).toUpperCase();
+        const lx = a.x + N / 2, ly = a.y + N + 3 + (stag ? SMALL_H + 3 : 0);
+        // a scrap of paper behind it, so a pencil line passing through the gap goes under the word
+        const lw0 = smallWidth(lab) + 2;
+        ui.ctx.fillStyle = T.paper;
+        ui.ctx.fillRect(Math.round(lx - lw0 / 2), ly - 1, lw0, SMALL_H + 2);
+        if (stag) { ui.ctx.fillStyle = T.paperEdge; ui.ctx.fillRect(Math.round(lx), a.y + N + 1, 1, SMALL_H + 1); }
+        ui.small(lab, lx, ly, own ? ink : can || sel || hov ? T.ink : T.inkSoft, { align: 'center' });
       }
-      // the label under it, clipped to its column
-      const lab = shortLabel(p, cw - 2).toUpperCase();
-      const lx = a.x + N / 2, ly = a.y + N + 3;
-      const cx0 = a.x + N / 2 - Math.floor((cw - 2) / 2);
-      ui.clip(cx0, ly - 1, cw - 2, 7);
-      // on a dark backing, so a prerequisite line running down the gap passes behind it
-      const lw0 = Math.min(cw - 2, smallWidth(lab) + 2);
-      ui.ctx.fillStyle = rgba(C.ink, 0.8);
-      ui.ctx.fillRect(Math.round(lx - lw0 / 2), ly - 1, lw0, 7);
-      ui.small(lab, lx, ly, own ? col : can || sel || hov ? C.bone : C.hull2, { align: 'center', shadow: C.ink });
-      ui.unclip();
       if (hov && ui.clicked) {
         ui.eat();
         if (st.pinned === p.id && can) buy(app, p.id);
@@ -185,8 +225,21 @@ export function patentsScreen(app: App, r: Rect) {
       }
     }
   }
-  // ---- the node described
-  detail(app, hover ?? st.pinned, r.x + r.w - dw - 8, y0 - 2, dw, bottom - y0 + 2);
+  // ---- the node described, on the right page
+  if (detail) nodePage(app, hover ?? st.pinned, detail);
+}
+
+/** A price on a node: a little paper chip with the number in Pip, its right edge at x. */
+function priceTag(app: App, s: string, x: number, y: number, role: Role) {
+  const ui = app.ui;
+  const w = smallWidth(s) + 4, h = SMALL_H + 3;
+  const x0 = Math.round(x - w + 4);
+  ui.ctx.fillStyle = roleInk(role === 'soft' ? 'soft' : role);
+  ui.ctx.fillRect(x0 + 1, y, w - 2, h);
+  ui.ctx.fillRect(x0, y + 1, w, h - 2);
+  ui.ctx.fillStyle = T.paperHi;
+  ui.ctx.fillRect(x0 + 1, y + 1, w - 2, h - 2);
+  ui.small(s, x0 + 2, y + 2, roleInk(role));
 }
 
 /** A node's picture, 16x16 at (x, y). */
@@ -209,28 +262,34 @@ function buy(app: App, id: PatentId) {
   }
 }
 
+/** A pencil line from a prerequisite to a node: across to the gap after the source's column, then
+ * up or down there; going down it runs on in the gap just above the target's row and drops in from
+ * the top, so it never crosses a node. */
 function link(app: App, x0: number, y0: number, x1: number, y1: number, mx: number, col: string) {
-  const ui = app.ui;
-  // across to the gap after the source's column, then up or down there; going down, it runs on in
-  // the gap just above the target's row and drops in from the top, so it never crosses a node
-  ui.fill(Math.min(x0, mx), y0, Math.abs(mx - x0) + 1, 1, col);
+  const ctx = app.ui.ctx;
+  ctx.fillStyle = col;
+  const f = (x: number, y: number, w: number, h: number) => ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+  f(Math.min(x0, mx), y0, Math.abs(mx - x0) + 1, 1);
   const yr = y1 > y0 ? y1 - N / 2 - 3 : y1;
-  ui.fill(mx, Math.min(y0, yr), 1, Math.abs(yr - y0) + 1, col);
-  ui.fill(Math.min(mx, x1), yr, Math.abs(x1 - mx) + 1, 1, col);
-  if (yr !== y1) ui.fill(x1, yr, 1, y1 - yr, col);
+  f(mx, Math.min(y0, yr), 1, Math.abs(yr - y0) + 1);
+  f(Math.min(mx, x1), yr, Math.abs(x1 - mx) + 1, 1);
+  if (yr !== y1) f(x1, yr, 1, y1 - yr);
 }
 
-// ------------------------------------------------------------------ what a node does, in numbers
+// ------------------------------------------------------------------ what a node does, in rows
 
 type Eff = { k: string } & Record<string, unknown>;
 
-/** A rule's value as this run has it (the Patents owned) and as a new game has it. */
+/** A rule's value as this run has it (the Patents owned). */
 function ruleNow(app: App, key: string): number | undefined {
   const v = (prules(app.game) as unknown as Record<string, unknown>)[key];
   return typeof v === 'number' ? v : typeof v === 'boolean' ? (v ? 1 : 0) : undefined;
 }
 
-/** "45 s instead of 70" style lines: what the node does, and what buying it changes in this run. */
+const OWNED_NOW = '{good:in effect} · this run and every run after';
+
+/** What a node does as rows of markup ("{u:fold} the fold box 10x10 · was 4x4"), and what buying
+ * it changes in this run (a row, or null). */
 export function effectInfo(app: App, p: PatentDef): { does: string[]; now: string | null } {
   const g = app.game;
   const e = p.effect as unknown as Eff;
@@ -239,160 +298,172 @@ export function effectInfo(app: App, p: PatentDef): { does: string[]; now: strin
   const own = hasPatent(g, p.id);
   const was = (now: number | undefined, base: number | undefined, unit: string | ((v: number) => string) = '') => {
     const b = own ? base : now;
-    return b === undefined || !isFinite(b) ? '' : ` instead of ${typeof unit === 'string' ? b + unit : unit(b)}`;
+    return b === undefined || !isFinite(b) ? '' : ` · {soft:was ${typeof unit === 'string' ? b + unit : unit(b)}}`;
   };
   const base = (k: string) => (RULES as unknown as Record<string, { value: number } | undefined>)[k]?.value;
   const change = (from: number | undefined, to: number, fmt: (v: number) => string, better: (a: number, b: number) => boolean) => {
-    if (own) return 'In effect in this run and every run after.';
+    if (own) return OWNED_NOW;
     if (from === undefined) return null;
-    return better(to, from) ? `This run: ${fmt(from)} becomes ${fmt(to)} the moment you buy it.` : `No change this run: it is ${fmt(from)} already.`;
+    return better(to, from) ? `${fmt(from)} → {good:${fmt(to)}} the moment you buy it` : `{soft:no change · ${fmt(from)} already}`;
   };
   const up = (a: number, b: number) => a > b, down = (a: number, b: number) => a < b;
+  const box = (x: number) => `${x}x${x}`;
   switch (e.k) {
     case 'head': {
       const does: string[] = [];
       const add: string[] = [];
       for (const u of list('upgrades') as string[]) {
         const name = (UPGRADES as Record<string, { name: string } | undefined>)[u]?.name ?? u;
-        does.push(`Starts with the ${name}.`);
+        does.push(`{u:play} start with the ${name}`);
         if (!g.has(u as never)) add.push(`the ${name}`);
       }
       const rs = list('research') as string[];
       if (rs.length) {
         const names = rs.map((q) => (RESEARCH as Record<string, { name: string } | undefined>)[q]?.name ?? q);
-        does.push(`Research known from the start: ${names.join(', ')}.`);
-        rs.forEach((q, i) => { if (!g.done(q as never)) add.push(names[i]); });
+        does.push(`{u:research} known from the start · ${names.map((n) => `{research:${n}}`).join(' · ')}`);
+        rs.forEach((q, i) => { if (!g.done(q as never)) add.push(`{research:${names[i]}}`); });
       }
       const land = list('land') as string[];
       if (land.length) {
         const names = land.map((l) => CHUNKS.find((c) => c.id === l)?.name ?? `chunk ${l}`);
         const worth = land.reduce((s, l) => s + (CHUNKS.find((c) => c.id === l)?.cost ?? 0), 0);
-        does.push(`Land from the start: ${names.join(', ')}${worth ? ` (${amount(worth)} coin of land)` : ''}.`);
+        does.push(`{u:claim} land from the start · ${names.join(' · ')}${worth ? ` · {coin:${amount(worth)}} of land` : ''}`);
         land.forEach((l, i) => { if (!g.s.land.includes(l)) add.push(names[i]); });
       }
       const coin = num('coin');
-      if (isFinite(coin)) { does.push(`${amount(coin)} coin at the start of every run.`); add.push(`${amount(coin)} coin`); }
+      if (isFinite(coin)) { does.push(`{coin:${amount(coin)}} at the start of every run`); add.push(`{coin:${amount(coin)}}`); }
       const place = list('place') as { kind: string; x: number; y: number }[];
       for (const q of place) {
-        does.push(`A ${BUILD[q.kind as keyof typeof BUILD]?.name ?? q.kind} placed at ${q.x},${q.y} at the start.`);
-        if (!g.entAt(q.x, q.y)) add.push(`a ${BUILD[q.kind as keyof typeof BUILD]?.name ?? q.kind}`);
+        const name = BUILD[q.kind as keyof typeof BUILD]?.name ?? q.kind;
+        does.push(`{u:build} a ${name} at ${q.x},${q.y} from the start`);
+        if (!g.entAt(q.x, q.y)) add.push(`a ${name}`);
       }
-      const now = own ? 'Yours: every run starts with it.' : add.length ? `This run: buying adds ${add.join(', ')} now.` : 'This run: you have all of it already; it pays from the next run.';
+      const now = own ? '{good:yours} · every run starts with it' : add.length ? `+ ${add.join(' · ')} now` : '{soft:you have it all already · pays from the next run}';
       return { does: does.length ? does : [p.text], now };
     }
     case 'foldMax': {
       const v = num('value'), cur = ruleNow(app, 'foldMax');
-      return { does: [`The fold box is up to ${v}x${v}${was(cur, base('foldMax'), (x) => `${x}x${x}`)}.`], now: change(cur, v, (x) => `${x}x${x}`, up) };
+      return { does: [`{u:fold} the fold box up to ${box(v)}${was(cur, base('foldMax'), box)}`], now: change(cur, v, box, up) };
     }
     case 'audit': {
       const w = num('warmup'), s = num('span');
       const cw = ruleNow(app, 'auditWarmup'), cs = ruleNow(app, 'auditWindow');
       const cur = cw !== undefined && cs !== undefined ? cw + cs : undefined;
       const b = (base('auditWarmup') ?? NaN) + (base('auditWindow') ?? NaN);
-      return { does: [`An audit takes ${w + s} s (${w} s warm-up, a ${s} s window)${was(cur, isFinite(b) ? b : undefined, ' s')}.`], now: change(cur, w + s, (x) => `${x} s`, down) };
+      return { does: [`{u:clock} an audit takes ${w + s} s · ${w} s warm-up + ${s} s window${was(cur, isFinite(b) ? b : undefined, ' s')}`], now: change(cur, w + s, (x) => `${x} s`, down) };
     }
     case 'maxAudits': {
       const v = num('value'), cur = ruleNow(app, 'maxAudits');
-      return { does: [`Up to ${v} Workshop lines audited at once${was(cur, base('maxAudits'))}.`], now: change(cur, v, (x) => `${x} at once`, up) };
+      return { does: [`{u:stats} up to ${v} Workshop lines audited at once${was(cur, base('maxAudits'))}`], now: change(cur, v, (x) => `${x} at once`, up) };
     }
     case 'sideIntake':
-      return { does: ['A module also takes inputs from a trunk into its left side: 2 input sides instead of 1.'], now: own ? 'In effect in this run and every run after.' : ruleNow(app, 'sideIntake') ? 'No change this run: modules have it already.' : 'This run: every module gets its second input side at once.' };
+      return { does: ['{u:flow} a module also takes a trunk into its left side · 2 input sides, was 1'], now: own ? OWNED_NOW : ruleNow(app, 'sideIntake') ? '{soft:no change · modules have it already}' : 'every module gets its second input side at once' };
     // the Milestone 5-6 review round (the reset layer): the re-derived rules
     case 'halfClaims':
-      return { does: ['A copy of a source design graded S or S+ holds half a claim on each ore: twice the copies of a well-folded source line.'], now: own ? 'In effect in this run and every run after.' : 'This run: your S and S+ source designs need half a claim a copy at once.' };
+      return { does: ['{u:claim} an S or S+ source design holds half a claim on each ore · twice the copies'], now: own ? OWNED_NOW : 'your S and S+ source designs need half a claim a copy at once' };
     case 'nestedMax': {
       const v = num('value'), cur = ruleNow(app, 'nestedMax');
-      return { does: [`A nested fold boxes up to ${v}x${v}${was(cur, base('nestedMax'), (x) => `${x}x${x}`)}.`], now: change(cur, v, (x) => `${x}x${x}`, up) };
+      return { does: [`{u:factory} a nested fold boxes up to ${box(v)}${was(cur, base('nestedMax'), box)}`], now: change(cur, v, box, up) };
     }
     case 'freshDies':
-      return { does: ['A design refolded at a better grade than every earlier one of its product starts its stamp price over.'], now: own ? 'In effect in this run and every run after.' : 'This run: refold a line better and its copies are cheap again.' };
+      return { does: ['{u:heavy} a design refolded at a better grade than every earlier one of its product starts its stamp price over'], now: own ? OWNED_NOW : 'refold a line better and its copies are cheap again' };
     case 'shovel': {
       const v = num('every'), cur = ruleNow(app, 'shovelEvery');
-      return { does: [`Shovels one jammed machine clear every ${v} s, on its own.`], now: own ? 'In effect in this run and every run after.' : cur ? `No change this run: a frog shovels every ${cur} s already.` : 'This run: the frog starts at once.' };
+      return { does: [`{i:slag} shovels one jammed machine clear every ${v} s, on its own`], now: own ? OWNED_NOW : cur ? `{soft:no change · a frog shovels every ${cur} s already}` : 'the frog starts at once' };
     }
     case 'stampPress': {
       const v = num('every');
-      return { does: [`Stamps a spare of each "keep one spare" design every ${v} s while you can afford it.`], now: own ? 'In effect in this run and every run after.' : 'This run: the press starts at once.' };
+      return { does: [`{u:fold} stamps a spare of each keep-one-spare design every ${v} s · while you can afford it`], now: own ? OWNED_NOW : 'the press starts at once' };
     }
     case 'draughtsman': {
       const v = num('every');
-      return { does: [`Unfolds the designs you queue in the Patent Drawer, in your order, one every ${v} s at most, as land, research and coin allow.`], now: own ? 'In effect in this run and every run after.' : 'This run: queue kept designs in the Drawer and it starts at once.' };
+      return { does: [`{u:blueprint} unfolds the Drawer's queue in order · one every ${v} s at most · as land, research and coin allow`], now: own ? OWNED_NOW : 'queue kept designs in the Drawer · it starts at once' };
     }
     case 'drawer': {
       const v = num('add'), cur = ruleNow(app, 'drawerSlots');
-      return { does: [`The Patent Drawer keeps ${v} more designs.`], now: change(cur, (cur ?? 0) + v, (x) => `${x} slots`, up) };
+      return { does: [`{u:blueprint} the Patent Drawer keeps ${v} more designs`], now: change(cur, (cur ?? 0) + v, (x) => `${x} slots`, up) };
     }
     case 'offline': {
       const add = num('add');
       const now = offlineEfficiency(g);
       const cap = IDLE.offlineEffMax.value;
       const to = Math.min(cap, now + add);
-      return { does: [`Offline efficiency +${pct(add)} (at most ${pct(cap)}).`], now: own ? `In effect: offline pays ${pct(now)} now.` : to > now ? `This run: offline pays ${pct(now)}, then ${pct(to)}.` : `No change: offline is at its ${pct(cap)} ceiling.` };
+      return { does: [`{u:overnight} offline efficiency {good:+${pct(add)}} · at most ${pct(cap)}`], now: own ? `{good:in effect} · offline pays ${pct(now)} now` : to > now ? `offline pays ${pct(now)} → {good:${pct(to)}}` : `{soft:no change · offline is at its ${pct(cap)} ceiling}` };
     }
     case 'lab':
     case 'clerk':
     default:
-      return { does: [p.text], now: own ? 'In effect in this run and every run after.' : 'This run: it starts work the moment you buy it.' };
+      return { does: [p.text], now: own ? OWNED_NOW : 'it starts work the moment you buy it' };
   }
 }
 
-function detail(app: App, id: PatentId, x: number, y: number, w: number, h: number) {
+/** The Committee's line on the Patent page: what is waiting to be banked or spent. */
+function committeeLine(app: App): string {
+  const g = app.game;
+  const m = g.s.meta;
+  const now = previewPatents(g).now;
+  const canBuy = PATENT_LIST.some((p) => !hasPatent(g, p.id) && !patentRefusal(g, p.id));
+  if (canBuy) return '"spend them." "we won\'t tell." "much."';
+  if (now > 0) return `"psst." "this run files" {chip:reset:+${now}}`;
+  if (m.patents.gt(0)) return '"save them." "the good ones cost more."';
+  return '"psst." "we know a guy." "he files patents."';
+}
+
+function nodePage(app: App, id: PatentId, r: Rect) {
   const ui = app.ui;
   const g = app.game;
   const p = PATENTS[id];
-  const col = branchCol(p.branch);
-  const inner = card(ui, x, y, w, h, branchName(p.branch), col);
-  const tx = inner.x + 2, tw = inner.w - 4;
-  const foot = inner.y + inner.h - 18;
-  let yy = inner.y + 2;
-  // the icon beside the name
-  ui.fill(tx - 1, yy - 1, 18, 18, C.ink);
-  drawNodeIcon(app, p, tx, yy);
-  const nameH = ui.para(p.name, tx + 21, yy + (textWidth(p.name) > tw - 21 ? 0 : 4), tw - 21, C.gold);
-  yy += Math.max(18, nameH) + 4;
+  const role = branchRole(p.branch);
+  let y = r.y;
+  // the Committee, conspiring at the top
+  y += speak(app, 'committee', committeeLine(app), r.x, y, r.w, { size: 24, fallback: committeeFallback }) + 5;
+  rule(ui, r.x, y - 2, r.w, true);
+  y += 2;
+  const own = hasPatent(g, id);
+  // the disc beside the name
+  disc(ui, r.x, y, N, own ? 'owned' : 'normal');
+  drawNodeIcon(app, p, r.x + 2, y + 2);
+  const NL = layoutRich(`{big:${p.name}}`, r.w - N - 6);
+  drawLayout(ui, NL, r.x + N + 5, y + (NL.lines.length > 1 ? 0 : 5), roleInk(role));
+  y += Math.max(N, NL.h) + 3;
+  chip(ui, r.x, y, branchName(p.branch), { role });
+  if (own) stamp(ui, 'OWNED', r.x + r.w - 30, y + 4, { col: T.goodFill, angle: -0.1 });
+  y += 15;
+  const foot = r.y + r.h - 19;
   const info = effectInfo(app, p);
-  const room = (hh: number) => yy + hh <= foot - 12;
-  for (const d of info.does) {
-    const hh = ui.para(d, tx, yy, tw, C.bone);
-    yy += hh + 2;
+  // the data's row first, in ink; the numbers behind it (limits, what it was) after, softer
+  const rows = [{ s: p.text, col: T.ink }, ...info.does.filter((d) => d !== p.text).map((d) => ({ s: d, col: T.inkSoft }))];
+  for (const d of rows) {
+    const L = layoutRich(d.s, r.w);
+    if (y + L.h > foot - 30) break;
+    drawLayout(ui, L, r.x, y, d.col);
+    y += L.h + 2;
   }
   if (info.now) {
-    yy += 2;
-    label(ui, 'this run', tx, yy, C.teal1);
-    yy += 7;
-    // the label says "this run": the line says what changes
-    const now = info.now.replace(/^This run: /, '');
-    yy += ui.para(now.charAt(0).toUpperCase() + now.slice(1), tx, yy, tw, C.teal1) + 2;
+    y += 2;
+    const cw = chip(ui, r.x, y, 'THIS RUN', { role: 'research' });
+    const L = layoutRich(info.now, r.w - cw - 4);
+    drawLayout(ui, L, r.x + cw + 4, y + 2, T.ink);
+    y += Math.max(ROW_H, L.h + 4);
   }
   // the price and what it needs
-  yy += 2;
-  const own = hasPatent(g, id);
-  label(ui, own ? 'owned' : `price ${p.cost} ${p.cost === 1 ? 'patent' : 'patents'}, you have ${g.s.meta.patents.format()}`, tx, yy, own ? col : g.s.meta.patents.gte(p.cost) ? C.gold : C.hull2);
-  yy += 9;
-  if (p.requires.length) {
-    label(ui, 'needs', tx, yy, C.hull2);
-    yy += 7;
-    for (const q of p.requires) {
-      const ok = hasPatent(g, q);
-      ui.text(`${ok ? ICON.check : ICON.cross} ${PATENTS[q]?.name ?? q}`, tx, yy, ok ? C.leaf : C.copper2);
-      yy += 10;
-    }
+  y += 2;
+  const have = g.s.meta.patents;
+  if (!own) {
+    const cw = chip(ui, r.x, y, `${p.cost} ${p.cost === 1 ? 'Patent' : 'Patents'}`, { role: have.gte(p.cost) ? 'reset' : 'soft', solid: have.gte(p.cost) });
+    drawLayout(ui, layoutRich(`{soft:you have ${have.format()}}`), r.x + cw + 5, y + 3, T.inkSoft);
+    y += ROW_H;
   }
-  // the line from the data, then the flavour, as room allows
-  const textLines = info.does[0] === p.text ? 0 : Math.ceil(textWidth(p.text) / tw) + 1;
-  if (textLines && room(textLines * 10 + 4)) {
-    yy += 3;
-    yy += ui.para(p.text, tx, yy, tw, C.hull2) + 2;
+  for (const q of p.requires) {
+    if (y + 11 > foot - 12) break;
+    const ok = hasPatent(g, q);
+    ui.text(`${ok ? ICON.check : ICON.cross} ${PATENTS[q]?.name ?? q}`, r.x, y, ok ? T.good : T.bad);
+    y += 11;
   }
-  if (yy + 22 < foot - 4) {
-    const fh = Math.min(foot - 4 - yy, 40);
-    frame(ui, inner.x, yy + 2, inner.w, fh, 'paper', false);
-    ui.clip(inner.x + 3, yy + 5, inner.w - 6, fh - 6);
-    ui.para(p.flavor, inner.x + 5, yy + 6, inner.w - 10, C.ink);
-    ui.unclip();
-  }
-  const why = own ? 'Owned' : patentRefusal(g, id);
-  const lab = own ? `${ICON.check} Owned` : `Buy: ${p.cost} ${p.cost === 1 ? 'Patent' : 'Patents'}`;
-  if (button(ui, 'patentBuy', inner.x, foot, inner.w, 16, lab, { disabled: !!why, gold: !why, tip: why ?? 'Bought for good: it lasts through every Reorganize' })) buy(app, id);
-  ui.fill(inner.x, foot - 3, inner.w, 1, rgba(C.hull0, 0.6));
+  // the flavour line, as room allows
+  const FL = layoutRich(`{soft:"${p.flavor}"}`, r.w);
+  if (y + FL.h + 4 <= foot - 2) drawLayout(ui, FL, r.x, foot - 3 - FL.h, T.inkSoft);
+  const why = own ? null : patentRefusal(g, id);
+  const lab = own ? `${ICON.check} Yours for good` : `Buy · ${p.cost} ${p.cost === 1 ? 'Patent' : 'Patents'}`;
+  if (button(ui, 'patentBuy', r.x, foot, r.w, 18, lab, { disabled: own || !!why, gold: !own && !why, tip: own ? '{u:reset} it lasts through every Reorganize' : why ?? '{u:reset} bought for good · it lasts through every Reorganize' })) buy(app, id);
 }
