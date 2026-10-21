@@ -40,7 +40,9 @@ export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options
   // Milestone 6: "safe for overnight" (src/app/overnight.ts)
   | 'overnight'
   // Milestone 5: Reorganize, the Patent Office, the Patent Drawer
-  | 'reorganize' | 'patents' | 'drawer';
+  | 'reorganize' | 'patents' | 'drawer'
+  // the 180 (docs/hud-180.md): the Swamp Gazette's page and the drawn keyboard
+  | 'gazette' | 'keys';
 
 /** Screens added from other files (Milestones 5 and 6): drawn in the overlay rect like the rest. */
 const EXTRA = new Map<string, (app: App, r: Rect, L: Layout) => void>();
