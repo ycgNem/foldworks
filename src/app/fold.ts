@@ -1236,12 +1236,21 @@ function festivalScene(app: App, x: number, y: number, w: number, h: number, t: 
   const k = h >= 64 ? 2 : 1;
   frame(ui, x - 1, y - 1, w + 2, h + 2, 'inset', false);
   ui.clip(x, y, w, h);
-  // water, a dusk sky line, then the boardwalk along the bottom
-  ctx.fillStyle = C.shadow;
-  ctx.fillRect(x, y, w, h);
-  if (hasArt('tile_water')) {
-    const ws = sheet('tile_water');
-    for (let yy = y; yy < y + h; yy += 16 * k) for (let xx = x; xx < x + w; xx += 16 * k) ctx.drawImage(ws.frames[(Math.floor(t * 4) + xx + yy) & 3], xx, yy, 16 * k, 16 * k);
+  // the sky island's sky in bands (zenith to horizon), two clouds drifting, then the boardwalk
+  // along the bottom
+  const bands = [C.sky1, C.sky2, C.sky3, C.sky4];
+  for (let i = 0; i < bands.length; i++) {
+    ctx.fillStyle = bands[i];
+    ctx.fillRect(x, y + Math.floor((h * i) / bands.length), w, Math.ceil(h / bands.length));
+  }
+  if (hasArt('sky_cloud')) {
+    const cs = sheet('sky_cloud');
+    for (let i = 0; i < 2; i++) {
+      const f = cs.frames[2 + i * 2];
+      const span = w + cs.w * k;
+      const cx = x - cs.w * k + ((t * (6 + i * 4) * k + i * span * 0.55) % span);
+      ctx.drawImage(f, Math.round(cx), y + (2 + i * 10) * k, cs.w * k, cs.h * k);
+    }
   }
   const deckY = y + h - 16 * k;
   const bw = sheet('town_boardwalk');

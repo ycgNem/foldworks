@@ -209,9 +209,19 @@ def sheet(rows):
     return out
 
 
+# Sprites the sky island (docs/sky-island.md, 2026-10-21) took over: their src/art/ copies now come
+# from pixel-art/sky/ (the ores are re-seated from this folder's OUT by sky/ores_reseat.py, so run
+# sky/build.py after ores.py), pixel-art/town/ and pixel-art/title/. A rerun here still writes OUT
+# but never overwrites the game's copy.
+SUPERSEDED = ("town_", "tile_ore_", "tile_floor", "tile_water", "tile_shore", "title_scene")
+
+
 def export(name, rows, fps=0, anchor=(0, 0), facings=None, extra=None, check=True, to_src=True):
     """Write OUT/<name>.png + .json (and src/art/ when to_src). rows is a list of frame lists (one
     row unless facings). Every pixel must be from the art palette (pips never)."""
+    if to_src and name.startswith(SUPERSEDED):
+        print(f"  {name}: superseded by the sky island, written to {OUT.name}/ only")
+        to_src = False
     if isinstance(rows[0], Image.Image):
         rows = [rows]
     img = sheet(rows)

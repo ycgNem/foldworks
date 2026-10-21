@@ -33,6 +33,10 @@ await page.evaluate((m) => {
   a.zoom(-9);
   a.fitCamera(true);
 }, +minutes);
+// the setup's own celebrations (dust from every belt laid, the lots paving in with their coin
+// showers) settle before the steady state is read: measured mid-shower, a dense floor read 11 ms a
+// frame in software rendering that settles to about 2.2 ms
+await page.waitForFunction(() => { const f = window.__app.renderer.fx; return !f.parts.length && !f.rings.length && !f.flyers.length && !f.pops.length; }, null, { timeout: 15000 }).catch(() => {});
 await page.waitForTimeout(1500);
 const samples = [];
 for (let i = 0; i < 10; i++) {

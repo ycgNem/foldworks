@@ -2,7 +2,67 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
-## Status (2026-10-21): the 180 (text and HUD turned away from Last Watt) and the ore revamp
+## Status (2026-10-21, later): the sky island (the world redesigned)
+
+The owner: "full redesign the way the gameplay/game looks, the planks and worlds … the surrounding
+ocean isn't gonna cut it … Cookie Clicker combined with those factory Roblox games, tycoon things,
+Miner's Haven … 300 PixelLab limit, run autonomously". They picked **a floating sky island** and
+**palette B extended**. Built on branch `sky-island` (a style test, then agents in worktrees for the
+renderer, the ground and island, the Factory platform, the town and the title), merged by the lead.
+The plan and the as-built contract: `docs/sky-island.md`. DECISIONS.md: "The sky island".
+
+### What exists
+
+- **Palette B + 18 sky colours** (sky, cloud, grass, paving, sun) appended after the pips;
+  machines, items, cast and HUD unchanged. `pixel-art/sky/pal.py` tests the ramps (colour-blind
+  separation of meadow and paving included).
+- **The Workshop is a floating island**: owned land paved (concrete with a build grid, grass in the
+  grout at the meadow), land for sale meadow with its plot marked out; buying a lot paves it in a
+  wave. A grass rim with trees, bushes, fences and flowers; the south cliff with the floor's ores
+  as veins; an underside tapering to a point; waterfalls into the cloud sea; a parallax sky with
+  clouds, far islets and birds (`src/render/sky.ts`, `island.ts`, `skyart.ts`, `ground.ts`).
+- **The Factory is a sky platform**: a riveted plaza for the town, tread round the hall, brass
+  kerbs, a girder face and truss with rotor pods, outriggers with rotors on the sides, annex
+  splices (`src/render/factory.ts`); its sky is higher, the Workshop island small far below.
+- **The town on footings**: every house redrawn in daylight on stone, Unit 7's plinth, Voltaire's
+  steps, the Boardwalk a railed promenade (`pixel-art/town/`, `src/render/town.ts`).
+- **The title scene**: the Workshop island and the town's island framing the logo, Bramble raising
+  his hat (`pixel-art/title/`).
+- **Ores re-seated** on paving and meadow (`pixel-art/sky/ores_reseat.py`).
+- **Buildings drop in** and land with a squash (`renderer.ts`). The Festival sheet's strip is sky.
+- **Words**: strings that put the town in a swamp rewritten (ids unchanged).
+- **e2e**: `e2e/skylook.mjs` (the island at 1x, 2x, 3x); `screens` waits on the clock in a hover
+  chain (the wheel's fan had been caught mid-slide).
+
+### Measured
+
+No sim, data number or save changed (`src/sim/` untouched). `npm test` 38 files, 662 passed and 1
+todo (the pace suite as before); `npm run screens` clean at three sizes; `npm run smoke` green;
+`npm run shots` reaches every moment. **Perf** (swiftshader, 1920x1080, the dense floor): sim
+0.035 ms a tick; render + HUD 3.08 ms a frame at steady state. `e2e/perf.mjs` now waits for the
+setup's celebrations to settle: read mid-shower (dust from 196 belts laid, three lots paving in)
+the same floor showed 11 ms, which was the old method's 7.75 ms plus the bigger land-buy effects.
+
+### Open
+
+- **Derivative flags for the owner** (DECISIONS.md, the sky island): a floating island base
+  (Roblox *Islands*, Skyblock), the plot paving itself in (the tycoon genre), rotor pods
+  (steampunk). Nothing from Cookie Clicker or Miner's Haven is used.
+- **Not redrawn for the sky**: the Megaproject and research pictures (still the bayou's night),
+  the Dock's water slip (it reads as a canal in the paving). The pause key still does nothing.
+- **PixelLab**: 2 of the 300 generations used; ~205 more left the account during the work from
+  another session (not this one).
+- The earlier sections' open items still stand.
+
+### Start here next session
+
+- **Branch:** `sky-island` merged into `main` locally; not pushed until the owner says so.
+- **Art:** `pixel-art/sky/` (`python build.py`: ground, island, sky, props, ores re-seat; run it
+  after `pixel-art/revamp/ores.py`), `pixel-art/sky/fplat.py`, `pixel-art/town/build.py`,
+  `pixel-art/title/build.py`. The revamp scripts no longer write the sprites these took over.
+- **Looks:** `node e2e/skylook.mjs`, `node pixel-art/title/shot.mjs` (both with `BASE`).
+
+## Earlier status (2026-10-21): the 180 (text and HUD turned away from Last Watt) and the ore revamp
 
 The owner: the ores made the game look bland, and "all the text in this game mirrors" Last Watt
 (their tower defense, `Documents/candlepower`, grown from the same engine layer): "do a 180 to that

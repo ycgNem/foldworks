@@ -326,7 +326,7 @@ function customerPage(app: App, p: Rect) {
   const quote = cheer && filled ? cu.thanks[(filled - 1) % cu.thanks.length]
     : active && active.customer === who ? active.pitch
       : filled ? cu.thanks[(filled - 1) % cu.thanks.length]
-        : who === 'bramble' ? 'Got anything for me? The swamp is always buying!' : mine[0].pitch;
+        : who === 'bramble' ? 'Got anything for me? The island is always buying!' : mine[0].pitch;
   // the perks and rewards decide whether the portrait fits at 48
   let perks = perkRows(app, who, rep);
   const foot = who === 'unit7' ? 18 : 0;

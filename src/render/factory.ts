@@ -20,6 +20,7 @@ import { onPaper } from '../ui/theme';
 import { TICK_RATE } from '../engine/time';
 import { sheet, drawRot, frameAt, itemIcon, hasArt } from './sprites';
 import { TILE } from './ground';
+import { art, artSig, canvas, hh, named } from './skyart';
 
 const PIP: Record<string, string> = { work: C.pipGreen, starved: C.pipYellow, blocked: C.pipRed, idle: C.pipGrey };
 
@@ -85,14 +86,151 @@ function feedsInto(a: FEnt, b: FEnt): boolean {
   return a.x + DX[a.rot] === b.x && a.y + DY[a.rot] === b.y;
 }
 
+/** The deck round the hall, in tiles (docs/sky-island.md): the plaza north of the hall wide
+ *  enough for the town (its footing rows -3..-1, its sprites up to row -5, columns -3..fw+3) and
+ *  `wing` tiles wider than the body each side; a walk round the hall, `w` west, `e` east (the
+ *  annex block for sale and its label stand there), `s` south (the row-99 houses). */
+export const PLAT = { n: 5, s: 2, w: 2, e: 3, wing: 2 };
+const PLAT_ART = ['fplat_edge', 'fplat_under', 'fplat_deck'] as const;
+/** the plaza's plate kinds, picked by hash (plain most often) */
+const PLATE_KINDS = ['plain', 'plain', 'plain', 'hatch', 'plain', 'vent', 'plain'];
+
+/** A frame by its sidecar name, else by its index in the contract's order (the fallbacks have no
+ *  names, and some have fewer frames: a missing one is skipped). */
+function pick(a: ReturnType<typeof art>, name: string, i: number): HTMLCanvasElement | null {
+  return named(a, name) ?? (a.names ? null : a.frames[i] ?? null);
+}
+
+/** The Factory floor's riveted sky platform (docs/sky-island.md, pixel-art/sky/fplat.py): a pale
+ *  steel deck round the hall (fplat_deck: the plaza's 32 px plates north of it, tread on the walk),
+ *  a brass-capped kerb on every edge into the sky (fplat_edge overlays by neighbour mask, rounded
+ *  corners cut out of the deck, the kerb carried round concave corners), the girder face under
+ *  every south edge and a truss under the body (fplat_under), brass rotor pods hung under the
+ *  truss and on outriggers off the side faces, spinning (fplat_rotor, fplat_rotor_side, live).
+ *  Baked per floor size: annex blocks bolt on east as they are bought, a splice strip across the
+ *  deck and the face where each one meets what was there. */
+export class Platform {
+  private c: HTMLCanvasElement | null = null;
+  private key = '';
+  private ox = 0;
+  private oy = 0;
+  private rotors: { x: number; y: number }[] = [];
+  private sides: { x: number; y: number; east: boolean }[] = [];
+  private b = { x0: 0, y0: 0, x1: 0, y1: 0 };
+  /** world px under the floor's south edge the camera may show: the deck, the girder, the rotors */
+  readonly below = (PLAT.s + 4) * TILE;
+
+  bounds() {
+    return this.b;
+  }
+
+  draw(ctx: CanvasRenderingContext2D, fw: number, fh: number, time: number) {
+    const key = `${fw}x${fh}:${artSig(PLAT_ART)}`;
+    if (!this.c || key !== this.key) {
+      this.bake(fw, fh);
+      this.key = key;
+    }
+    ctx.drawImage(this.c!, this.ox, this.oy);
+    const r = art('fplat_rotor');
+    const tick = Math.floor(time * (r.fps || 12));
+    for (let i = 0; i < this.rotors.length; i++) {
+      const p = this.rotors[i];
+      ctx.drawImage(r.frames[(tick + i) % r.frames.length], p.x - r.ax, p.y - r.ay);
+    }
+    // the outriggers: frames w0..w3 for the west face, e0..e3 (mirrored, anchor mirrored) east
+    const s = art('fplat_rotor_side');
+    const n = Math.max(1, Math.floor(s.frames.length / 2));
+    for (let i = 0; i < this.sides.length; i++) {
+      const p = this.sides[i];
+      const f = s.frames[(p.east ? n : 0) + ((tick + i * 3) % n)];
+      if (f) ctx.drawImage(f, p.x - (p.east ? s.w - 1 - s.ax : s.ax), p.y - s.ay);
+    }
+  }
+
+  private bake(fw: number, fh: number) {
+    // the plaza north of the hall, wider than the body by a wing each side; the body round the hall
+    const NX0 = -PLAT.w - PLAT.wing, NX1 = fw + PLAT.e + PLAT.wing, BX0 = -PLAT.w, BX1 = fw + PLAT.e, Y0 = -PLAT.n, Y1 = fh + PLAT.s;
+    const on = (x: number, y: number) => {
+      if (y < Y0 || y >= Y1) return false;
+      return y < 0 ? x >= NX0 && x < NX1 : x >= BX0 && x < BX1;
+    };
+    const hall = (x: number, y: number) => x >= 0 && y >= 0 && x < fw && y < fh;
+    const X0 = NX0, X1 = NX1;
+    const c = canvas((X1 - X0) * TILE, (Y1 - Y0 + 2) * TILE);
+    const ctx = c.getContext('2d')!;
+    this.ox = X0 * TILE;
+    this.oy = Y0 * TILE;
+    const put = (img: CanvasImageSource | null, x: number, y: number) => { if (img) ctx.drawImage(img, x * TILE - this.ox, y * TILE - this.oy); };
+    const edge = art('fplat_edge'), under = art('fplat_under'), deck = art('fplat_deck');
+    // the annex seams: where each bought block meets the hall before it
+    const seams = new Set<number>();
+    for (let x = FACTORY.w; x < fw; x += ANNEX.cols) seams.add(x);
+    // under each column's lowest deck tile the girder face (ends where the column next to it is
+    // shallower or sky; a splice plate on an annex seam); under the body, the truss, inset a tile
+    const bottom = (x: number) => { let b = Y1 - 1; while (b >= Y0 && !on(x, b)) b--; return b; };
+    for (let x = X0; x < X1; x++) {
+      const b = bottom(x);
+      if (b < Y0) continue;
+      const l = !on(x - 1, b) || bottom(x - 1) < b, r = !on(x + 1, b) || bottom(x + 1) < b;
+      const f = l && r ? pick(under, 'face_lr', 1) : l ? pick(under, 'face_l', 0) : r ? pick(under, 'face_r', 2)
+        : seams.has(x) ? pick(under, 'face_splice', 1) : x % 2 ? pick(under, 'face2', 1) ?? pick(under, 'face', 1) : pick(under, 'face', 1);
+      put(f, x, b + 1);
+      if (x > BX0 && x < BX1 - 1) put(x === BX0 + 1 ? pick(under, 'truss_l', 3) : x === BX1 - 2 ? pick(under, 'truss_r', 5) : pick(under, 'truss', 4), x, Y1 + 1);
+    }
+    // the deck: the plaza's 32 px plates (a plate the edge cuts is plain), the walk's tread
+    const mod2 = (v: number) => ((v % 2) + 2) % 2;
+    for (let y = Y0; y < Y1; y++)
+      for (let x = X0; x < X1; x++) {
+        if (!on(x, y) || hall(x, y)) continue;
+        if (y < 0) {
+          const px = x - mod2(x), py = y - mod2(y);
+          const whole = on(px, py) && on(px + 1, py) && on(px, py + 1) && on(px + 1, py + 1) && py + 1 < 0;
+          const kind = whole ? PLATE_KINDS[Math.floor(hh(px, py, 7) * PLATE_KINDS.length)] : 'plain';
+          put(pick(deck, `${kind}_${mod2(y) ? 's' : 'n'}${mod2(x) ? 'e' : 'w'}`, 0), x, y);
+        } else put(pick(deck, hh(x, y, 3) < 0.2 ? 'tread1' : 'tread0', 0), x, y);
+      }
+    // the kerb on every edge into the sky: round the convex corners cut out of the deck, the mask's
+    // overlay, the kerb carried round a concave corner; then the annex seams' splice strips
+    const CORNERS: [string, number, number, number][] = [['nw', -1, -1, 9], ['ne', 1, -1, 3], ['sw', -1, 1, 12], ['se', 1, 1, 6]];
+    for (let y = Y0; y < Y1; y++)
+      for (let x = X0; x < X1; x++) {
+        if (!on(x, y) || hall(x, y)) continue;
+        const m = (on(x, y - 1) ? 1 : 0) | (on(x + 1, y) ? 2 : 0) | (on(x, y + 1) ? 4 : 0) | (on(x - 1, y) ? 8 : 0);
+        for (const [k, , , bits] of CORNERS) {
+          if (m & bits) continue;
+          const cut = named(edge, 'cut_' + k);
+          if (!cut) continue;
+          ctx.globalCompositeOperation = 'destination-out';
+          put(cut, x, y);
+          ctx.globalCompositeOperation = 'source-over';
+        }
+        if (m !== 15) put(pick(edge, 'm' + m, m), x, y);
+        for (const [k, dx, dy, bits] of CORNERS) if ((m & bits) === bits && !on(x + dx, y + dy)) put(named(edge, 'in_' + k), x, y);
+        if (seams.has(x) && !hall(x, y) && on(x - 1, y)) put(named(edge, !on(x, y - 1) ? 'seam_n' : !on(x, y + 1) ? 'seam_s' : y < 0 ? 'seam_deck' : 'seam_tread'), x, y);
+      }
+    this.c = c;
+    // a rotor pod every five tiles or so along the truss
+    const span = BX1 - BX0 - 2;
+    const n = Math.max(2, Math.round(span / 5));
+    this.rotors = [];
+    for (let i = 0; i < n; i++) this.rotors.push({ x: Math.round((BX0 + 1 + ((i + 0.5) * span) / n) * TILE), y: (Y1 + 2) * TILE - 3 });
+    // outriggers off the body's side faces, a tile down from the plaza and a tile up from the foot
+    const rows = fh >= 6 ? [2, fh - 2] : [Math.floor(fh / 2)];
+    this.sides = [];
+    for (const r of rows) {
+      this.sides.push({ x: BX0 * TILE, y: r * TILE + 8, east: false });
+      this.sides.push({ x: BX1 * TILE, y: r * TILE + 8, east: true });
+    }
+    this.b = { x0: X0 * TILE - TILE, y0: Y0 * TILE, x1: X1 * TILE + TILE, y1: (Y1 + 2) * TILE + 24 };
+  }
+}
+
 /** `viewRight`: the view's right edge in world px, so the annex block's label slides into view
  * while its outline is cut by the screen edge (the Milestone 5-6 final round, 1024x640). */
 export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number, ov: FactoryOverlay, viewRight = Infinity) {
   // the annex (DESIGN.md §19, the Milestone 5-6 review round): the hall grows east by the blocks bought
   const W = g.fw, H = g.fh;
-  // the hall: a shadow, a riveted wall, then the floor plates
-  ctx.fillStyle = rgba(C.ink, 0.6);
-  ctx.fillRect(4, 4, W * TILE, H * TILE);
+  // the hall on its platform: a riveted wall, then the floor plates
   ctx.fillStyle = C.hull0;
   ctx.fillRect(-3, -3, W * TILE + 6, H * TILE + 6);
   ctx.fillStyle = C.brass0;
@@ -116,7 +254,9 @@ export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number
   const next = annexPrice(g);
   if (next && g.done(ANNEX.requires)) {
     const ax = W * TILE + 4, aw = ANNEX.cols * TILE;
-    antsBox(ctx, W + 4 / TILE, 0, ANNEX.cols, H, rgba(C.bone, 0.45), rgba(C.bone, 0.04), time);
+    // on the platform's pale tread: ink dashes over a shade the deck's own marks don't reach
+    // (fplat_deck's lows are steel2, a pixel at a time; this is a block of steel1-ish shade)
+    antsBox(ctx, W + 4 / TILE, 0, ANNEX.cols, H, C.ink, rgba(C.steel0, 0.24), time);
     const lw = Math.max(textWidth('annex'), textWidth(next.format())) + 6;
     const cx = viewRight > ax + 4 ? Math.max(ax + 4 - lw / 2, Math.min(ax + aw / 2, viewRight - lw / 2 - 2)) : ax + aw / 2;
     label(ctx, 'annex', cx, H * TILE / 2 - 12, C.bone);

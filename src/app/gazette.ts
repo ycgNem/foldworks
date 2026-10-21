@@ -95,7 +95,7 @@ export class Gazette {
       const bits = Math.floor(s.mega.progress.drillBit?.toNumber() ?? 0);
       news.push(`MEGAPROJECT: ${bits} of 40 Drill Bits are at the Bay. The town packs a small bag, just in case.`);
     }
-    if (s.mega.stage >= 1) news.push('THE GREAT DRILL RUNS. Every miner in the swamp digs half again as fast. The town has moved.');
+    if (s.mega.stage >= 1) news.push('THE GREAT DRILL RUNS. Every miner on the island digs half again as fast. The town has moved.');
     const deep = s.designs.filter((d) => d.depth === 2).length;
     if (deep) news.push(`FOLDING: ${deep} module${deep === 1 ? '' : 's'} of modules now in service. Nobody can find the inside of them.`);
     const brown = g.grids.find((gr) => gr.demand > 0 && gr.sat < 1);

@@ -1,11 +1,16 @@
-// Bramble's Town: the swamp town that grows in the water around the floors as orders are filled
-// (the Milestone 4 review: the screen was a quarter floor and three quarters empty water). It
-// starts as two houses on stilts; The Boardwalk lays a boardwalk along the floor's top edge, Lamp
-// Posts stands lamps on it, the Gizmo Festival adds stalls, bunting and frogs walking, Unit 7's
-// and Dame Voltaire's first orders add their buildings, and every filled order (a reputation
-// level) adds a house. Placement is fixed (the same state always draws the same town), always on
-// water around the floor and drawn behind it. Pieces whose sprite is not drawn yet are skipped.
-// Presentation only: reads the Game, never writes it.
+// Bramble's Town: the frog town that grows round the floors as orders are filled (the Milestone 4
+// review: the screen was a quarter floor and three quarters empty). The sky island
+// (docs/sky-island.md): the town stands on the island's grass rim north of the Workshop's plot and
+// on the sky platform's north deck on the Factory floor, every piece on a stone or timber footing
+// (pixel-art/town/). It starts as two houses; The Boardwalk lays a wooden promenade with a railing
+// along the plot's north edge, Lamp Posts stands lamps on it, the Gizmo Festival adds stalls,
+// bunting and frogs strolling behind the rail, Unit 7's and Dame Voltaire's first orders add their
+// buildings, and every filled order (a reputation level) adds a house. Placement is fixed (the
+// same state always draws the same town), always off the floor and drawn behind it. Pieces whose
+// sprite is not drawn yet are skipped. Every piece casts a soft shadow drawn here (so it is right
+// on meadow and on steel alike), and on the Workshop a house's footing gets grass tufts. The
+// island's own trees and bushes keep out of townZones(). Presentation only: reads the Game, never
+// writes it.
 import { C, rgba } from '../data/palette';
 import { ORDER, CUSTOMERS, type CustomerId } from '../data/orders';
 import type { Game } from '../sim/Game';
@@ -33,10 +38,18 @@ export interface TownPiece {
 }
 
 /** The town's rows above the floor: the far row (houses behind the stalls), the back row (houses
- *  and the customers' buildings) and the boardwalk row along the floor's top edge. */
+ *  and the customers' buildings) and the promenade row along the floor's top edge. */
 const FAR = -3, BACK = -2, WALK = -1;
-/** how many water rows above the floor the town needs on screen (Unit 7's tower is 3 tiles tall) */
+/** how many rim rows above the floor the town needs on screen (Unit 7's tower is 3 tiles tall) */
 export const TOWN_ROWS = 4;
+
+/** Where things stand on the promenade's tile (rows from its top; pixel-art/town/boardwalk.py):
+ *  the deck runs rows 3-12, the low rail on rows 8-11 with its posts down to the fascia (rows
+ *  13-14). A stall's bottom row sits on the deck at row 10 (its legs behind the rail), a frog's
+ *  feet on row 7 (whole above the rail), a lamp's stone foot on row 14 (in front of it). */
+const STALL_FOOT = 10, FROG_FOOT = 7, LAMP_FOOT = 14;
+/** the sprites that stand on the ground and get grass tufts at their feet on the Workshop */
+const BUILDINGS = new Set(['town_house', 'town_unit7', 'town_voltaire']);
 
 const HOUSE_VARIANTS = ['gable', 'lily', 'tall', 'brick', 'hut', 'gable', 'lily', 'tall', 'brick'];
 /** where reputation houses go, in the order they are built */
@@ -45,6 +58,18 @@ const HOUSE_SLOTS: { x: number; row: number }[] = [
   { x: -3, row: BACK }, { x: 24, row: BACK }, { x: 2, row: 99 }, { x: 6, row: 99 }, { x: 10, row: 99 },
 ];
 const LAMPS = [2, 7, 12, 15, 20, 23];
+
+/** Where the town may ever stand around a floor fw x fh (tile rects, x0 y0 inclusive, x1 y1
+ *  exclusive), sprites' height included: the island keeps its trees and bushes out of them (the
+ *  sky island, docs/sky-island.md). The rows above the floor from x -3 to fw + 3, and the row-99
+ *  slots under it. */
+export function townZones(fw: number, fh: number): { x0: number; y0: number; x1: number; y1: number }[] {
+  const xs = HOUSE_SLOTS.filter((s) => s.row === 99).map((s) => s.x);
+  return [
+    { x0: -3, y0: FAR - 2, x1: Math.min(fw, 24) + 3, y1: 0 },
+    { x0: Math.min(...xs), y0: fh, x1: Math.max(...xs) + 2, y1: fh + 2 },
+  ];
+}
 const STALLS = [5, 10, 18];
 
 const fmtTime = (tick: number) => {
@@ -53,12 +78,24 @@ const fmtTime = (tick: number) => {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}` : `${m}:${String(ss).padStart(2, '0')}`;
 };
 
-function hash(n: number) {
-  let x = (n * 2654435761) >>> 0;
-  x ^= x >>> 15;
-  x = Math.imul(x, 2246822519) >>> 0;
-  x ^= x >>> 13;
-  return x >>> 0;
+/** A footprint: the lowest opaque row of a frame and its leftmost and rightmost pixel. */
+interface Foot { x0: number; x1: number; bot: number }
+const feet = new WeakMap<HTMLCanvasElement, Foot>();
+function footOf(img: HTMLCanvasElement): Foot {
+  let f = feet.get(img);
+  if (f) return f;
+  f = { x0: 0, x1: img.width - 1, bot: img.height - 1 };
+  const ctx = img.getContext('2d');
+  if (ctx) {
+    const d = ctx.getImageData(0, 0, img.width, img.height).data;
+    search: for (let y = img.height - 1; y >= 0; y--) {
+      let a = -1, b = -1;
+      for (let x = 0; x < img.width; x++) if (d[(y * img.width + x) * 4 + 3] > 0) { if (a < 0) a = x; b = x; }
+      if (a >= 0) { f = { x0: a, x1: b, bot: y }; break search; }
+    }
+  }
+  feet.set(img, f);
+  return f;
 }
 
 export class Town {
@@ -72,9 +109,10 @@ export class Town {
   /** the last pieces drawn and where (world px), for hover */
   private drawn: { p: TownPiece; x: number; y: number; w: number; h: number }[] = [];
 
+  /** "The Boardwalk, filled at 3:12" (or just "filled" when this session never saw the time) */
   label(id: string, what: string): string {
     const t = this.times[id];
-    return t !== undefined ? `${what}: filled at ${fmtTime(t)}` : `${what}: filled`;
+    return t !== undefined ? `${what}, filled at ${fmtTime(t)}` : `${what}, filled`;
   }
 
   /** Every piece the state calls for, around a floor fw x fh tiles. */
@@ -87,28 +125,33 @@ export class Town {
     const out: TownPiece[] = [];
     const done = (id: string) => o.done.includes(id);
     const add = (p: TownPiece) => {
-      // only on water: left of, right of, above or below the floor, never on it
+      // only on the rim (or deck) round the floor: left of, right of, above or below it, never on it
       const r = p.row === 99 ? fh + 1 : p.row;
       const onFloor = r >= 0 && r < fh && p.x + p.w > 0 && p.x < fw;
       if (onFloor || p.x < -3 || p.x + p.w > fw + 3) return;
       out.push({ ...p, row: r });
     };
     // the town as the player finds it: Bramble's house and a neighbour's hut
-    add({ key: 'hut0', group: 'start', sprite: 'town_house', frame: 'hut', x: 0, row: BACK, w: 2, z: 2, label: "A townsfrog's hut: the town was here first" });
-    add({ key: 'bramble', group: 'start', sprite: 'town_house', frame: 'bramble', x: 3, row: BACK, w: 2, z: 2, label: "Mayor Bramble's house: the town was here first" });
+    add({ key: 'hut0', group: 'start', sprite: 'town_house', frame: 'hut', x: 0, row: BACK, w: 2, z: 2, label: "A townsfrog's hut. The town was here first" });
+    add({ key: 'bramble', group: 'start', sprite: 'town_house', frame: 'bramble', x: 3, row: BACK, w: 2, z: 2, label: "Mayor Bramble's house. The town was here first" });
     if (done('boardwalk')) {
-      const lab = this.label('boardwalk', ORDER.boardwalk.name);
+      const lab = `${this.label('boardwalk', ORDER.boardwalk.name)}. Nobody falls off now`;
       const x1 = Math.min(fw, 24);
-      for (let x = -1; x <= x1; x++) add({ key: 'bw' + x, group: 'boardwalk', sprite: 'town_boardwalk', frame: x === -1 ? 'end_w' : x === x1 ? 'end_e' : 'h', x, row: WALK, w: 1, z: 3, label: lab });
+      for (let x = -1; x <= x1; x++) {
+        const frame = x === -1 ? 'end_w' : x === x1 ? 'end_e' : 'h';
+        add({ key: 'bw' + x, group: 'boardwalk', sprite: 'town_boardwalk', frame, x, row: WALK, w: 1, z: 3, label: lab });
+        // the railing on its plot side, in front of the frogs and the stalls
+        add({ key: 'rail' + x, group: 'boardwalk', sprite: 'town_rail', frame, x, row: WALK, w: 1, z: 7, label: lab });
+      }
     }
     if (done('lampPosts')) {
       const lab = this.label('lampPosts', ORDER.lampPosts.name);
-      for (const x of LAMPS) add({ key: 'lamp' + x, group: 'lamps', sprite: 'town_lamp', frame: 0, x, row: WALK, w: 1, z: 4, label: lab, anim: true });
+      for (const x of LAMPS) add({ key: 'lamp' + x, group: 'lamps', sprite: 'town_lamp', frame: 0, x, row: WALK, w: 1, z: 8, label: lab, anim: true });
     }
     if (done('gizmoFestival')) {
       const lab = this.label('gizmoFestival', ORDER.gizmoFestival.name);
       STALLS.forEach((x, i) => add({ key: 'stall' + x, group: 'festival', sprite: 'town_stall', frame: i, x, row: WALK, w: 2, z: 4, label: lab, anim: true }));
-      for (let i = 0; i < 4; i++) add({ key: 'frog' + i, group: 'festival', sprite: 'town_frog', frame: 0, x: 0, row: WALK, w: 1, z: 6, label: `A townsfrog at the Festival (${ORDER.gizmoFestival.name}: ${this.times.gizmoFestival !== undefined ? 'filled at ' + fmtTime(this.times.gizmoFestival) : 'filled'})`, anim: true, walker: i });
+      for (let i = 0; i < 4; i++) add({ key: 'frog' + i, group: 'festival', sprite: 'town_frog', frame: 0, x: 0, row: WALK, w: 1, z: 6, label: `A townsfrog at the Festival (${lab})`, anim: true, walker: i });
     }
     // the customers' buildings arrive with their first filled order
     const first = (c: CustomerId) => o.done.find((id) => ORDER[id]?.customer === c);
@@ -124,21 +167,9 @@ export class Town {
       const n = (lvl[d.customer] = (lvl[d.customer] ?? 0) + d.rep);
       const slot = HOUSE_SLOTS[i];
       const who = CUSTOMERS[d.customer].name;
-      add({ key: 'rep' + i, group: 'rep:' + id, sprite: 'town_house', frame: HOUSE_VARIANTS[i % HOUSE_VARIANTS.length], x: slot.x, row: slot.row, w: 2, z: slot.row === FAR ? 1 : 2, label: `A new house: ${who}'s reputation ${n} (${this.label(id, d.name)})` });
+      const long = `A new house: ${who}'s reputation ${n} (${this.label(id, d.name)})`;
+      add({ key: 'rep' + i, group: 'rep:' + id, sprite: 'town_house', frame: HOUSE_VARIANTS[i % HOUSE_VARIANTS.length], x: slot.x, row: slot.row, w: 2, z: slot.row === FAR ? 1 : 2, label: long.length < 80 ? long : `A new house: ${who}'s reputation ${n} (${d.name})` });
     });
-    // lily pads and reeds in the water on the other three sides, more as the town grows
-    const lilies = Math.min(28, 6 + out.length);
-    const spots: { x: number; y: number }[] = [];
-    for (let i = 0; spots.length < lilies && i < 400; i++) {
-      const h = hash(i + 7);
-      const side = h % 3;
-      const x = side === 0 ? -1 - (h >>> 3) % 3 : side === 1 ? fw + (h >>> 3) % 3 : (h >>> 3) % (fw + 2) - 1;
-      const y = side === 2 ? fh + (h >>> 7) % 3 : (h >>> 7) % fh;
-      if (spots.some((q) => Math.abs(q.x - x) + Math.abs(q.y - y) < 2)) continue;
-      if (out.some((p) => y <= p.row && y > p.row - 3 && x >= p.x - 1 && x <= p.x + p.w)) continue;
-      spots.push({ x, y });
-    }
-    spots.forEach((q, i) => out.push({ key: 'lily' + i, group: 'swamp', sprite: 'town_lily', frame: hash(i * 31 + 3) % 6, x: q.x, row: q.y, w: 1, z: 0, label: 'Lily pads and reeds: the swamp' }));
     out.sort((a, b) => a.row - b.row || a.z - b.z || a.x - b.x);
     this.cache = { v, fw, fh, pieces: out };
     return out;
@@ -156,30 +187,37 @@ export class Town {
     for (const [k, p] of groups) {
       if (this.known.has(k)) continue;
       this.known.add(k);
-      const text = NEWS[k] ?? (k.startsWith('rep:') ? `HOUSING: a new family moves onto the water, drawn by ${CUSTOMERS[ORDER[k.slice(4)]?.customer ?? 'bramble'].name}'s good word.` : null);
+      const text = NEWS[k] ?? (k.startsWith('rep:') ? `HOUSING: a family arrives by balloon, drawn by ${CUSTOMERS[ORDER[k.slice(4)]?.customer ?? 'bramble'].name}'s good word.` : null);
       if (text) this.news.push({ text, x: (p.x + p.w / 2) * TILE, y: (p.row + 0.5) * TILE });
     }
   }
 
-  /** Draw the town around a floor fw x fh (world transform set, behind the floor). */
-  draw(ctx: CanvasRenderingContext2D, g: Game, fw: number, fh: number, time: number) {
+  /** Draw the town around a floor fw x fh (world transform set, behind the floor). `floor` says
+   *  which floor it stands on (grass tufts only on the Workshop's meadow); when the caller does
+   *  not say, the floor's size tells. */
+  draw(ctx: CanvasRenderingContext2D, g: Game, fw: number, fh: number, time: number, floor?: 'workshop' | 'factory') {
+    const onFactory = floor ? floor === 'factory' : fw === g.fw && fh === g.fh && !(fw === g.W && fh === g.H);
     const pieces = this.pieces(g, fw, fh);
     this.watch(g, pieces);
     this.drawn = [];
     const lampTops: { x: number; y: number }[] = [];
+    // where each piece goes this frame
+    const placed: { p: TownPiece; s: SpriteSheet; f: number; x: number; y: number; flip: boolean }[] = [];
     for (const p of pieces) {
       if (!hasArt(p.sprite)) continue;
       const s = sheet(p.sprite);
       let f = typeof p.frame === 'string' ? frameNamed(s, p.frame) : p.frame % s.frames.length;
       if (p.anim && s.fps > 0) f = (f + Math.floor(time * s.fps + p.x * 0.37)) % s.frames.length;
       let x = p.x * TILE + Math.floor((p.w * TILE - s.w) / 2);
-      // standing sprites end in a 2-row waterline, bottom-aligned to their row; a frog's feet go
-      // on the boardwalk's deck (rows 5-10 of its tile), 6 px above the tile's top
+      // standing sprites end in their footing's ink line, bottom-aligned to their row; on the
+      // promenade, stalls and frogs stand on the deck behind the rail, lamps on its fascia
       let y = (p.row + 1) * TILE - s.h;
-      if (p.walker !== undefined) y = p.row * TILE - 6;
+      if (p.sprite === 'town_stall') y = p.row * TILE + STALL_FOOT + 1 - s.h;
+      if (p.sprite === 'town_lamp') y = p.row * TILE + LAMP_FOOT + 1 - s.h;
       let flip = false;
       if (p.walker !== undefined) {
-        // frogs stroll the boardwalk, turning at its ends
+        y = p.row * TILE + FROG_FOOT + 1 - s.h;
+        // frogs stroll the promenade, turning at its ends
         const span = Math.max(4, Math.min(fw, 24)) * TILE;
         const speed = 9 + p.walker * 3;
         const d = (time * speed + p.walker * 97) % (span * 2);
@@ -187,10 +225,37 @@ export class Town {
         x = -TILE + Math.round(flip ? span * 2 - d : d);
         f = Math.floor(time * (s.fps || 8) + p.walker) % s.frames.length;
       }
-      draw(ctx, s, f, x, y, flip);
-      this.drawn.push({ p, x, y, w: s.w, h: s.h });
-      if (p.sprite === 'town_lamp') lampTops.push({ x: x + Math.floor(s.w / 2), y: y + 4 });
+      placed.push({ p, s, f, x, y, flip });
     }
+    // the promenade's deck first (it is ground), then every shadow, then the town in order
+    for (const q of placed) if (q.p.sprite === 'town_boardwalk') draw(ctx, q.s, q.f, q.x, q.y, false);
+    ctx.fillStyle = rgba(C.ink, 0.22);
+    for (const q of placed) {
+      if (q.p.sprite === 'town_boardwalk' || q.p.sprite === 'town_rail' || q.p.sprite === 'town_lamp') continue;
+      const ft = footOf(frameOf(q.s, q.f));
+      const a = q.flip ? q.s.w - 1 - ft.x1 : ft.x0, b = q.flip ? q.s.w - 1 - ft.x0 : ft.x1;
+      // the sun is up and to the left: the shadow falls a pixel right, two rows deep
+      const w0 = b - a + 1;
+      ctx.fillRect(q.x + a + 1, q.y + ft.bot + 1, w0, 1);
+      if (w0 > 6) ctx.fillRect(q.x + a + 3, q.y + ft.bot + 2, w0 - 4, 1);
+    }
+    const tufts = !onFactory && hasArt('town_tuft') ? sheet('town_tuft') : null;
+    for (const q of placed) {
+      if (q.p.sprite === 'town_boardwalk') continue;
+      draw(ctx, q.s, q.f, q.x, q.y, q.flip);
+      if (tufts && BUILDINGS.has(q.p.sprite)) {
+        // a clump of meadow at each corner of the footing (which clumps: by its column)
+        const ft = footOf(frameOf(q.s, q.f));
+        const h = (q.p.x * 7 + q.p.row * 3 + 40) % 4;
+        const ty = q.y + ft.bot + 1 - tufts.h;
+        draw(ctx, tufts, h, q.x + ft.x0 - 7, ty, false);
+        if ((q.p.x + q.p.row) % 3 !== 0) draw(ctx, tufts, h + 1, q.x + ft.x1 - 8, ty, true);
+      }
+      this.drawn.push({ p: q.p, x: q.x, y: q.y, w: q.s.w, h: q.s.h });
+      if (q.p.sprite === 'town_lamp') lampTops.push({ x: q.x + Math.floor(q.s.w / 2), y: q.y + 4 });
+    }
+    // the deck under hover too (it was drawn first)
+    for (const q of placed) if (q.p.sprite === 'town_boardwalk') this.drawn.unshift({ p: q.p, x: q.x, y: q.y, w: q.s.w, h: q.s.h });
     // bunting strung between the lamp posts once the Festival is on
     if (g.s.orders.done.includes('gizmoFestival') && lampTops.length > 1) bunting(ctx, lampTops, time);
   }
@@ -199,23 +264,27 @@ export class Town {
   at(wx: number, wy: number): TownPiece | null {
     for (let i = this.drawn.length - 1; i >= 0; i--) {
       const d = this.drawn[i];
-      if (d.p.group === 'swamp') continue;
       if (wx >= d.x && wy >= d.y && wx < d.x + d.w && wy < d.y + d.h) return d.p;
     }
     return null;
   }
 }
 
+/** The Gazette's town lines (src/data/gazette.ts's voice: under 80 characters, one colon). */
 const NEWS: Record<string, string> = {
-  boardwalk: 'TOWN: The Boardwalk opens along the Workshop! Frogs stop sinking and start strolling.',
-  lamps: 'TOWN: Lamp Posts lit along the Boardwalk. The swamp is less dark at night. Moths delighted.',
-  festival: 'FESTIVAL: stalls, bunting and a crowd on the Boardwalk. Nobody knows what Gizmos do; everyone wants one.',
-  unit7: 'TOWN: Unit 7 raises an observatory on the water. It watches the Factory. Constantly.',
-  voltaire: "TOWN: Dame Voltaire's turbine pavilion rises on stilts. It hums in a superior key.",
+  boardwalk: 'TOWN: The Boardwalk opens. Frogs stop falling off and start strolling.',
+  lamps: 'TOWN: Lamp Posts lit along the Boardwalk. Visible from three islands away.',
+  festival: 'FESTIVAL: stalls and bunting on the Boardwalk. Nobody knows what a Gizmo does.',
+  unit7: 'TOWN: Unit 7 builds an observatory. It watches the Factory. Constantly.',
+  voltaire: "TOWN: Dame Voltaire's pavilion goes up. It hums in a superior key.",
 };
 
+function frameOf(s: SpriteSheet, f: number): HTMLCanvasElement {
+  return s.frames[((f % s.frames.length) + s.frames.length) % s.frames.length];
+}
+
 function draw(ctx: CanvasRenderingContext2D, s: SpriteSheet, f: number, x: number, y: number, flip: boolean) {
-  const img = s.frames[((f % s.frames.length) + s.frames.length) % s.frames.length];
+  const img = frameOf(s, f);
   if (!flip) { ctx.drawImage(img, x, y); return; }
   ctx.save();
   ctx.translate(x + s.w, y);

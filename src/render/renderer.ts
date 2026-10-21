@@ -9,7 +9,7 @@ import { DX, DY, opposite, type Dir, type Ent, type Floor } from '../sim/world';
 import { drawFactory, type FactoryOverlay } from './factory';
 import { auditTicks } from '../sim/systems/audits';
 import { poleReach } from '../sim/systems/power';
-import { CHUNKS, PATCHES, FACTORY } from '../data/land';
+import { CHUNKS, PATCHES } from '../data/land';
 import { BUILD, isMachine, isPower, type BuildKind } from '../data/machines';
 import { ITEMS } from '../data/items';
 import { RULES } from '../data/rules';
@@ -24,6 +24,12 @@ import { sheet, drawRot, frameAt, itemIcon, hasArt, spriteName } from './sprites
 import { Fx, FOLD_DUR, FOLD_FLASH } from './fx';
 import { onGridKind, powered, gridIndex, cheb, wirePairs, reached, capacity } from './powerview';
 import { Town, TOWN_ROWS } from './town';
+import { drawSky } from './sky';
+import { Island } from './island';
+import { Platform } from './factory';
+
+/** seconds the paving takes to spread over a bought chunk */
+const PAVE_S = 0.7;
 
 export class Camera {
   /** centre, in world pixels */
@@ -87,6 +93,9 @@ export class Renderer {
   private jamSince = new Map<number, number>();
   /** recent crafting flashes: entity id -> time */
   private flashes = new Map<number, number>();
+  /** buildings just placed on the Workshop (tile key y * 4096 + x -> time): they drop in from
+   *  above and land with a squash and a puff of dust (the sky island: a tycoon's build, felt) */
+  private drops = new Map<number, { t: number; landed: boolean }>();
   /** sounds to play with the effects, drained by the HUD each frame */
   sounds: SoundReq[] = [];
   /** events that celebrate over the whole screen whatever floor is shown (the HUD draws them) */
@@ -107,6 +116,12 @@ export class Renderer {
   parade: { t: number; n: number; paths: { x: number; y: number }[][]; dock: { x: number; y: number } } | null = null;
   /** town news lines for the Gazette, drained by the HUD */
   townNews: string[] = [];
+  /** the sky island under the Workshop, and the Factory's sky platform (docs/sky-island.md) */
+  isle = new Island();
+  plat = new Platform();
+  /** chunks being paved over after a buy: the wave's centre (tile units), its age, which tiles
+   *  it has reached (a dust puff as it reaches each) */
+  private paving: { id: string; x: number; y: number; t: number; hit: Uint8Array }[] = [];
 
   constructor(public ctx: CanvasRenderingContext2D) {}
 
@@ -152,11 +167,18 @@ export class Renderer {
     const c = this.cam;
     const mw = wTiles * TILE, mh = hTiles * TILE;
     const halfW = this.view.w / 2 / c.zoom, halfH = this.view.h / 2 / c.zoom;
-    const pad = 48;
-    // the town above the floor may be scrolled to: TOWN_ROWS of water on top
-    const top = TOWN_ROWS * TILE;
+    // the rim either side may be scrolled to; above, the town on the north rim (and a row of sky
+    // over it); below, the south rim and the cliff under it (the sky island)
+    const pad = 4 * TILE;
+    const top = (TOWN_ROWS + 1) * TILE;
+    const bot = this.floor === 'factory' ? this.plat.below : this.isle.below;
     c.x = mw + pad * 2 <= halfW * 2 ? mw / 2 : Math.max(halfW - pad, Math.min(mw + pad - halfW, c.x));
-    c.y = mh + top + pad <= halfH * 2 ? (mh - top) / 2 + pad / 2 : Math.max(halfH - top, Math.min(mh + pad - halfH, c.y));
+    // zoomed out far enough for the whole island (or platform) to show: frame all of it; else the
+    // player may pan on down past the cliff to the island's point
+    const B = this.floor === 'factory' ? this.plat.bounds() : this.isle.bounds();
+    const low = Math.max(mh + bot, B.y1);
+    if (B.y1 > B.y0 && B.y1 - B.y0 <= halfH * 2) c.y = (B.y0 + B.y1) / 2;
+    else c.y = mh + top + bot <= halfH * 2 ? Math.max((mh + bot - top) / 2, Math.min(low - halfH, c.y)) : Math.max(halfH - top, Math.min(low - halfH, c.y));
   }
 
   /** World pixel under a screen pixel. */
@@ -231,8 +253,12 @@ export class Renderer {
         case 'place': {
           const big = e.id && e.id in BUILD ? BUILD[e.id as BuildKind].w : 1;
           const c = big * 8;
-          fx.burst(px + c, py + c * 2 - 2, 6 * big, [C.tan, C.clay, C.fog], 30, 80);
-          fx.ring(px + c, py + c, C.bone, 10 * big, 0.25, 6);
+          // belts are laid flat (a drag lays dozens); anything that stands up drops in, and its
+          // dust and ring wait for the landing (building())
+          if (e.id === 'belt' || e.floor === 'factory') {
+            fx.burst(px + c, py + c * 2 - 2, 6 * big, [C.tan, C.clay, C.fog], 30, 80);
+            fx.ring(px + c, py + c, C.bone, 10 * big, 0.25, 6);
+          } else this.drops.set((e.y ?? 0) * 4096 + (e.x ?? 0), { t: this.time, landed: false });
           if (e.id === 'pole') { fx.ring(px + 8, py + 8, C.teal1, (poleReach(g) + 0.5) * TILE, 0.5, 6); this.sfx('powerOn', 0.5); }
           if (e.floor === 'factory' && e.id === 'module' && (g.s.counters.modulesPlaced ?? 0) <= 1) {
             // the first module on the Factory floor
@@ -245,7 +271,19 @@ export class Renderer {
           break;
         }
         case 'remove': fx.burst(px + 8, py + 8, 8, [C.steel, C.iron, C.fog], 40, 100); break;
-        case 'land': fx.ring(px, py, C.gold, 90, 0.9, 10); fx.burst(px, py, 40, [C.gold, C.amber, C.bone, C.lime], 80, 60, 1, 1.2); fx.kick(4); break;
+        case 'land': {
+          // the meadow is paved over in a wave from the middle out (drawn in draw()), a coin
+          // shower out of the middle and a thump
+          const ch = CHUNKS.find((c) => c.id === e.id);
+          if (ch) this.paving.push({ id: ch.id, x: e.x ?? ch.x + ch.w / 2, y: e.y ?? ch.y + ch.h / 2, t: 0, hit: new Uint8Array(ch.w * ch.h) });
+          fx.fountain(px, py, 46, [C.gold, C.hot, C.brass1, C.gold], 120, 2, 1.3);
+          fx.ring(px, py, C.gold, 70, 0.8, 8);
+          const s = this.toScreen(e.x ?? 0, e.y ?? 0);
+          for (let i = 0; i < 12; i++) fx.fly(s.x + ((i % 4) - 2) * 6, s.y - (i % 3) * 4, this.coinTarget.x, this.coinTarget.y, undefined, false, 0.2 + i * 0.05);
+          fx.kick(4);
+          this.sfx('stampLand', 0.7);
+          break;
+        }
         case 'upgrade': {
           const f = g.machines.find((m) => m.kind === 'furnace');
           if (f) { fx.burst(f.x * TILE + 8, f.y * TILE + 8, 24, [C.orange, C.amber, C.gold, C.bone], 50, -20, 1, 0.9); fx.ring(f.x * TILE + 8, f.y * TILE + 8, C.amber, 24, 0.6); }
@@ -353,21 +391,25 @@ export class Renderer {
   draw(g: Game, dt: number, alpha: number, ov: Overlay) {
     const ctx = this.ctx;
     this.time += dt;
-    if (!this.ground || this.ground.game !== g) this.ground = new Ground(g);
+    if (!this.ground || this.ground.game !== g) {
+      this.ground = new Ground(g);
+      // a wave from a game that is gone would pave land this one does not own
+      this.paving.length = 0;
+    }
     this.labels.length = 0;
     const z = this.cam.zoom;
     const { ox, oy } = this.origin();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = C.ink;
-    ctx.fillRect(0, 0, this.W, this.H);
+    // the sky over the whole canvas (the HUD floats over the floor), then the island in the world
+    drawSky(ctx, this.W, this.H, this.cam, this.time, ov.floor);
     ctx.setTransform(z, 0, 0, z, ox, oy);
     ctx.imageSmoothingEnabled = false;
-    if (ov.floor === 'factory') this.backdrop(ox, oy, z, g.fw, g.fh);
-    else this.backdrop(ox, oy, z, g.W, g.H);
-    // Bramble's Town on the water, behind the floor
-    if (ov.floor === 'factory') this.town.draw(ctx, g, g.fw, g.fh, this.time);
-    else this.town.draw(ctx, g, g.W, g.H, this.time);
+    if (ov.floor === 'factory') this.plat.draw(ctx, g.fw, g.fh, this.time);
+    else this.isle.draw(ctx, g.W, g.H, this.time);
+    // Bramble's Town on the north rim, behind the floor
+    if (ov.floor === 'factory') this.town.draw(ctx, g, g.fw, g.fh, this.time, 'factory');
+    else this.town.draw(ctx, g, g.W, g.H, this.time, 'workshop');
     for (const n of this.town.news) {
       this.fx.burst(n.x, n.y, 30, [C.gold, C.leaf, C.bone, C.hot], 70, 40, 1, 1);
       this.fx.ring(n.x, n.y, C.gold, 28, 0.7, 4);
@@ -382,10 +424,11 @@ export class Renderer {
       return;
     }
 
-    // a shadow under the whole workshop so it sits on the backdrop
-    ctx.fillStyle = rgba(C.ink, 0.6);
-    ctx.fillRect(3, 3, g.W * TILE, g.H * TILE);
-    for (const ch of CHUNKS) ctx.drawImage(this.ground.chunk(ch.id), ch.x * TILE, ch.y * TILE);
+    for (const ch of CHUNKS) {
+      const w = this.paving.length ? this.paving.find((p) => p.id === ch.id) : undefined;
+      if (w) this.paveWave(ch, w, dt);
+      else ctx.drawImage(this.ground.chunk(ch.id), ch.x * TILE, ch.y * TILE);
+    }
     this.landLabels(g);
     this.veins(g);
     drawOreFx(ctx, g, this.time, -ox / z, -oy / z, this.W / z, this.H / z);
@@ -408,30 +451,34 @@ export class Renderer {
     this.wasBrown = brown;
   }
 
-  /** Swamp water around the floor (tile_water, each tile on its own frame), with a reedy bank
-   *  (tile_shore) on the water tiles that touch the floor. */
-  private backdrop(ox: number, oy: number, z: number, fw: number, fh: number) {
-    if (!hasArt('tile_water')) return;
-    const s = sheet('tile_water');
-    const t = frameAt(s, this.time);
-    // the whole canvas, not just the framed view: the HUD floats over the floor (the UI redesign)
-    const v = { x: 0, y: 0, w: this.W, h: this.H };
-    const tx0 = Math.floor((v.x - ox) / z / TILE) - 1, ty0 = Math.floor((v.y - oy) / z / TILE) - 1;
-    const tx1 = Math.ceil((v.x + v.w - ox) / z / TILE) + 1, ty1 = Math.ceil((v.y + v.h - oy) / z / TILE) + 1;
-    const land = (x: number, y: number) => x >= 0 && y >= 0 && x < fw && y < fh;
-    for (let y = ty0; y <= ty1; y++)
-      for (let x = tx0; x <= tx1; x++) if (!land(x, y)) this.ctx.drawImage(s.frames[(t + x * 3 + y * 5) & 3], x * TILE, y * TILE);
-    if (!hasArt('tile_shore')) return;
-    const sh = sheet('tile_shore');
-    for (let y = -1; y <= fh; y++)
-      for (let x = -1; x <= fw; x++) {
-        if (land(x, y)) continue;
-        // frame 0: land to the north, 1 east, 2 south, 3 west
-        if (land(x, y - 1)) this.ctx.drawImage(sh.frames[0], x * TILE, y * TILE);
-        if (land(x + 1, y)) this.ctx.drawImage(sh.frames[1], x * TILE, y * TILE);
-        if (land(x, y + 1)) this.ctx.drawImage(sh.frames[2], x * TILE, y * TILE);
-        if (land(x - 1, y)) this.ctx.drawImage(sh.frames[3], x * TILE, y * TILE);
+  /** A bought chunk paving itself (docs/sky-island.md): the meadow under, the paving laid tile by
+   *  tile in a ring spreading from the middle over PAVE_S, a puff of dust where it reaches. */
+  private paveWave(ch: { id: string; x: number; y: number; w: number; h: number }, w: { id: string; x: number; y: number; t: number; hit: Uint8Array }, dt: number) {
+    const ctx = this.ctx;
+    const X = ch.x * TILE, Y = ch.y * TILE;
+    w.t += dt;
+    const meadow = this.ground!.bake(ch.id, false), paved = this.ground!.bake(ch.id, true);
+    ctx.drawImage(meadow, X, Y);
+    const reach = Math.hypot(ch.w, ch.h) / 2 + 0.5;
+    const r = (Math.min(1, w.t / PAVE_S) ** 0.8) * reach;
+    const dust = [C.pave2, C.pave3, C.pave1, C.bone];
+    for (let ty = 0; ty < ch.h; ty++)
+      for (let tx = 0; tx < ch.w; tx++) {
+        const d = Math.hypot(ch.x + tx + 0.5 - w.x, ch.y + ty + 0.5 - w.y);
+        if (d > r) continue;
+        ctx.drawImage(paved, tx * TILE, ty * TILE, TILE, TILE, X + tx * TILE, Y + ty * TILE, TILE, TILE);
+        const k = ty * ch.w + tx;
+        if (!w.hit[k]) {
+          w.hit[k] = 1;
+          // the slab lands: dust off its edges, and a bright edge for a moment
+          this.fx.burst(X + tx * TILE + 8, Y + ty * TILE + 12, 3, dust, 26, 50, 1, 0.45);
+        }
+        if (r - d < 0.9 && w.t < PAVE_S) {
+          ctx.fillStyle = rgba(C.bone, 0.45 * (1 - (r - d) / 0.9));
+          ctx.fillRect(X + tx * TILE, Y + ty * TILE, TILE, TILE);
+        }
       }
+    if (w.t >= PAVE_S + 0.05) this.paving.splice(this.paving.indexOf(w), 1);
   }
 
   private landLabels(g: Game) {
@@ -670,6 +717,44 @@ export class Renderer {
   // ---------------------------------------------------------------- buildings
 
   private building(g: Game, e: Ent) {
+    const d = this.drops.size ? this.drops.get(e.y * 4096 + e.x) : undefined;
+    if (!d) return this.buildingAt(g, e);
+    // the drop: 0.12 s falling 14 px (accelerating), then 0.16 s of squash on landing, about the
+    // footprint's bottom middle
+    const FALL = 0.12, SQUASH = 0.16;
+    const t = this.time - d.t;
+    if (t >= FALL + SQUASH) { this.drops.delete(e.y * 4096 + e.x); return this.buildingAt(g, e); }
+    const ctx = this.ctx;
+    const bx = (e.x + e.w / 2) * TILE, by = (e.y + e.h) * TILE;
+    if (t >= FALL && !d.landed) {
+      d.landed = true;
+      const c = e.w * 8;
+      this.fx.burst(bx, by - 2, 8 * e.w, [C.tan, C.clay, C.fog, C.pave3], 40, 90);
+      this.fx.ring(bx, by - c, C.bone, 12 * e.w, 0.25, 6);
+      this.sfx('place', 0.35, 0.8);
+    }
+    let dy = 0, sx = 1, sy = 1;
+    if (t < FALL) {
+      const u = t / FALL;
+      dy = -Math.round(14 * (1 - u * u));
+      // its shadow on the ground grows as it comes down
+      ctx.fillStyle = rgba(C.ink, 0.12 + 0.2 * u);
+      const sw = Math.round(e.w * TILE * (0.5 + 0.4 * u));
+      ctx.fillRect(Math.round(bx - sw / 2), by - 3, sw, 2);
+    } else {
+      const k = Math.sin(Math.PI * Math.min(1, (t - FALL) / SQUASH));
+      sx = 1 + 0.14 * k;
+      sy = 1 - 0.16 * k;
+    }
+    ctx.save();
+    ctx.translate(bx, by + dy);
+    ctx.scale(sx, sy);
+    ctx.translate(-bx, -by);
+    this.buildingAt(g, e);
+    ctx.restore();
+  }
+
+  private buildingAt(g: Game, e: Ent) {
     const ctx = this.ctx;
     const x = e.x * TILE, y = e.y * TILE;
     const W = e.w * TILE, Ht = e.h * TILE;
