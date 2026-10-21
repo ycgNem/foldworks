@@ -552,8 +552,9 @@ export function drawTitle(app: App) {
 /** The title over the art director's key art ('title_scene', 320x180, STYLE.md): the scene at
  *  the smallest whole-number scale that covers the screen, centred and cropped, never smoothed.
  *  Everything is placed in scene coordinates so it lands on the scene's calm areas: the logo and
- *  the tagline's ribbon on the sky band (scene y 14-66), the buttons on the open water (y 104+),
- *  the last line on a slip along the bottom. */
+ *  the tagline's ribbon on the sky band (scene y 14-66), the buttons on the open sky between the
+ *  two islands (x 125-195 from y 104; the coin chip lands on the town island's empty west end),
+ *  the last line on a slip on the cloud sea along the bottom (pixel-art/title/build.py). */
 function drawTitleScene(app: App) {
   const ui = app.ui;
   const t = ui.time;

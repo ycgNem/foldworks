@@ -6,24 +6,33 @@ everything that matters sits inside that.
 Composition (scene px): a morning sky (sky.py's gradient, the sun's glow top-left) with the logo
 (y 14..54) and the tagline ribbon (y 56..64) on its calm band; the buttons (x 125..195 from y 104)
 on open sky between two islands; the last line's slip on the cloud sea along the bottom.
-- the Workshop island at the left, nearer and lower: the grass rim, a paved plot with the working
-  line (a miner on the iron outcrop, a furnace, a belt carrying ingots into the Dock), trees on the
-  rim, its cliff with an iron vein, a waterfall off its lip, its underside sunk in the cloud sea;
-- the town's island at the right, higher: Bramble's house and a gable house on footings, a lamp,
-  the town flag, Mayor Bramble in front of his door raising his top hat, a frog townsperson, its
-  cliff, underside and rocky tip, a long waterfall into the clouds;
-- far islets hazed on the horizon under the buttons, high puffs in the corners, a flock of birds.
+- the Workshop island at the left: the grass rim, a paved plot with the working line in an L (a
+  miner on the iron outcrop, a furnace, a belt turning south into the Dock, ingots riding it), a
+  brass module with an ingot in its well beside it (the line folded: the tagline's promise), a
+  frog worker, trees and bushes on the rim, its cliff with ore veins, two waterfalls off its lip,
+  its tiered underside sinking into the cloud sea;
+- the town's island at the right: Mayor Bramble out on the open grass raising his top hat (it
+  goes up against the sky), his house and a gable house re-seated on stone footings, the town's
+  red pennant, a townsperson, a waterfall, the cliff, the tiered underside and its rocky tip;
+- a hazed windmill islet on the horizon under the buttons (off their axis), puffs in the
+  corners, a flock of birds over the gap, the horizon warmed to the sun's colour (morning).
+Nothing tall stands under the logo or the ribbon (x 50..270 above y 66): trees only at x < 50.
 
-Motion (8 frames): the waterfalls run (isle_fall's 4-frame loop twice) and foam where they meet the
-clouds, the belt runs and ingots ride it into the Dock, the miner drills and the furnace's mouth
-flickers, a puff of smoke rises, the flag waves, the birds flap and bob, the front puffs of the
-cloud sea breathe, the lamp flickers, Bramble raises his hat once a loop.
+Motion (8 frames, a 1 s loop): the waterfalls run (isle_fall's 4-frame loop twice) and foam
+where they meet the clouds, the belt turn runs and two ingots ride it into the Dock, the miner
+drills, the furnace's mouth flickers, the module's band breathes, the pennant waves, the birds
+flap and bob, the front puffs of the cloud sea breathe a pixel, the frog worker steps, Bramble
+blinks and raises his hat. Nothing drifts across the frame (it could not loop in 8 frames).
 
 Pieces: pixel-art/sky/ (the island's cliff and underside textures, the tip, the falls and foam,
-the grass and paving tiles, deco, trees and bushes, clouds, islets, the bird) and src/art/ (the
-miner, furnace, belt, Dock, iron outcrop, town houses, lamp, frog). Bramble's full figure and
-the flag are drawn here. Run `python build.py` from this folder: writes src/art/title_scene.png
-+ .json and looks in out/.
+the grass and paving tiles, deco, trees and bushes, clouds, islets, the bird, the gradient) and
+src/art/ (the miner, furnace, belt turn, Dock, module, ingot, iron outcrop on paving, town houses,
+frog). Bramble's whole figure, the pennant and the islands' shapes are drawn here (the game's
+island is tile-built and too big for 320x180; this one follows its rules per pixel column: lip,
+cliff, tiers, tip, one ink outline). Run `python build.py` from this folder: it writes
+src/art/title_scene.png + .json and the looks in out/ (frame 0 at 1x and 4x, frame 5 at 4x, a
+GIF, the motion sheets, Bramble at 10x, the 1024x640 crop). `node shot.mjs` (with BASE set to a
+dev server) shoots the real title with a save at the three window sizes into out/game-*.png.
 """
 import json
 import math
@@ -35,7 +44,7 @@ sys.path.insert(0, str(HERE.parent / "sky"))
 
 from PIL import Image  # noqa: E402
 
-from common import P, T, new, draw, put, rect, get, rgb, hsh, vnoise, scale, frame_of, ART_SET, sheet  # noqa: E402
+from common import P, T, new, draw, put, rgb, hsh, vnoise, scale, frame_of, ART_SET, sheet, bayer  # noqa: E402
 import island  # noqa: E402
 import sky  # noqa: E402
 import props  # noqa: E402
@@ -104,17 +113,17 @@ BRAMBLE = [
     ".......khHhhk.......",
     ".......khHhhk.......",
     ".......khhhhk.......",
-    ".......koyook.......",
-    "..kkk.kkkkkkkk.kkk..",
-    ".kwwwkkGGGGGGkkwwwk.",
-    ".kwkekGGGGGGGGGkekwk",
-    ".kwwwkGGGGGGGGGkwwgk",
-    ".kGGGGGGGGGGGGGGGGgk",
-    ".kGGGGGGGGGGGGGGGggk",
-    ".kgGkGGGGGGGGGGkGggk",
-    ".kggGkkkkkkkkkkGgggk",
-    "..kgggggggggggggggk.",
-    "...kkwwwwwwwwwwwkk..",
+    "..kkk..koyook..kkk..",
+    ".kwwwkkkkkkkkkkwwwk.",
+    ".kweekGGGGGGGGkeewk.",
+    ".kweekGGGGGGGGkeewk.",
+    ".kGwwGGGGGGGGGGwwGk.",
+    "kGGGGGGGGGGGGGGGGGgk",
+    "kGGGGGGGGGGGGGGGGGgk",
+    "kgGkGGGGGGGGGGGGkGgk",
+    "kggGkkkkkkkkkkkkGggk",
+    ".kggggggggggggggggk.",
+    "..kkwwwwwwwwwwwwkk..",
     "..kCskwwwwwwwwwkcck.",
     ".kCCCsSCCwwCCCCccck.",
     ".kCCCCsSCCCCCCCccck.",
@@ -141,36 +150,42 @@ def from_rows(rows, key):
 
 
 def bramble(f):
-    """Bramble standing, 20x25 (+3 above for the raised hat): frames 4-6 lift the hat with his
-    right hand, frame 2 blinks. Returns (img, y offset: draw at y - 3)."""
+    """Bramble standing, 24x32 (his feet on row 30): big domed eyes, his small top hat, the blue
+    coat with the copper sash and the gold medal. Frame 2 blinks; frames 4-6 he lifts the hat off
+    his head and holds it up at his side, his arm straight up in its sleeve (the hat 4 px up, 5 at
+    the top of the gesture), so the greeting reads at 1x against the sky."""
     rows = [list(r) for r in BRAMBLE]
-    if f == 2:                                   # blink: lids over both eyes
-        for y in (7,):
-            for x in (2, 3, 4, 15, 16, 17):
-                rows[y][x] = "g"
+    if f == 2:                                   # blink: the lids come down
         for x in (2, 3, 4, 15, 16, 17):
-            rows[6][x] = "g" if rows[6][x] == "w" else rows[6][x]
-    img = new(20, 28)
-    body = from_rows(["".join(r) for r in rows], BKEY)
-    if f in (4, 5, 6):
-        lift = 3 if f == 5 else 2
-        hat = body.crop((7, 0, 13, 5))
-        head = body.crop((0, 5, 20, 25))
-        img.alpha_composite(head, (0, 8))
-        img.alpha_composite(hat, (8, 3 - lift))
-        # the right arm up to the hat brim (the viewer's right): the hand on the brim
-        for (x, y, c) in ((17, 21, "k"), (18, 21, "k"), (16, 20, "g"), (17, 20, "g"), (18, 20, "k"),
-                          (15, 19, "g"), (16, 19, "g"), (17, 19, "k"), (14, 18, "k"), (15, 18, "k"),
-                          (13, 7 - lift, "g"), (14, 7 - lift, "k"), (13, 8 - lift, "k")):
-            put(img, x, y, BKEY[c])
-        # the old hand at his side is now his raised sleeve: clear it
-        for (x, y) in ((18, 23), (19, 23), (18, 24), (19, 24), (19, 25)):
-            if (x, y) == (18, 23):
-                put(img, x, y, BKEY["C"])
-            else:
-                img.putpixel((x, y), (0, 0, 0, 0))
-    else:
-        img.alpha_composite(body, (0, 3))
+            rows[5][x] = rows[6][x] = "g"
+            rows[7][x] = "k"
+    img = new(24, 32)
+    if f not in (4, 5, 6):
+        img.alpha_composite(from_rows(["".join(r) for r in rows], BKEY), (0, 6))
+        return img
+    lift = 5 if f == 5 else 4
+    hat = from_rows([r[6:14] for r in BRAMBLE[:5]] + ["kkkkkkkk"], BKEY)
+    rows[4] = list("..kkk..........kkk..")               # the head, bare (row 5 is its crown)
+    for y in (18, 19, 20):                               # the hand leaves his side
+        rows[y][18] = rows[y][19] = "."
+        rows[y][17] = "k"
+    img.alpha_composite(from_rows(["".join(r) for r in rows[4:]], BKEY), (0, 10))
+    brim = 11 - lift
+    img.alpha_composite(hat, (13, brim - 5))
+    arm = {}
+    for y in range(brim + 1, 23):                        # the sleeve, wrist to shoulder
+        arm[(20, y)] = "C"
+        arm[(21, y)] = "c"
+    for (x, y) in ((20, brim - 1), (21, brim - 1), (20, brim), (21, brim)):
+        arm[(x, y)] = "g"                                # the hand on the brim
+    arm[(20, brim - 1)] = "G"
+    for (x, y), ch in arm.items():
+        put(img, x, y, BKEY[ch])
+    for (x, y) in list(arm):
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            q = (x + dx, y + dy)
+            if q not in arm and 0 <= q[0] < 24 and 0 <= q[1] < 32 and not img.getpixel(q)[3]:
+                put(img, q[0], q[1], P["ink"])
     return img
 
 
@@ -376,11 +391,6 @@ class Isle:
         while y < sea + 6:
             img.alpha_composite(seg.crop((0, 0, 16, min(32, sea + 6 - y))), (fx, y))
             y += 32
-        # the falling sheet's own outline, so it reads against the sky
-        for yy in range(fr + 1, sea + 6):
-            for xx in (fx + 2, fx + 13):
-                if 0 <= yy < H and not get(img, xx, yy)[3]:
-                    pass
 
 
 # ---------------------------------------------------------------- the ground on the islands
@@ -419,8 +429,17 @@ ISLETS = [sky.islet(v) for v in range(4)]
 
 def backdrop():
     img = GRAD.copy()
-    # far islets on the horizon (pre-hazed), the one under the buttons the smallest
-    for (x, y, v) in ((128, 116, 2), (196, 128, 1), (-18, 122, 3)):
+    # morning: the horizon right over the cloud sea warms to the sun's colour, a band with the
+    # gradient's own 8-row ordered-dither seam above it (sky.py), mostly showing between the puffs
+    a = img.load()
+    seam, band = 144, 152
+    for y in range(seam, SEA + 2):
+        t = (y - seam + 0.5) / (band - seam)
+        for x in range(W):
+            if y >= band or bayer(x, y) < t:
+                a[x, y] = C("sun")
+    # far islets on the horizon (pre-hazed), the windmill one off the buttons' axis
+    for (x, y, v) in ((144, 118, 2), (196, 128, 1), (-18, 122, 3)):
         img.alpha_composite(ISLETS[v], (x, y))
     # high puffs in the corners (clear of the logo and the tagline), lower ones behind the islands
     for (x, y, k) in ((-22, 4, 4), (276, 16, 3), (290, 50, 5), (2, 48, 5), (100, 88, 5),
@@ -520,7 +539,7 @@ def left_island(img, f):
     # trees and bushes on the rim, outside the plot; tall ones only left of the logo (x < 50)
     for (k, x, y) in ((1, -4, 82), (3, 14, 70), (0, 34, 64), (2, 10, 110), (1, -14, 104)):
         img.alpha_composite(props.tree(k), (x - 16, y - 29))
-    for (k, x, y) in ((2, 58, 57), (0, 84, 58), (1, 98, 70), (2, 104, 92), (0, 20, 112)):
+    for (k, x, y) in ((2, 58, 57), (0, 84, 58), (1, 98, 70), (0, 20, 112)):
         img.alpha_composite(props.bush(k), (x, y))
     # the iron outcrop, re-seated off the planks onto the paving
     ore = new(32, 32)
@@ -543,18 +562,12 @@ def left_island(img, f):
     at(art("dock", (f // 4) % 2), 2, 1)
     at(art("miner", f % 4, row=0), 1, 0)
     at(art("furnace", f % 4, row=0), 2, 0)
-    # the slag heap and a frog worker on the plot's front row
-    at(art("heap", 2), 0, 2)
+    # on the plot's front row, this very line folded into one tile (the tagline's promise): a brass
+    # module with an ingot in its well, its band breathing; a frog worker beside it
+    at(art("module"), 0, 2)
+    at(art("items", 2), 0, 2, 4, 4)
+    at(art("module_glow", f % 4), 0, 2)
     at(reseat(art("town_frog", (f // 2) % 4)), 1, 2, 0, -2)
-    # smoke from the furnace: a puff that rises and thins over the loop
-    sx, sy = gx + 2 * T + 6, gy - 2 - f
-    if f < 6:
-        c = P["cloud2"] if f < 3 else P["cloud1"]
-        r = 1 + f // 3
-        for yy in range(-r, r + 1):
-            for xx in range(-r, r + 1):
-                if xx * xx + yy * yy <= r * r + 0.5:
-                    put(img, sx + xx + f // 2, sy + yy, c)
 
 
 def right_island(img, f):
@@ -566,18 +579,19 @@ def right_island(img, f):
     img.alpha_composite(body)
     for fx in RIGHT_FALLS:
         RIGHT.falls(img, fx, f)
-    # the town on the rim: back row houses on footings, the flag, the lamp
+    # the town on the rim: the mayor's house and a gable house on footings, the town flag
     gable = reseat(named("town_house", "gable"))
     home = reseat(named("town_house", "bramble"))
-    img.alpha_composite(props.tree(1), (310 - 16, 90 - 29))
-    img.alpha_composite(gable, (226, 63))
-    img.alpha_composite(home, (258, 62))
-    img.alpha_composite(flag(f), (210, 70))
-    img.alpha_composite(props.bush(2), (294, 98))
-    # Bramble in front of his door raising his hat, a townsperson beside him
-    img.alpha_composite(bramble(f), (236, 84))
+    img.alpha_composite(props.tree(1), (318 - 16, 92 - 29))
+    img.alpha_composite(home, (242, 62))
+    img.alpha_composite(gable, (274, 63))
+    img.alpha_composite(flag(f), (302, 68))
+    img.alpha_composite(props.bush(2), (296, 100))
+    # Bramble out on the open grass by his house, his hat against the sky when he raises it,
+    # facing the buttons; a townsperson by the gable house
+    img.alpha_composite(bramble(f), (214, 74))
     fr = reseat(art("town_frog", 0)).transpose(Image.FLIP_LEFT_RIGHT)
-    img.alpha_composite(fr, (284, 96))
+    img.alpha_composite(fr, (282, 96))
 
 
 def scene(f):
@@ -618,6 +632,11 @@ def build():
     for name, box in (("left", (28, 60, 124, 132)), ("right", (204, 60, 300, 170))):
         crops = [fr.crop(box) for fr in frames]
         scale(sheet(crops, 4), 3).save(OUT / f"motion_{name}@3x.png")
+    # Bramble's frames (0, blink, the hat going up, the top of it) at 10x over the sky
+    br = sheet([bramble(f) for f in (0, 2, 4, 5)])
+    bg = Image.new("RGBA", br.size, C("sky2"))
+    bg.alpha_composite(br)
+    scale(bg, 10).save(OUT / "bramble@10x.png")
     # the 1024x640 crop (scene x 32..288, y 10..170) at 2x
     scale(frames[0].crop((32, 10, 288, 170)), 2).save(OUT / "title_crop1024@2x.png")
     print("colours", len({p[:3] for p in strip.getdata()}))
