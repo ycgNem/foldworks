@@ -10,8 +10,12 @@
 //   coal0..3 sand0..3 · isle_under left x4, fill x4, right x4 · isle_tip 48x32 · isle_fall 16x32 x4
 //   (tiles vertically) · isle_fall_foam 32x16 x4 · sky_cloud 64x32 big x2, medium x2, small x2 ·
 //   sky_islet 64x48 x4 · sky_bird 8x8 x4 · prop_tree 32x32 x4 (anchor at the trunk foot) ·
-//   prop_bush 16x16 x4 · prop_fence h, v, post, gate · fplat_under face left, face, face right,
-//   truss left, truss, truss right · fplat_rotor 48x24 x4.
+//   prop_bush 16x16 x4 · prop_fence h, v, post, gate · the Factory platform (pixel-art/sky/fplat.py,
+//   read by name where the sheet has names; factory.ts falls back to these indices): fplat_deck
+//   (plain|hatch|vent)_(nw|ne|sw|se), tread0, tread1 · fplat_edge m0..m15 kerb OVERLAYS on the deck,
+//   in_nw..in_se, cut_nw..cut_se, seam_deck, seam_tread, seam_n, seam_s · fplat_under face_l, face,
+//   face_r, face_splice, truss_l, truss, truss_r, face_lr, face2 · fplat_rotor 48x24 x4 ·
+//   fplat_rotor_side 48x32 w0..w3, e0..e3 (anchor on the west face; east mirrors it).
 import { C } from '../data/palette';
 import { hasArt, sheet } from './sprites';
 
@@ -242,7 +246,10 @@ const FALLBACK: Record<string, () => Art> = {
   // ---------------------------------------------------------------- the island body
   // the rim's boundary tiles by land mask (N=1 E=2 S=4 W=8); frames 16..31 are a second wobble
   isle_edge: () => mk(frames(16, 16, 32, (q, f) => edgeTile(q, f & 15, f >> 4, false)), 16, 16),
-  fplat_edge: () => mk(frames(16, 16, 16, (q, f) => edgeTile(q, f, 0, true)), 16, 16),
+  // the Factory platform's kerb: overlays on the deck by mask (pixel-art/sky/fplat.py has the rest:
+  // concave corners, corner cuts, the annex splice strips, all by name; the fallback has none)
+  fplat_edge: () => mk(frames(16, 16, 16, (q, f) => fplatKerb(q, f)), 16, 16),
+  fplat_deck: () => mk(frames(16, 16, 1, (q) => deckTile(q)), 16, 16),
   isle_cliff: () => mk(frames(16, 16, 12, (q, f) => cliffTile(q, Math.floor(f / 4), f % 4)), 16, 16),
   isle_vein: () => {
     const ores: [string, string[]][] = [
@@ -425,7 +432,29 @@ const FALLBACK: Record<string, () => Art> = {
       p(C.cloud3, Math.round(24 + Math.cos(t) * 23), Math.round(18 + Math.sin(t) * 4.5), 1, 1);
     }
   }), 48, 24, 24, 0, 12),
+  // an outrigger off a side face: w0..w3 (the root on the right, at the anchor), e0..e3 mirrored
+  fplat_rotor_side: () => mk(frames(48, 32, 8, ({ p }, f) => {
+    const east = f >= 4;
+    const X = (u: number) => (east ? 2 + u : 45 - u);
+    const span = (u0: number, u1: number, y: number, h: number, col: string) => p(col, Math.min(X(u0), X(u1)), y, Math.abs(X(u1) - X(u0)) + 1, h);
+    span(0, 2, 11, 18, C.ink); span(0, 1, 12, 16, C.steel2);
+    span(2, 22, 12, 6, C.ink); span(2, 21, 13, 1, C.steel4); span(2, 21, 14, 2, C.steel2); span(2, 21, 16, 1, C.steel1);
+    const cx = X(26);
+    p(C.ink, cx - 9, 8, 19, 16); p(C.brass1, cx - 8, 9, 17, 14); p(C.brass2, cx - 8, 9, 10, 13); p(C.brass3, cx - 7, 9, 12, 3);
+    p(C.ink, cx - 1, 4, 3, 5); p(C.steel3, cx, 4, 1, 5);
+    const a = ((f % 4) / 4) * Math.PI + (east ? 0.4 : 0);
+    for (const s of [1, -1])
+      for (let k = 3; k <= 20; k++) p(k > 16 ? C.brass2 : C.steel4, Math.round(cx + s * Math.cos(a) * k), Math.round(5 + s * Math.sin(a) * k * 0.2), 1, 1);
+  }), 48, 32, 45, 15, 12),
 };
+
+/** The fallback kerb on the Factory platform's open sides: ink, then brass. */
+function fplatKerb({ p }: Pen, mask: number) {
+  if (!(mask & 1)) { p(C.ink, 0, 0, 16, 1); p(C.brass2, 0, 1, 16, 2); p(C.steel2, 0, 3, 16, 1); }
+  if (!(mask & 8)) { p(C.ink, 0, 0, 1, 16); p(C.brass2, 1, 0, 2, 16); p(C.steel2, 3, 0, 1, 16); }
+  if (!(mask & 4)) { p(C.brass1, 0, 13, 16, 1); p(C.brass2, 0, 14, 16, 2); }
+  if (!(mask & 2)) { p(C.ink, 15, 0, 1, 16); p(C.brass1, 13, 0, 2, 16); }
+}
 
 /** A rim tile with its edge into the sky on the sides that are not land (mask: N=1 E=2 S=4 W=8).
  *  The grass (or, on the Factory, a steel deck with a brass-trimmed girder) is cut along a wobble
