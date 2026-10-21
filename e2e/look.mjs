@@ -121,6 +121,13 @@ else if (ACT2.includes(state)) {
   if (held?.drag) await dragTiles(page, held.drag);
   else if (held?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), held.hover); await page.mouse.move(p.x, p.y); }
 }
+// ---- the 180's fold look states (fold.ts): an audit still warming up, the Modules page with no
+// designs yet, and three audits with the camera panned away so their clipboards hang as tags at
+// the view's edge
+else if (state === 'auditWarm') { await foldSetup(true); await page.evaluate(() => window.__app.step(20 * 4)); }
+else if (state === 'modulesEmpty') { await foldSetup(true); await page.evaluate(() => { const a = window.__app; a.game.s.audits = []; a.togglePanel('modules'); }); }
+else if (state === 'auditEdge') { await page.evaluate(workshopSetup, 'audits3'); await page.evaluate(() => { const a = window.__app; a.renderer.cam.zoom = 4; a.lookAt(16, 3); }); }
+// ---- end of the fold look states
 else if (state === 'audit') { await foldSetup(true); await page.evaluate(() => window.__app.step(20 * 30)); }
 else if (state === 'grade' || state === 'gradeC') { await foldSetup(state === 'grade'); await page.evaluate(() => window.__app.step(20 * 70)); }
 else if (['factory', 'modules', 'sliceEnd', 'offline'].includes(state)) {
