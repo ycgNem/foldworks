@@ -9,7 +9,7 @@ import { DX, DY, opposite, type Dir, type Ent, type Floor } from '../sim/world';
 import { drawFactory, type FactoryOverlay } from './factory';
 import { auditTicks } from '../sim/systems/audits';
 import { poleReach } from '../sim/systems/power';
-import { CHUNKS, PATCHES, FACTORY } from '../data/land';
+import { CHUNKS, PATCHES } from '../data/land';
 import { BUILD, isMachine, isPower, type BuildKind } from '../data/machines';
 import { ITEMS } from '../data/items';
 import { RULES } from '../data/rules';
