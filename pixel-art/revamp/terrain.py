@@ -3,7 +3,7 @@ plate, belts and trunks. All hand-built (pixel-art-studio rules): the deck is ge
 generated tileset would not tile with itself across four random variants. The water and bank
 colours come from phase 1's PixelLab bayou tileset (revamp-test/raw/B_water_grass.png).
 
-Light from the top-left. The deck is a raised boardwalk over the bayou: its edge tiles
+Light from the top-left. (The ore deposits moved to ores.py.) The deck is a raised boardwalk over the bayou: its edge tiles
 (tile_shore, drawn on the water next to the floor) show plank ends and pilings in the water.
 """
 import math
@@ -50,60 +50,8 @@ def deck_tile(v):
     return img
 
 
-# ---------------------------------------------------------------- ore deposits (32x32 in quadrants)
-ORES = {
-    # pocket, lump dark, mid, light, glint, accent (and its chance)
-    "iron": (P["earth0"], P["iron0"], P["iron1"], P["iron2"], P["steel4"], P["copper1"], 0.25),
-    "copper": (P["earth0"], P["copper0"], P["copper1"], P["copper2"], P["copper3"], P["teal"], 0.45),
-    "coal": (P["earth0"], P["ink"], P["ink2"], P["steel1"], P["steel3"], P["lamp1"], 0.12),
-    "sand": (P["earth1"], P["wood3"], P["wood4"], P["wood5"], P["bone"], P["earth2"], 0.0),
-}
-
-
-def deposit(kind):
-    """One 32x32 deposit, seamless with itself (lumps wrap), on dark earth broken by deck boards."""
-    pocket, d0, d1, d2, glint, acc, pacc = ORES[kind]
-    S = 32
-    img = new(S, S)
-    r = rng({"iron": 1, "copper": 2, "coal": 3, "sand": 4}[kind])
-    # bed: dark earth with a grain of lighter grit
-    for y in range(S):
-        for x in range(S):
-            draw(img, [(x, y)], P["earth1"] if (x * 7 + y * 13) % 11 else P["earth2"])
-    lumps = []
-    for gy in range(0, S, 8):
-        for gx in range(0, S, 8):
-            if r.random() < 0.2:
-                continue
-            lumps.append((gx + 3 + r.randint(-1, 1) + (gy // 8 % 2) * 4, gy + 3 + r.randint(-1, 1),
-                          r.choice((4, 5, 5, 6)) if kind != "sand" else r.choice((5, 6, 6))))
-
-    def wrap(pts):
-        return [(x % S, y % S) for x, y in pts]
-
-    for x, y, s in lumps:   # pockets (shadow round each lump, offset down-right)
-        pts = [(x + i, y + j) for j in range(-s // 2, s // 2 + 2) for i in range(-s // 2, s // 2 + 2)
-               if ((i - 0.5) / (s / 2 + 0.9)) ** 2 + ((j - 0.7) / (s / 2 + 0.6)) ** 2 <= 1]
-        draw(img, wrap(pts), pocket)
-    for x, y, s in lumps:
-        body = [(x + i, y + j) for j in range(-s // 2, s // 2 + 1) for i in range(-s // 2, s // 2 + 1)
-                if (i / (s / 2 + 0.4)) ** 2 + (j / (s / 2 + 0.2)) ** 2 <= 1]
-        draw(img, wrap(body), d1)
-        draw(img, wrap([(px, py) for px, py in body if (px - x) + (py - y) >= s // 2]), d0)
-        draw(img, wrap([(px, py) for px, py in body if (px - x) + (py - y) <= -(s // 2)]), d2)
-        draw(img, wrap([(x - s // 2 + 1, y - s // 2 + 1)]), glint)
-        if r.random() < pacc:
-            draw(img, wrap([(x + 1, y)]), acc)
-    if kind == "sand":     # sand is drifts, not rocks: ripple lines across
-        for y in range(2, S, 6):
-            for x in range(S):
-                if (x + y * 3) % 9 < 5:
-                    draw(img, [(x, (y + (x // 6) % 2) % S)], P["wood5"])
-    return img
-
-
-def quadrants(img):
-    return [img.crop((0, 0, 16, 16)), img.crop((16, 0, 32, 16)), img.crop((0, 16, 16, 32)), img.crop((16, 16, 32, 32))]
+# ---------------------------------------------------------------- ore deposits
+# The ore outcrops (tile_ore_*, tile_ore_*_spill) are built by ores.py since the ore revamp.
 
 
 # ---------------------------------------------------------------- water and the deck's edge
@@ -272,8 +220,6 @@ def trunk_frame(f, field):
 
 def build():
     export("tile_floor", [deck_tile(v) for v in range(4)])
-    for k in ORES:
-        export(f"tile_ore_{k}", quadrants(deposit(k)))
     export("tile_water", [water_tile(f) for f in range(4)], 4)
     export("tile_shore", [shore_north(), shore_west_side(), shore_south(), shore_west_side(mirror=True)])
     export("tile_factory", [factory_tile(0), factory_tile(1)])

@@ -209,6 +209,58 @@ COAL = [
 ]
 
 
+# The four ore icons match their deposits (the ore revamp, ores.py): still lumps by silhouette,
+# each its own lump. Iron: an angular banded slab and a chip, blue tops, rust layers in the dark
+# face. Copper: a bubbly verdigris crust with a native-copper nugget breaking out of the top.
+# Coal: two jagged black shards with a cool sheen on their lit edges and an ember in the crack.
+# Sand: a little dune heap, pale gold, its crest bone-bright and one ripple across it.
+IRON_ORE = [
+    "..ooo...",
+    ".o332oo.",
+    "o3221o2o",
+    "o2211o1o",
+    "oaaa0aao",
+    "o0000o0o",
+    ".oooo.o.",
+    "........",
+]
+IRON_KEY = {"o": o, "3": P["steel3"], "2": P["iron2"], "1": P["iron1"], "0": P["steel0"], "a": P["copper1"]}
+COPPER_ORE = [
+    "...oo...",
+    "..ohCo..",
+    ".oTCkoo.",
+    "oTttoTto",
+    "otTttCto",
+    "ottwttwo",
+    ".owwwwo.",
+    "..oooo..",
+]
+COPPER_KEY = {"o": o, "h": P["copper3"], "C": P["copper2"], "k": P["copper1"], "T": P["teal"], "t": P["water4"],
+              "w": P["water3"]}
+COAL_ORE = [
+    "..o.....",
+    ".oso....",
+    ".osmo.o.",
+    "osmmkoso",
+    "osmkdsmo",
+    "osmkdmko",
+    ".omkekdo",
+    "..oooooo",
+]
+COAL_KEY = {"o": o, "s": P["steel3"], "m": P["steel1"], "k": P["ink2"], "d": P["ink1"], "e": P["lamp1"]}
+SAND_HEAP = [
+    "........",
+    "........",
+    "........",
+    "...ooo..",
+    ".oo3bbo.",
+    "o3r33r3o",
+    "o2r22r1o",
+    ".oooooo.",
+]
+SAND_KEY = {"o": o, "b": P["bone"], "3": P["brass3"], "2": P["wood5"], "r": P["brass2"], "1": P["brass1"]}
+
+
 def ic(rows, r0, r1, r2, r3, a=None, b=None):
     return from_rows(rows, {"o": o, "0": r0, "1": r1, "2": r2, "3": r3, "a": a, "b": b})
 
@@ -218,8 +270,8 @@ COPPER = (P["copper0"], P["copper1"], P["copper2"], P["copper3"])
 STEEL_R = (P["steel1"], P["steel2"], P["steel3"], P["steel4"])
 
 ICONS = {
-    "ironOre": ic(ORE, *IRON, a=P["copper1"]),
-    "copperOre": ic(ORE, *COPPER, a=P["teal"]),
+    "ironOre": from_rows(IRON_ORE, IRON_KEY),
+    "copperOre": from_rows(COPPER_ORE, COPPER_KEY),
     "ironIngot": ic(INGOT, *IRON),
     "copperIngot": ic(INGOT, *COPPER),
     "slag": ic(SLAG, P["slag0"], P["slag1"], P["violet"], P["violet"], a=P["lamp1"]),
@@ -228,8 +280,8 @@ ICONS = {
     "gear": ic(GEAR, *STEEL_R),
     "slagBrick": ic(BRICK, P["slag0"], P["slag1"], P["violet"], P["bone"]),
     "gizmo": ic(GIZMO, P["brass1"], P["brass2"], P["brass3"], P["lamp3"], a=P["red"], b=P["teal"]),
-    "coal": ic(COAL, P["ink"], P["ink2"], P["steel1"], P["steel3"], a=P["lamp1"]),
-    "sand": ic(SAND, P["wood3"], P["wood4"], P["wood5"], P["bone"]),
+    "coal": from_rows(COAL_ORE, COAL_KEY),
+    "sand": from_rows(SAND_HEAP, SAND_KEY),
     "steel": ic(STEEL, P["steel0"], P["steel2"], P["steel3"], P["bone"]),
     "glass": ic(GLASS, P["water3"], P["water4"], P["teal"], P["bone"]),
     "gravel": ic(GRAVEL, P["steel1"], P["steel2"], P["steel3"], P["steel4"]),

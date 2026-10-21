@@ -8,7 +8,7 @@ colour goes to what matters (ore, items, fire, brass modules, coin, the lanterns
 town round the floors).**
 
 The build scripts live in `pixel-art/revamp/`, one module per family, each run as
-`python <script>.py` from that folder: `terrain.py`, `machines.py`, `routers.py`, `items.py`,
+`python <script>.py` from that folder: `terrain.py`, `ores.py`, `machines.py`, `routers.py`, `items.py`,
 `buildings.py`, `destinations.py`, `modules.py`, `cast_draw.py` then `portraits.py`, `town_draw.py`,
 `fx.py`, `pictures.py`, `ui_art.py` then `ui.py` (it appends the Milestone 5-6 icons).
 `recolor_old.py` was the one-off A→B pass before the redraw; every sprite the game loads is now
@@ -86,7 +86,9 @@ Rules:
 
 ## Items
 
-By shape first: ore = lumps, ingots = slanted bars, plates = flat squares, gears = teeth with a
+By shape first: ore = lumps that match their deposits (iron an angular slab and chip, blue with a
+rust layer; copper a teal crust lump with a copper nugget on top; coal two jagged shards with
+sheen and an ember; sand a low pale-gold heap with a ripple), ingots = slanted bars, plates = flat squares, gears = teeth with a
 hole, wire = a coil, slag = a crumbly lump, bricks = a coursed block, the Gizmo = its own odd box
 with an antenna, steel = an I-beam end-on, glass = a pane with a shine, concrete = a cinder block
 with two holes, plastic = a little moulded bottle, oil = a drop, the machine kit = a crate with a
@@ -119,8 +121,23 @@ flickering lantern.
 ## Floors and ground
 
 - **Workshop**: the plank deck on pilings over the bayou; the shore's north face shows plank
-  ends and pilings, the south a mossy lip. Ore patches are 32×32 seamless deposits (lumps 4–6 px,
-  each ore its own lump shape and colour) on an `earth` bed. Unowned land is darker earth.
+  ends and pilings, the south a mossy lip. Unowned land is the deck darkened, cooled and hatched.
+- **Ore deposits** (`ores.py`, the ore revamp) are outcrops, not tiles: each ore is one 32×32
+  drawn for its 2×2 patch in the 3/4 view (lit tops, shadowed front faces, a shadow cast
+  down-right on the planks), breaking up through a ragged hole in the deck so the boards show at
+  its corners and it never reads as a square. Told apart by silhouette first: **iron** blocky
+  slabs (blue hematite tops with `steel3` rims, dark faces with wavering rust and blue layers),
+  **copper** a bubbly verdigris crust ringed like malachite with native-copper nuggets breaking
+  out (the most colourful thing on the deck), **coal** tall faceted anthracite shards (flat
+  facets, `steel2`-`steel3` sheen on the lit ridges, splinters on the hole's rim, embers in the
+  cracks), **sand** a soft dune heap with no ink outline (long windward slope, a shaded slip face
+  east, wind ripples, two shells). Each has a spill sheet: a few pebbles, rust or verdigris stains,
+  cracks or drift within 4 px of the hole on the neighbouring deck, never on another patch and
+  sparse enough not to read as ore. Frame 0 of `tile_ore_*` is the whole outcrop at 16×16 for
+  screens that show one tile (the Survey Office). **Glints** are drawn live by `src/render/orefx.ts`
+  (iron a silver cross, copper a lantern-bright gleam, coal a sheen and embers breathing, sand a
+  quartz grain), 1–3 px, under anything standing on the patch, only on land you own; never a
+  star with motes (that is a Spark).
 - **Factory**: riveted `steel` plates, two variants; belts and trunks sit on it as on the deck.
 - **Water** animates in 4 frames, phase-shifted per tile.
 
