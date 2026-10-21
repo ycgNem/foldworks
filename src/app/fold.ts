@@ -28,9 +28,10 @@ import { claimsHeld, claimsUsed, oresOf, copiesOf } from '../sim/systems/claims'
 import type { AuditResult, AuditState, Box, FAuditState, FEnt, ModuleDesign } from '../sim/world';
 import { frame, button, uiIcon, portrait, coinIcon, clipboard, chip, chipWidth, meter, tag, tagSize, bubble, ribbon, rule, twine, RIBBON_H, CHIP_H, T, type Role } from './chrome';
 import { perMin as perMinW, menuTemplate, cells, fmt, rays, slamScale } from './widgets';
-import { drawRich, layoutRich, richWidth } from '../ui/rich';
+import { drawRich, layoutRich, richWidth, richHeight } from '../ui/rich';
 import { paperRaw, hash2, stampCanvas } from '../ui/paper';
 import type { Layout } from './layout';
+import { zones } from './tags';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
 
@@ -302,7 +303,9 @@ export function auditBadge(app: App, L: Layout) {
   here.forEach((a, i) => {
     const b = boxes[i];
     if (!overlapArea(b, view)) { placed.push(edgeTag(app, a, ws, b, view, placed)); return; }
-    const r = placeClip(b, avoid, placed, view);
+    // the corner pieces (the Purse, the speaker's bubble, the Gazette…) are kept clear where it
+    // costs nothing, but another clipboard is worse to cover than a corner
+    const r = placeClip(b, avoid, placed, view, zones);
     placed.push(r);
     auditClip(app, a, ws, r, b, here.length);
   });
@@ -310,7 +313,7 @@ export function auditBadge(app: App, L: Layout) {
 
 /** Where a clipboard goes beside box b: the candidate covering the least of the boxes and the
  * clipboards already placed, kept inside the view. */
-function placeClip(b: Rect, boxes: Rect[], placed: Rect[], view: Rect): Rect {
+function placeClip(b: Rect, boxes: Rect[], placed: Rect[], view: Rect, soft: Rect[] = []): Rect {
   const cands = [
     { x: b.x + b.w + 10, y: b.y }, { x: b.x - CB_W - 10, y: b.y },
     { x: b.x + b.w / 2 - CB_W / 2, y: b.y + b.h + 10 }, { x: b.x + b.w / 2 - CB_W / 2, y: b.y - CB_H - 10 },
@@ -320,7 +323,7 @@ function placeClip(b: Rect, boxes: Rect[], placed: Rect[], view: Rect): Rect {
   for (const p of cands) {
     const x = Math.round(clampN(p.x, view.x, view.x + view.w - CB_W)), y = Math.round(clampN(p.y, view.y, view.y + view.h - CB_H));
     const r = { x, y, w: CB_W, h: CB_H };
-    const cost = boxes.reduce((s, q) => s + overlapArea(q, r) * 3, 0) + placed.reduce((s, q) => s + overlapArea(q, { x: x - 2, y: y - 2, w: CB_W + 4, h: CB_H + 4 }) * 6, 0) + Math.abs(x - p.x) + Math.abs(y - p.y);
+    const cost = boxes.reduce((s, q) => s + overlapArea(q, r) * 3, 0) + placed.reduce((s, q) => s + overlapArea(q, { x: x - 2, y: y - 2, w: CB_W + 4, h: CB_H + 4 }) * 6, 0) + soft.reduce((s, q) => s + overlapArea(q, r), 0) + Math.abs(x - p.x) + Math.abs(y - p.y);
     if (cost < bestCost) { bestCost = cost; best = r; }
   }
   return best!;
@@ -1199,7 +1202,8 @@ function ledger(app: App, D: Rect, foot = 0) {
     drawRich(ui, `{${gizmoMod ? 'good' : 'soft'}:${gizmoMod ? ICON.check : ICON.cross}} {i:gizmo} module → Factory Dock`, x, yy, Infinity, gizmoMod ? T.good : T.ink);
     ui.hint(x, yy - 19, w, 30, [{ text: `{big:Bramble's last order}  ${want} {i:gizmo}` }, { text: 'counted at the {u:factory} Factory Dock only' }, { text: 'fold the {i:gizmo} line and its {i:gear} {i:copperWire} feeders · trunk them in' }], 200);
     yy += LINE_H;
-  } else if (yy + 30 <= end) {
+  } else if (yy + 3 + 8 + LINE_H + richHeight('{soft:n grows per product, not per design}', w, LINE_H) <= end) {
+    // the rule's note wraps on a narrow page: it shows only when both of its lines fit
     rule(ui, x, yy, w, true);
     yy += 3;
     ui.small('THE STAMP PRICE', x, yy, T.inkSoft);
@@ -1208,102 +1212,6 @@ function ledger(app: App, D: Rect, foot = 0) {
     yy += LINE_H;
     drawRich(ui, '{soft:n grows per product, not per design}', x, yy, w);
   }
-}
-
-// ------------------------------------------------------------------ the Factory floor's reports
-
-/** Why a module's output backs up, with both rates when the module downstream takes less than
- *  it is offered (the Milestone 4 review: "does not take it" when it took 34 of 81 a minute). */
-function blockedWhy(g: App['game'], e: FEnt, d: ModuleDesign, to: FEnt | null, item: ItemId): string {
-  if (!to) return 'Its front leads nowhere: lay a trunk from its gold mark to the Factory Dock.';
-  const offered = d.outs[item] ?? 0;
-  if (to.kind === 'module') {
-    const td = g.design(to.design);
-    const name = fname(g, to);
-    const takes = td?.ins[item] ?? 0;
-    if (!td || takes <= 0) {
-      const wants = td ? (Object.keys(td.ins) as ItemId[]).map((k) => ITEMS[k].name.toLowerCase()) : [];
-      return `${name} does not take ${ITEMS[item]?.name.toLowerCase() ?? 'it'}${wants.length ? `: it wants ${wants.join(', ')}` : ': it is a source and takes nothing'}. Turn this trunk to the Factory Dock.`;
-    }
-    if (to.state === 'blocked') return `${name} takes ${perMinW(takes)}/min but is blocked itself, so it takes nothing now. Clear its front first.`;
-    if (takes < offered * 0.98) return `${name} takes ${perMinW(takes)} of the ${perMinW(offered)}/min offered: a trunk feeds one module. Fold a works that takes ${perMinW(offered)}/min, or split the source.`;
-    return `${name} takes ${perMinW(takes)}/min, as much as is offered, but its input store is full.`;
-  }
-  if (to.kind === 'fbay') return 'The Megaproject Bay takes only what the Great Drill is built from (steel and Drill Bits).';
-  return `The trunk is full: it carries ${FACTORY.trunkSpeed * 60}/min. Give the module a trunk of its own.`;
-}
-
-/** The hover report for a thing on the Factory floor. */
-/** A report line, tagged with what it says so the hover report can pick the few that matter. */
-interface RLine { text: string; color?: string; role?: 'status' | 'cause' | 'od' | 'odReady' | 'rate' }
-
-export function factoryReport(app: App, e: FEnt): RLine[] {
-  const g = app.game;
-  const out: RLine[] = [{ text: fname(g, e), color: C.gold }];
-  if (e.kind === 'trunk') {
-    const r = g.routes.find((q) => q.tiles.includes(e));
-    const cap = FACTORY.trunkSpeed * 60;
-    out.push({ text: `Carrying ${Math.round(e.flow * 60)} of ${cap} a minute`, color: e.flow > FACTORY.trunkSpeed * 0.97 ? C.pipYellow : C.bone });
-    if (r?.by) out.push({ text: 'A side route: it carries the module\'s byproducts (slag, oil).', color: C.violet });
-    return out;
-  }
-  if (e.kind === 'fdock') return [...out, { text: 'Buys what reaches it, like the Workshop Dock. Fills the active order first. Slag is scrapped for nothing.' }];
-  if (e.kind === 'fhopper') return [...out, { text: 'Counts toward the selected research, like the Workshop Hopper. Machine Kits go to the parts bank.' }];
-  if (e.kind === 'fbay') {
-    const st = megaStage(g.s.mega.stage);
-    if (!st) return [...out, { text: 'The Great Drill runs: every Miner and source module +50%.', color: C.gold }, { text: 'Click to open.', color: C.hull2 }];
-    out.push({ text: `${st.name}: ${Math.floor(megaFrac(g) * 100)}%`, color: C.bone });
-    for (const [k, n] of Object.entries(st.wants) as [ItemId, number][]) out.push({ text: `${ITEMS[k].name}: ${fmt(Math.min(n, g.s.mega.progress[k]?.toNumber() ?? 0))} / ${fmt(n)}`, color: C.hull3 });
-    out.push({ text: 'Trunk them in. Click to open the Megaproject.', color: C.hull2 });
-    return out;
-  }
-  const d = g.design(e.design);
-  if (!d) return out;
-  const pct = Math.round(e.fAvg * 100);
-  if (e.state === 'work') out.push({ text: `Working: ${pct}% of full speed lately`, color: C.pipGreen, role: 'status' });
-  else if (e.state === 'starved') out.push({ text: `Starved of ${ITEMS[e.why as ItemId]?.name.toLowerCase() ?? 'input'} (${pct}% lately): feed its back`, color: C.pipYellow, role: 'status' });
-  else if (e.state === 'blocked') {
-    const r = g.routes.find((q) => q.from === e && !q.by);
-    const item = e.why as ItemId;
-    const iname = ITEMS[item]?.name.toLowerCase() ?? 'output';
-    out.push({ text: `Blocked: ${iname} backs up`, color: C.pipRed, role: 'status' });
-    out.push({ text: blockedWhy(g, e, d, r?.to ?? null, item), color: C.pipRed, role: 'cause' });
-  } else out.push({ text: 'Idle', color: C.hull2, role: 'status' });
-  if (e.spill) out.push({ text: `Spilling ${ITEMS[e.spill as ItemId]?.name.toLowerCase() ?? 'a product'}: what its front leads to doesn't take it all. Trunk it somewhere that does, or fold a works that uses it`, color: C.pipYellow, role: 'cause' });
-  if (g.done('overdrive')) {
-    const od = e.od ?? 0, cool = e.cool ?? 0;
-    if (od > 0) out.push({ text: `Overdriven: ${RULES.overdriveMult.value}x for ${Math.ceil(od / TICK_RATE)} s more`, color: C.glow, role: 'od' });
-    else if (cool > 0) out.push({ text: `Cooling: Overdrive again in ${Math.ceil(cool / TICK_RATE)} s`, color: C.hull2 });
-    else out.push({ text: `Overdrive: click to run it and every module trunked to it ${RULES.overdriveMult.value}x for ${RULES.overdriveSeconds.value} s`, color: C.glow, role: 'odReady' });
-  }
-  out.push({ role: 'rate', text: `Makes ${Object.entries(d.outs).map(([k, v]) => `${perMin(v ?? 0)} ${ITEMS[k as ItemId].name.toLowerCase()}`).join(', ')} a minute at full speed` });
-  if (Object.keys(d.ins).length) out.push({ text: `Takes ${Object.entries(d.ins).map(([k, v]) => `${perMin(v ?? 0)} ${ITEMS[k as ItemId].name.toLowerCase()}`).join(', ')} a minute at its back` });
-  if (g.routes.some((q) => q.from === e && q.by && q.to)) out.push({ text: 'Byproducts leave by its side trunk', color: C.violet });
-  out.push({ text: feedsDock(g, e) ? 'Feeds the Factory Dock' : 'Does not reach the Factory Dock yet', color: C.hull2 });
-  if (d.depth === 2) out.push({ text: `Depth 2: folded from ${(d.fparts ?? []).filter((p) => p.kind === 'module').length} modules`, color: C.teal1 });
-  out.push({ text: `Grade ${d.grade.letter}: rates x${d.grade.mult.toFixed(2)}`, color: GRADE_COL[d.grade.letter] });
-  return out;
-}
-
-/** The hover report on the Factory floor, kept short (the Milestone 5-6 final round): a module's
- * name and grade, what it is doing, the one cause worth fixing, its rate; the rest is pinned by a
- * click. The Docks, the Hopper, the Bay and trunks say little enough to show whole. */
-export function factoryHover(app: App, e: FEnt): { text: string; color?: string }[] {
-  const all = factoryReport(app, e);
-  const keys = e.kind === 'trunk' ? 'R rotates, X removes.' : e.kind === 'module' ? 'R rotates, X removes.' : '';
-  if (e.kind !== 'module') return keys ? [...all, { text: keys, color: C.hull1 }] : all;
-  const d = app.game.design(e.design);
-  const shown = [all[0], ...all.filter((l) => l.role === 'status' || l.role === 'od'), all.find((l) => l.role === 'cause'), all.find((l) => l.role === 'rate')].filter((l): l is RLine => !!l);
-  if (d) shown[0] = { text: `${all[0].text} (${d.grade.letter})`, color: all[0].color };
-  const ready = all.some((l) => l.role === 'odReady');
-  const more = all.length - shown.length - (ready ? 1 : 0);
-  const what = `the full report${more > 0 ? ` (+${more} line${more > 1 ? 's' : ''})` : ''}`;
-  const out: { text: string; color?: string }[] = shown.map((l) => ({ text: l.text, color: l.color }));
-  if (ready) {
-    out.push({ text: `Click: Overdrive it and every module trunked to it ${RULES.overdriveMult.value}x for ${RULES.overdriveSeconds.value} s`, color: C.glow });
-    out.push({ text: `While it cools, a click pins ${what}. ${keys}`, color: C.hull1 });
-  } else out.push({ text: `Click to pin ${what}. ${keys}`, color: C.hull1 });
-  return out;
 }
 
 // ------------------------------------------------------------------ the slice's end

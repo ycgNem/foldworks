@@ -664,7 +664,7 @@ export class App {
     const c = this.layout.center;
     const ui = this.ui;
     const m = 10;
-    const inside = this.mouseIn && !this.panel && !wheelOpen(this) && ui.mx >= c.x && ui.my >= c.y && ui.mx < c.x + c.w && ui.my < c.y + c.h;
+    const inside = this.mouseIn && !this.panel && !wheelOpen(this) && !ui.captured && ui.mx >= c.x && ui.my >= c.y && ui.mx < c.x + c.w && ui.my < c.y + c.h;
     const dx = !inside ? 0 : ui.mx < c.x + m ? -1 : ui.mx >= c.x + c.w - m ? 1 : 0;
     const dy = !inside ? 0 : ui.my < c.y + m ? -1 : ui.my >= c.y + c.h - m ? 1 : 0;
     if (!dx && !dy) { this.edgeT = 0; return; }

@@ -46,6 +46,40 @@ check(miners === 1, `a Miner placed with 2 + click (${miners})`);
 await page.keyboard.press('Escape');
 await frames(page, 2);
 
+// the 180: build from the Workbench Wheel by mouse alone (a right tap on the deck opens it at the
+// cursor; the Build petal fans its items; the Miner follows the cursor to its tile)
+const cssOf = (id) => page.evaluate((id) => { const a = window.__app; const r = a.ui.ids.get(id); return r ? a.uiToCss(r.x + r.w / 2, r.y + r.h / 2) : null; }, id);
+await page.evaluate(() => { window.__app.grant(100); });
+await hoverTile(page, 4, 5);
+await frames(page, 2);
+// a frame between press and release, as a hand's tap has (the game reads the press on a frame)
+await page.mouse.down({ button: 'right' });
+await frames(page, 2);
+await page.mouse.up({ button: 'right' });
+await frames(page, 4);
+check(await page.evaluate(() => window.__app.wheelIsOpen), 'a right tap opens the Workbench Wheel');
+const petal = await cssOf('wheel_build');
+if (petal) { await page.mouse.move(petal.x, petal.y); await frames(page, 2); await page.mouse.click(petal.x, petal.y); }
+await frames(page, 8);
+const item = await cssOf('wheel_item_miner');
+if (item) { await page.mouse.move(item.x, item.y); await frames(page, 2); await page.mouse.click(item.x, item.y); }
+await frames(page, 3);
+check(await page.evaluate(() => !window.__app.wheelIsOpen && window.__app.stats().mode === 'build'), `picking the Miner on the wheel closes it and holds the Miner (${petal ? 'petal' : 'no petal'}, ${item ? 'item' : 'no item'})`);
+await hoverTile(page, 1, 3);
+await page.mouse.down();
+await page.mouse.up();
+await frames(page, 2);
+const miners2 = await page.evaluate(() => window.__app.game.s.ents.filter((e) => e.kind === 'miner').length);
+check(miners2 === 2, `a second Miner placed from the wheel (${miners2})`);
+await page.keyboard.press('Escape');
+await frames(page, 2);
+const nb = await cssOf('notebook');
+if (nb) await page.mouse.click(nb.x, nb.y);
+await frames(page, 3);
+check(!!(await st()).panel, `the notebook opens a page (${(await st()).panel})`);
+await page.keyboard.press('Escape');
+await frames(page, 2);
+
 // open and close every screen
 for (const key of ['KeyT', 'KeyO', 'Slash']) {
   await page.keyboard.press(key);

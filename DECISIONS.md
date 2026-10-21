@@ -1443,3 +1443,121 @@ emberrock), which Foldworks should stop resembling.
   crust lump with a nugget, two shards, a low heap); no other item cell changed.
 - Palette B only, no colour added. PixelLab: **0 generations** (its service returned a database
   error at the start; everything is hand-built in the script).
+
+## The 180: text and HUD turned away from Last Watt (2026-10-21)
+
+The owner: *"take a look at the game Last Watt, all the text in this game mirrors it, I want to do
+a 180 to that game's format, revamp completely."* Last Watt is their tower defense
+(`Documents/candlepower`), grown from the same Sprocket & Sprout engine layer, so the two games
+shared a font, a panel style, a voice and a screen format. Asked how far, they picked **text and
+the whole HUD**; then "make all the rest of the decisions by yourself and run autonomously". The
+plan is `docs/hud-180.md` (it replaces `docs/ui-redesign.md`'s screen; that doc's lessons stand).
+Built in two phases by parallel agents on branch `hud-180`, merged by the lead.
+
+**What went** (each mirrored Last Watt): the S&S bitmap font; light text on slate boxes with gold
+caps titles; mechanics explained in sentences with numbers inside them, colon chains and
+semicolons; key hints in brackets; a top strip of counters; a numbered bottom hotbar with prices;
+cards of instructions in a column; a two-column help table of keys; square ore patches (the ore
+revamp above).
+
+### Phase 1: the letters, the paper, the art, the words
+- **Three fonts drawn for Foldworks** (`src/ui/font.ts`): Reed (body: cap 7, x-height 5, 2 px
+  verticals, rounded bowls, LINE_H 11), Bullfrog (display: cap 9, 2 px everywhere, soft corners,
+  the round lowercase sits 1 px low; BIG_LINE_H 13), Pip (small caps, cap 5, 2 px verticals). Reed
+  is ~32% wider than the S&S font, so every layout was re-measured. Bullfrog's capitals don't
+  bounce (O read as o). Contact sheet: `pixel-art/fonts/out/fonts.png`, beside a crop of Last Watt.
+  The font test strips rich-text markup before checking glyphs.
+- **Ink on paper** (`src/ui/theme.ts`): colour roles over palette B (unchanged): `ink`/`inkSoft`
+  on `paper` (bone) at 7:1 or more, accent inks at 4.4:1 or more (`warn` is `copper1`: `lamp0`
+  failed at 3.8:1; `coin` is Lantern Bayou's `brass0`, read from the palette list, because
+  `C.brass0` is palette A's lighter brass). A test checks every pair.
+- **Rich text** (`src/ui/rich.ts`): one markup for every string a player reads: item and UI icons
+  inline, keycaps (`{k:T}`, `{k:LMB}`), coin chips, colour spans, the display face, and an inline
+  status chip (`{chip:role:WORDS}`). Icons never split from the next word; plain strings draw as
+  before.
+- **The kit** (`src/ui/ui.ts`, `src/ui/paper.ts`, `src/app/chrome.ts`, `src/app/widgets.ts`):
+  tags on strings (deckled, a punched hole, a shadow), speech bubbles with tails, ribbons, the
+  Purse sign on ropes, the ledger book (`menuTemplate` keeps its signature and draws the book),
+  keycaps, chips, paper meters with a target notch, rubber stamps, paper buttons that press 1 px.
+  Every old export keeps its signature. A kit gallery (`gallery.html`, dev only; `e2e/gallery.mjs`).
+- **The art** (`pixel-art/hud180/`, `src/art/h180_*`): 29 pieces (paper, bubble and tails,
+  ribbons in five inks, bookmarks, the Purse sign and rope, the book, keycaps and mouse, buttons,
+  chip, slip, clipboard, pushpin, the bell, the lift dial and buttons, notebook, newspaper, toolbox,
+  the wheel's hub, petals and discs, lily pad, tick, red-pencil circle) and **the Inspector's
+  portraits** (an olive frog in a black bowler with a monocle on a chain, a drooping moustache that
+  curls up when he cheers). PixelLab: 0 generations.
+- **The words** (`src/data/*`, `src/app/goals.ts`): blurbs and descriptions became icon
+  equations and rows (`{i:ironOre} → {i:ironIngot}  30/min out the front · {i:slag} 1 per 4, out
+  the sides`); **every goal is a line in a character's mouth** (`Goal.who`: Bramble by default,
+  the Inspector for folding and audits, Voltaire for power and Mk2, the Committee for the Drill's
+  later stages, a customer for their own orders), with progress as `bar` and numbers as `chips`;
+  the voice guide is at the top of `goals.ts`. Land chunks got names (`Chunk B · Copper Bank`,
+  `Chunk C · Rust Hollow`, `Chunk E · Coal Flats`, `Chunk F · Ironside`, `Chunk A · the Yard`,
+  `Chunk D · the Back Forty`; "Chunk X" stays because a test matches it). Two stale goal numbers
+  (steel 15, circuits 110) are now read from the data. Strings in `src/sim/` stay (tests pin
+  them); the app turns them into rows and chips where they reach the player.
+
+### Phase 2: the screen
+- **No strips, no columns**: the floor runs edge to edge (`layout.ts`); things hang on its
+  corners. **The Purse** (top-left, a sign on ropes: the coin in Bullfrog 2x with its roll, bump
+  and sparkle; the rate on a tag under it; the Shipping tag on hover; flying coins land on it) is
+  the one loud number. Kits show where they are spent, Patents on their pages and on the
+  Committee's contract slip (under the Purse when a Reorganize is worth it), power on the floor.
+  Every book page shows the coin you hold in its header, since the book covers the Purse.
+- **The trouble bell** (under the Purse, only while a line is watched): swings and chimes on a new
+  problem; a click goes to the next, worst first, and pins its report (the old line-health chip's
+  job). Off-screen problems get red edge arrows, Sparks gold ones.
+- **The lift** (top-right): a needle between W and F, F padlocked until the Factory opens, `Tab`.
+- **Slips** under the lift for toasts; trophies drop as gold ribbons; banners are ribbons.
+- **The speaker's corner** (bottom-left): the goal's speaker on a lily pad with the bubble, its bar
+  and chips; the Bellows' Buy button in the bubble; cameos (a customer pitching an order or
+  thanking you, Unit 7 logging a Codex first) take the corner for ~6 s, one at a time. Beside it
+  the toolbox opens the wheel at the screen's centre.
+- **The notebook and the Gazette** (bottom-right): the notebook opens the last page; while a page
+  is open its sections hang as bookmark ribbons down the book's edge, and the book lies on a
+  dark-wood desk. The Gazette is a folded paper with today's headline on a slip beside it, turning
+  every 15 s, an EXTRA! corner for factory news; its page is a newspaper front.
+- **The floor carries the numbers** (`floortags.ts`): tags on the Dock (coin/min, the order's
+  bars), the Hopper (node and %), where belts enter the Dock or Hopper (item/min), each grid (power
+  %), the Bay; land for sale is a sign with a price chip, locked land a quiet padlock on a stake.
+  They draw outside the overlap audit (floor, not layout) and never block clicks.
+- **Reports are tags** (`tags.ts`): status chip and cause, the recipe and its rate, a bar against
+  nominal, feeders, the byproduct's route, power, mode and Overdrive rows, keycap verbs. Hovered:
+  the key rows on a string. Pinned: every row, docked at the screen side that shows them all and
+  doesn't cover the machine (a full report is ~220 px tall). Built from game state, not from
+  `analysis.ts`'s prose; the Factory's old `factoryReport`/`factoryHover` are gone.
+- **The Workbench Wheel** (`wheel.ts`; `buildbar.ts` deleted): a right tap on the floor (a drag
+  still pans), `Q` or `Space` opens it at the cursor. The hub holds the last pick; petals in a fixed
+  clockwise order (Build at the top, then Power, Heavy, Upgrades, Tools; on the Factory, Modules,
+  Trunk, Tools) fan their items on twine after a 0.09 s rest. Discs are code-drawn at 24 px (the
+  18 px art hid under a 16 px sprite). Locked items keep the old mystery (`???`, a silhouette,
+  the research that opens them). Number keys pick within the last petal, never drawn as a row.
+  **Zoom out moved from Q to Z**; Pause is `P` (still not implemented, as before).
+- **World doors**: the Dock opens Orders, the Hopper Research, the Bay the Megaproject (as
+  before), and now Unit 7's observatory opens the Codex and Voltaire's pavilion the orders.
+- **The book's pages** (`screens.ts`, `act2screens.ts`, `orders.ts`, `patents.ts`, `drawer.ts`,
+  `reorganize.ts`, `offlinereport.ts`, `overnight.ts`, `fold.ts`): the research tree in pencil
+  (paper discs, a green stamped tick for done, a red-pencil circle for the selected node, dashed
+  graphite for locked); statistics as a ledger; trophies as a sticker page (names shown before
+  they are earned: the "almost there" list showed them anyway); a drawn keyboard on a new **Keys**
+  page (bindings read live from `input.ts`); Unit 7's Codex of pinned specimens; the Survey's
+  claims as deed slips; the Megaproject's wants on the left page and the Bay picture taped on the
+  right; orders with each customer's line in a bubble; the Patent Office; the Drawer's designs as
+  folded paper cards; **Reorganize as the Committee's contract** (you gain, you keep ticked, you
+  lose struck through in red ink, "Sign here"); the offline report as **a letter from Bramble**;
+  the overnight forecast on **the Inspector's clipboard**; the audit badge as his clipboard hung
+  on a string from its box; the grade card as **his report with the grade rubber-stamped in red
+  ink** (every grade the same red; the stamp falls from 3x and lands with the shake, the sound,
+  ink drops and confetti; S+ keeps its rays and gold rain), advice as rows each with its worth;
+  modules as folded paper cards; the Festival's end on a paper sheet.
+
+### Flagged as derivative (owner to decide)
+- A radial build menu (pie menus: The Sims, many builders): a genre convention. Hub, petal ring and
+  items on twine are not copied from a specific game.
+- A mascot's speech-bubble corner for goals (Animal Crossing's Isabelle, Kairosoft's advisors).
+- Diegetic menus (the Dock opens orders), a newspaper headline (re-derived from Cookie Clicker's
+  news ticker before), an alert bell (re-derived from Factorio's alerts, as the old chip was),
+  edge arrows to off-screen things, pinned tooltips: genre conventions.
+- **A red rubber stamp on an inspector's report resembles Papers, Please's visa stamp** in look.
+  Here it only reveals a computed grade; the player never stamps anything.
+- A drawn keyboard on the help page, a sticker album for trophies: generic metaphors.

@@ -1066,13 +1066,15 @@ function bigKey(app: App, code: string, lab: string, x: number, y: number, w: nu
   let word = KEY_WORD[acts[0]] ?? (acts[0].startsWith('slot') ? 'PICK' : (ACTION_LABELS[acts[0] as keyof typeof ACTION_LABELS] ?? acts[0]).split(' ')[0].toUpperCase());
   const fits = smallWidth(word) <= w - 4;
   const mark = arrow ?? (!fits && !ic ? KEY_MARK[acts[0]] : undefined);
-  if (mark) ui.text(mark, x + Math.floor(w / 2), y + h - 15 + dy, roleInk(role), { align: 'center' });
+  // the mark sits under the key's name, never on it (a short key at 1024x640 had them touch)
+  const markY = y + Math.max(h - 15, 9) + dy;
+  if (mark) ui.text(mark, x + Math.floor(w / 2), markY, roleInk(role), { align: 'center' });
   else if (fits || !ic) {
     // the word along the foot, the icon in the top-right corner when there is room for both
     if (ic && w >= 22 && smallWidth(name) + 12 <= w - 2) uiIcon(ui, ic, x + w - 10, y + 2 + dy, 1);
     while (word.length > 1 && smallWidth(word) > w - 4) word = word.slice(0, -1);
     ui.small(word, x + Math.floor(w / 2), y + h - 12 + dy, roleInk(role), { align: 'center' });
-  } else uiIcon(ui, ic, x + Math.floor(w / 2) - 4, y + h - 15 + dy, 1); // a narrow key: the icon alone
+  } else uiIcon(ui, ic, x + Math.floor(w / 2) - 4, markY, 1); // a narrow key: the icon alone
   if (hov) {
     ui.tip([{ text: `{k:${keyLabel(code)}}  {big:${ACTION_LABELS[acts[0] as keyof typeof ACTION_LABELS] ?? acts[0]}}` }, ...acts.slice(1).map((a) => ({ text: `{soft:and} ${ACTION_LABELS[a as keyof typeof ACTION_LABELS] ?? a}` }))], 180);
   }

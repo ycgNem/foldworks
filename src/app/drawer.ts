@@ -201,7 +201,7 @@ function runRow(app: App, d: ModuleDesign, x: number, y: number, w: number, h: n
   if (on || ui.hover(x, y, w - 44, h)) section(ui, x, y, w - 42, h);
   if (it) ui.ctx.drawImage(itemIcon(it), x + 2, y + 4);
   const label = `${d.name} {soft:${d.grade.letter}}`;
-  const room = w - 56;
+  const room = w - 59; // inside the row's region (w - 44 from x, the label starting at x + 13)
   drawLayout(ui, layoutRich(layoutRich(label).w <= room ? label : ellipsize(d.name, room - 14) + ` {soft:${d.grade.letter}}`), x + 13, y + 4, T.ink);
   if (on) rule(ui, x + 13, y + h - 1, w - 58, true);
   const why = keepRefusal(g, d.id);

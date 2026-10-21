@@ -165,7 +165,7 @@ if (H180.includes(state)) {
       a.trophyPops = [];
       a.hud.bellAt = a.ui.time;
       a.selected = st === 'jam180' ? f.id : null;
-      if (st === 'jam180') a.toast('Blocked: slag!', 'Smelting leaves slag, and it has nowhere to go.', '#c8362e');
+      if (st === 'jam180') a.toast('Choked on slag!', '{i:slag} nowhere to go · {k:LMB} shovel or a Slag Heap', '#c8362e');
       if (st === 'page180') a.panel = 'research';
       if (st === 'gazette180') { for (let i = 0; i < 9; i++) a.gazette.next(g); a.panel = 'gazette'; }
       if (st === 'reorg180') g.s.megaPatents = 12;

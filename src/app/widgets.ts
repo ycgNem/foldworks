@@ -6,7 +6,7 @@
 import { C, rgba } from '../data/palette';
 import { ICON, textWidth, smallWidth, bigWidth } from '../ui/font';
 import { sheet, hasArt } from '../render/sprites';
-import { button, keycapK } from './chrome';
+import { button, keycapK, chip, chipWidth } from './chrome';
 import type { App } from './app';
 import type { ScreenName } from './screens';
 import type { Rect, TipLine } from '../ui/ui';
@@ -155,7 +155,11 @@ function menuHead(app: App, r: Rect, title: string, accent: string, ic: IconName
   if (button(ui, 'closeScreen', cx, headTop + 1, 15, 14, ICON.cross, { tip: 'Close {k:Esc}' })) app.panel = null;
   const kw = keycapWidth('Esc');
   keycapK(ui, 'Esc', cx - 3 - kw, headTop + Math.floor((headH - 10) / 2));
-  const right0 = cx - 3 - kw - 6;
+  // the coin you hold: the book covers the Purse, and pages sell things (claims, stamps, Patents)
+  const coin = `{coin:${app.game.s.coin.format()}}`;
+  const cw = chipWidth(coin, { role: 'coin' });
+  chip(ui, cx - 3 - kw - 6 - cw, headTop + Math.floor((headH - 12) / 2), coin, { role: 'coin' });
+  const right0 = cx - 3 - kw - 6 - cw - 6;
   const titleEnd = titleX + bigWidth(title) + 8;
   if (!tabs.length) return right0 - titleEnd;
   const want = (lab: boolean) => tabs.reduce((s, t) => s + (lab ? Math.max(40, 22 + textWidth(t.label)) : 18) + 2, 0);

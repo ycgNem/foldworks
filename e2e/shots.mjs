@@ -55,6 +55,18 @@ let r = await until('g.s.counters.clicks >= 1', 30);
 await page.evaluate(() => window.__app.step(4));
 await shot('01-first-click', 'the first hand-mined ore goes into the Hand Furnace');
 
+// 1b. the Workbench Wheel open at the cursor, the Build petal fanned, the Miner's tag (the 180:
+// building from the hand, no numbered hotbar)
+await page.evaluate(() => window.__app.openWheelAt());
+for (const id of ['wheel_build', 'wheel_item_miner']) {
+  await frames(page, 8);
+  const p = await page.evaluate((id) => { const a = window.__app; const q = a.ui.ids.get(id); return q ? a.uiToCss(q.x + q.w / 2, q.y + q.h / 2) : null; }, id);
+  if (p) await page.mouse.move(p.x, p.y);
+}
+await shot('01b-wheel', 'the Workbench Wheel, the Miner hovered');
+await page.keyboard.press('Escape');
+await page.mouse.move(Math.floor(w * 0.6), Math.floor(h * 0.45));
+
 // 2. the Bellows
 r = await until("g.s.upgrades.includes('bellows')", 120);
 await shot('02-bellows', `Bellows bought (${r.ok ? 'ok' : 'NOT REACHED'})`);
