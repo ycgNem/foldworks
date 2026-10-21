@@ -17,9 +17,10 @@ import type { Rect, UI } from '../ui/ui';
 /** UI px left free along the overlay's right edge: the notebook's section tabs hang there. */
 export const TAB_ROOM = 14;
 
-/** The overlay rect less the notebook's tab strip. */
+/** The page's rect. `drawScreen` (screens.ts) already takes the notebook's tab strip off the
+ * overlay for every screen, so this keeps the rect as it is (taking it twice left 28 px). */
 export function bookArea(r: Rect): Rect {
-  return { x: r.x, y: r.y, w: r.w - TAB_ROOM, h: r.h };
+  return { x: r.x, y: r.y, w: r.w, h: r.h };
 }
 
 /** Line height for rows that carry chips (a chip stands 2 px above the text and 3 below). */
