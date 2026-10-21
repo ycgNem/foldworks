@@ -164,8 +164,17 @@ export function topBar(app: App, L: Layout, dt: number) {
     ui.hint(x - 2, 0, w + 4, T.h, [{ text: 'Machine Kits', color: C.gold }, { text: 'Stamping a module made of Act II machines takes Machine Kits as well as coin. A Hopper banks the kits that reach it.' }], 190);
     x += w + 5;
   }
-  // what the rest of the bar needs after the counters: power, the chip, the floor tabs at their smallest
-  const after = (g.grids.length > 0 ? (narrow ? 58 : 72) : 0) + 70 + (g.done('folding') || g.flag('factoryOpen') ? 54 : 0);
+  // what the rest of the bar needs after the counters, measured: power at its smallest, the chip,
+  // and the floor tabs with both labels. A counter past that draws its short form, so the
+  // Reorganize key shrinks to its icon and number before "Workshop" and "Factory" lose their words
+  // (the Milestone 5-6 final round).
+  const tabsShown = g.done('folding') || g.flag('factoryOpen');
+  const chipShown = g.miners.length > 0 || g.s.research.done.length > 0 || g.s.factory.ents.some((e) => e.kind === 'module');
+  const pt = g.grids.length > 0 ? powerTotals(g) : null;
+  const powerW = pt ? 5 + 7 + textWidth(`${fmtKw(pt.demand)}/${fmtKw(pt.supply)}`) + 2 + (narrow ? 1 : smallWidth('KW') + 3) : 0;
+  const chipW = chipShown ? 5 + healthWidth(app, narrow) + 6 : 0;
+  const tabsFull = tabsShown ? floorTabsWidth('both') + 8 : 0;
+  const after = powerW + chipW + tabsFull;
   for (const c of COUNTERS) {
     if (!c.show(app)) continue;
     sep();
@@ -183,7 +192,7 @@ export function topBar(app: App, L: Layout, dt: number) {
     // the unit and the bar give way on a narrow bar (the tooltip says kW)
     if (!narrow) x += ui.small('KW', x, 9, C.hull2) + 3;
     else x += 1;
-    if (!narrow && room() > 190) {
+    if (!narrow && room() - chipW - tabsFull >= 26) {
       bar(ui, x, 8, 22, 5, t.supply > 0 ? Math.min(1, t.demand / t.supply) : t.demand > 0 ? 1 : 0, t.worst < 1 ? C.pipYellow : C.teal1);
       x += 26;
     }
@@ -194,26 +203,38 @@ export function topBar(app: App, L: Layout, dt: number) {
     ], 200);
   }
   // the line-health chip, once there is a line to be healthy (the first minute shows one goal)
-  if (g.miners.length || g.s.research.done.length || g.s.factory.ents.some((e) => e.kind === 'module')) {
+  if (chipShown) {
     sep();
     x = healthChip(app, x, 3, narrow) + 6;
   }
 
-  // ---- the floor tabs, in the middle of what is left
-  const labels = rx - x >= 2 * (24 + textWidth('Workshop')) + 10;
-  const fw = (s: string) => (labels ? 22 + textWidth(s) : 22);
-  const tw = fw('Workshop') + 2 + fw('Factory');
+  // ---- the floor tabs, in the middle of what is left: both labelled; short of room, the floor
+  // you are on keeps its word and the other its icon; icons alone only as a last resort
+  const avail = rx - 6 - x;
+  const mode: TabMode = avail >= floorTabsWidth('both') ? 'both' : avail >= floorTabsWidth('active') ? 'active' : 'icons';
+  const lab = (f: 'workshop' | 'factory') => mode === 'both' || (mode === 'active' && app.floor === f);
+  const fw = (f: 'workshop' | 'factory') => tabW(f === 'workshop' ? 'Workshop' : 'Factory', lab(f));
+  const tw = fw('workshop') + 2 + fw('factory');
   const mid = Math.floor(T.w / 2 - tw / 2);
   const fx = Math.max(x, Math.min(mid, rx - 6 - tw));
   // one floor until Folding is researched: no tabs to choose between
-  if (fx + tw <= rx - 2 && (g.done('folding') || g.flag('factoryOpen'))) {
-    if (tab(app, 'floorWorkshop', fx, 3, fw('Workshop'), 15, labels ? 'Workshop' : '', { icon: 'workshop', active: app.floor === 'workshop', tip: 'The Workshop floor (Tab)' })) app.setFloor('workshop');
+  if (fx + tw <= rx - 2 && tabsShown) {
+    if (tab(app, 'floorWorkshop', fx, 3, fw('workshop'), 15, lab('workshop') ? 'Workshop' : '', { icon: 'workshop', active: app.floor === 'workshop', tip: 'The Workshop floor (Tab)' })) app.setFloor('workshop');
     const open = g.flag('factoryOpen');
     const fresh = open && !g.flag('factorySeen');
-    if (tab(app, 'floorFactory', fx + fw('Workshop') + 2, 3, fw('Factory'), 15, labels ? 'Factory' : '', { icon: 'factory', active: app.floor === 'factory', disabled: !open, tip: open ? 'The Factory floor (Tab)' : 'The Factory floor opens with your first fold' })) app.setFloor('factory');
+    if (tab(app, 'floorFactory', fx + fw('workshop') + 2, 3, fw('factory'), 15, lab('factory') ? 'Factory' : '', { icon: 'factory', active: app.floor === 'factory', disabled: !open, tip: open ? 'The Factory floor (Tab)' : 'The Factory floor opens with your first fold' })) app.setFloor('factory');
     if (fresh && Math.floor(ui.time * 3) % 2 === 0) dot(ui, fx + tw - 5, 4, C.gold);
   }
   void menusW;
+}
+
+type TabMode = 'both' | 'active' | 'icons';
+/** A floor tab's width: the icon, and the word when it has one. */
+const tabW = (s: string, labelled: boolean) => (labelled ? 22 + textWidth(s) : 22);
+/** Both floor tabs' width in a mode ('active': the wider word, the other tab an icon). */
+function floorTabsWidth(mode: TabMode): number {
+  const a = tabW('Workshop', true), b = tabW('Factory', true);
+  return 2 + (mode === 'both' ? a + b : mode === 'active' ? Math.max(a, b) + 22 : 44);
 }
 
 /** One menu: an icon key, teal when its screen is open, with a dot when something waits inside. */
@@ -245,10 +266,8 @@ function menuButton(app: App, it: Menu, x: number, y: number, w: number) {
 
 /** The line-health chip: how many machines and modules work, starve, block, or want power; a
  *  click jumps to the next problem (the worst share of the last minute first) and opens it. */
-function healthChip(app: App, x0: number, y: number, compact = false): number {
-  const ui = app.ui;
+function healthCounts(app: App, compact: boolean) {
   const g = app.game;
-  const h = app.hud;
   const all = [...g.miners, ...g.machines];
   const mods = g.s.factory.ents.filter((e) => e.kind === 'module');
   let work = 0, starved = 0, blocked = 0, unpowered = 0;
@@ -262,6 +281,24 @@ function healthChip(app: App, x0: number, y: number, compact = false): number {
     else if (m.state === 'blocked') blocked++;
     else if (m.state === 'starved') starved++;
   }
+  const pips: [string, number][] = [[C.pipGreen, work], [C.pipYellow, starved], [C.pipRed, blocked]];
+  if (unpowered || g.machines.some((m) => powered(m.kind))) pips.push([C.pipBlue, unpowered]);
+  // compact (a narrow bar): the green count, and only the problem colours that have any
+  if (compact) for (let i = pips.length - 1; i > 0; i--) if (!pips[i][1]) pips.splice(i, 1);
+  const w = pips.reduce((s, [, n]) => s + 9 + textWidth(String(n)) + 4, 0) + 4;
+  return { all, mods, work, starved, blocked, unpowered, pips, w };
+}
+
+/** The line-health chip's width, for the top bar's room sums. */
+function healthWidth(app: App, compact: boolean): number {
+  return healthCounts(app, compact).w;
+}
+
+function healthChip(app: App, x0: number, y: number, compact = false): number {
+  const ui = app.ui;
+  const g = app.game;
+  const h = app.hud;
+  const { all, mods, work, starved, blocked, unpowered, pips, w } = healthCounts(app, compact);
   const problems: Problem[] = [];
   for (const m of all) {
     if (!(m.state === 'blocked' || (m.state === 'starved' && m.why !== 'crank'))) continue;
@@ -274,11 +311,6 @@ function healthChip(app: App, x0: number, y: number, compact = false): number {
     if (s >= 0.1) problems.push({ floor: 'factory', id: m.id, x: m.x + 0.5, y: m.y + 0.5, share: s });
   }
   problems.sort((a, b) => b.share - a.share || a.id - b.id);
-  const pips: [string, number][] = [[C.pipGreen, work], [C.pipYellow, starved], [C.pipRed, blocked]];
-  if (unpowered || g.machines.some((m) => powered(m.kind))) pips.push([C.pipBlue, unpowered]);
-  // compact (a narrow bar): the green count, and only the problem colours that have any
-  if (compact) for (let i = pips.length - 1; i > 0; i--) if (!pips[i][1]) pips.splice(i, 1);
-  const w = pips.reduce((s, [, n]) => s + 9 + textWidth(String(n)) + 4, 0) + 4;
   const hov = ui.hover(x0, y, w, 14);
   ui.mark('nextProblem', x0, y, w, 14);
   ui.region(x0, y, w, 14, 'button');

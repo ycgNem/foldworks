@@ -14,7 +14,7 @@ import { prules } from '../sim/patents'; // Milestone 5: the Patent rules (More 
 import { megaStage } from '../data/megaprojects';
 import { ITEMS, type ItemId } from '../data/items';
 import { BYPRODUCTS } from '../sim/systems/modules';
-import { drawText } from '../ui/font';
+import { drawText, textWidth } from '../ui/font';
 import { TICK_RATE } from '../engine/time';
 import { sheet, drawRot, frameAt, itemIcon, hasArt } from './sprites';
 import { TILE } from './ground';
@@ -83,7 +83,9 @@ function feedsInto(a: FEnt, b: FEnt): boolean {
   return a.x + DX[a.rot] === b.x && a.y + DY[a.rot] === b.y;
 }
 
-export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number, ov: FactoryOverlay) {
+/** `viewRight`: the view's right edge in world px, so the annex block's label slides into view
+ * while its outline is cut by the screen edge (the Milestone 5-6 final round, 1024x640). */
+export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number, ov: FactoryOverlay, viewRight = Infinity) {
   // the annex (DESIGN.md §19, the Milestone 5-6 review round): the hall grows east by the blocks bought
   const W = g.fw, H = g.fh;
   // the hall: a shadow, a riveted wall, then the floor plates
@@ -113,8 +115,10 @@ export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number
   if (next && g.done(ANNEX.requires)) {
     const ax = W * TILE + 4, aw = ANNEX.cols * TILE;
     antsBox(ctx, W + 4 / TILE, 0, ANNEX.cols, H, rgba(C.bone, 0.45), rgba(C.bone, 0.04), time);
-    label(ctx, 'annex', ax + aw / 2, H * TILE / 2 - 12, C.bone);
-    label(ctx, next.format(), ax + aw / 2, H * TILE / 2 + 2, C.brass0);
+    const lw = Math.max(textWidth('annex'), textWidth(next.format())) + 6;
+    const cx = viewRight > ax + 4 ? Math.max(ax + 4 - lw / 2, Math.min(ax + aw / 2, viewRight - lw / 2 - 2)) : ax + aw / 2;
+    label(ctx, 'annex', cx, H * TILE / 2 - 12, C.bone);
+    label(ctx, next.format(), cx, H * TILE / 2 + 2, C.brass0);
   }
   // the Bay's corner, marked on the floor until the Bay stands there
   if (g.done('greatDrill') && !g.s.factory.ents.some((e) => e.kind === 'fbay')) bayMarks(ctx, time);
@@ -385,7 +389,7 @@ function antsBox(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
 
 /** A pill of text in world space above a tile rect. */
 function label(ctx: CanvasRenderingContext2D, s: string, cx: number, y: number, col: string) {
-  const w = s.length * 5 + 4;
+  const w = textWidth(s) + 6;
   const x = Math.round(cx - w / 2);
   ctx.fillStyle = C.ink;
   ctx.fillRect(x, y, w, 11);

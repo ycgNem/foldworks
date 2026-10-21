@@ -1220,6 +1220,53 @@ The lead decided the fixes below. What was built and measured is in DESIGN.md §
   Universal Paperclips' later stages count records. Ours files the best value per product, which
   only a game of folded products has. Flagged for the owner all the same.
 
+## The Milestone 5–6 final round: UI (2026-10-20)
+
+From the idle-critic's re-review of the Milestones 5–6 build. Presentation only: no sim behaviour,
+number or data file changed.
+
+- 2026-10-20: **The floor tabs keep their words; the Reorganize key shrinks first.** The top bar
+  now measures what follows the counters (power at its smallest, the line-health chip, both floor
+  tabs labelled) and passes counters only the room that leaves, so "Reorganize +N" becomes the
+  reset icon and "+N" before "Workshop" and "Factory" lose their labels. Short of room even then
+  (1024x640 on the Factory floor), the floor you are on keeps its word and the other its icon;
+  icons alone are the last resort. *Why:* at 1280 and 1920 the full "Reorganize +9" left the tabs
+  as two look-alike icons. The earlier estimates (a flat 70 px for the chip, 54 for the tabs) were
+  replaced by the real widths.
+- 2026-10-20: **World tooltips stay off what you are looking at.** `ui.tip` takes a placement:
+  rects to avoid (the hovered tile and its neighbours, and the tile the goal points at) and the
+  room to stay in (between the top bar and the build bar). It tries beside the avoided area on the
+  cursor's row (right, then left), then above, then below, and falls back to the old spot. *Why:*
+  in the first minute the ore's tooltip sat on the Hand Furnace just as the goal said to crank it;
+  later, hover reports covered the build bar at 1024x640.
+- 2026-10-20: **The hover report is short; the pinned report is the whole story.** Hovering a
+  machine shows its name, what it is doing (the first-minute instruction too, for the hand
+  furnace), the one cause most worth fixing (a fault first, then a power problem, then a warning
+  about its own flow before the grid's; blocked by its own byproduct, where that byproduct must
+  go), its rate, and what a click does: Overdrive when it is ready ("while it cools, a click pins
+  the full report"), else "Click to pin the full report (+N lines)". A Factory module likewise
+  (its grade beside its name). The pinned report is unchanged and still anchored above the build
+  bar with the toasts' room kept. *Why:* a kiln's hover ran to ~15 lines over a third of the floor.
+  The report lines are now built in parts (head, power and Overdrive, the rest) so the hover and
+  the pinned card read the same sentences.
+- 2026-10-20: **A Great Drill stage shut behind the Committee shows the Committee, not the
+  trunks.** The panel names the Committee with its portrait, its reputation now against what the
+  stage needs (pips), how many more of its orders open the stage, its orders on offer with their
+  progress (the one under way first), and a gold key to its tab on the Orders screen; what the
+  stage will want once open and its reward sit under that, quietly. No "not arriving", ETA or
+  "Clear the Factory floor's corner" while shut: the Bay counts nothing then. The stage track
+  shows the current stage locked in violet. The `mega2` screens state is now one the game can
+  produce (stage 1 done, nothing counted for stage 2, the Bay standing, two Committee orders
+  filled and a third under way).
+- 2026-10-20: Small fits. The Patent label tries "Overdrive" and falls back to "Overdrv" in a
+  narrow column (a label may list fallbacks), and the small font's V now tapers over two rows so
+  it never reads as U. The Factory camera frames the annex block for sale with the floor (a
+  half-tile margin, so the 12x8 keeps its zoom at 1024x640), and the block's label slides into
+  view while its outline is cut by the screen edge. The Orders screen's customer tabs keep whole
+  names at 1024x640: when any name would be cut, every tab's hearts move onto its portrait's foot.
+
+Nothing here is derivative of a shipped game beyond what the UI redesign already lists (a short
+hover card with a click-to-pin detail panel is a genre convention).
 ## The Milestone 5–6 final round (2026-10-20)
 
 The idle-critic's re-review of the review round found three blocking problems:

@@ -27,7 +27,8 @@ import { factoryOpen } from '../sim/systems/modules';
 import { BUILD, STORE_TABS, type BuildKind } from '../data/machines';
 import { ITEMS, type ItemId } from '../data/items';
 import { MEGA } from '../data/megaprojects';
-import { CHUNKS } from '../data/land';
+import { CHUNKS, ANNEX } from '../data/land';
+import { annexPrice } from '../sim/systems/annex';
 import { RESEARCH } from '../data/research';
 import { ORDER, CUSTOMERS } from '../data/orders';
 import { TITLE } from '../game-info';
@@ -653,8 +654,15 @@ export class App {
         if (kind) this.pickBuild(kind);
       }
     }
-    if (this.floor === 'factory') this.renderer.clampCam(this.game.fw, this.game.fh);
+    if (this.floor === 'factory') this.renderer.clampCam(Math.ceil(this.factorySpan()), this.game.fh);
     else this.renderer.clampCam(this.game.W, this.game.H);
+  }
+
+  /** The Factory floor's width the camera frames, in tiles: the floor, and the annex block for sale
+   * beyond its east wall (its outline, label and price) while there is one. */
+  factorySpan(): number {
+    const g = this.game;
+    return g.fw + (annexPrice(g) && g.done(ANNEX.requires) ? ANNEX.cols + 0.25 : 0);
   }
 
   /** Rest the mouse at an edge of the floor view to pan that way, while the floor runs past it. */
@@ -782,11 +790,15 @@ export class App {
     const g = this.game;
     const cam = this.renderer.cam;
     if (this.floor === 'factory') {
-      const z = this.fillZoom((this.game.fw + 1) * TILE, (this.game.fh + 1) * TILE);
+      // the annex block for sale beyond the east wall is framed in with the floor, its label and
+      // price whole (the Milestone 5-6 final round: cut at the screen edge at 1024x640)
+      // with a block for sale, a half-tile margin, so the 12x8 keeps its zoom at 1024x640
+      const span = this.factorySpan();
+      const z = this.fillZoom((span + (span > g.fw ? 0.5 : 1)) * TILE, (g.fh + 1) * TILE);
       if (reset || cam.zoom > z) cam.zoom = z;
-      cam.x = (this.game.fw / 2) * TILE;
-      this.frameRows(0, this.game.fh * TILE);
-      this.renderer.clampCam(this.game.fw, this.game.fh);
+      cam.x = (span / 2) * TILE;
+      this.frameRows(0, g.fh * TILE);
+      this.renderer.clampCam(Math.ceil(span), g.fh);
       return;
     }
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
