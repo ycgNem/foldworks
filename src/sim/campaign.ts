@@ -85,6 +85,9 @@ export interface CampaignOpts {
    * every run, until `horizon` seconds of play in all */
   loopAt?: number | 'slice';
   horizon?: number;
+  /** a loop that burns its coin before each reset (the final round): called once a run when the
+   * loop's reset time is reached, before the reset; it may act and step the game */
+  burn?: (g: Game) => void;
   /** called once a second */
   onSecond?: (g: Game, run: number, bot: Act2Bot | null) => void;
 }
@@ -107,6 +110,7 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
     const ring: number[] = [];
     const cap = o.cap(run);
     let reset = false;
+    let burned = false;
     // the Patents, spent first thing in the new run (the tree screen, one click a hand-beat)
     const bought: PatentId[] = [];
     for (;;) {
@@ -133,6 +137,7 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
       if (g.s.tick % TICK_RATE === 0) o.onSecond?.(g, run, bot);
       if (o.loopAt !== undefined && g.s.tick % TICK_RATE === 0) {
         const at = o.loopAt === 'slice' ? (handover >= 0 ? handover : Infinity) : o.loopAt;
+        if (runSeconds(g) >= at && o.burn && !burned) { burned = true; o.burn(g); }
         if (runSeconds(g) >= at && !reorganizeRefusal(g) && !g.s.audits.length && !g.s.faudit) {
           reset = true;
           break;

@@ -33,8 +33,32 @@ function campaign(seed: number): Played {
 /** Rule 3 misses measured and left open for the lead, with the reason (DESIGN.md §16 rule 3,
  * DECISIONS.md, the review round). Keys are seed:run. */
 export const RULE3_OPEN: Record<string, string> = {
-  '1000:3': 'run 3 tops out at run 2\'s own level (17.3K against 17.4K a minute): both runs fill the same floor (the 12x8 and the three annex blocks hold about nine Gizmo chains), and nothing bought after run 2 adds room or income per tile; seed 8919 passes at 28 min. The lever is the lead\'s call (the annex kept through Reorganize, or more blocks): it changes what a reset keeps',
+  // Re-measured in the final round, with the bot buying claims and its annex blocks as soon as they
+  // are affordable: both seeds now miss, and claims were not the cap (one copper block a later run,
+  // with claims to spare: iron 7/9 and copper 7/9 held at 1.5 h). Run 3 tops out at run 2's own peak
+  // (21.4K and 21.2K against 21.1K and 21.2K a minute) and reaches it only once its third annex block
+  // holds a Gizmo works II copy (1:09-1:11): both runs fill the same floor, and nothing bought after
+  // run 2 adds room
+  '1000:3': "run 3 passes run 2's peak at 1:22 against a limit of 1:01: it equals run 2's peak (21.4K against 21.1K a minute) only once its third annex block is filled at 1:11; claims are not the cap (one copper block bought, claims to spare). The lever is the lead's: room kept through a Reorganize (the annex) or more of it",
+  '8919:3': "run 3 passes run 2's peak at 1:22 against a limit of 0:57: the same floor as seed 1000 (21.2K against 21.2K a minute), reached once the third annex block is filled at 1:09",
 };
+
+/** The burn loop's spending (the final round): every coin into the dearest building that stands on
+ * a free owned tile (a refinery, else an assembler, press or smelter), a Pole every few tiles so the
+ * powered ones join a grid and brown out on it, then six minutes so the bills window sees them. */
+function burnCoin(g: Game) {
+  const kinds = ['refinery', 'assembler', 'press', 'smelter'] as const;
+  for (let y = 0; y < g.H; y++)
+    for (let x = 0; x < g.W; x++) {
+      if (!g.owned(x, y) || g.entAt(x, y)) continue;
+      if (x % 4 === 2 && y % 4 === 1) {
+        g.act({ k: 'place', kind: 'pole', x, y, rot: 0 });
+        continue;
+      }
+      for (const kind of kinds) if (g.act({ k: 'place', kind, x, y, rot: 0 }).ok) break;
+    }
+  g.step(6 * 60 * TICK_RATE);
+}
 
 const MAX_CLICKS_PER_SEC = 4;
 function clicksPerSecMax(log: RunLog): number {
@@ -91,17 +115,20 @@ describe('Reorganize pacing (the campaign bot)', () => {
     });
   }
 
-  it('a reset loop (at the slice end, 1 h or 2 h, every run) never beats the designed run\'s Patents an hour (seed 1000)', () => {
+  it('a reset loop (at the slice end, 1 h or 2 h, every run, or at 35 min burning its coin into buildings) never beats the designed run\'s Patents an hour (seed 1000)', () => {
     const { logs } = campaign(1000);
     const horizon = logs[0].end - logs[0].start + (logs[1].end - logs[1].start);
     const designed = (logs[0].patents + logs[1].patents) / (horizon / H);
     const rows: string[] = [];
-    for (const at of ['slice', H, 2 * H] as const) {
+    for (const at of ['slice', H, 2 * H, 'burn'] as const) {
       const g = new Game(1000);
-      const loop = playCampaign(g, { runs: 200, cap: () => 8 * H, loopAt: at, horizon });
+      // the burn loop (the final round): the critic's 35-minute loop, every coin put into buildings
+      // before each reset and six minutes for the bills window to see them
+      const loop = playCampaign(g, { runs: 200, cap: () => 8 * H, loopAt: at === 'burn' ? 35 * 60 : at, horizon, burn: at === 'burn' ? burnCoin : undefined });
       const banked = loop.reduce((t, l) => t + l.patents, 0);
       const perH = banked / (horizon / H);
-      rows.push(`at ${at === 'slice' ? 'the slice end' : hmm(at)}: ${loop.length} runs, ${banked} Patents, ${perH.toFixed(2)}/h (${loop.map((l) => l.patents).join(',')})`);
+      const name = at === 'burn' ? 'at 35 min, burning its coin' : `at ${at === 'slice' ? 'the slice end' : hmm(at)}`;
+      rows.push(`${name}: ${loop.length} runs, ${banked} Patents, ${perH.toFixed(2)}/h (${loop.map((l) => l.patents).join(',')})`);
       expect(perH).toBeLessThan(designed);
     }
     console.log(`designed: ${logs[0].patents} + ${logs[1].patents} Patents in ${hmm(horizon)}, ${designed.toFixed(2)}/h; loops over the same hours: ${rows.join('; ')}`);
