@@ -351,3 +351,22 @@ function drawRaw(ctx: CanvasRenderingContext2D, s: string, x: number, y: number,
   }
   return cx - x;
 }
+
+// ---------------------------------------------------------------- Bullfrog, the display face
+// The 180 (docs/hud-180.md): the Purse, titles, names, grade letters and big numbers. Until its
+// glyph table lands these draw in the body face, so callers can use the names now.
+export const BIG_H = FONT_H;
+export const BIG_LINE_H = LINE_H + 2;
+
+export function hasBigGlyph(ch: string): boolean {
+  return hasGlyph(ch);
+}
+
+export function bigWidth(s: string): number {
+  return textWidth(s);
+}
+
+/** Draw display-face text. `scale` is an integer multiplier. Returns the width drawn. */
+export function drawBig(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, color: string, scale = 1, shadow: string | null = null): number {
+  return drawText(ctx, s, x, y, color, scale, shadow);
+}
