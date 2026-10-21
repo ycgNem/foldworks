@@ -173,13 +173,26 @@ def islet(v):
             put(img, x, y, P["cloud1"] if x < cx + w // 6 else P["cloud0"])
         put(img, x, top + 4 + ((x // 5) % 2), P["cloud0"] if x < cx + w // 6 else P["sky2"])
     # the underside: a tapering point, lit left (cloud0), the rest sky2 (deepest haze)
+    # lumpy: the taper steps in tiers every 4-5 rows and each side wobbles, a boulder or two hang
     depth = 18 + v * 2
     for y in range(top + 7, min(H, top + 7 + depth)):
         t = (y - top - 7) / depth
-        hw = (w / 2) * (1 - t) ** 1.4
+        tier = ((y - top - 7) // 5) * 5 / depth
+        base = (w / 2) * (1 - (t * 0.35 + tier * 0.65)) ** 1.5
+        wl = base + (hsh(3100 + v, y // 2) % 3) - 1
+        wr = base + (hsh(3200 + v, y // 2) % 3) - 1
         for x in range(W):
-            if abs(x + 0.5 - cx - t * 3) <= hw:
-                put(img, x, y, P["cloud0"] if x < cx - hw * 0.3 else P["sky2"])
+            dx = x + 0.5 - cx - t * 3
+            if -wl <= dx <= wr:
+                c = P["cloud0"] if dx < -wl * 0.3 else P["sky2"]
+                if (y - top - 7) % 5 == 0 and dx > -wl + 1:
+                    c = P["sky2"] if c == P["cloud0"] else P["sky1"]
+                put(img, x, y, c)
+    for (bx, by) in ((cx - w // 4, top + 9 + v), (cx + w // 5, top + 12)):
+        for y in range(by, by + 3):
+            for x in range(bx - 1, bx + 2):
+                if not get(img, x, y)[3]:
+                    put(img, x, y, P["sky2"] if x > bx - 1 else P["cloud0"])
     # waterfall threads
     if v in (0, 3):
         fx = cx + w // 3 - 2
@@ -217,6 +230,48 @@ def islet(v):
     return img
 
 
+# ---------------------------------------------------------------- the Workshop, far below
+def below():
+    """48x32: the Workshop island seen from the Factory's sky, far down through a gap in the cloud
+    sea, hazed: a teal rim round a pale paved plot (the player's own lots, so it is theirs), a dot
+    row of town roofs on its north, its cone of rock in haze, two waterfall threads."""
+    W, H = 48, 32
+    img = new(W, H)
+    cx = 24
+    # the cone
+    for y in range(9, 30):
+        t = (y - 9) / 21
+        hw = 19 * (1 - t) ** 1.25 + (1 if (y // 3) % 2 else 0) * (1 - t)
+        for x in range(W):
+            dx = x + 0.5 - cx - t * 2
+            if abs(dx) <= hw:
+                put(img, x, y, P["cloud0"] if dx < -hw * 0.25 else P["sky1"])
+    # the cliff band
+    for x in range(cx - 20, cx + 21):
+        for y in (9, 10):
+            put(img, x, y, P["cloud1"] if x < cx + 6 else P["cloud0"])
+    # the top: a rounded rim of teal (grass in haze) round the pale plot
+    for y in range(1, 10):
+        hw = round(21 * math.sqrt(max(0.0, 1 - ((y - 5.2) / 4.8) ** 2)))
+        for x in range(cx - hw, cx + hw):
+            put(img, x, y, P["teal"])
+    for y in range(3, 8):
+        for x in range(cx - 12, cx + 12):
+            put(img, x, y, P["pave3"] if y == 3 else P["pave2"])
+    for x in range(cx - 12, cx + 12, 8):
+        for y in range(3, 8):
+            put(img, x, y, P["pave1"])
+    for x in range(cx - 14, cx + 14, 3):
+        put(img, x, 1, P["copper2"] if (x // 3) % 2 else P["cloud0"])
+    put(img, cx - 4, 5, P["steel2"])
+    put(img, cx + 3, 4, P["steel2"])
+    # waterfall threads
+    for fx in (cx - 8, cx + 7):
+        for y in range(10, H):
+            put(img, fx, y, P["cloud2"] if (y // 2) % 2 else P["sky4"])
+    return img
+
+
 # ---------------------------------------------------------------- a bird
 def bird(f):
     """8x8, 4 frames: wings up, level, down, level. ink2 with a steel1 body pixel."""
@@ -233,9 +288,10 @@ def bird(f):
 
 
 def build():
-    export("sky_cloud", clouds(), bg=P["sky1"], extra={"sizes": ["big", "big", "medium", "medium", "small", "small"]})
-    export("sky_islet", [islet(v) for v in range(4)], bg=P["sky3"])
-    export("sky_bird", [bird(f) for f in range(4)], fps=8, bg=P["sky3"], look_scale=8)
+    export("sky_cloud", clouds(), bg=P["sky1"], src=True, extra={"sizes": ["big", "big", "medium", "medium", "small", "small"]})
+    export("sky_islet", [islet(v) for v in range(4)], bg=P["sky3"], src=True)
+    export("sky_below", [below()], bg=P["sky2"], src=True, look_scale=6)
+    export("sky_bird", [bird(f) for f in range(4)], fps=8, bg=P["sky3"], look_scale=8, src=True, anchor=(4, 4))
     (OUT / "sky_spec.json").write_text(json.dumps(SPEC, indent=1) + "\n", newline="\n")
     g = gradient(320, 180, "workshop")
     g.save(OUT / "sky_gradient_workshop.png")

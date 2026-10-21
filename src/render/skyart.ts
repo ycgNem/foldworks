@@ -4,10 +4,14 @@
 // Fallbacks are pixel art: whole pixels, hard edges, palette colours only, no blur or smoothing.
 // Each is made once and cached. Frame orders (the contract):
 //   tile_pave 4+ variants · tile_pave_seam N E S W · tile_grass 4+ · tile_grass_deco 8+
+//   tile_pave_edge N E S W (grass in the grout where paving meets land you don't own) ·
 //   tile_plot NW N NE W (none) E SW S SE · isle_edge / fplat_edge by mask N=1 E=2 S=4 W=8 (land
 //   there), a whole tile that replaces the grass (or deck) on the rim's boundary tiles, clear
-//   where the sky shows · isle_cliff top x4, mid x4, low x4 · isle_vein names iron0..3 copper0..3
-//   coal0..3 sand0..3 · isle_under left x4, fill x4, right x4 · isle_tip 48x32 · isle_fall 16x32 x4
+//   where the sky shows · isle_cliff top x4, mid x4, low x4 (one 64 px strip: variant = world
+//   tile x mod 4) · isle_vein names iron0..3 copper0..3 coal0..3 sand0..3 · isle_under fill x4,
+//   bottom x4, left slope x4, right slope x4 (variant x mod 4) · isle_under_deco 8 overlays on
+//   its fill · isle_tip 48x32 (anchor at its top centre) · isle_fall_top 16x16 x4 (the spring on
+//   the lip tile) · isle_fall_head 16x16 x4 (the bow over the lip) · isle_fall 16x32 x4
 //   (tiles vertically) · isle_fall_foam 32x16 x4 · sky_cloud 64x32 big x2, medium x2, small x2 ·
 //   sky_islet 64x48 x4 · sky_bird 8x8 x4 · prop_tree 32x32 x4 (anchor at the trunk foot) ·
 //   prop_bush 16x16 x4 · prop_fence h, v, post, gate · fplat_under face left, face, face right,
@@ -272,7 +276,27 @@ const FALLBACK: Record<string, () => Art> = {
     });
     return mk(fr, 16, 16, 0, 0, 0, names);
   },
-  isle_under: () => mk(frames(16, 16, 12, (q, f) => underTile(q, Math.floor(f / 4), f % 4)), 16, 16),
+  isle_under: () => mk(frames(16, 16, 16, (q, f) => underTile(q, Math.floor(f / 4), f % 4)), 16, 16),
+  // overlays for the underside's fill (the art's crystals and roots); the code draws none
+  isle_under_deco: () => mk(frames(16, 16, 8, () => {}), 16, 16),
+  // grass in the grout where paving meets land you don't own: frames N, E, S, W
+  tile_pave_edge: () => mk(frames(16, 16, 4, ({ p }, f) => {
+    const at = (a: number, k: number, col: string) => {
+      if (f === 0) p(col, a, k); else if (f === 2) p(col, 15 - a, 15 - k); else if (f === 1) p(col, 15 - k, a); else p(col, k, 15 - a);
+    };
+    for (const [a, k, col] of [[2, 1, C.grass1], [3, 1, C.grass1], [4, 1, C.grass1], [2, 0, C.grass2], [4, 0, C.grass2], [1, 0, C.grass3], [10, 0, C.grass1], [11, 1, C.grass1], [11, 0, C.grass3]] as [number, number, string][]) at(a, k, col);
+  }), 16, 16),
+  // the spring and its channel on a south lip tile (grass round it), and the bow over the lip
+  isle_fall_top: () => mk(frames(16, 16, 4, (q, f) => {
+    grassTile(q, 1);
+    const { p } = q;
+    p(C.grass0, 4, 2, 8, 14); p(C.sky1, 5, 3, 6, 13); p(C.sky2, 6, 4, 3, 2);
+    p(C.sky3, 6, (f * 3) % 12 + 4, 2, 1); p(C.cloud3, 5, 15, 6, 1);
+  }), 16, 16, 0, 0, 8),
+  isle_fall_head: () => {
+    const fall = FALLBACK.isle_fall();
+    return mk(fall.frames.map((fr) => { const c = canvas(16, 16); const x = c.getContext('2d')!; x.drawImage(fr, 0, 0); x.fillStyle = C.cloud3; x.fillRect(3, 0, 10, 1); return c; }), 16, 16, 0, 0, 8);
+  },
   isle_tip: () => mk(frames(48, 32, 1, ({ p }) => {
     for (let y = 0; y < 32; y++) {
       const hw = Math.max(0, Math.round(23 * (1 - y / 31) ** 0.9 + (hh(y, 0, 51) < 0.35 ? -1 : 0)));
@@ -547,8 +571,9 @@ function cliffTile(q: Pen, row: number, v: number) {
   }
 }
 
-/** The underside: shadowed rock in tiers. type 0 the left edge (open sky to the left), 1 fill, 2
- *  the right edge. Each edge tile slants in from its top corner, so stacked ones step like tiers. */
+/** The underside: shadowed rock. type 0 fill, 1 bottom (open below: a ragged foot with the cloud
+ *  sea's bounce light on it), 2 left slope (open left and below: a 45 degree edge from the top-left
+ *  corner), 3 right slope. */
 function underTile(q: Pen, type: number, v: number) {
   const { p, clear } = q;
   p(C.earth1, 0, 0, 16, 16);
@@ -558,17 +583,13 @@ function underTile(q: Pen, type: number, v: number) {
   }
   for (let i = 0; i < 2; i++) { const x = 2 + Math.floor(hh(v, i, 93) * 12), y = 2 + Math.floor(hh(v, i, 94) * 10); p(C.ink2, x, y, 1, 3); p(C.ink2, x + 1, y + 3, 1, 2); }
   for (let i = 0; i < 3; i++) p(C.earth2, Math.floor(hh(v, i, 95) * 16), Math.floor(hh(v, i, 96) * 16), 1, 1);
-  if (type === 1) return;
-  for (let y = 0; y < 16; y++) {
-    const b = Math.min(14, Math.floor(y * 0.75) + (hh(y, v, 97) < 0.25 ? 1 : 0));
-    if (type === 0) {
-      clear(0, y, b, 1);
-      p(C.earth2, b, y, 1, 1);
-      p(C.earth3, b, y, 1, hh(y, v, 98) < 0.3 ? 1 : 0);
-    } else {
-      clear(16 - b, y, b, 1);
-      p(C.ink2, 15 - b, y, 1, 1);
-    }
+  if (type === 0) return;
+  for (let x = 0; x < 16; x++) {
+    // the rock's foot in this column
+    const foot = type === 1 ? 11 + Math.floor(hh(x >> 2, v, 97) * 3) : type === 2 ? Math.min(15, x + 1) : Math.min(15, 16 - x);
+    clear(x, foot + 1, 1, 15 - foot);
+    p(C.steel2, x, foot, 1, 1);
+    if (foot > 0) p(C.steel1, x, foot - 1, 1, 1);
   }
 }
 

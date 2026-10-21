@@ -8,6 +8,7 @@
 import { C } from '../data/palette';
 import type { Floor } from '../sim/world';
 import { art, canvas, hh } from './skyart';
+import { hasArt } from './sprites';
 
 interface Cam { x: number; y: number; zoom: number }
 
@@ -50,10 +51,10 @@ function bakeGradient(w: number, h: number, floor: Floor): HTMLCanvasElement {
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const th = BAYER[(y & 3) * 4 + (x & 3)];
-      // the band, dithered over 6 px at each boundary
+      // the band, dithered over 8 px at each boundary (docs/sky-island.md: 8 px Bayer seams)
       let band = 0;
       for (const b of L.bands) {
-        const d = (y - b * h) / 6 + 0.5;
+        const d = (y - b * h) / 8 + 0.5;
         if (d >= 1 || (d > 0 && th < d)) band++;
       }
       // the sun's glow: rings that lift the band a step each, dithered at their edges
@@ -186,7 +187,8 @@ export function drawSky(ctx: CanvasRenderingContext2D, W: number, H: number, cam
   }
   if (floor === 'factory') {
     // the Workshop far below, in a gap between the banks
-    const b = belowIsle();
+    // the art's sky_below when there is one (pixel-art/sky/sky.py), else the code's stand-in
+    const b = hasArt('sky_below') ? art('sky_below').frames[0] : belowIsle();
     const bx = w * 0.7 - camX * 0.12, by = L.near * h - 18 - camY * 0.2;
     bank(banks.below, L.far * h + 4 - camY * 0.2, 0.2, 2.2);
     at(b, b.width, b.height, bx, by);

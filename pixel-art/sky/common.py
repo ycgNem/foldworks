@@ -146,9 +146,10 @@ def sheet(frames, n=None):
     return out
 
 
-def export(name, frames, fps=0, anchor=(0, 0), extra=None, bg=None, look_scale=4):
+def export(name, frames, fps=0, anchor=(0, 0), extra=None, bg=None, look_scale=4, src=False):
     """OUT/<name>.png (1x, frames in one row) + .json, and OUT/<name>@<k>x.png on a backdrop for
-    looking. Refuses any pixel outside the art palette (pips never)."""
+    looking; with src, src/art/<name>.png + .json too (what the game loads). Refuses any pixel
+    outside the art palette (pips never)."""
     img = sheet(frames)
     bad = {p[:3] for p in img.getdata() if p[3] and p[:3] not in ART_SET}
     if bad:
@@ -160,8 +161,9 @@ def export(name, frames, fps=0, anchor=(0, 0), extra=None, bg=None, look_scale=4
     meta = {"frame": [fw, fh], "frames": len(frames), "anchor": list(anchor), "fps": fps}
     if extra:
         meta.update(extra)
-    img.save(OUT / f"{name}.png")
-    (OUT / f"{name}.json").write_text(json.dumps(meta) + "\n", newline="\n")
+    for d in ([OUT, SRC_ART] if src else [OUT]):
+        img.save(d / f"{name}.png")
+        (d / f"{name}.json").write_text(json.dumps(meta) + "\n", newline="\n")
     look = sheet_spaced(frames, bg or P["sky2"])
     scale(look, look_scale).save(OUT / f"{name}@{look_scale}x.png")
     return img

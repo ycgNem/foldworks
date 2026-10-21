@@ -20,7 +20,7 @@ export const TILE = 16;
 
 /** each ore's deposit art (a 2x2 deposit in four quadrants) */
 const ORE_ART: Record<string, string> = { ironOre: 'tile_ore_iron', copperOre: 'tile_ore_copper', coal: 'tile_ore_coal', sand: 'tile_ore_sand' };
-const ART = ['tile_pave', 'tile_pave_seam', 'tile_grass', 'tile_grass_deco', 'tile_plot', 'tile_ore_iron', 'tile_ore_copper', 'tile_ore_coal', 'tile_ore_sand'] as const;
+const ART = ['tile_pave', 'tile_pave_seam', 'tile_pave_edge', 'tile_grass', 'tile_grass_deco', 'tile_plot', 'tile_ore_iron', 'tile_ore_copper', 'tile_ore_coal', 'tile_ore_sand'] as const;
 
 /** Small deterministic hash in [0, 1). */
 export function hash2(x: number, y: number, s = 0): number {
@@ -43,30 +43,50 @@ export class Ground {
     return this.bake(id, this.game.s.land.includes(id));
   }
 
-  /** A land chunk baked paved (owned) or as meadow (for sale), cached both ways. */
+  /** Is (x, y) on a land chunk you own? */
+  private ownedAt(x: number, y: number) {
+    const ch = CHUNKS.find((c) => x >= c.x && y >= c.y && x < c.x + c.w && y < c.y + c.h);
+    return !!ch && this.game.s.land.includes(ch.id);
+  }
+
+  /** A land chunk baked paved (owned) or as meadow (for sale), cached both ways (and by which of
+   *  its neighbours are owned: a paved lot's edge is a bolted strip against owned land, grass in
+   *  the grout against meadow or the rim). */
   bake(id: string, owned: boolean): HTMLCanvasElement {
     const ch = CHUNKS.find((c) => c.id === id)!;
     const stage = this.game.s.mega?.stage ?? 0;
     const sig = artSig(ART);
-    const key = owned ? id + '+' : id + '-';
+    // which sides border owned land, sampled at the side's middle (chunks line up edge to edge)
+    const mx = ch.x + (ch.w >> 1), my = ch.y + (ch.h >> 1);
+    const nb = (this.ownedAt(mx, ch.y - 1) ? 1 : 0) | (this.ownedAt(ch.x + ch.w, my) ? 2 : 0) | (this.ownedAt(mx, ch.y + ch.h) ? 4 : 0) | (this.ownedAt(ch.x - 1, my) ? 8 : 0);
+    const key = owned ? `${id}+${nb}` : id + '-';
     let e = this.chunks.get(key);
     if (e && e.stage === stage && e.sig === sig) return e.c;
     const c = document.createElement('canvas');
     c.width = ch.w * TILE;
     c.height = ch.h * TILE;
     const ctx = c.getContext('2d')!;
-    const seam = art('tile_pave_seam'), plot = art('tile_plot');
+    const seam = art('tile_pave_seam'), edge = art('tile_pave_edge'), plot = art('tile_plot');
     for (let ty = 0; ty < ch.h; ty++)
       for (let tx = 0; tx < ch.w; tx++) {
         const px = tx * TILE, py = ty * TILE;
         this.tile(ctx, ch.x + tx, ch.y + ty, px, py, owned);
-        // the lot's border: a bolted strip on paving, the plot's stakes and dashes on meadow
+        // the lot's border: a bolted strip on paving against owned land, grass in the grout
+        // against land you don't own; the plot's stakes and dashes on meadow
         const n = ty === 0, s = ty === ch.h - 1, w = tx === 0, e2 = tx === ch.w - 1;
         if (owned) {
-          if (n) ctx.drawImage(seam.frames[0], px, py);
-          if (e2) ctx.drawImage(seam.frames[1 % seam.frames.length], px, py);
-          if (s) ctx.drawImage(seam.frames[2 % seam.frames.length], px, py);
-          if (w) ctx.drawImage(seam.frames[3 % seam.frames.length], px, py);
+          // one strip per border between owned lots: this lot draws it on its east and south
+          // sides, the owned neighbour on its own (so north and west against owned land: none)
+          const side = (on: boolean, bit: number, f: number) => {
+            if (!on) return;
+            if (nb & bit && (bit === 1 || bit === 8)) return;
+            const a = nb & bit ? seam : edge;
+            ctx.drawImage(a.frames[f % a.frames.length], px, py);
+          };
+          side(n, 1, 0);
+          side(e2, 2, 1);
+          side(s, 4, 2);
+          side(w, 8, 3);
         } else if (n || s || w || e2) {
           const f = (n ? 0 : s ? 6 : 3) + (w ? 0 : e2 ? 2 : 1);
           ctx.drawImage(plot.frames[f % plot.frames.length], px, py);
@@ -94,7 +114,9 @@ export class Ground {
       // outcrop at 16x16, for the Survey Office): pick by place in the patch
       const p = PATCHES[g.patchOf[y * g.W + x]];
       const s = sheet(oreArt);
-      const fr = (p ? ((x - p.x) % 2) + 2 * ((y - p.y) % 2) : 0) + (s.frames.length >= 5 ? 1 : 0);
+      // frames 1-4 sit the outcrop on paving, 5-8 (when the sheet has them) on the meadow
+      const seat = !owned && s.frames.length >= 9 ? 4 : 0;
+      const fr = (p ? ((x - p.x) % 2) + 2 * ((y - p.y) % 2) : 0) + (s.frames.length >= 5 ? 1 : 0) + seat;
       ctx.drawImage(s.frames[fr % s.frames.length], px, py);
     } else if (ore) {
       const [d, m, l, acc] = ore === 'ironOre' ? [C.deep, C.sky, C.ice, C.rust] : ore === 'coal' ? [C.ink, C.shadow, C.hull1, C.glow] : ore === 'sand' ? [C.ground1, C.copper2, C.hot, C.bone] : [C.rust, C.copper, C.tan, C.lime];
@@ -115,7 +137,10 @@ export class Ground {
         const dx = x - p.x, dy = y - p.y;
         if (dx < -1 || dy < -1 || dx > 2 || dy > 2 || !patchOpen(p, stage)) continue;
         const sp = (ORE_ART[p.item] ?? 'tile_ore_copper') + '_spill';
-        if (hasArt(sp)) ctx.drawImage(sheet(sp).frames[(dy + 1) * 4 + (dx + 1)], px, py);
+        if (!hasArt(sp)) continue;
+        const ss = sheet(sp);
+        // frames 0-15 on paving, 16-31 (when the sheet has them) on the meadow
+        ctx.drawImage(ss.frames[(dy + 1) * 4 + (dx + 1) + (!owned && ss.frames.length >= 32 ? 16 : 0)], px, py);
       }
     }
   }

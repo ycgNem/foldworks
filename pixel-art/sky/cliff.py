@@ -248,12 +248,14 @@ def under_texture():
     pillowy cells as the face, smaller and in the shadow ramp (earth1 lit, earth0, ink2, ink1
     gaps), since the underside faces down and away from the sun."""
     img = new(CW, 16)
+    # two tones of cell, so the underside reads as rocks, not one dark mass: the paler (earth2
+    # lit) about half of them
+    pale = (P["earth2"], P["earth1"], P["earth0"], P["ink2"])
     shadow = (P["earth1"], P["earth0"], P["ink2"], P["ink1"])
-    deep = (P["earth0"], P["ink2"], P["ink2"], P["ink1"])
     pts = _cells(970, 12, 16, True)
 
     def tones(q, y):
-        return shadow if q < 0.6 else deep
+        return pale if q < 0.45 else shadow
     _shade_cells(img, 0, _voronoi(pts, 16, True, sx=0.7), pts, 16, True, tones)
     return img
 
