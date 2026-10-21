@@ -1,259 +1,239 @@
-// The left rail (docs/ui-redesign.md): floating cards with a gap between them, not one framed
-// column. The Goal (the old "Next", with the Bellows' Buy button at the start), the active Order
-// (the customer's portrait, one bar per item; an "orders offered" pill when none is active), the
-// Research node, and the Megaproject once the Bay exists. A click on a card's title folds it to
-// that line; a click on its body opens its screen. Also the diegetic touches drawn on the map:
-// the active order's flag over the Dock and the research ring over the Hopper.
+// The speaker's corner (docs/hud-180.md "Bramble's corner"): the speaker's portrait on a lily pad,
+// bottom-left, and the speech bubble with the current goal beside it (rich text, its progress as a
+// meter, its chips, its note), its tail at the portrait's mouth. A click on the portrait folds the
+// bubble away (a "!" bubble when a new line arrives) or unfolds it; a click on the bubble opens what
+// the goal names (a page, a floor, a tool), or folds it. At the start the Bellows' Buy button sits
+// in the bubble. Other speakers take the corner for a few seconds for their own lines: a customer
+// offering an order or thanking you for one, Unit 7 logging a Codex first. The toolbox (the wheel at
+// the screen's centre) sits on the pad's shoulder. Also the diegetic touches on the floor: the
+// active order's flag over the Dock, the research ring over the Hopper, the goal's bobbing arrow.
 import { C, rgba } from '../data/palette';
 import { UPGRADES } from '../data/machines';
-import { RESEARCH, type ResearchId } from '../data/research';
 import { ORDER, CUSTOMERS, type CustomerId } from '../data/orders';
-import { ITEMS, type ItemId } from '../data/items';
-import { megaStage } from '../data/megaprojects';
-import { ICON, textWidth, wrapText, ellipsize } from '../ui/font';
-import { itemIcon } from '../render/sprites';
-import { researchFrac, available } from '../sim/systems/research';
+import { itemName } from '../data/items';
+import { ICON, drawText, LINE_H } from '../ui/font';
+import { layoutRich, drawLayout, richWidth, CHIP_H } from '../ui/rich';
+import { T } from '../ui/theme';
+import { bubbleRaw } from '../ui/paper';
+import { sheet, hasArt } from '../render/sprites';
+import { researchFrac } from '../sim/systems/research';
 import { offeredOrders, orderFrac } from '../sim/systems/orders';
-import { megaFrac } from '../render/factory';
-import { plate, bar, button, label, uiIcon, dot, type UIconName } from './chrome';
-import { customerPortrait } from './orders';
-import { nextGoal } from './goals';
+import { bubble, button, meter, chip, chipWidth, lilyPad, portrait, rule } from './chrome';
+import { nextGoal, type Speaker } from './goals';
+import { toolboxButton } from './wheel';
 import type { Layout } from './layout';
-import type { TipLine } from '../ui/ui';
 import { nodeIcon } from './screens';
 import type { App } from './app';
 
-/** each customer's colour (their orders' cards, flags and tabs) */
+/** each customer's colour (their orders' flags and tabs) */
 export const CUSTOMER_COL: Record<CustomerId, string> = { bramble: C.leaf, unit7: C.teal1, voltaire: C.hot, committee: C.violet };
-
-const TITLE_H = 13;
-
-/** A rail card: a plate with an accent top edge and a small-caps title; a click on the title
- *  folds the card to that line. Returns the y under it. */
-function railCard(app: App, id: string, x: number, y: number, w: number, title: string, accent: string, ic: UIconName, bodyH: number, body: (x: number, y: number, w: number) => void, open?: () => void, flash = 0, tip?: TipLine[]): number {
-  const ui = app.ui;
-  const hs = app.hud;
-  const folded = hs.collapsed.has(id);
-  const h = folded ? TITLE_H + 1 : TITLE_H + bodyH + 5;
-  const hovTitle = ui.hover(x, y, w, TITLE_H);
-  const hovBody = !!open && !folded && ui.hover(x, y + TITLE_H, w, h - TITLE_H);
-  plate(ui, x, y, w, h, { accent, hover: hovTitle || hovBody });
-  if (flash > 0) ui.fill(x + 1, y + 1, w - 2, h - 2, accent, flash * 0.5);
-  uiIcon(ui, ic, x + 4, y + 3, 1);
-  label(ui, title, x + 15, y + 5, accent);
-  ui.small(folded ? '+' : '-', x + w - 8, y + 5, hovTitle ? C.bone : C.hull1);
-  ui.mark('card:' + id, x, y, w, h);
-  if (!folded) body(x + 6, y + TITLE_H + 2, w - 12);
-  if (hovTitle) {
-    ui.tip([{ text: folded ? 'Click to open this card' : 'Click to fold this card to its title', color: C.hull2 }], 150);
-    if (ui.clicked) {
-      ui.eat();
-      ui.sfx('click');
-      if (folded) hs.collapsed.delete(id);
-      else hs.collapsed.add(id);
-    }
-  } else if (!folded && ui.hover(x, y + TITLE_H, w, h - TITLE_H)) {
-    if (tip && !ui.hoverId) ui.tip(tip, 190);
-    if (open && ui.clicked) {
-      ui.eat();
-      ui.sfx('click');
-      open();
-    }
-  }
-  return y + h + 4;
-}
-
-/** a want row: the item's icon, a bar, and "have/need" in the small figures */
-function wantRow(app: App, item: ItemId, have: number, need: number, x: number, y: number, w: number, col: string) {
-  const ui = app.ui;
-  ui.ctx.drawImage(itemIcon(item), x, y);
-  const s = `${fmtShort(have)}/${fmtShort(need)}`;
-  const sw = ui.small(s, x + w, y + 2, have >= need ? C.leaf : C.hull3, { align: 'right' });
-  bar(ui, x + 10, y + 2, w - 13 - sw, 5, need > 0 ? have / need : 0, col);
-}
-
-function fmtShort(n: number): string {
-  n = Math.floor(n);
-  if (n < 10000) return String(n);
-  if (n < 1e6) return (n / 1000).toFixed(n < 1e5 ? 1 : 0).replace(/\.0$/, '') + 'K';
-  return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
-}
 
 /** The goal's key without its live numbers: a change of key is a new goal (it flashes and chimes). */
 const goalKey = (s: string) => s.replace(/[\d,.%/]+/g, '#');
 
+/** A line another speaker says for a few seconds (an order offered, a Codex first). */
+export interface Cameo { who: Speaker; text: string; at: number; life: number; chips?: string[]; open?: 'orders' | 'codex' }
+
+/** Seconds a cameo holds the corner. */
+const CAMEO_S = 6.5;
+
+/** Watch the game for other speakers' lines and queue them. */
+function cameos(app: App) {
+  const g = app.game;
+  const hs = app.hud;
+  const t = app.ui.time;
+  const offered = offeredOrders(g);
+  const ids = offered.map((d) => d.id);
+  if (hs.offerSeen === null) hs.offerSeen = ids;
+  const fresh = ids.find((id) => !hs.offerSeen!.includes(id));
+  hs.offerSeen = ids;
+  if (fresh && !g.s.orders.active) {
+    const d = ORDER[fresh];
+    hs.cameos.push({ who: d.customer, text: d.pitch, at: t, life: CAMEO_S, chips: [`{u:orders} ${d.name}`], open: 'orders' });
+  }
+  const codex = g.s.codex.length;
+  if (hs.codexHeard < 0) hs.codexHeard = codex;
+  if (codex > hs.codexHeard) {
+    const id = g.s.codex[codex - 1];
+    hs.cameos.push({ who: 'unit7', text: `NEW SPECIMEN: ${itemName(id).toUpperCase()}. PLEASING.`, at: t, life: CAMEO_S, chips: [`{i:${id}} ${codex} logged`], open: 'codex' });
+  }
+  hs.codexHeard = codex;
+  const done = g.s.orders.done.length;
+  if (hs.ordersHeard < 0) hs.ordersHeard = done;
+  if (done > hs.ordersHeard) {
+    const d = ORDER[g.s.orders.done[done - 1]];
+    const c = d ? CUSTOMERS[d.customer] : null;
+    if (d && c) hs.cameos.push({ who: d.customer, text: c.thanks[done % c.thanks.length], at: t, life: CAMEO_S - 1, chips: [`{coin:${d.pays.toLocaleString('en-US')}}`] });
+  }
+  hs.ordersHeard = done;
+  // one at a time: the next starts when the last ends
+  while (hs.cameos.length && t - hs.cameos[0].at > hs.cameos[0].life) {
+    hs.cameos.shift();
+    if (hs.cameos.length) hs.cameos[0].at = t;
+  }
+  if (hs.cameos.length > 4) hs.cameos.splice(1, hs.cameos.length - 4);
+}
+
+/** A speaker's portrait on its lily pad (the cheer frames while a line is fresh). */
+function speaker(app: App, who: Speaker, x: number, y: number, cheer: boolean) {
+  const ui = app.ui;
+  if (hasArt('h180_lilypad')) ui.ctx.drawImage(sheet('h180_lilypad').frames[0], x - 4, y + 42);
+  else lilyPad(ui, x + 24, y + 46, 62);
+  const name = cheer && hasArt(`portrait_${who}_cheer`) ? `portrait_${who}_cheer` : `portrait_${who}`;
+  if (!hasArt(name)) { portrait(ui, who, x, y, 48); return; }
+  const s = sheet(name);
+  const f = cheer ? Math.floor(ui.time * 4) % s.frames.length : s.frames.length > 1 && Math.floor(ui.time * 10) % 47 === 0 ? 1 : 0;
+  ui.ctx.drawImage(s.frames[f], x, y);
+}
+
+/** The speaker's corner. */
 export function rail(app: App, L: Layout) {
   const ui = app.ui;
   const g = app.game;
   const hs = app.hud;
-  const R = L.rail;
-  const x = R.x, w = R.w;
-  let y = R.y;
-
-  // ---- the goal
+  cameos(app);
   const goal = nextGoal(g);
-  const text = goal ? goal.text : 'Build, balance, and keep the pips green.';
+  const cam = hs.cameos[0] ?? null;
+  const who: Speaker = cam ? cam.who : goal?.who ?? 'bramble';
+  const text = cam ? cam.text : goal ? goal.text : 'Build, balance, keep it humming!';
   const key = goalKey(text);
   if (hs.goalKey !== key) {
     if (hs.goalKey !== null) {
       hs.goalAt = ui.time;
-      app.audio.sfx('codex', 0.35, 1.5);
+      if (!cam) app.audio.sfx('codex', 0.35, 1.5);
     }
     hs.goalKey = key;
   }
   hs.goalUi = goal?.ui ?? null;
   const t = ui.time - hs.goalAt;
-  const k = Math.min(1, t / 0.28);
-  const slide = Math.round((1 - k * k * (3 - 2 * k)) * -(w + 8));
-  const flash = t < 0.7 ? 1 - t / 0.7 : 0;
-  const lines = wrapText(text, w - 12);
-  const noteLines = goal?.note ? wrapText(goal.note, w - 12) : [];
-  const bellows = !g.has('bellows');
-  // a goal that names a screen or a tool opens it from its card (and its pill below gives way)
-  const goalOpen = goalAction(app, goal?.ui ?? null);
-  const goalH = lines.length * 10 + (bellows ? 18 : 0) + (noteLines.length ? 5 + noteLines.length * 10 : 0) - 2;
-  y = railCard(app, 'goal', x + slide, y, w, 'Goal', C.gold, 'star', goalH, (bx, by, bw) => {
-    lines.forEach((l, i) => ui.text(l, bx, by + i * 10, C.bone));
-    let yy = by + lines.length * 10;
-    if (bellows) bellowsRow(app, bx, yy + 1, bw);
-    if (bellows) yy += 18;
-    if (noteLines.length) {
-      ui.fill(bx, yy + 1, bw, 1, C.hull0);
-      noteLines.forEach((l, i) => ui.text(l, bx, yy + 4 + i * 10, C.pipYellow));
-    }
-  }, goalOpen?.go, flash, goalOpen ? [{ text: 'Goal', color: C.gold }, { text: `Click: ${goalOpen.what}.`, color: C.hull2 }] : undefined);
-
-  // ---- the order
-  const o = g.s.orders;
-  if (o.active) {
-    const d = ORDER[o.active];
-    const who = d.customer;
-    const col = CUSTOMER_COL[who];
-    const wants = Object.entries(d.wants) as [ItemId, number][];
-    const factoryOnly = d.at === 'factory';
-    const bodyH = Math.max(26, 11 + wants.length * 9) + (factoryOnly ? 9 : 0);
-    y = railCard(app, 'order', x, y, w, 'Order', col, 'orders', bodyH, (bx, by, bw) => {
-      customerPortrait(app, who, bx + 1, by + 1, 24);
-      const tx = bx + 30;
-      ui.clip(tx, by, bw - 30, 10);
-      ui.text(ellipsize(d.name, bw - 30), tx, by, C.bone, { shadow: C.ink });
-      ui.unclip();
-      wants.forEach(([item, n], i) => {
-        const have = Math.min(n, Math.floor(o.progress[d.id]?.[item]?.toNumber() ?? 0));
-        wantRow(app, item, have, n, tx, by + 11 + i * 9, bw - 30, col);
-      });
-      if (factoryOnly) ui.small('factory dock only', bx + 1, by + bodyH - 6, C.hot);
-    }, () => app.togglePanel('orders'), 0, [{ text: `${d.name}, for ${CUSTOMERS[who].name}`, color: col }, { text: factoryOnly ? 'This order counts only what reaches the Factory Dock: trunk the modules that make it into the Factory Dock. The Workshop Dock just sells.' : 'Items sent to the Dock fill the active order first, then sell. Orders never expire.' }, { text: `${Math.round(orderFrac(g, d.id) * 100)}% done. Click for the Orders screen (O).`, color: C.hull2 }]);
-  } else {
-    const offered = offeredOrders(g);
-    if (offered.length && goal?.ui !== 'orders') {
-      const s = offered.length === 1 ? 'An order is offered' : `${offered.length} orders offered`;
-      if (pill(app, 'openOrders', x, y, w, s, C.leaf, 'orders', [{ text: 'Orders', color: C.leaf }, { text: 'A customer has an order for you. Take one; it fills before anything sells. (O)' }])) app.togglePanel('orders');
-      y += 18;
+  const P = L.portrait;
+  const folded = hs.collapsed.has('goal') && !cam;
+  // the portrait: a click folds or unfolds the bubble
+  const pHov = ui.hover(P.x, P.y, 48, 54);
+  ui.mark('speaker', P.x, P.y, 48, 54);
+  ui.region(P.x, P.y + 6, 48, 48, 'button');
+  speaker(app, who, P.x, P.y + (pHov ? -1 : 0), t < 1.2);
+  if (pHov) {
+    ui.hoverId = 'speaker';
+    ui.tip([{ text: `{big:${SPEAKER_NAME[who]}}` }, { text: folded ? '{k:LMB} listen' : '{k:LMB} hush' }], 150);
+    if (ui.clicked) {
+      ui.eat();
+      ui.sfx('click');
+      if (hs.collapsed.has('goal')) hs.collapsed.delete('goal');
+      else { hs.collapsed.add('goal'); hs.foldedAt = ui.time; }
     }
   }
-
-  // ---- research (once the Bellows is bought: the first minute has one goal)
-  const sel = g.s.research.selected;
-  const allDone = g.s.research.done.length >= Object.keys(RESEARCH).length;
-  if (sel) {
-    y = railCard(app, 'research', x, y, w, 'Research', C.teal1, 'research', 18, (bx, by, bw) => {
-      const f = researchFrac(g, sel);
-      ui.clip(bx, by, bw, 10);
-      ui.text(ellipsize(RESEARCH[sel].name, bw), bx, by, C.bone, { shadow: C.ink });
-      ui.unclip();
-      const ps = `${Math.floor(f * 100)}%`;
-      const pw = ui.small(ps, bx + bw, by + 11, C.teal1, { align: 'right' });
-      bar(ui, bx, by + 11, bw - pw - 3, 5, f, C.teal1);
-    }, () => app.togglePanel('research'), 0, [{ text: RESEARCH[sel].name, color: C.teal1 }, { text: `Unlocks ${RESEARCH[sel].unlocks}. Items delivered to the Hopper pay for it.` }, { text: 'Click for the research tree (T).', color: C.hull2 }]);
-  } else if (goal?.ui !== 'research' && !allDone && (g.has('bellows') || g.s.research.done.length > 0) && Object.keys(RESEARCH).some((id) => available(g, id as ResearchId))) {
-    if (pill(app, 'openTree', x, y, w, 'Pick research (T)', C.teal1, 'research', [{ text: 'Research', color: C.teal1 }, { text: 'Nothing is selected: items in the Hopper go to waste. Pick a node in the tree.' }])) app.togglePanel('research');
-    y += 18;
+  toolboxButton(app, P.x + 2, P.y - 18);
+  if (folded) {
+    // a little bubble: "!" when a new line has arrived since it was folded
+    const news = hs.goalAt > hs.foldedAt;
+    const bx = P.x + 40, by = P.y - 2;
+    bubbleRaw(ui.ctx, bx, by, 15, 14, 'left', 6);
+    ui.big(news ? '!' : '…', bx + 7, by + 2, news ? T.bad : T.inkSoft, { align: 'center' });
+    return;
   }
-
-  // ---- the Megaproject, once the Bay stands on the Factory floor
-  const st = megaStage(g.s.mega.stage);
-  if (st && g.s.factory.ents.some((e) => e.kind === 'fbay')) {
-    const wants = Object.entries(st.wants) as [ItemId, number][];
-    y = railCard(app, 'mega', x, y, w, 'Megaproject', C.glow, 'mega', 11 + wants.length * 9, (bx, by, bw) => {
-      ui.clip(bx, by, bw, 10);
-      // "Great Drill, stage 1", or "Stage 1" where that does not fit (the card's title names it)
-      const full = st.name.replace(/^The /, '');
-      const tail = full.split(', ').slice(1).join(', ');
-      const name = textWidth(full) <= bw - 26 || !tail ? full : tail.charAt(0).toUpperCase() + tail.slice(1);
-      ui.text(ellipsize(name, bw - 26), bx, by, C.bone, { shadow: C.ink });
-      ui.unclip();
-      ui.small(`${Math.floor(megaFrac(g) * 100)}%`, bx + bw, by + 2, C.glow, { align: 'right' });
-      wants.forEach(([item, n], i) => wantRow(app, item, Math.min(n, g.s.mega.progress[item]?.toNumber() ?? 0), n, bx, by + 11 + i * 9, bw, C.glow));
-    }, () => app.togglePanel('mega'), 0, [{ text: st.name, color: C.glow }, { text: `Trunk these into the Megaproject Bay on the Factory floor. Built, it gives: ${st.reward}.` }, { text: 'Click for the Megaproject.', color: C.hull2 }]);
+  // ---- the bubble: the line, its meter, its chips, the note, the Bellows
+  const maxW = Math.max(150, Math.min(L.wide ? 262 : 236, L.corner.w - 56));
+  const cw = maxW - 12;
+  const lay = layoutRich(text, cw);
+  const bellows = !cam && !g.has('bellows');
+  const canBuy = bellows && g.s.coin.gte(UPGRADES.bellows.cost);
+  const chips = (cam ? cam.chips : goal?.chips) ?? [];
+  const bar = cam ? undefined : goal?.bar;
+  const note = cam ? null : goal?.note ? layoutRich(goal.note, cw) : null;
+  // chips flow in rows
+  const chipRows: string[][] = [];
+  let rowW = 0;
+  for (const c of chips) {
+    const w = chipWidth(c);
+    if (!chipRows.length || rowW + w > cw) { chipRows.push([c]); rowW = w + 3; } else { chipRows[chipRows.length - 1].push(c); rowW += w + 3; }
   }
-  void ITEMS; void textWidth;
+  let ch = lay.h - 2;
+  if (bar !== undefined) ch += 9;
+  if (chipRows.length) ch += 3 + chipRows.length * (CHIP_H + 2);
+  if (bellows) ch += canBuy ? 20 : 11;
+  if (note) ch += 5 + note.h;
+  const natural = Math.max(lay.w, ...chipRows.map((r) => r.reduce((s, c) => s + chipWidth(c) + 3, -3)), note ? note.w : 0, canBuy ? 130 : bellows ? 110 : 0);
+  const bw = Math.min(maxW, natural + 12);
+  const bh = ch + 10;
+  const bx = P.x + 54;
+  const by = Math.min(ui.h - 8 - bh, P.y + 40 - bh + 14);
+  const at = Math.max(6, Math.min(bh - 12, P.y + 22 - by));
+  // a new line pops in: the bubble grows from its tail for a moment
+  const k = Math.min(1, t / 0.18);
+  const slide = Math.round((1 - k) * -10);
+  const action = cam?.open ? { go: () => app.togglePanel(cam.open!), what: cam.open === 'orders' ? 'orders' : 'the Codex' } : goalAction(app, goal?.ui ?? null);
+  const hov = ui.hover(bx, by, bw, bh);
+  ui.mark('goalBubble', bx, by, bw, bh);
+  const r = bubble(ui, bx + slide, by, bw, bh, { side: 'left', at });
+  if (t < 0.6) { ui.ctx.fillStyle = rgba(T.paperHi, (0.6 - t) * 1.2); ui.ctx.fillRect(r.x - 3, r.y - 2, r.w + 6, r.h + 4); }
+  drawLayout(ui, lay, r.x, r.y, T.ink);
+  let yy = r.y + lay.h - 1;
+  if (bar !== undefined) { meter(ui, r.x, yy + 1, Math.min(r.w, 120), 6, bar, { role: 'good' }); yy += 9; }
+  if (chipRows.length) {
+    yy += 2;
+    for (const row of chipRows) {
+      let x = r.x;
+      for (const c of row) x += chip(ui, x, yy, c, { role: 'ink' }) + 3;
+      yy += CHIP_H + 2;
+    }
+  }
+  if (bellows) {
+    const u = UPGRADES.bellows;
+    if (canBuy) {
+      if (button(ui, 'buyBellows', r.x, yy + 2, Math.min(r.w, 140), 17, `Buy the Bellows {coin:${u.cost}}`, { gold: true, pulse: true, tip: [{ text: '{big:The Bellows}' }, { text: '{i:ironOre} → {i:ironIngot} on its own · 1 per 2 s' }] })) app.act({ k: 'upgrade', id: 'bellows' });
+      yy += 20;
+    } else {
+      const have = Math.max(0, Math.floor(g.s.coin.toNumber()));
+      const s = `{coin:${have}/${u.cost}}`;
+      const sw = richWidth(s);
+      meter(ui, r.x, yy + 2, Math.min(r.w - sw - 4, 90), 6, have / u.cost, { role: 'coin' });
+      ui.rich(s, r.x + Math.min(r.w - sw - 4, 90) + 4, yy);
+      ui.mark('bellows', r.x, yy, r.w, 10);
+      yy += 11;
+    }
+  }
+  if (note) {
+    rule(ui, r.x, yy + 2, r.w);
+    drawLayout(ui, note, r.x, yy + 4, T.warn);
+  }
+  if (hov && !ui.hoverId) {
+    ui.tip([{ text: action ? `{k:LMB} ${action.what}` : '{k:LMB} hush' }], 160);
+    if (ui.clicked) {
+      ui.eat();
+      ui.sfx('click');
+      if (action) action.go();
+      else if (cam) hs.cameos.shift();
+      else { hs.collapsed.add('goal'); hs.foldedAt = ui.time; }
+    }
+  }
+  void LINE_H;
 }
 
-/** What a click on the goal card does when the goal names a screen, a floor or a tool. */
+export const SPEAKER_NAME: Record<Speaker, string> = { bramble: 'Mayor Bramble', unit7: 'Unit 7', voltaire: 'Dame Voltaire', committee: 'The Committee', inspector: 'The Inspector' };
+
+/** What a click on the goal's bubble does when the goal names a page, a floor or a tool. */
 function goalAction(app: App, ui: string | null): { go: () => void; what: string } | null {
   switch (ui) {
-    case 'research': return { go: () => app.togglePanel('research'), what: 'open the research tree (T)' };
-    case 'orders': return { go: () => app.togglePanel('orders'), what: 'open the Orders screen (O)' };
-    case 'mega': return { go: () => app.togglePanel('mega'), what: 'open the Megaproject' };
-    case 'survey': return { go: () => app.togglePanel('survey'), what: 'open the Survey Office' };
-    case 'factory': return app.floor === 'factory' ? null : { go: () => app.setFloor('factory'), what: 'go to the Factory floor (Tab)' };
-    case 'fold': return app.mode.k === 'fold' ? null : { go: () => app.toggleFold(), what: 'pick the Fold tool (F)' };
+    case 'research': return { go: () => app.togglePanel('research'), what: 'research' };
+    case 'orders': return { go: () => app.togglePanel('orders'), what: 'orders' };
+    case 'mega': return { go: () => app.togglePanel('mega'), what: 'the Megaproject' };
+    case 'survey': return { go: () => app.togglePanel('survey'), what: 'the Survey Office' };
+    case 'factory': return app.floor === 'factory' ? null : { go: () => app.setFloor('factory'), what: 'the Factory floor' };
+    case 'fold': return app.mode.k === 'fold' ? null : { go: () => app.toggleFold(), what: 'the Fold tool' };
     default: return null;
   }
 }
 
-/** A pill: a one-line plate in its accent colour that opens a screen (orders offered, research to
- *  pick), with a blinking dot. Calmer than a gold button: gold is for buying. */
-function pill(app: App, id: string, x: number, y: number, w: number, text: string, accent: string, ic: UIconName, tip: TipLine[]): boolean {
-  const ui = app.ui;
-  const h = 14;
-  const hov = ui.hover(x, y, w, h);
-  ui.mark(id, x, y, w, h);
-  plate(ui, x, y, w, h, { accent, hover: hov, kind: 'button' });
-  uiIcon(ui, ic, x + 4, y + 3, 1);
-  ui.text(ellipsize(text, w - 26), x + 15, y + 3, accent, { shadow: C.ink });
-  if (Math.floor(ui.time * 2.5) % 2 === 0) dot(ui, x + w - 7, y + 5, accent === C.leaf ? C.pipRed : C.gold);
-  if (hov) {
-    ui.hoverId = id;
-    ui.tip(tip, 180);
-    if (ui.clicked) {
-      ui.eat();
-      ui.sfx('click');
-      return true;
-    }
-  }
-  return false;
-}
-
-/** The Bellows under the first goal: how close the coin is, then a Buy button once it is there. */
-function bellowsRow(app: App, x: number, y: number, w: number) {
-  const ui = app.ui;
-  const g = app.game;
-  const u = UPGRADES.bellows;
-  ui.mark('bellows', x, y, w, 15);
-  if (g.s.coin.gte(u.cost)) {
-    if (button(ui, 'buyBellows', x, y, w, 15, `Buy the Bellows ${ICON.coin}${u.cost}`, { gold: true, pulse: true, tip: [{ text: 'The Bellows', color: C.gold }, { text: 'The Hand Furnace runs on its own: an ingot every 2 s while it has ore. No more cranking.' }] })) app.act({ k: 'upgrade', id: 'bellows' });
-    return;
-  }
-  const have = Math.max(0, Math.floor(g.s.coin.toNumber()));
-  label(ui, 'bellows', x, y + 4, C.hull2);
-  const s = `${have}/${u.cost}`;
-  const sw = ui.small(s, x + w, y + 4, C.gold, { align: 'right' });
-  bar(ui, x + 32, y + 4, w - 36 - sw, 5, have / u.cost, C.gold);
-  ui.hint(x, y, w, 14, [{ text: 'The Bellows', color: C.gold }, { text: `The Hand Furnace runs on its own: an ingot every 2 s while it has ore. ${u.cost - have} coin to go: crank the furnace and sell ingots at the Dock.` }], 190);
-}
-
-/** On the map, under the HUD: the active order's flag over the Dock (the customer's colour, a
- *  small bar) and a progress ring over the Hopper for the selected research node. World markers,
- *  drawn straight to the canvas outside the overlap audit. */
+/** On the floor, under the HUD: the active order's flag over the Dock (the customer's colour, a
+ *  small bar), a progress ring over the Hopper for the selected research node, and the goal's
+ *  arrow bobbing over its tile. World markers, drawn straight to the canvas outside the audit. */
 export function diegetic(app: App, L: Layout) {
   const ui = app.ui;
   const g = app.game;
   const ctx = ui.ctx;
   const r = app.renderer;
-  const c = L.center;
-  const inView = (x: number, y: number) => x > 0 && x < ui.w && y > L.top.h + 4 && y < L.band.y;
+  const inView = (x: number, y: number) => x > 0 && x < ui.w && y > 4 && y < ui.h;
   const fac = app.floor === 'factory';
   const at = (tx: number, ty: number) => { const s = r.toScreen(tx, ty); return { x: Math.round(s.x / ui.scale), y: Math.round(s.y / ui.scale) }; };
   const o = g.s.orders;
@@ -265,14 +245,12 @@ export function diegetic(app: App, L: Layout) {
       if (inView(p.x, p.y - 20)) {
         const col = CUSTOMER_COL[d.customer];
         const top = p.y - 20;
-        // the pole
         ctx.fillStyle = C.ink;
         ctx.fillRect(p.x - 1, top - 1, 3, 22);
         ctx.fillStyle = C.hull2;
         ctx.fillRect(p.x, top, 1, 20);
         ctx.fillStyle = C.gold;
         ctx.fillRect(p.x - 1, top - 2, 3, 2);
-        // the pennant, waving
         const wave = Math.floor(ui.time * 4) % 2;
         ctx.fillStyle = C.ink;
         ctx.fillRect(p.x - 13, top, 13, 9);
@@ -282,7 +260,6 @@ export function diegetic(app: App, L: Layout) {
         ctx.fillRect(p.x - 12 + (wave ? 0 : 6), top + 1, 3, 7);
         ctx.fillStyle = C.ink;
         ctx.fillRect(p.x - 13, top + 4 + wave, 2, 2);
-        // its progress, under the pennant
         const f = orderFrac(g, d.id);
         ctx.fillStyle = C.ink;
         ctx.fillRect(p.x - 13, top + 10, 13, 4);
@@ -295,7 +272,6 @@ export function diegetic(app: App, L: Layout) {
   if (sel) {
     const hop = fac ? g.s.factory.ents.find((e) => e.kind === 'fhopper') : g.s.ents.find((e) => e.kind === 'hopper');
     if (hop) {
-      // on the Hopper's own top-right corner, so it never sits on the belts feeding it
       const p = at(hop.x + hop.w, hop.y);
       const cx = p.x - 7, cy = p.y + 6;
       if (inView(cx, cy - 8)) {
@@ -312,5 +288,13 @@ export function diegetic(app: App, L: Layout) {
       }
     }
   }
-  void c;
+  // the goal's arrow, bobbing over the tile it names
+  const goal = nextGoal(g);
+  if (goal?.tile && !app.panel && !fac) {
+    const s = r.toScreen(goal.tile.x + 0.5, goal.tile.y);
+    const bob = Math.round(Math.sin(ui.time * 6) * 2);
+    const ux = Math.round(s.x / ui.scale), uy = Math.round(s.y / ui.scale) - 18 + bob;
+    if (ux > 8 && ux < ui.w - 8 && uy > 2 && uy < ui.h - 18) drawText(ctx, ICON.down, ux - 6, uy, T.floorCoin, 2, C.ink);
+  }
+  void L;
 }

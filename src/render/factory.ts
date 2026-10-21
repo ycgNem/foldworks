@@ -15,6 +15,8 @@ import { megaStage } from '../data/megaprojects';
 import { ITEMS, type ItemId } from '../data/items';
 import { BYPRODUCTS } from '../sim/systems/modules';
 import { drawText, textWidth } from '../ui/font';
+import { paperRaw } from '../ui/paper';
+import { onPaper } from '../ui/theme';
 import { TICK_RATE } from '../engine/time';
 import { sheet, drawRot, frameAt, itemIcon, hasArt } from './sprites';
 import { TILE } from './ground';
@@ -387,15 +389,13 @@ function antsBox(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
   }
 }
 
-/** A pill of text in world space above a tile rect. */
+/** A pill of text in world space above a tile rect: a slip of paper with the words in the ink
+ *  their colour stands for (the 180, docs/hud-180.md). */
 function label(ctx: CanvasRenderingContext2D, s: string, cx: number, y: number, col: string) {
-  const w = textWidth(s) + 6;
+  const w = textWidth(s) + 8;
   const x = Math.round(cx - w / 2);
-  ctx.fillStyle = C.ink;
-  ctx.fillRect(x, y, w, 11);
-  ctx.fillStyle = C.shadow;
-  ctx.fillRect(x + 1, y + 1, w - 2, 9);
-  drawText(ctx, s, x + 3, y + 1, col);
+  paperRaw(ctx, x, y - 1, w, 13, { deckle: false });
+  drawText(ctx, s, x + 4, y + 1, onPaper(col));
 }
 
 /** The nested-fold audit under way: the box in teal with its countdown, and each module's run

@@ -98,7 +98,96 @@ if (state === 'firsts') {
   await browser.close();
   process.exit(0);
 }
-if (WORKSHOP.includes(state)) await page.evaluate(workshopSetup, state);
+
+// ---- the 180's screen (docs/hud-180.md; the screen agent's states, phase 2) ----
+// jam180: a slag jam, the furnace's report pinned, the bell ringing; jamHover: the same, hovered;
+// power180: a busy Act II Workshop with grids and floor tags, a kiln pinned, a boiler hovered;
+// page180: a page open with the section tabs; gazette180: the Gazette's page; reorg180: the
+// Committee's slip under the Purse
+const H180 = ['jam180', 'jamHover', 'power180', 'page180', 'gazette180', 'reorg180', 'title180', 'purse180', 'bell180', 'refuse180'];
+if (H180.includes(state)) {
+  const hover = await page.evaluate((st) => {
+    const a = window.__app;
+    const g = a.game;
+    if (st === 'title180') { a.screen = 'title'; return null; }
+    if (st !== 'power180') {
+      a.freeze();
+      a.grant(70);
+      a.act({ k: 'upgrade', id: 'bellows' });
+      const f = g.machines.find((m) => m.kind === 'furnace');
+      a.act({ k: 'place', kind: 'miner', x: f.x - 1, y: f.y, rot: 0 });
+      a.step(20 * 60);
+      f.state = 'blocked';
+      f.why = 'slag';
+      f.by = 5;
+      f.hist = 'w'.repeat(20) + 'x'.repeat(40);
+      a.game.events.drain();
+      a.renderer.fx.flyers = [];
+      a.renderer.fx.pops = [];
+      a.toasts = [];
+      a.trophyPops = [];
+      a.hud.bellAt = a.ui.time;
+      a.selected = st === 'jam180' ? f.id : null;
+      if (st === 'jam180') a.toast('Blocked: slag!', 'Smelting leaves slag, and it has nowhere to go.', '#c8362e');
+      if (st === 'page180') a.panel = 'research';
+      if (st === 'gazette180') { for (let i = 0; i < 9; i++) a.gazette.next(g); a.panel = 'gazette'; }
+      if (st === 'reorg180') g.s.megaPatents = 12;
+      if (st === 'refuse180') { a.refusal = { text: 'Not enough coin: a Smelter costs 60', t: 2 }; return [f.x + 2, f.y + 1]; }
+      return st === 'jamHover' ? [f.x, f.y] : st === 'purse180' ? 'purse' : st === 'bell180' ? 'nextProblem' : null;
+    }
+    // power180: the act2power state of e2e/screens.mjs, with Tuning
+    a.freeze();
+    a.grant(2.4e6);
+    g.s.land = ['A', 'B', 'C', 'D', 'E', 'F'];
+    g.s.upgrades.push('bellows');
+    g.s.research.done = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding', 'coalSeams', 'steelmaking', 'overdrive', 'steamPower', 'glassworks', 'crushing', 'concrete', 'refining', 'machineKits', 'tuning'];
+    g.s.research.selected = 'circuits';
+    g.s.research.progress = { circuits: { copperWire: g.s.coin.constructor.of(310), glass: g.s.coin.constructor.of(44) } };
+    g.s.flags.push('factoryOpen', 'factorySeen', 'sliceEnd', 'ordersSeen');
+    g.s.orders.done = ['boardwalk', 'lampPosts', 'gizmoFestival', 'calibration'];
+    g.s.orders.rep = { bramble: 3, unit7: 1, voltaire: 1 };
+    g.s.orders.active = 'lensArray';
+    g.s.orders.progress = { lensArray: { glass: g.s.coin.constructor.of(212), circuit: g.s.coin.constructor.of(18) } };
+    g.s.parts = g.s.coin.constructor.of(14);
+    g.s.income = Array(60).fill(140);
+    a.renderer.ground = null;
+    g.rebuild();
+    const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
+    act({ k: 'place', kind: 'boiler', x: 16, y: 4, rot: 0 });
+    act({ k: 'place', kind: 'steamEngine', x: 17, y: 4, rot: 0 });
+    act({ k: 'place', kind: 'pole', x: 18, y: 3, rot: 0 });
+    act({ k: 'place', kind: 'pole', x: 22, y: 3, rot: 0 });
+    for (const x of [19, 20, 21, 22, 23]) act({ k: 'place', kind: 'kiln', x, y: 1, rot: 3 });
+    act({ k: 'place', kind: 'mixer', x: 23, y: 4, rot: 0 });
+    act({ k: 'recipe', x: 23, y: 4, recipe: 'mixConcrete' });
+    for (const x of [19, 20, 21, 22, 23]) { act({ k: 'recipe', x, y: 1, recipe: 'fireGlass' }); g.entAt(x, 1).inBuf.sand = 4; }
+    act({ k: 'place', kind: 'miner', x: 1, y: 2, rot: 0 });
+    g.entAt(16, 4).inBuf.coal = 8;
+    const m = g.entAt(23, 4);
+    m.inBuf.gravel = 4; m.inBuf.sand = 2;
+    a.step(20 * 3);
+    g.entAt(16, 4).inBuf.coal = 8;
+    for (const x of [19, 20, 21, 22, 23]) g.entAt(x, 1).inBuf.sand = 4;
+    a.step(10);
+    a.game.events.drain();
+    a.toasts = [];
+    a.panel = null;
+    a.setFloor('workshop', true);
+    a.fitCamera(true);
+    a.selected = g.entAt(21, 1).id;
+    a.renderer.fx.flyers = [];
+    a.renderer.fx.pops = [];
+    return [16, 4];
+  }, state);
+  if (typeof hover === 'string') {
+    await frames(page, 3);
+    const p = await page.evaluate((id) => { const a = window.__app; const q = a.ui.ids.get(id); return q ? a.uiToCss(q.x + q.w / 2, q.y + q.h / 2) : null; }, hover);
+    if (p) await page.mouse.move(p.x, p.y);
+  } else if (hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), hover); await page.mouse.move(p.x, p.y); }
+}
+// ---- end of the 180's states ----
+if (H180.includes(state)) { /* set up above */ }
+else if (WORKSHOP.includes(state)) await page.evaluate(workshopSetup, state);
 else if (state === 'foldAnim') {
   // the fold, frame by frame: the graded S+ line folds (crease, corners, squeeze, flash, pop)
   await page.evaluate(workshopSetup, 'gradeSplus');

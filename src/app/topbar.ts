@@ -1,10 +1,14 @@
-// The top bar (docs/ui-redesign.md): one thin plate across the top. On the left the coin counter,
-// the one loud thing on the screen (big gold digits that roll, bump and sparkle; the rate beside
-// them; hovering drops down the old Shipping card), then Machine Kits and the power readout once
-// they exist, and the line-health chip (green, yellow, red and blue counts; a click jumps to the
-// next problem, Factorio-style). The floor tabs in the middle. The menus on the right as icon
-// buttons with a dot when something waits inside (the label and key are in the tooltip).
-import { C, rgba } from '../data/palette';
+// The pieces that hang on the screen's corners (docs/hud-180.md "The screen"), now that there is no
+// top bar. Top-left, the Purse: a wooden sign on two ropes with the coin counter in the display
+// face at 2x, gold with an ink outline, that rolls, bumps and sparkles; the rate on a tag hanging
+// under it; hovering hangs the Shipping tag. Under it the trouble bell (only while something is
+// wrong; it swings when a new problem starts, a click jumps to the next one, worst first, and pins
+// its report), red edge arrows for problems off the screen and gold ones for Sparks, and whatever
+// counters other files register (Milestone 5's contract slip). Top-right, the lift: a brass dial in
+// a wooden case, a button for each floor (Tab still works). Bottom-right, the notebook that opens
+// the book at the last page, and, while a page is open, its section tabs down the book's right
+// edge. The menus registry (registerMenu) and the counters registry keep their pre-180 signatures.
+import { C } from '../data/palette';
 import { RESEARCH } from '../data/research';
 import { TROPHIES } from '../data/trophies';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
@@ -13,17 +17,187 @@ import { CLAIM_PRICE } from '../data/land';
 import { TICK_RATE } from '../engine/time';
 import { Num } from '../engine/num';
 import { plain } from '../engine/fmt';
-import { textWidth, smallWidth, ICON } from '../ui/font';
-import { itemIcon } from '../render/sprites';
+import { bigWidth, BIG_LINE_H, LINE_H, ICON } from '../ui/font';
+import { layoutRich, drawLayout, richWidth } from '../ui/rich';
+import { T } from '../ui/theme';
+import { outlinedText, ribbonRaw, type RibbonColor } from '../ui/paper';
+import { itemIcon, hasArt, sheet, frameNamed } from '../render/sprites';
 import { offeredOrders } from '../sim/systems/orders';
-import { powered, powerTotals, kw } from '../render/powerview';
-import { plate, plateRaw, coinIcon, sparkline, uiIcon, dot, label, bar, type UIconName } from './chrome';
-import { icon, tab } from './widgets';
+import { powered } from '../render/powerview';
+import { sign, tag, tagSize, coinIcon, sparkline, dot, uiIcon, rule, chip, chipWidth, type UIconName } from './chrome';
 import type { Layout } from './layout';
+import type { Rect } from '../ui/ui';
 import type { App } from './app';
+import type { ScreenName } from './screens';
+
+export function fmtRate(v: number) {
+  return plain(v, v < 10 ? 1 : 0); // Milestone 6: through the one number helper (DESIGN.md §20)
+}
+
+// ------------------------------------------------------------------ registries
+
+/** A menu another file adds (Milestones 5 and 6: Patents, the Drawer, Overnight): a page of the
+ * notebook, shown as a section tab while the book is open. */
+export interface MenuDef { id: string; icon: UIconName; name: string; key?: string; panel: Parameters<App['togglePanel']>[0]; tip: string; show: (app: App) => boolean; dot?: (app: App) => boolean; group?: 'game' | 'book' }
+const MENUS: MenuDef[] = [];
+/** Add a page to the notebook: registerMenu({ id: 'patents', icon: 'star', name: 'Patents', panel: 'patents', tip: '...', show: (app) => app.game.done('x') }). */
+export function registerMenu(m: MenuDef) { if (!MENUS.some((q) => q.id === m.id)) MENUS.push(m); }
+
+/** A counter another file hangs under the Purse (Milestone 5: the Committee's contract slip): it
+ * draws at (x, y) and returns its width; `room` is the width it may take. Each takes a 30 px row. */
+export interface CounterDef { id: string; show: (app: App) => boolean; draw: (app: App, x: number, y: number, room: number) => number }
+const COUNTERS: CounterDef[] = [];
+export function registerCounter(c: CounterDef) { if (!COUNTERS.some((q) => q.id === c.id)) COUNTERS.push(c); }
+
+// ------------------------------------------------------------------ shipping
+
+/** Delivered totals sampled once a game second, for the per-minute Shipping rates. */
+export function sampleShipping(app: App) {
+  const g = app.game;
+  const hs = app.hud;
+  const last = hs.ship[hs.ship.length - 1];
+  if (!last || g.s.tick - last.tick >= TICK_RATE || g.s.tick < last.tick) {
+    if (last && g.s.tick < last.tick) hs.ship = [];
+    const d: Partial<Record<ItemId, number>> = {};
+    for (const id of ITEM_IDS) d[id] = g.s.delivered[id]?.toNumber() ?? 0;
+    hs.ship.push({ tick: g.s.tick, d });
+    if (hs.ship.length > 61) hs.ship.shift();
+  }
+}
+
+/** What reached the Dock and the Hopper a minute, per item, over the last minute. */
+export function shipRates(app: App): Map<ItemId, number> {
+  const hs = app.hud;
+  const out = new Map<ItemId, number>();
+  const a = hs.ship[0], b = hs.ship[hs.ship.length - 1];
+  const span = a && b ? (b.tick - a.tick) / TICK_RATE : 0;
+  if (!b || span <= 0) return out;
+  for (const id of ITEM_IDS) {
+    const pm = (((b.d[id] ?? 0) - (a.d[id] ?? 0)) / span) * 60;
+    if (pm > 0) out.set(id, pm);
+  }
+  return out;
+}
+
+// ------------------------------------------------------------------ the Purse
+
+/** The Purse and the rate tag under it. Returns the y under them (the bell hangs there). */
+export function purse(app: App, L: Layout, dt: number): number {
+  const ui = app.ui;
+  const g = app.game;
+  const h = app.hud;
+  sampleShipping(app);
+  // the roll toward the real number
+  const real = g.s.coin.toNumber();
+  if (!isFinite(real) || real > 1e12 || Math.abs(real - h.coinShown) > 1e9) h.coinShown = real;
+  else h.coinShown += (real - h.coinShown) * Math.min(1, dt * 10);
+  if (Math.abs(real - h.coinShown) < 0.5) h.coinShown = real;
+  const shown = real > 1e12 ? g.s.coin.format() : Num.of(Math.max(0, Math.round(h.coinShown))).format();
+  const numW = bigWidth(shown) * 2;
+  const P = L.purse;
+  const w = Math.max(84, numW + 40), ph = P.h;
+  const x0 = P.x, y0 = P.y;
+  if (h.coinLast >= 0 && real > h.coinLast) {
+    // a bigger bump for a bigger gain
+    const gain = (real - h.coinLast) / Math.max(1, h.coinLast);
+    h.coinBump = Math.max(h.coinBump, Math.min(1.6, 0.8 + gain * 8));
+    if (h.glints.length < 12 && Math.random() < 0.6) h.glints.push({ x: x0 + 26 + Math.random() * numW, y: y0 + 5 + Math.random() * 18, t: 0 });
+  }
+  h.coinLast = real;
+  h.coinBump = Math.max(0, h.coinBump - dt * 4);
+  const hov = app.mouseIn && ui.hover(x0, 0, w, y0 + ph + 26);
+  ui.mark('purse', x0, y0, w, ph);
+  const c = sign(ui, x0, y0, w, ph, { ropeTop: 0 });
+  coinIcon(ui, c.x + 1, c.y + Math.floor((c.h - 16) / 2) - (h.coinBump > 0.5 ? 1 : 0));
+  const bump = h.coinBump > 0.4 ? (h.coinBump > 1 ? 2 : 1) : 0;
+  const nx = c.x + 21, ny = c.y + Math.floor((c.h - 18) / 2) - bump;
+  const col = h.coinBump > 0.9 ? C.lamp3 : T.floorCoin;
+  ui.big(shown, nx, ny, col, { scale: 2, outline: T.ink });
+  // a shine that sweeps across the digits now and then: the number again in a lighter gold,
+  // through a narrow window
+  const sweep = (ui.time * 0.6) % 3;
+  if (sweep < 1) {
+    const sx = nx + Math.floor(sweep * (numW + 10)) - 5;
+    ui.ctx.save();
+    ui.ctx.beginPath();
+    ui.ctx.rect(sx, ny - 2, 3, 26);
+    ui.ctx.clip();
+    outlinedText(ui.ctx, shown, nx, ny, C.lamp3, T.ink, 2, true);
+    ui.ctx.restore();
+  }
+  for (const gl of h.glints) gl.t += dt;
+  h.glints = h.glints.filter((gl) => gl.t < 0.5);
+  for (const gl of h.glints) {
+    const k = gl.t < 0.25 ? 1 : 0;
+    ui.ctx.fillStyle = gl.t < 0.15 ? C.bone : C.lamp3;
+    ui.ctx.fillRect(Math.round(gl.x), Math.round(gl.y - k), 1, 3);
+    ui.ctx.fillRect(Math.round(gl.x) - 1, Math.round(gl.y + 1 - k), 3, 1);
+  }
+  // flying coins land on the Purse's coin
+  app.renderer.coinTarget = { x: (c.x + 9) * ui.scale, y: (c.y + c.h / 2) * ui.scale };
+  // the rate, on a tag hanging under the sign
+  const rate = g.incomePerMin();
+  const rs = rate > 0 ? `{coinc:+${fmtRate(rate)}/min}` : '{soft:0/min}';
+  const rw = richWidth(rs);
+  const rz = tagSize(rw, LINE_H - 2, 'left');
+  const ry = y0 + ph + 5;
+  const rt = tag(ui, x0 + 12, ry, rz.w, rz.h, { hole: 'left', anchor: { x: x0 + 14, y: y0 + ph - 2 } });
+  drawLayout(ui, layoutRich(rs), rt.x, rt.y);
+  if (hov) shippingTag(app, x0, ry + rz.h + 4);
+  return ry + rz.h;
+}
+
+/** The Shipping tag (on the Purse's hover): the whole number, the rate and its last minute, the
+ * run's earnings, and what reached the Dock and the Hopper a minute, each with its icon. */
+function shippingTag(app: App, x: number, y: number) {
+  const ui = app.ui;
+  const g = app.game;
+  const hs = app.hud;
+  const b = hs.ship[hs.ship.length - 1];
+  const rates = shipRates(app);
+  const rows = b ? ITEM_IDS.filter((id) => (b.d[id] ?? 0) > 0).slice(0, 10) : [];
+  const cw = 168;
+  const rh = rows.length ? 10 + rows.length * 10 : 22;
+  const ch = BIG_LINE_H + 3 + LINE_H + 16 + LINE_H + 4 + rh;
+  const sz = tagSize(cw, ch, 'left');
+  ui.later(() => {
+    const r = tag(ui, x, y, sz.w, sz.h, { hole: 'left', anchor: { x: x + 14, y: y - 6 }, blocking: false });
+    ui.big(`${g.s.coin.format()}`, r.x, r.y, T.coin);
+    ui.small('COIN', r.x + bigWidth(g.s.coin.format()) + 4, r.y + 4, T.inkSoft);
+    rule(ui, r.x, r.y + BIG_LINE_H, r.w, true);
+    let yy = r.y + BIG_LINE_H + 3;
+    const rate = g.incomePerMin();
+    ui.rich(rate > 0 ? `{good:+${Math.round(rate).toLocaleString('en-US')}/min}` : '{soft:nothing selling yet}', r.x, yy);
+    yy += LINE_H;
+    sparkline(ui, r.x, yy, r.w, 12, g.s.income, C.brass1);
+    ui.small('THE LAST MINUTE', r.x + r.w, yy - 8, T.inkSoft, { align: 'right' });
+    yy += 16;
+    ui.rich(`earned this run {coin:${g.s.earned.format()}}`, r.x, yy);
+    yy += LINE_H + 1;
+    rule(ui, r.x, yy, r.w);
+    yy += 3;
+    if (!rows.length) {
+      ui.rich('{soft:nothing shipped yet}', r.x, yy);
+      ui.rich('{u:orders} Dock sells · {u:research} Hopper studies', r.x, yy + LINE_H);
+      return;
+    }
+    ui.small('SHIPPING A MINUTE', r.x, yy + 1, T.inkSoft);
+    yy += 9;
+    for (const id of rows) {
+      const pm = rates.get(id) ?? 0;
+      ui.ctx.drawImage(itemIcon(id), r.x, yy);
+      ui.text(ITEMS[id].name, r.x + 11, yy, T.ink);
+      const val = pm > 0 ? `${fmtRate(pm)}/min` : Num.of(b!.d[id] ?? 0).format();
+      ui.text(val, r.x + r.w, yy, pm > 0 ? T.good : T.inkSoft, { align: 'right' });
+      yy += 10;
+    }
+  });
+}
+
+// ------------------------------------------------------------------ problems and the bell
 
 /** Something not working for a share of the last minute: a Workshop machine or a Factory module. */
-interface Problem { floor: 'workshop' | 'factory'; id: number; x: number; y: number; share: number }
+export interface Problem { floor: 'workshop' | 'factory'; id: number; x: number; y: number; share: number; bad: boolean }
 
 function badShare(hist: string, state: string): number {
   if (!hist.length) return state === 'blocked' || state === 'starved' ? 1 : 0;
@@ -32,241 +206,8 @@ function badShare(hist: string, state: string): number {
   return n / hist.length;
 }
 
-export function fmtRate(v: number) {
-  return plain(v, v < 10 ? 1 : 0); // Milestone 6: through the one number helper (DESIGN.md §20)
-}
-
-function fmtKw(v: number) {
-  return plain(v, 0); // Milestone 6: through the one number helper, so the notation reaches it
-}
-
-interface Menu { id: string; icon: UIconName; name: string; key: string; panel: Parameters<App['togglePanel']>[0]; tip: string; dot: boolean }
-
-/** A menu another file adds to the top bar (Milestones 5 and 6: Patents, Blueprints...). */
-export interface MenuDef { id: string; icon: UIconName; name: string; key?: string; panel: Parameters<App['togglePanel']>[0]; tip: string; show: (app: App) => boolean; dot?: (app: App) => boolean; group?: 'game' | 'book' }
-const MENUS: MenuDef[] = [];
-/** Add an icon menu to the top bar: registerMenu({ id: 'patents', icon: 'star', name: 'Patents', panel: 'patents', tip: '...', show: (app) => app.game.done('x') }). */
-export function registerMenu(m: MenuDef) { if (!MENUS.some((q) => q.id === m.id)) MENUS.push(m); }
-
-/** A counter another file adds beside Machine Kits and power (Patents): it draws at (x, 7) and returns its width.
- * `room` is the width it may take before the line-health chip and the floor tabs are squeezed out:
- * a counter with a long label draws a short form past it (the UI legibility round, 2026-10-20). */
-export interface CounterDef { id: string; show: (app: App) => boolean; draw: (app: App, x: number, y: number, room: number) => number }
-const COUNTERS: CounterDef[] = [];
-export function registerCounter(c: CounterDef) { if (!COUNTERS.some((q) => q.id === c.id)) COUNTERS.push(c); }
-
-export function topBar(app: App, L: Layout, dt: number) {
-  const ui = app.ui;
-  const g = app.game;
-  const h = app.hud;
-  const T = L.top;
-  plate(ui, T.x - 2, T.y - 2, T.w + 4, T.h + 3, { alpha: 0.92 });
-  sampleShipping(app);
-
-  // ---- the menus, right to left, so the rest knows the room it has
-  const menus: Menu[] = [];
-  // a narrow bar (1024x640) folds the Orders group's keys into the Orders key: its screen's header
-  // has a tab for each (the UI legibility round: twelve keys squeezed the floor tabs off the bar)
-  const narrow = !L.wide;
-  const GROUPED = new Set(['modules', 'codex', 'survey', 'mega']);
-  const folded: { name: string; key: string; dot: boolean }[] = [];
-  const m = (id: string, ic: UIconName, name: string, key: string, panel: Menu['panel'], tip: string, d = false) => {
-    if (narrow && GROUPED.has(id)) folded.push({ name, key, dot: d });
-    else menus.push({ id, icon: ic, name, key, panel, tip, dot: d });
-  };
-  m('research', 'research', 'Research', 'T', 'research', 'The research tree: the Hopper pays in items', !g.s.research.selected && g.s.research.done.length < Object.keys(RESEARCH).length && g.has('bellows'));
-  m('orders', 'orders', 'Orders', 'O', 'orders', 'Customers and their orders', !g.s.orders.active && offeredOrders(g).length > 0);
-  if (g.done('folding')) m('modules', 'fold', 'Modules', 'I', 'modules', 'Your folded modules: stamp, unfold, place', g.s.designs.some((d) => d.spare > 0) && app.floor === 'factory' && !g.s.factory.ents.some((e) => e.kind === 'module'));
-  if (g.s.orders.rep.unit7 >= 1) m('codex', 'codex', 'Codex', '', 'codex', "Unit 7's Codex: every item, and a first-delivery bonus for each", !h.opened.has('codex') || g.s.codex.length > h.codexSeen);
-  if (g.done('surveying')) {
-    const cheapest = Math.min(...CLAIM_PRICE.map((c) => c.price * (1 + 0.5 * (g.s.claimBlocks[c.item] ?? 0))));
-    m('survey', 'survey', 'Survey', '', 'survey', 'The Survey Office: buy deposit claims, 4 at a time', !h.opened.has('survey') || g.s.coin.gte(cheapest));
-  }
-  if (g.done('greatDrill')) m('mega', 'mega', 'Megaproject', '', 'mega', `The Megaproject: ${MEGA.find((q) => q.stage === g.s.mega.stage + 1)?.name ?? 'the Great Drill'}`, !h.opened.has('mega'));
-  for (const q of MENUS) if (q.group !== 'book' && q.show(app)) m(q.id, q.icon, q.name, q.key ?? '', q.panel, q.tip, q.dot?.(app) ?? false);
-  const ord = menus.find((q) => q.id === 'orders');
-  if (ord && folded.length) {
-    ord.tip += `. Its tabs: ${folded.map((f) => f.name + (f.key ? ` (${f.key})` : '')).join(', ')}`;
-    ord.dot = ord.dot || folded.some((f) => f.dot);
-  }
-  const trophyCount = TROPHIES.filter((t) => g.flag('trophy:' + t.id)).length;
-  const book: Menu[] = [];
-  book.push({ id: 'stats', icon: 'stats', name: 'Statistics', key: '', panel: 'stats', tip: 'The run in numbers, and everything delivered', dot: false });
-  book.push({ id: 'trophies', icon: 'trophies', name: `Trophies ${trophyCount}/${TROPHIES.length}`, key: '', panel: 'trophies', tip: 'The Trophy Shelf', dot: false });
-  for (const q of MENUS) if (q.group === 'book' && q.show(app)) book.push({ id: q.id, icon: q.icon, name: q.name, key: q.key ?? '', panel: q.panel, tip: q.tip, dot: q.dot?.(app) ?? false });
-  book.push({ id: 'options', icon: 'options', name: 'Options', key: '/', panel: 'options', tip: 'Sound, saves, keys', dot: false });
-  const BW = 18, BG = 2;
-  const menusW = (menus.length + book.length) * (BW + BG) + 6;
-  let rx = T.w - 3;
-  for (const it of [...book].reverse()) { rx -= BW; menuButton(app, it, rx, 2, BW); rx -= BG; }
-  rx -= 6;
-  ui.fill(rx + 2, 4, 1, 12, C.hull0);
-  for (const it of [...menus].reverse()) { rx -= BW; menuButton(app, it, rx, 2, BW); rx -= BG; }
-
-  // ---- the coin counter
-  const x0 = 4;
-  const real = g.s.coin.toNumber();
-  if (!isFinite(real) || real > 1e12 || Math.abs(real - h.coinShown) > 1e9) h.coinShown = real;
-  else h.coinShown += (real - h.coinShown) * Math.min(1, dt * 10);
-  if (Math.abs(real - h.coinShown) < 0.5) h.coinShown = real;
-  const shown = real > 1e12 ? g.s.coin.format() : Num.of(Math.max(0, Math.round(h.coinShown))).format();
-  const sc = textWidth(shown) * 2 <= (L.wide ? 96 : 76) ? 2 : 1;
-  const numW = textWidth(shown) * sc;
-  if (h.coinLast >= 0 && real > h.coinLast) {
-    // a bigger bump for a bigger gain
-    const gain = (real - h.coinLast) / Math.max(1, h.coinLast);
-    h.coinBump = Math.max(h.coinBump, Math.min(1.6, 0.8 + gain * 8));
-    if (h.glints.length < 12 && Math.random() < 0.6) h.glints.push({ x: x0 + 20 + Math.random() * numW, y: 2 + Math.random() * 14, t: 0 });
-  }
-  h.coinLast = real;
-  h.coinBump = Math.max(0, h.coinBump - dt * 4);
-  coinIcon(ui, x0, 2 - (h.coinBump > 0.5 ? 1 : 0));
-  const bump = h.coinBump > 0.4 ? (h.coinBump > 1 ? 2 : 1) : 0;
-  const numX = x0 + 20, numY = (sc === 2 ? 3 : 7) - bump;
-  ui.text(shown, numX, numY, h.coinBump > 0.9 ? C.hot : C.gold, { scale: sc, shadow: C.brass0 });
-  // a shine that sweeps across the number now and then
-  const sweep = (ui.time * 0.6) % 3;
-  if (sweep < 1) {
-    const sx = numX + Math.floor(sweep * (numW + 10)) - 5;
-    ui.ctx.save();
-    ui.ctx.beginPath();
-    ui.ctx.rect(numX, numY, numW, 7 * sc);
-    ui.ctx.clip();
-    ui.ctx.fillStyle = rgba(C.bone, 0.45);
-    ui.ctx.fillRect(sx, numY, 2, 7 * sc);
-    ui.ctx.restore();
-  }
-  for (const gl of h.glints) gl.t += dt;
-  h.glints = h.glints.filter((gl) => gl.t < 0.5);
-  for (const gl of h.glints) {
-    const k = gl.t < 0.25 ? 1 : 0;
-    ui.ctx.fillStyle = gl.t < 0.15 ? C.bone : C.hot;
-    ui.ctx.fillRect(Math.round(gl.x), Math.round(gl.y - k), 1, 3);
-    ui.ctx.fillRect(Math.round(gl.x) - 1, Math.round(gl.y + 1 - k), 3, 1);
-  }
-  const rate = g.incomePerMin();
-  const rs = rate > 0 ? `+${fmtRate(rate)}/min` : '0/min';
-  let x = numX + numW + 5;
-  x += ui.text(rs, x, 7, rate > 0 ? C.leaf : C.hull1) + 4;
-  const coinEnd = x;
-  app.renderer.coinTarget = { x: (x0 + 8) * ui.scale, y: 10 * ui.scale };
-  if (app.mouseIn && ui.hover(0, 0, coinEnd, T.h)) coinCard(app, coinEnd);
-
-  // ---- Machine Kits and power, once they exist
-  const sep = () => { ui.fill(x, 4, 1, 12, C.hull0); x += 5; };
-  // the room the middle needs: the chip, and the floor tabs at their smallest
-  const room = () => rx - x - 4;
-  if (g.done('machineKits') || g.s.parts.gt(0)) {
-    sep();
-    const s = g.s.parts.format();
-    icon(app, 'kit', x, 6, true);
-    const w = 10 + ui.text(s, x + 10, 7, g.s.parts.gt(0) ? C.bone : C.hull1);
-    ui.hint(x - 2, 0, w + 4, T.h, [{ text: 'Machine Kits', color: C.gold }, { text: 'Stamping a module made of Act II machines takes Machine Kits as well as coin. A Hopper banks the kits that reach it.' }], 190);
-    x += w + 5;
-  }
-  // what the rest of the bar needs after the counters, measured: power at its smallest, the chip,
-  // and the floor tabs with both labels. A counter past that draws its short form, so the
-  // Reorganize key shrinks to its icon and number before "Workshop" and "Factory" lose their words
-  // (the Milestone 5-6 final round).
-  const tabsShown = g.done('folding') || g.flag('factoryOpen');
-  const chipShown = g.miners.length > 0 || g.s.research.done.length > 0 || g.s.factory.ents.some((e) => e.kind === 'module');
-  const pt = g.grids.length > 0 ? powerTotals(g) : null;
-  const powerW = pt ? 5 + 7 + textWidth(`${fmtKw(pt.demand)}/${fmtKw(pt.supply)}`) + 2 + (narrow ? 1 : smallWidth('KW') + 3) : 0;
-  const chipW = chipShown ? 5 + healthWidth(app, narrow) + 6 : 0;
-  const tabsFull = tabsShown ? floorTabsWidth('both') + 8 : 0;
-  const after = powerW + chipW + tabsFull;
-  for (const c of COUNTERS) {
-    if (!c.show(app)) continue;
-    sep();
-    x += c.draw(app, x, 7, room() - after) + 5;
-  }
-  if (g.grids.length > 0) {
-    sep();
-    const t = powerTotals(g);
-    const col = t.demand > 0 && t.supply <= 0 ? C.pipBlue : t.worst < 1 ? C.pipYellow : C.pipGreen;
-    const flick = t.worst < 1 && t.demand > 0 && Math.floor(ui.time * 6) % 3 === 0;
-    const x1 = x;
-    ui.text(ICON.bolt, x, 7, flick ? C.hull1 : col, { shadow: C.ink });
-    x += 7;
-    x += ui.text(`${fmtKw(t.demand)}/${fmtKw(t.supply)}`, x, 7, col) + 2;
-    // the unit and the bar give way on a narrow bar (the tooltip says kW)
-    if (!narrow) x += ui.small('KW', x, 9, C.hull2) + 3;
-    else x += 1;
-    if (!narrow && room() - chipW - tabsFull >= 26) {
-      bar(ui, x, 8, 22, 5, t.supply > 0 ? Math.min(1, t.demand / t.supply) : t.demand > 0 ? 1 : 0, t.worst < 1 ? C.pipYellow : C.teal1);
-      x += 26;
-    }
-    ui.hint(x1 - 2, 0, x - x1 + 2, T.h, [
-      { text: 'Power: demand / supply', color: C.pipBlue },
-      { text: `Machines want ${kw(t.demand)}; the engines make ${kw(t.supply)}, across ${t.grids} grid${t.grids > 1 ? 's' : ''}.` },
-      { text: t.demand > 0 && t.supply <= 0 ? 'No fuelled producer: feed the Boilers and Generators coal.' : t.worst < 1 ? `Brownout: a grid gets ${Math.round(t.worst * 100)}% of what it wants, so its machines run at that speed. Add an engine, or fuel.` : 'Every grid has the power it wants.', color: t.worst < 1 || t.supply <= 0 ? C.pipYellow : C.hull2 },
-    ], 200);
-  }
-  // the line-health chip, once there is a line to be healthy (the first minute shows one goal)
-  if (chipShown) {
-    sep();
-    x = healthChip(app, x, 3, narrow) + 6;
-  }
-
-  // ---- the floor tabs, in the middle of what is left: both labelled; short of room, the floor
-  // you are on keeps its word and the other its icon; icons alone only as a last resort
-  const avail = rx - 6 - x;
-  const mode: TabMode = avail >= floorTabsWidth('both') ? 'both' : avail >= floorTabsWidth('active') ? 'active' : 'icons';
-  const lab = (f: 'workshop' | 'factory') => mode === 'both' || (mode === 'active' && app.floor === f);
-  const fw = (f: 'workshop' | 'factory') => tabW(f === 'workshop' ? 'Workshop' : 'Factory', lab(f));
-  const tw = fw('workshop') + 2 + fw('factory');
-  const mid = Math.floor(T.w / 2 - tw / 2);
-  const fx = Math.max(x, Math.min(mid, rx - 6 - tw));
-  // one floor until Folding is researched: no tabs to choose between
-  if (fx + tw <= rx - 2 && tabsShown) {
-    if (tab(app, 'floorWorkshop', fx, 3, fw('workshop'), 15, lab('workshop') ? 'Workshop' : '', { icon: 'workshop', active: app.floor === 'workshop', tip: 'The Workshop floor (Tab)' })) app.setFloor('workshop');
-    const open = g.flag('factoryOpen');
-    const fresh = open && !g.flag('factorySeen');
-    if (tab(app, 'floorFactory', fx + fw('workshop') + 2, 3, fw('factory'), 15, lab('factory') ? 'Factory' : '', { icon: 'factory', active: app.floor === 'factory', disabled: !open, tip: open ? 'The Factory floor (Tab)' : 'The Factory floor opens with your first fold' })) app.setFloor('factory');
-    if (fresh && Math.floor(ui.time * 3) % 2 === 0) dot(ui, fx + tw - 5, 4, C.gold);
-  }
-  void menusW;
-}
-
-type TabMode = 'both' | 'active' | 'icons';
-/** A floor tab's width: the icon, and the word when it has one. */
-const tabW = (s: string, labelled: boolean) => (labelled ? 22 + textWidth(s) : 22);
-/** Both floor tabs' width in a mode ('active': the wider word, the other tab an icon). */
-function floorTabsWidth(mode: TabMode): number {
-  const a = tabW('Workshop', true), b = tabW('Factory', true);
-  return 2 + (mode === 'both' ? a + b : mode === 'active' ? Math.max(a, b) + 22 : 44);
-}
-
-/** One menu: an icon key, teal when its screen is open, with a dot when something waits inside. */
-function menuButton(app: App, it: Menu, x: number, y: number, w: number) {
-  const ui = app.ui;
-  const h = 16;
-  ui.mark(it.id, x, y, w, h);
-  ui.region(x, y, w, h, 'button');
-  const active = app.panel === it.panel;
-  const hov = ui.hover(x, y, w, h);
-  if (active || hov) {
-    ui.fill(x, y, w, h, active ? C.teal0 : C.hull0, 0.9);
-    ui.fill(x, y, w, 1, active ? C.teal1 : C.hull1);
-  }
-  const down = hov && ui.input.mouse.down[0] ? 1 : 0;
-  uiIcon(ui, it.icon, x + Math.floor((w - 16) / 2), y + down);
-  // an unopened screen's dot blinks; one with news inside holds steady
-  if (it.dot && (app.hud.opened.has(it.panel) || Math.floor(ui.time * 2.5) % 2 === 0)) dot(ui, x + w - 4, y + 1, app.hud.opened.has(it.panel) ? C.pipRed : C.gold);
-  if (hov) {
-    ui.hoverId = it.id;
-    ui.tip([{ text: it.key ? `${it.name}  (${it.key})` : it.name, color: C.gold }, { text: it.tip }], 180);
-    if (ui.clicked) {
-      ui.eat();
-      ui.sfx('click');
-      app.togglePanel(it.panel);
-    }
-  }
-}
-
-/** The line-health chip: how many machines and modules work, starve, block, or want power; a
- *  click jumps to the next problem (the worst share of the last minute first) and opens it. */
-function healthCounts(app: App, compact: boolean) {
+/** Every machine and module that has struggled lately, the worst first; and the health counts. */
+export function problems(app: App) {
   const g = app.game;
   const all = [...g.miners, ...g.machines];
   const mods = g.s.factory.ents.filter((e) => e.kind === 'module');
@@ -281,129 +222,293 @@ function healthCounts(app: App, compact: boolean) {
     else if (m.state === 'blocked') blocked++;
     else if (m.state === 'starved') starved++;
   }
-  const pips: [string, number][] = [[C.pipGreen, work], [C.pipYellow, starved], [C.pipRed, blocked]];
-  if (unpowered || g.machines.some((m) => powered(m.kind))) pips.push([C.pipBlue, unpowered]);
-  // compact (a narrow bar): the green count, and only the problem colours that have any
-  if (compact) for (let i = pips.length - 1; i > 0; i--) if (!pips[i][1]) pips.splice(i, 1);
-  const w = pips.reduce((s, [, n]) => s + 9 + textWidth(String(n)) + 4, 0) + 4;
-  return { all, mods, work, starved, blocked, unpowered, pips, w };
-}
-
-/** The line-health chip's width, for the top bar's room sums. */
-function healthWidth(app: App, compact: boolean): number {
-  return healthCounts(app, compact).w;
-}
-
-function healthChip(app: App, x0: number, y: number, compact = false): number {
-  const ui = app.ui;
-  const g = app.game;
-  const h = app.hud;
-  const { all, mods, work, starved, blocked, unpowered, pips, w } = healthCounts(app, compact);
-  const problems: Problem[] = [];
+  const list: Problem[] = [];
   for (const m of all) {
     if (!(m.state === 'blocked' || (m.state === 'starved' && m.why !== 'crank'))) continue;
     const s = badShare(m.hist, m.state);
-    if (s >= 0.1) problems.push({ floor: 'workshop', id: m.id, x: m.x + m.w / 2, y: m.y + m.h / 2, share: s });
+    if (s >= 0.1) list.push({ floor: 'workshop', id: m.id, x: m.x + m.w / 2, y: m.y + m.h / 2, share: s, bad: m.state === 'blocked' });
   }
   for (const m of mods) {
     if (m.state !== 'blocked' && m.state !== 'starved') continue;
     const s = badShare(m.hist, m.state);
-    if (s >= 0.1) problems.push({ floor: 'factory', id: m.id, x: m.x + 0.5, y: m.y + 0.5, share: s });
+    if (s >= 0.1) list.push({ floor: 'factory', id: m.id, x: m.x + 0.5, y: m.y + 0.5, share: s, bad: m.state === 'blocked' });
   }
-  problems.sort((a, b) => b.share - a.share || a.id - b.id);
-  const hov = ui.hover(x0, y, w, 14);
-  ui.mark('nextProblem', x0, y, w, 14);
-  ui.region(x0, y, w, 14, 'button');
-  const alarm = problems.length > 0;
-  ui.fill(x0, y, w, 14, C.ink);
-  ui.fill(x0 + 1, y + 1, w - 2, 12, hov ? C.hull0 : C.shadow);
-  if (alarm) ui.fill(x0 + 1, y + 1, w - 2, 1, blocked ? C.pipRed : C.pipYellow, Math.floor(ui.time * 2) % 2 ? 1 : 0.4);
-  let x = x0 + 4;
-  for (const [col, n] of pips) {
-    ui.fill(x, y + 4, 6, 6, C.ink);
-    ui.fill(x + 1, y + 5, 4, 4, n ? col : C.pipGrey);
-    x += 9 + ui.text(String(n), x + 8, y + 3, n ? C.bone : C.hull1) + 4;
+  list.sort((a, b) => b.share - a.share || a.id - b.id);
+  const showPower = unpowered > 0 || g.machines.some((m) => powered(m.kind));
+  return { list, work, starved, blocked, unpowered, showPower };
+}
+
+/** The trouble bell: only while something is wrong. Returns the y under it. */
+export function bell(app: App, L: Layout, y: number): number {
+  const ui = app.ui;
+  const h = app.hud;
+  const pr = problems(app);
+  const ids = new Set(pr.list.map((p) => p.floor + p.id));
+  // a new problem: the bell swings and rings
+  let fresh = false;
+  for (const id of ids) if (!h.bellIds.has(id)) fresh = true;
+  if (fresh && pr.list.length && (app.game.miners.length > 0 || app.game.s.research.done.length > 0)) { h.bellAt = ui.time; app.audio.sfx('spark', 0.5, 0.55); }
+  h.bellIds = ids;
+  // the first minute has one goal: no bell until there is a line to be healthy
+  const g = app.game;
+  const lines = g.miners.length > 0 || g.s.research.done.length > 0 || g.s.factory.ents.some((e) => e.kind === 'module');
+  if (!pr.list.length || !lines) return y;
+  const bx = L.bell.x, by = y + 4;
+  const n = pr.list.length;
+  const s = `{bad:${n}}`;
+  const sz = tagSize(richWidth(s), LINE_H - 2, 'left');
+  const w = 20 + sz.w;
+  const hov = ui.hover(bx, by, w, 18);
+  ui.mark('nextProblem', bx, by, w, 18);
+  ui.region(bx, by, w, 18, 'button');
+  const swing = ui.time - h.bellAt < 1.6;
+  const hookX = bx + 8;
+  // a nail and the bell under it
+  ui.ctx.fillStyle = C.ink;
+  ui.ctx.fillRect(hookX - 1, by - 2, 3, 2);
+  if (hasArt('h180_bell')) {
+    const bs = sheet('h180_bell');
+    const f = swing ? Math.floor((ui.time - h.bellAt) * (bs.fps || 6)) % bs.frames.length : hov ? frameNamed(bs, 'left') : 0;
+    ui.ctx.drawImage(bs.frames[f], hookX - bs.ax, by - bs.ay);
+  } else {
+    const sw = swing ? Math.round(Math.sin((ui.time - h.bellAt) * 14) * 2) : 0;
+    ui.ctx.fillStyle = C.ink;
+    ui.ctx.fillRect(hookX - 6 + sw, by + 3, 13, 11);
+    ui.ctx.fillStyle = T.brass;
+    ui.ctx.fillRect(hookX - 5 + sw, by + 4, 11, 9);
+    ui.ctx.fillStyle = T.brassHi;
+    ui.ctx.fillRect(hookX - 4 + sw, by + 4, 3, 8);
   }
+  const ct = tag(ui, bx + 18, by + 1, sz.w, sz.h, { hole: 'left', anchor: { x: hookX + 4, y: by + 8 }, blocking: false, hover: hov });
+  drawLayout(ui, layoutRich(s), ct.x, ct.y);
   if (hov) {
     ui.hoverId = 'nextProblem';
-    ui.tip([
-      { text: 'Line health', color: C.gold },
-      { text: `${work} working, ${starved} starved (waiting for an input), ${blocked} blocked (output has nowhere to go)${pips.length > 3 ? `, ${unpowered} without power` : ''}. Workshop machines and Factory modules.` },
-      { text: problems.length ? `${problems.length} problem${problems.length > 1 ? 's' : ''}: click to jump to the next one, the worst first.` : 'Nothing has struggled for long: every pip green or close.', color: problems.length ? C.pipYellow : C.hull2 },
-    ], 200);
+    const counts = `{chip:good:${pr.work}} {chip:warn:${pr.starved}} {chip:bad:${pr.blocked}}${pr.showPower ? ` {chip:power:${pr.unpowered}}` : ''}`;
+    ui.tip([{ text: '{big:Trouble}' }, { text: counts }, { text: '{soft:working · starved · blocked}' + (pr.showPower ? '{soft: · no power}' : '') }, { text: `{k:LMB} the next one · worst first` }], 200);
     if (ui.clicked) {
       ui.eat();
       ui.sfx('click');
-      if (problems.length) {
-        h.problemIdx = (h.problemIdx + 1) % problems.length;
-        const p = problems[h.problemIdx];
-        if (p.floor === 'factory') {
-          app.setFloor('factory');
-          app.fselected = p.id;
-        } else {
-          if (app.floor !== 'workshop') app.setFloor('workshop');
-          app.selected = p.id;
-        }
-        app.lookAt(p.x, p.y);
+      h.problemIdx = (h.problemIdx + 1) % pr.list.length;
+      const p = pr.list[h.problemIdx];
+      if (p.floor === 'factory') {
+        app.setFloor('factory');
+        app.fselected = p.id;
+      } else {
+        if (app.floor !== 'workshop') app.setFloor('workshop');
+        app.selected = p.id;
       }
+      app.lookAt(p.x, p.y);
     }
   }
-  return x0 + w;
+  return by + 18;
 }
 
-/** Delivered totals sampled once a game second, for the per-minute Shipping rates. */
-function sampleShipping(app: App) {
-  const g = app.game;
-  const hs = app.hud;
-  const last = hs.ship[hs.ship.length - 1];
-  if (!last || g.s.tick - last.tick >= TICK_RATE || g.s.tick < last.tick) {
-    if (last && g.s.tick < last.tick) hs.ship = [];
-    const d: Partial<Record<ItemId, number>> = {};
-    for (const id of ITEM_IDS) d[id] = g.s.delivered[id]?.toNumber() ?? 0;
-    hs.ship.push({ tick: g.s.tick, d });
-    if (hs.ship.length > 61) hs.ship.shift();
+/** An arrow at the screen's edge toward something off it: red for a problem, gold for a Spark. */
+function edgeArrow(app: App, wx: number, wy: number, col: string, word: string | null) {
+  const ui = app.ui;
+  const s = app.renderer.toScreen(wx, wy);
+  const ux = s.x / ui.scale, uy = s.y / ui.scale;
+  const m = 14;
+  if (ux > 0 && ux < ui.w && uy > 0 && uy < ui.h) return;
+  const cx = ui.w / 2, cy = ui.h / 2;
+  const dx = ux - cx, dy = uy - cy;
+  const k = Math.min(Math.abs((cx - m) / (dx || 1e-6)), Math.abs((cy - m) / (dy || 1e-6)));
+  const ex = Math.round(cx + dx * k), ey = Math.round(cy + dy * k);
+  const glyph = Math.abs(dx) * (ui.h / ui.w) > Math.abs(dy) ? (dx > 0 ? ICON.right : ICON.left) : dy > 0 ? ICON.down : ICON.up;
+  const bob = Math.round(Math.sin(ui.time * 6) * 1.5);
+  const bx = glyph === ICON.right ? bob : glyph === ICON.left ? -bob : 0, byy = glyph === ICON.down ? bob : glyph === ICON.up ? -bob : 0;
+  outlinedText(ui.ctx, glyph, ex - 6 + bx, ey - 7 + byy, col, T.ink, 2);
+  if (word) {
+    const w = chipWidth(word);
+    const tx = Math.max(4, Math.min(ui.w - w - 4, ex - Math.floor(w / 2)));
+    const ty = glyph === ICON.up ? ey + 10 : ey - 22;
+    chip(ui, tx, Math.max(4, Math.min(ui.h - 16, ty)), word, { role: 'coin' });
   }
 }
 
-/** The coin counter's drop-down (on hover): the whole number, the rate with its sparkline, the
- *  run's earnings, and Shipping: what reaches the Dock and the Hopper, per minute. */
-function coinCard(app: App, minW: number) {
+/** Edge arrows: problems on this floor that are off the screen, and Sparks. */
+export function edgeArrows(app: App) {
+  const g = app.game;
+  const prev = app.ui.audit;
+  app.ui.audit = false;
+  try {
+    for (const p of problems(app).list.slice(0, 6)) if (p.floor === app.floor) edgeArrow(app, p.x, p.y, p.bad ? T.floorBad : T.floorWarn, null);
+    if (app.floor === 'workshop') for (const p of g.s.sparks) edgeArrow(app, p.x + 0.5, p.y + 0.5, T.floorCoin, p.kind === 'vein' ? 'vein!' : 'inspector!');
+  } finally {
+    app.ui.audit = prev;
+  }
+}
+
+/** The counters other files hang under the Purse, one 30 px row each. */
+export function counters(app: App, L: Layout, y: number): number {
+  for (const c of COUNTERS) {
+    if (!c.show(app)) continue;
+    const w = c.draw(app, L.purse.x + 4, y + 4, 140);
+    if (w > 0) y += 30;
+  }
+  return y;
+}
+
+// ------------------------------------------------------------------ the lift
+
+/** The lift, top-right: a dial whose needle points at the floor you are on, a brass button for
+ * each floor (the Factory padlocked until it opens), a dot on a floor that wants you. */
+export function lift(app: App, L: Layout, dt: number) {
   const ui = app.ui;
   const g = app.game;
+  const R = L.lift;
+  const open = g.flag('factoryOpen');
+  const fresh = open && !g.flag('factorySeen');
+  const want = app.floor === 'factory' ? 120 : 180;
   const hs = app.hud;
-  const a = hs.ship[0], b = hs.ship[hs.ship.length - 1];
-  const span = a && b ? (b.tick - a.tick) / TICK_RATE : 0;
-  const rows = b ? ITEM_IDS.filter((id) => (b.d[id] ?? 0) > 0) : [];
-  const w = Math.max(minW, 184);
-  const shown = rows.slice(0, 10);
-  const h = 58 + (shown.length ? 12 + shown.length * 10 : 22);
-  ui.later(() => {
-    const x = 2, y = 21;
-    plateRaw(ui.ctx, x, y, w, h, C.gold);
-    label(ui, 'coin', x + 6, y + 5, C.gold);
-    ui.text(`${g.s.coin.format()} coin`, x + w - 6, y + 4, C.gold, { align: 'right' });
-    const rate = g.incomePerMin();
-    ui.text(rate > 0 ? `+${Math.round(rate).toLocaleString('en-US')} a minute` : 'Nothing selling yet', x + 6, y + 15, rate > 0 ? C.leaf : C.hull2);
-    sparkline(ui, x + 6, y + 26, w - 12, 12, g.s.income, C.brass1);
-    label(ui, 'each second, the last minute', x + 6, y + 40, C.hull1);
-    ui.text(`Earned this run: ${g.s.earned.format()}`, x + 6, y + 47, C.hull2);
-    let yy = y + 58;
-    ui.fill(x + 5, yy - 2, w - 10, 1, C.hull0);
-    if (!shown.length) {
-      ui.text('Nothing shipped yet.', x + 6, yy + 2, C.hull2);
-      ui.text('Docks sell; the Hopper researches.', x + 6, yy + 11, C.hull1);
-      return;
+  hs.liftAngle += (want - hs.liftAngle) * Math.min(1, dt * 8);
+  ui.region(R.x, R.y, R.w, R.h, 'panel');
+  const art = hasArt('h180_lift') ? sheet('h180_lift') : null;
+  if (art) ui.ctx.drawImage(art.frames[0], R.x, R.y);
+  else {
+    ui.ctx.fillStyle = C.ink; ui.ctx.fillRect(R.x, R.y, R.w, R.h);
+    ui.ctx.fillStyle = T.wood; ui.ctx.fillRect(R.x + 1, R.y + 1, R.w - 2, R.h - 2);
+    ui.ctx.fillStyle = T.brass; ui.ctx.fillRect(R.x + 14, R.y + 5, 16, 16);
+  }
+  // the needle, from the hub, toward the floor's tick
+  const px = R.x + 22, py = R.y + 15;
+  const a = (hs.liftAngle * Math.PI) / 180;
+  ui.ctx.fillStyle = C.ink;
+  for (let i = 0; i <= 7; i++) ui.ctx.fillRect(Math.round(px + Math.cos(a) * i), Math.round(py - Math.sin(a) * i), 1, 1);
+  ui.ctx.fillStyle = C.red;
+  ui.ctx.fillRect(Math.round(px + Math.cos(a) * 7), Math.round(py - Math.sin(a) * 7), 1, 1);
+  ui.ctx.fillStyle = T.brassDeep;
+  ui.ctx.fillRect(px - 1, py - 1, 2, 2);
+  const btns = hasArt('h180_liftbtn') ? sheet('h180_liftbtn') : null;
+  const holes: [number, number][] = [[2, 9], [32, 9]];
+  const floors = [
+    { id: 'floorWorkshop', f: 'workshop' as const, name: 'Workshop', lit: 'Wlit', off: 'W', locked: false },
+    { id: 'floorFactory', f: 'factory' as const, name: 'Factory', lit: 'Flit', off: 'F', locked: !open },
+  ];
+  floors.forEach((fl, i) => {
+    const bx = R.x + holes[i][0], by = R.y + holes[i][1];
+    ui.mark(fl.id, bx, by, 10, 10);
+    ui.region(bx, by, 10, 10, 'button');
+    const hov = ui.hover(bx - 1, by - 1, 12, 12);
+    const on = app.floor === fl.f;
+    if (btns) {
+      ui.ctx.drawImage(btns.frames[frameNamed(btns, fl.locked ? 'locked' : on ? fl.lit : fl.off)], bx, by);
+      if (hov && !fl.locked) ui.ctx.drawImage(btns.frames[frameNamed(btns, 'hover')], bx, by);
+    } else {
+      ui.ctx.fillStyle = C.ink; ui.ctx.fillRect(bx, by, 10, 10);
+      ui.ctx.fillStyle = on ? T.brassHi : T.brass; ui.ctx.fillRect(bx + 1, by + 1, 8, 8);
+      ui.small(fl.locked ? 'X' : fl.off, bx + 3, by + 3, T.ink);
     }
-    label(ui, 'shipping, per minute', x + 6, yy + 2, C.copper2);
-    yy += 11;
-    for (const id of shown) {
-      const pm = span > 0 ? (((b.d[id] ?? 0) - (a.d[id] ?? 0)) / span) * 60 : 0;
-      ui.ctx.drawImage(itemIcon(id), x + 6, yy);
-      ui.text(ITEMS[id].name, x + 17, yy, C.bone);
-      const val = pm > 0 ? `${fmtRate(pm)}/m` : Num.of(b.d[id] ?? 0).format();
-      ui.text(val, x + w - 6, yy, pm > 0 ? C.leaf : C.hull2, { align: 'right' });
-      yy += 10;
+    if (fl.f === 'factory' && fresh && Math.floor(ui.time * 3) % 2 === 0) dot(ui, bx + 8, by - 1, C.gold);
+    if (fl.f === 'factory' && !fresh && app.floor !== 'factory' && hs.goalUi === 'factory' && Math.floor(ui.time * 3) % 2 === 0) dot(ui, bx + 8, by - 1, C.gold);
+    if (hov) {
+      ui.hoverId = fl.id;
+      ui.tip(fl.locked ? [{ text: `{big:${fl.name}}` }, { text: '{u:lock} opens with your first fold' }] : [{ text: `{big:${fl.name}}` }, { text: on ? '{soft:you are here}' : '{k:LMB} go  {k:Tab} switch' }], 160);
+      if (ui.clicked && !fl.locked) {
+        ui.eat();
+        ui.sfx('click');
+        app.setFloor(fl.f);
+      }
     }
-    void smallWidth;
   });
+}
+
+// ------------------------------------------------------------------ the notebook and its pages
+
+export interface Page { id: string; panel: ScreenName; icon: UIconName; name: string; key: string; dot: boolean; color: RibbonColor }
+
+/** Every page the notebook has now, in order: research, orders, modules, the Act II pages, the
+ * registered ones (Patents, the Drawer, Overnight), stats, trophies, the Gazette, options, keys. */
+export function pages(app: App): Page[] {
+  const g = app.game;
+  const h = app.hud;
+  const out: Page[] = [];
+  const p = (id: ScreenName, icon: UIconName, name: string, key: string, color: RibbonColor, d = false) => out.push({ id, panel: id, icon, name, key, dot: d, color });
+  p('research', 'research', 'Research', 'T', 'teal', !g.s.research.selected && g.s.research.done.length < Object.keys(RESEARCH).length && g.has('bellows'));
+  p('orders', 'orders', 'Orders', 'O', 'moss', !g.s.orders.active && offeredOrders(g).length > 0);
+  if (g.done('folding')) p('modules', 'fold', 'Modules', 'I', 'gold', g.s.designs.some((d) => d.spare > 0) && app.floor === 'factory' && !g.s.factory.ents.some((e) => e.kind === 'module'));
+  if (g.s.orders.rep.unit7 >= 1) p('codex', 'codex', 'Codex', '', 'teal', !h.opened.has('codex') || g.s.codex.length > h.codexSeen);
+  if (g.done('surveying')) {
+    const cheapest = Math.min(...CLAIM_PRICE.map((c) => c.price * (1 + 0.5 * (g.s.claimBlocks[c.item] ?? 0))));
+    p('survey', 'survey', 'Survey', '', 'moss', !h.opened.has('survey') || g.s.coin.gte(cheapest));
+  }
+  if (g.done('greatDrill')) p('mega', 'mega', MEGA.find((q) => q.stage === g.s.mega.stage + 1) ? 'Megaproject' : 'Great Drill', '', 'red', !h.opened.has('mega'));
+  for (const q of MENUS) if (q.show(app)) out.push({ id: q.id, panel: q.panel as ScreenName, icon: q.icon, name: q.name, key: q.key ?? '', dot: q.dot?.(app) ?? false, color: 'violet' });
+  const trophies = TROPHIES.filter((t) => g.flag('trophy:' + t.id)).length;
+  p('stats', 'stats', 'Statistics', '', 'moss');
+  p('trophies', 'trophies', `Trophies ${trophies}/${TROPHIES.length}`, '', 'gold');
+  p('gazette', 'orders', 'The Gazette', '', 'red');
+  p('options', 'options', 'Options', '/', 'moss');
+  p('keys', 'build', 'Keys', '', 'moss');
+  return out;
+}
+
+/** The notebook, bottom-right: opens the book at the last page; a dot when a page wants you. */
+export function notebook(app: App, L: Layout) {
+  const ui = app.ui;
+  const R = L.notebook;
+  const ps = pages(app);
+  const hov = ui.hover(R.x, R.y, R.w, R.h);
+  ui.mark('notebook', R.x, R.y, R.w, R.h);
+  ui.region(R.x, R.y, R.w, R.h, 'button');
+  if (hasArt('h180_notebook')) {
+    const s = sheet('h180_notebook');
+    ui.ctx.drawImage(s.frames[frameNamed(s, hov ? 'hover' : 'closed')], R.x, R.y);
+  } else {
+    ui.ctx.fillStyle = C.ink; ui.ctx.fillRect(R.x + 2, R.y + 1, 20, 22);
+    ui.ctx.fillStyle = C.copper0; ui.ctx.fillRect(R.x + 3, R.y + 2, 18, 20);
+  }
+  const wants = ps.filter((p) => p.dot);
+  if (wants.length && Math.floor(ui.time * 2.5) % 2 === 0) dot(ui, R.x + R.w - 4, R.y + 1, C.pipRed);
+  if (hov) {
+    ui.hoverId = 'notebook';
+    const keys = ps.filter((p) => p.key).map((p) => `{k:${p.key}} ${p.name.toLowerCase()}`).join('  ');
+    ui.tip([{ text: '{big:Notebook}' }, { text: `{k:LMB} open${wants.length ? ` · {warn:${wants.map((p) => p.name).join(', ')}}` : ''}` }, { text: keys }], 220);
+    if (ui.clicked) {
+      ui.eat();
+      const last = app.hud.lastPage;
+      const go = wants.length && !last ? wants[0].panel : last && ps.some((p) => p.panel === last) ? last : wants.length ? wants[0].panel : 'research';
+      app.togglePanel(go);
+    }
+  }
+}
+
+/** While a page is open: its section tabs, bookmark ribbons down the book's right edge. */
+export function sectionTabs(app: App, L: Layout) {
+  const ui = app.ui;
+  const ps = pages(app);
+  if (!app.panel || !ps.some((p) => p.panel === app.panel)) return;
+  const R = L.tabs;
+  const n = ps.length;
+  const step = Math.max(12, Math.min(17, Math.floor(R.h / n)));
+  let y = R.y;
+  for (const p of ps) {
+    const on = app.panel === p.panel;
+    const hov = ui.hover(R.x, y, R.w + 2, step - 1);
+    const w = on ? R.w + 1 : hov ? R.w : R.w - 3;
+    const h = Math.min(14, step - 2);
+    ui.mark('page:' + p.id, R.x, y, R.w + 2, h);
+    ui.region(R.x, y, R.w + 2, h, 'button');
+    ribbonRaw(ui.ctx, R.x - 2, y, w + 2, h, on ? 'gold' : p.color, 'in');
+    uiIcon(ui, p.icon, R.x + w - 11, y + Math.floor((h - 8) / 2) - 1, 1);
+    if (p.dot && !on && Math.floor(ui.time * 2.5) % 2 === 0) dot(ui, R.x + w - 2, y, C.pipRed);
+    if (hov) {
+      ui.hoverId = 'page:' + p.id;
+      ui.tip([{ text: `{big:${p.name}}${p.key ? `  {k:${p.key}}` : ''}` }], 160);
+      if (ui.clicked) {
+        ui.eat();
+        if (!on) { app.panel = p.panel; app.audio.sfx('tab'); }
+      }
+    }
+    y += step;
+  }
+}
+
+/** HUD rects the floor's tags and the reports keep off, this frame. */
+export function cornerZones(app: App, L: Layout, purseBottom: number): Rect[] {
+  return [
+    { x: 0, y: 0, w: L.purse.x + 150, h: purseBottom + 4 },
+    { x: L.lift.x - 4, y: 0, w: L.lift.w + 10, h: L.lift.y + L.lift.h + 4 },
+    { x: L.notebook.x - 4, y: L.notebook.y - 4, w: app.ui.w - L.notebook.x + 4, h: app.ui.h - L.notebook.y + 4 },
+  ];
 }
