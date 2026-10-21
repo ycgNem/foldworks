@@ -793,7 +793,7 @@ function statsScreen(app: App, r: Rect) {
 /** Bramble's line on the sticker page. */
 function brambleTrophyLine(have: number, all: number): string {
   if (have === 0) return 'An empty page! Go win me a sticker, ribbit.';
-  if (have >= all) return 'Every sticker! The whole swamp salutes you!';
+  if (have >= all) return 'Every sticker! The whole island salutes you!';
   return 'Glory now! Later each one adds a little bonus.';
 }
 
