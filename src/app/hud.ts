@@ -28,7 +28,7 @@ import { auditBadge, factoryReport, factoryHover } from './fold';
 import type { TipPlace } from '../ui/ui';
 import { topBar } from './topbar';
 import { rail, diegetic } from './rail';
-import { buildBar } from './buildbar';
+import { drawWheel, toolboxButton } from './wheel';
 import { gridIndex, capacity, powered, burnerOf, fuelCount, engineOf, producerKw, kw } from '../render/powerview';
 import type { App } from './app';
 // Milestone 5: Reorganize's preview on the bar, and the Patent rules
@@ -111,7 +111,7 @@ export function drawHud(app: App, dt: number) {
     diegetic(app, L);
     centerOverlay(app, L);
     rail(app, L);
-    buildBar(app, L);
+    toolboxButton(app, L.rail.x + 2, L.band.y + L.band.h - 20);
     auditBadge(app, L);
     pinnedReport(app, L);
   }
@@ -127,6 +127,7 @@ export function drawHud(app: App, dt: number) {
   if (!app.panel) hoverReport(app);
   refusal(app, dt);
   celebrations(app, L, dt);
+  drawWheel(app, L);
 }
 
 /** Sounds the renderer asked for, screen-wide events, the fold animation's target, and which
