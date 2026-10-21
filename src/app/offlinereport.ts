@@ -1,23 +1,28 @@
-// The offline report (DESIGN.md §12, §20; Milestone 6): what happened while the player was away, as
-// a timeline (each line that stopped as one row: its first machine to block and why, how many
-// machines it stopped and a fix to build; heaps filling, orders filled, research finished, the
-// Megaproject's stages) with a jump-to button per line, and the totals. While the run is still
-// going (it is spread over frames, so the page never freezes) the card shows its progress. The
-// footer says exactly how the number was made: what ran tick by tick, what was extrapolated and
-// at what efficiency, so the report is a number the player can check (pillar 4).
-// Built with the existing kit (chrome.ts, widgets.ts, ui.ts) as it is.
+// The offline report (DESIGN.md §12, §20; Milestone 6), as a letter from Mayor Bramble
+// (docs/hud-180.md): he opens it in a speech bubble in his own voice, then the totals (the coin in
+// the display face, the Hopper, Machine Kits, the Megaproject, what sold), then the timeline as
+// rows (each line that stopped as one row: its first machine to block, the cause and how many
+// machines it stopped as chips, the fix to build as a chip, a jump-to button; heaps filling, orders
+// filled, research finished, the Megaproject's stages one row each), and at the foot exactly how
+// the number was made: what ran tick by tick, what was worked out from the rates and at what
+// efficiency (pillar 4: a number the player can check). While the run is still going (it is spread
+// over frames, so the page never freezes) the letter shows its progress.
 import { C } from '../data/palette';
 import { ITEMS, type ItemId } from '../data/items';
-import { ICON, textWidth } from '../ui/font';
-import { frame, button, bar, coinIcon, uiIcon } from './chrome';
+import { textWidth, bigWidth, BIG_H } from '../ui/font';
+import { button, meter, coinIcon, chip, chipWidth, rule } from './chrome';
 import { duration, clock } from '../engine/fmt';
 import { Num } from '../engine/num';
-import { paidHow, type TimelineEntry, type OfflineReport, type OfflineRun } from '../sim/offline';
+import { type TimelineEntry, type OfflineReport, type OfflineRun, type JamLine } from '../sim/offline';
 import { IDLE } from '../data/idle';
+import { layoutRich, drawLayout } from '../ui/rich';
+import { T, roleInk, type Role } from '../ui/theme';
 import type { Layout } from './layout';
 import type { App } from './app';
+import type { Rect } from '../ui/ui';
+import { speak, ROW_H } from './ledger';
 
-/** the timeline page shown (rows per page depend on the card's height) */
+/** the timeline page shown (rows per page depend on the letter's height) */
 let page = 0;
 let pageFor: OfflineReport | null = null;
 
@@ -38,11 +43,10 @@ export function fit(s: string, w: number): string {
   return t.trimEnd() + '...';
 }
 
-const KIND_COL: Record<TimelineEntry['kind'], string> = {
-  jam: C.pipRed, heap: C.pipYellow, order: C.lime, research: C.ice, mega: C.gold, bay: C.gold,
-};
-const KIND_MARK: Record<TimelineEntry['kind'], string> = {
-  jam: ICON.cross, heap: ICON.pip, order: ICON.crate, research: ICON.flask, mega: ICON.star, bay: ICON.star,
+/** Each kind of timeline row: its icon and its ink. */
+const KIND: Record<TimelineEntry['kind'], { icon: string; role: Role }> = {
+  jam: { icon: '{u:remove}', role: 'bad' }, heap: { icon: '{i:slag}', role: 'warn' }, order: { icon: '{u:orders}', role: 'good' },
+  research: { icon: '{u:research}', role: 'research' }, mega: { icon: '{u:mega}', role: 'coin' }, bay: { icon: '{u:mega}', role: 'coin' },
 };
 
 /** Go to a jam or a heap on its floor and pin its report. */
@@ -56,102 +60,200 @@ export function goTo(app: App, e: { x?: number; y?: number; floor?: 'workshop' |
   else app.fselected = g.fentAt(e.x, e.y)?.id ?? null;
 }
 
-/** The biggest few things sold, as "12.3K steel, 4.5K glass". */
-function soldLine(rep: OfflineReport, n = 3): string {
+/** The biggest few things sold, as icon rows: "{i:steel} 12.3K  {i:glass} 4.5K". */
+function soldRow(rep: OfflineReport, n = 3): string {
   const rows = (Object.entries(rep.sold) as [ItemId, Num][])
     .filter(([k, v]) => v.gt(0) && ITEMS[k].value > 0)
     .sort((a, b) => b[1].mul(Math.max(0.01, ITEMS[b[0]].value)).cmp(a[1].mul(Math.max(0.01, ITEMS[a[0]].value))));
-  return rows.slice(0, n).map(([k, v]) => `${v.format()} ${ITEMS[k].name.toLowerCase()}`).join(', ');
+  return rows.slice(0, n).map(([k, v]) => `{i:${k}} ${v.format()}`).join('  ');
+}
+
+/** How the number was made, as one row (the sim's paidHow, in chips and icons). */
+export function paidRow(rep: Pick<OfflineReport, 'replayed' | 'extrapolated' | 'eff'>): string {
+  if (rep.extrapolated <= 0) return `{u:clock} ${duration(rep.replayed)} {good:at 100%} · as if open`;
+  return `{u:clock} first ${duration(rep.replayed)} {good:at 100%} · the other ${duration(rep.extrapolated)} {warn:at ${Math.round(rep.eff * 100)}%}`;
+}
+
+/** Mayor Bramble's opening line for the letter. */
+function brambleLine(rep: OfflineReport | null): string {
+  if (!rep) return 'Welcome back! Counting it all up, one moment!';
+  if (rep.lines.length) return rep.lines.length === 1 ? 'While you were away, a line got stuck! Look!' : 'While you were away, some lines got stuck! Look!';
+  if (rep.coin.gt(0)) return 'While you were away, she never stopped! Smells like money!';
+  return 'Welcome back! A quiet stretch. Ribbit.';
 }
 
 export function offlineReportCard(app: App, L: Layout) {
   const ui = app.ui;
   const O = L.overlay;
   ui.fill(O.x, O.y, O.w, O.h, C.ink, 0.6);
-  const w = Math.min(380, O.w - 12), h = Math.min(250, O.h - 8);
+  const w = Math.min(420, O.w - 12), h = Math.min(286, O.h - 8);
   const x = O.x + Math.floor((O.w - w) / 2), y = O.y + Math.floor((O.h - h) / 2);
-  frame(ui, x, y, w, h);
-  ui.fill(x + 3, y + 3, w - 6, 15, C.shadow);
-  uiIcon(ui, 'clock', x + 6, y + 2);
+  // the letter: a sheet of paper, ruled faintly like writing paper
+  ui.panel(x, y, w, h, 'paper', true);
+  const c: Rect = { x: x + 8, y: y + 6, w: w - 16, h: h - 12 };
   const job = app.offlineJob;
   const rep = app.offline;
+  // ---- Bramble opens it, the time away on a chip beside him
+  const away = rep ? rep.away : job ? job.away : 0;
+  const awayChip = `{u:clock} ${duration(away)}`;
+  const cw = chipWidth(awayChip);
+  const sh = speak(app, 'bramble', brambleLine(rep), c.x, c.y, c.w - cw - 6, { size: 48, cheer: !!rep && rep.coin.gt(0) && !rep.lines.length });
+  chip(ui, c.x + c.w - cw, c.y + 2, awayChip, { role: 'ink', solid: false });
+  let yy = c.y + sh + 6;
   if (!rep) {
     if (!job) { app.panel = null; return; }
-    // still running: a progress bar, never a frozen page
-    ui.text(`While you were away: ${duration(job.away)}`, x + 26, y + 7, C.hot, { shadow: C.ink });
-    ui.text('Running your factory through the time away...', x + 12, y + 34, C.bone);
-    bar(ui, x + 12, y + 48, w - 24, 8, job.progress(), C.gold);
-    ui.para('The first hour runs tick by tick through the same machines as live play and pays in full; the rest follows from the rates measured, in segments that end whenever a Slag Heap fills, an order fills or research finishes.', x + 12, y + 66, w - 24, C.hull2);
+    // still running: a meter, never a frozen page
+    meter(ui, c.x, yy + 2, c.w, 8, job.progress(), { role: 'coin' });
+    yy += 16;
+    drawLayout(ui, layoutRich('{u:clock} the first hour · tick by tick, the same machines as live play · {good:pays in full}', c.w), c.x, yy, T.ink);
+    yy += layoutRich('{u:clock} the first hour · tick by tick, the same machines as live play · {good:pays in full}', c.w).h + 4;
+    drawLayout(ui, layoutRich('{u:stats} the rest · the rates measured · a new segment at each full heap, filled order, finished research', c.w), c.x, yy, T.inkSoft);
     return;
   }
   if (pageFor !== rep) { page = 0; pageFor = rep; }
-  ui.text(`While you were away: ${duration(rep.away)}`, x + 26, y + 7, C.hot, { shadow: C.ink });
-  // ---- the totals
-  let yy = y + 24;
-  coinIcon(ui, x + 12, yy);
-  ui.text(`+${rep.coin.format()}`, x + 34, yy + 1, C.gold, { scale: 2, shadow: C.brass0 });
-  ui.text('coin earned', x + 34, yy + 18, C.hull2);
-  const rx = x + Math.floor(w / 2) + 6, rw = x + w - 12 - rx;
-  let ry = y + 24;
-  const right = (s: string, col: string) => { ui.text(fit(s, rw), rx, ry, col); ry += 10; };
-  if (!rep.hopper.isZero()) right(`${rep.hopper.format()} items into the Hopper`, C.teal1);
-  if (!rep.parts.isZero()) right(`${rep.parts.format()} Machine Kits banked`, C.copper2);
+  // ---- the totals: the coin big, the rest as icon rows beside it
+  coinIcon(ui, c.x, yy + 2);
+  const coin = `+${rep.coin.format()}`;
+  ui.big(coin, c.x + 20, yy, T.coin, { scale: 2 });
+  const tw = 20 + bigWidth(coin) * 2 + 12;
+  const rx = c.x + Math.max(tw, Math.floor(c.w * 0.42));
+  const rw = c.x + c.w - rx;
+  const right: string[] = [];
+  if (!rep.hopper.isZero()) right.push(`{u:research} ${rep.hopper.format()} into the Hopper`);
+  if (!rep.parts.isZero()) right.push(`{i:machineKit} ${rep.parts.format()} Machine Kits`);
   const given = (Object.entries(rep.mega.given) as [ItemId, Num][]).filter(([, v]) => v.gt(0));
-  if (given.length) right(`Megaproject: +${given.map(([k, v]) => `${v.format()} ${ITEMS[k].name.toLowerCase()}`).join(', ')}`, C.gold);
-  const sold = soldLine(rep);
-  if (sold) right(`Sold: ${sold}`, C.bone);
-  yy = Math.max(yy + 30, ry + 2);
-  // ---- the timeline: a stopped line is one row (its first machine to block, why, how many it
-  // stopped) with the fix under it; heaps, orders, research and the Megaproject one line each
-  ui.fill(x + 8, yy, w - 16, 1, C.brass0);
+  if (given.length) right.push(`{u:mega} ${given.map(([k, v]) => `{i:${k}} +${v.format()}`).join(' ')}`);
+  const sold = soldRow(rep);
+  if (sold) right.push(`{u:coin} sold ${sold}`);
+  let ry = yy - 1;
+  for (const s of right.slice(0, 3)) {
+    const RL = layoutRich(s);
+    if (RL.w > rw) continue;
+    drawLayout(ui, RL, rx, ry, T.ink);
+    ry += 10;
+  }
+  yy = Math.max(yy + 2 * BIG_H + 3, ry + 2);
+  // writing paper from here down: faint ruled lines under the timeline
+  ui.ctx.fillStyle = T.paperLo;
+  for (let ly = yy + 20; ly < y + h - 6 - 40; ly += 13) ui.ctx.fillRect(x + 6, ly, w - 12, 1);
+  // ---- the timeline: its summary as chips, then a row a line (two when it has a fix)
+  rule(ui, c.x, yy, c.w, true);
   yy += 4;
   const nl = rep.lines.length;
-  const head = nl
-    ? `${nl} line${nl > 1 ? 's' : ''} stopped (${rep.jams} machine${rep.jams > 1 ? 's' : ''}), ${rep.orders.length} order${rep.orders.length === 1 ? '' : 's'} filled, ${rep.research.length} research done`
-    : `${ICON.check} Nothing jammed in ${duration(rep.counted)}.`;
-  ui.text(fit(head, w - 24), x + 12, yy, nl ? C.pipYellow : C.leaf);
-  yy += 12;
-  const footH = 56;
-  const rowsH = y + h - footH - yy - 12;
+  const sum: { text: string; role: Role }[] = nl
+    ? [{ text: `${nl} line${nl > 1 ? 's' : ''} stopped`, role: 'bad' }, { text: `${rep.jams} machine${rep.jams > 1 ? 's' : ''}`, role: 'bad' }]
+    : [{ text: `nothing jammed in ${duration(rep.counted)}`, role: 'good' }];
+  if (rep.orders.length) sum.push({ text: `${rep.orders.length} order${rep.orders.length > 1 ? 's' : ''} filled`, role: 'good' });
+  if (rep.research.length) sum.push({ text: `${rep.research.length} research done`, role: 'research' });
+  let sx = c.x;
+  for (const s of sum) {
+    const sw = chipWidth(s.text);
+    if (sx + sw > c.x + c.w) break;
+    chip(ui, sx, yy, s.text, { role: s.role, solid: s.role === 'bad' });
+    sx += sw + 3;
+  }
+  yy += ROW_H + 2;
+  const footH = 38;
+  const rowsBottom = y + h - 6 - footH - 14;
   const tl = rep.timeline;
-  const rowH = (e: TimelineEntry) => (e.line !== undefined ? 21 : 12);
-  // pages by height: a line's row is two lines tall
+  const rowH = (e: TimelineEntry) => (e.line !== undefined ? lineRows(app, rep.lines[e.line], c.x + 46, 0, c.w - 46, c.w - 46 - 40, false) + 1 : 14);
+  // pages by height: a line's row is two rows tall
   const starts: number[] = [0];
   for (let i = 0, used = 0; i < tl.length; i++) {
-    if (used + rowH(tl[i]) > rowsH && used > 0) { starts.push(i); used = 0; }
+    if (used + rowH(tl[i]) > rowsBottom - yy && used > 0) { starts.push(i); used = 0; }
     used += rowH(tl[i]);
   }
   const pages = starts.length;
   if (page >= pages) page = pages - 1;
-  if (!tl.length) ui.text(rep.jammedAtStart ? `${rep.jammedAtStart} machine${rep.jammedAtStart > 1 ? 's were' : ' was'} already jammed when you left.` : 'A quiet stretch: every line ran the whole time.', x + 12, yy, C.hull2);
+  if (!tl.length) drawLayout(ui, layoutRich(rep.jammedAtStart ? `{warn:${rep.jammedAtStart} machine${rep.jammedAtStart > 1 ? 's' : ''} already jammed when you left}` : '{good:every line ran the whole time}', c.w), c.x, yy, T.ink);
   for (let i = starts[page]; i < (starts[page + 1] ?? tl.length); i++) {
     const e = tl[i];
-    const col = KIND_COL[e.kind];
+    const k = KIND[e.kind];
     const line = e.line !== undefined ? rep.lines[e.line] : null;
-    ui.text(clock(e.t), x + 12, yy, C.hull3);
-    ui.text(KIND_MARK[e.kind], x + 42, yy, col);
+    ui.text((e.est ? '~' : '') + clock(e.t), c.x + 30, yy + 2, T.inkSoft, { align: 'right' });
+    drawLayout(ui, layoutRich(k.icon), c.x + 34, yy + 2, T.ink);
     const go = e.x !== undefined && (e.kind === 'jam' || e.kind === 'heap');
-    const tw = w - 24 - 40 - (go ? 40 : 0);
-    const text = line ? `${line.root.name}'s line: ${line.cause}` : e.text;
-    ui.text(fit((e.est ? '~' : '') + text, tw), x + 52, yy, e.kind === 'jam' ? C.bone : col);
-    if (go && button(ui, 'offGo' + i, x + w - 48, yy - 2, 36, 11, 'Go', { tip: line ? `Show ${line.root.name}, the first of its line to block` : e.est ? 'Worked out from the measured rates (~): this is where it will be' : 'Show me where' })) goTo(app, e);
-    if (line) ui.text(fit(`${line.count} machine${line.count > 1 ? 's' : ''} stopped. Fix: ${line.fix}`, w - 24 - 40), x + 52, yy + 9, C.leaf);
+    const room = c.w - 46 - (go ? 40 : 0);
+    if (line) lineRows(app, line, c.x + 46, yy, c.w - 46, room, true);
+    else ui.text(fit(e.text, room), c.x + 46, yy + 2, roleInk(k.role));
+    if (go && button(ui, 'offGo' + i, c.x + c.w - 36, yy - 1, 36, 14, 'Go', { tip: line ? `{u:remove} show ${line.root.name} · the first of its line to block` : e.est ? '~ worked out from the measured rates · this is where it will be' : 'show me where' })) goTo(app, e);
     yy += rowH(e);
   }
   if (pages > 1) {
-    const py = y + h - footH - 2;
-    if (button(ui, 'offPrev', x + 12, py - 10, 44, 11, 'Earlier', { disabled: page === 0 })) page--;
-    ui.text(`${page + 1}/${pages}`, x + Math.floor(w / 2), py - 8, C.hull2, { align: 'center' });
-    if (button(ui, 'offNext', x + w - 56, py - 10, 44, 11, 'Later', { disabled: page >= pages - 1 })) page++;
+    const py = rowsBottom + 1;
+    if (button(ui, 'offPrev', c.x, py, 50, 13, 'Earlier', { disabled: page === 0 })) page--;
+    ui.text(`${page + 1}/${pages}`, c.x + Math.floor(c.w / 2), py + 3, T.inkSoft, { align: 'center' });
+    if (button(ui, 'offNext', c.x + c.w - 50, py, 50, 13, 'Later', { disabled: page >= pages - 1 })) page++;
   }
   // ---- how the number was made (pillar 4: a number you can check)
-  const fy = y + h - footH + 2;
-  ui.fill(x + 8, fy - 2, w - 16, 1, C.brass0);
-  const how = `Paid: ${paidHow(rep)} (offline efficiency).${tl.some((e) => e.est) ? ' ~ marks a time worked out from rates.' : ''} Time away counts up to 7 days.`;
-  ui.para(how, x + 12, fy + 1, w - 24, C.hull2);
-  if (button(ui, 'offOvernight', x + 12, y + h - 18, 110, 13, 'Overnight check', { tip: 'Before you go next time: see which lines would jam, and stop them' })) {
+  const fy = y + h - 6 - footH;
+  rule(ui, c.x, fy, c.w, true);
+  const how = `${paidRow(rep)}${tl.some((e) => e.est) ? ' · ~ from rates' : ''} · {soft:7 days at most}`;
+  const HL = layoutRich(how, c.w);
+  drawLayout(ui, HL.lines.length > 1 ? layoutRich(paidRow(rep), c.w) : HL, c.x, fy + 4, T.ink);
+  const by = y + h - 6 - 17;
+  if (button(ui, 'offOvernight', c.x, by, 130, 17, '{u:overnight} Overnight check', { tip: [{ text: '{u:overnight} before you go next time' }, { text: 'see which lines would jam, and stop them', color: T.inkSoft }] })) {
     app.offline = null;
     app.panel = 'overnight';
   }
-  if (button(ui, 'offlineOk', x + w - 112, y + h - 18, 100, 13, 'Back to work', { gold: true })) { app.panel = null; app.offline = null; }
+  if (button(ui, 'offlineOk', c.x + c.w - 120, by, 120, 17, 'Back to work', { gold: true, big: true })) { app.panel = null; app.offline = null; }
+}
+
+/** A stopped line as rows (the offline letter and the overnight forecast): its first machine to
+ * block, the cause and how many machines it stopped as chips, then the fix to build. Line one has
+ * `room1` px (the buttons sit after it), the rest `w`. A chip too wide for its row becomes wrapped
+ * ink instead (never cut). Draws when `draw`; returns the height. */
+export function lineRows(app: App, line: JamLine, x: number, y: number, w: number, room1: number, draw: boolean): number {
+  const ui = app.ui;
+  const who = line.root.why && ITEMS[line.root.why as ItemId] ? `{i:${line.root.why}} ` : '';
+  const cause = `${who}${line.cause}`;
+  const count = `${line.count} stopped`;
+  const name = line.root.name;
+  const nw = textWidth(name) + 5;
+  // line one: the name, then the cause and the count when they fit beside it
+  const both = nw + chipWidth(cause) + 3 + chipWidth(count) <= room1;
+  const causeUp = both || nw + chipWidth(cause) <= room1;
+  const countUp = both || (!causeUp && nw + chipWidth(count) <= room1);
+  if (draw) {
+    ui.text(name, x, y + 2, T.ink);
+    let lx = x + nw;
+    if (causeUp) lx += chip(ui, lx, y, cause, { role: 'bad' }) + 3;
+    if (countUp) chip(ui, lx, y, count, { role: 'soft' });
+  }
+  let h = 13;
+  // the cause on its own row when line one had no room for it (the count after it if it fits)
+  if (!causeUp) {
+    const cw = chipWidth(cause);
+    if (cw <= w) {
+      if (draw) {
+        chip(ui, x, y + h, cause, { role: 'bad' });
+        if (!countUp && cw + 3 + chipWidth(count) <= w) chip(ui, x + cw + 3, y + h, count, { role: 'soft' });
+      }
+      h += 13;
+    } else {
+      const L = layoutRich(`${who}{bad:${line.cause}} · ${count}`, w);
+      if (draw) drawLayout(ui, L, x, y + h + 2, T.inkSoft);
+      h += L.h + 2;
+    }
+  }
+  // the fix (the count rides after it when line one had room only for the cause)
+  const fix = `fix · ${line.fix}`;
+  const countLeft = causeUp && !countUp;
+  const fw = chipWidth(fix);
+  if (fw <= w) {
+    if (draw) {
+      chip(ui, x, y + h, fix, { role: 'good' });
+      if (countLeft && fw + 3 + chipWidth(count) <= w) chip(ui, x + fw + 3, y + h, count, { role: 'soft' });
+    }
+    h += 13;
+    if (countLeft && fw + 3 + chipWidth(count) > w) {
+      if (draw) chip(ui, x, y + h, count, { role: 'soft' });
+      h += 13;
+    }
+  } else {
+    const L = layoutRich(`{good:fix · ${line.fix}}${countLeft ? ` · {soft:${count}}` : ''}`, w);
+    if (draw) drawLayout(ui, L, x, y + h + 2, T.good);
+    h += L.h + 2;
+  }
+  return h;
 }

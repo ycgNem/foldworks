@@ -6,7 +6,7 @@
 // Writes e2e/out/look/<state>-<w>x<h>.png. For eyeballing while working; npm run screens is the audit.
 import fs from 'node:fs';
 import { launch, openGame, frames } from './launch.mjs';
-import { act2Setup, ACT2, dragTiles, workshopSetup, WORKSHOP } from './screens.mjs';
+import { act2Setup, ACT2, dragTiles, workshopSetup, WORKSHOP, m5Setup, M5, idleSetup } from './screens.mjs';
 
 const [state = 'start', w = '1280', h = '720'] = process.argv.slice(2);
 const { browser } = await launch();
@@ -98,6 +98,28 @@ if (state === 'firsts') {
   await browser.close();
   process.exit(0);
 }
+// ---- the 180, menus B: the Milestone 5 pages (reorg, patents, patentsHover, drawer, committee,
+// annex, mega2) and the idle ones (offline2: a 9 h report, offlineRun: one under way, overnight:
+// the forecast with a stopped line), borrowed from e2e/screens.mjs
+const IDLE_LOOK = { offline2: 'report', offlineRun: 'running', overnight: 'overnight' };
+if (M5.includes(state) || IDLE_LOOK[state]) {
+  const r = M5.includes(state) ? await page.evaluate(m5Setup, state) : await page.evaluate(idleSetup, IDLE_LOOK[state]);
+  if (r?.hoverId) {
+    await frames(page, 2);
+    const p = await page.evaluate((id) => { const a = window.__app; const q = a.ui.ids.get(id); return q ? a.uiToCss(q.x + q.w / 2, q.y + q.h / 2) : null; }, r.hoverId);
+    if (p) await page.mouse.move(p.x, p.y);
+  }
+  await frames(page, 6);
+  fs.mkdirSync('e2e/out/look', { recursive: true });
+  const out = `e2e/out/look/${state}-${w}x${h}.png`;
+  await page.screenshot({ path: out });
+  console.log(out);
+  if (errors.length) console.log(errors.join('
+'));
+  await browser.close();
+  process.exit(0);
+}
+// ---- end of the menus B block
 if (WORKSHOP.includes(state)) await page.evaluate(workshopSetup, state);
 else if (state === 'foldAnim') {
   // the fold, frame by frame: the graded S+ line folds (crease, corners, squeeze, flash, pop)
