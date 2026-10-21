@@ -43,8 +43,8 @@ marked out on it; the Factory is a riveted sky platform held up by brass rotors,
 3. **The ground** (`src/render/ground.ts`, baked per chunk): **owned** chunks are paving,
    **for sale** chunks are meadow with a plot marked out (corner stakes and a dashed line), chunk
    seams on owned land a thin bolted strip, so lots read as lots.
-4. **The town** on the north rim (houses on footings, not stilts; the boardwalk becomes a paved
-   promenade with lamps), trees, bushes, flowers and fences scattered on the rim (never on the
+4. **The town** on the north rim (houses on footings, not stilts; the boardwalk becomes a wooden
+   promenade with a railing and lamps), trees, bushes, flowers and fences scattered on the rim (never on the
    plot).
 5. Everything that was there: ores, belts, machines, the Dock, the Hopper, FX, floor tags, HUD.
 

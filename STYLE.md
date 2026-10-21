@@ -181,14 +181,18 @@ The sky island (`docs/sky-island.md` holds every frame and rule; the scripts are
 
 ## The town (Bramble's Town)
 
-Night water, so the town is read by **warm lantern windows** and lit rims. Everything standing
-in the water ends in two waterline rows (a `water3` ripple and a `water2` shadow), so any two town
-sprites bottom-aligned on a row share a waterline. Houses (`town_house` order: hut, gable, lily,
-tall, brick, bramble) are 32×32; the stall's and the lamps' lanterns flicker. Unit 7's tower,
-Voltaire's pavilion, the frogs, lilies and the boardwalk are their Milestone 4 recipes in B: every
-ripple and glint in the water ramp, decks and boardwalk in the Workshop deck's lighter boards
-(wood1 seams and faces, wood3 boards, wood4 rims). The shore stands on 3 px outlined pilings with
-a moss band, a ripple ring and a broken reflection.
+The town stands on the island's north rim (and on the Factory platform's plaza), drawn by
+`pixel-art/town/` (`python build.py`) in daylight: windows reflect the sky, the warm Lantern Bayou
+timber and roofs are lit from the top left. **Every building stands on a footing** (stone
+foundations, a step or a stair at the door; Unit 7's tower on a two-tier stone plinth, Voltaire's
+pavilion on three marble steps), in stone and wood only so it sits on both the meadow and the
+steel plaza; shadows under them are code-drawn (`ink` at 22%), and `town_tuft` (grass at a
+building's feet) is drawn on the Workshop only. Houses (`town_house` order: hut, gable, lily,
+tall, brick, bramble) are 32×32 and each reads by its own shape at 1x; the stall's and the lamps'
+lanterns flicker. **The Boardwalk** (`town_boardwalk`, `town_rail`) is a wooden promenade along
+the plot's north edge: long boards, a timber fascia, steps off each end and a low rail with iron
+caps on the plot side, drawn in front of the frogs and stalls so nobody falls off (the order's
+joke). `town_lily` is no longer drawn.
 
 ## Portraits
 

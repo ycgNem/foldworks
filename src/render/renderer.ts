@@ -408,8 +408,8 @@ export class Renderer {
     if (ov.floor === 'factory') this.plat.draw(ctx, g.fw, g.fh, this.time);
     else this.isle.draw(ctx, g.W, g.H, this.time);
     // Bramble's Town on the north rim, behind the floor
-    if (ov.floor === 'factory') this.town.draw(ctx, g, g.fw, g.fh, this.time);
-    else this.town.draw(ctx, g, g.W, g.H, this.time);
+    if (ov.floor === 'factory') this.town.draw(ctx, g, g.fw, g.fh, this.time, 'factory');
+    else this.town.draw(ctx, g, g.W, g.H, this.time, 'workshop');
     for (const n of this.town.news) {
       this.fx.burst(n.x, n.y, 30, [C.gold, C.leaf, C.bone, C.hot], 70, 40, 1, 1);
       this.fx.ring(n.x, n.y, C.gold, 28, 0.7, 4);
