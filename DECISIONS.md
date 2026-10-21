@@ -1267,6 +1267,7 @@ number or data file changed.
 
 Nothing here is derivative of a shipped game beyond what the UI redesign already lists (a short
 hover card with a click-to-pin detail panel is a genre convention).
+
 ## The Milestone 5–6 final round (2026-10-20)
 
 The idle-critic's re-review of the review round found three blocking problems:
