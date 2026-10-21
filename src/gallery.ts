@@ -15,7 +15,7 @@ import { textWidth, LINE_H, BIG_LINE_H } from './ui/font';
 import { RIBBON_COLORS, bookmarkRaw, KEY_H, keycapWidth } from './ui/paper';
 import {
   plate, frame, card, section, label, dot, badge, sparkline, coinIcon, portrait, button, bar, uiIcon,
-  tag, tagSize, bubble, ribbon, sign, chip, chipWidth, keycapK, meter, stamp, book, rule, pencil,
+  tag, tagSize, slip, clipboard, bubble, ribbon, sign, chip, chipWidth, keycapK, meter, stamp, book, rule, pencil,
 } from './app/chrome';
 import { menuTemplate, tab, cells, slamScale, rays, type MenuTab } from './app/widgets';
 import type { App } from './app/app';
@@ -102,17 +102,21 @@ function hud() {
   // a trophy ribbon from the top centre
   ribbon(ui, 250, 8, 140, 'First Fold!', { color: 'gold' });
 
-  // a slip (a toast) at the top right
-  plate(ui, 492, 10, 140, 22);
-  drawRich(ui, 'Bellows bought {coin:25}', 500, 16);
+  // a slip (a toast) at the top right, and the Inspector's clipboard on an audit box
+  const sl = slip(ui, 492, 10, 140, 24);
+  drawRich(ui, 'Bellows bought {coin:25}', sl.x, sl.y + 1);
+  const cb = clipboard(ui, 500, 230, 120, 60);
+  ui.big('Audit', cb.x, cb.y, T.ink);
+  drawRich(ui, '{u:clock} 70 s  {chip:good:A}', cb.x, cb.y + 15);
+  stamp(ui, 'A', cb.x + cb.w - 12, cb.y + 8, { angle: -0.15 });
 
   // the hover report: a tag on a string from the furnace (docs/hud-180.md, "Reports")
   report(300, 186, { x: 278, y: ty + 8 });
 
   // a pinned line tag at the Dock's mouth, and the Dock's own tag
   const lt = '{i:gear} 30/min';
-  const ls = tagSize(richWidth(lt), LINE_H, 'top');
-  const lr = tag(ui, 340, 120, ls.w, ls.h, { hole: 'top', pin: true });
+  const ls = tagSize(richWidth(lt), LINE_H, 'left');
+  const lr = tag(ui, 340, 120, ls.w, ls.h, { hole: 'left', pin: true });
   drawRich(ui, lt, lr.x, lr.y);
   const dt = '{coin} {coinc:+5.1K/min}';
   const ds = tagSize(Math.max(richWidth(dt), 70), LINE_H + 7, 'left');
@@ -122,12 +126,12 @@ function hud() {
 
   // a coin pop over the floor
   const pop = (ui.time * 12) % 10;
-  ui.big('+25', 392, ty - 30 - Math.round(pop), T.floorCoin, { outline: T.floorOutline });
+  ui.big('+25', 470, ty - 24 - Math.round(pop), T.floorCoin, { outline: T.floorOutline });
 
   // Bramble's corner: the portrait on a lily pad, the goal in a speech bubble
   portrait(ui, 'bramble', 12, ui.h - 60, 48, { pad: true });
   const line = "She's choking! {k:LMB} shovel, or a {i:slag} Heap {coin:25}";
-  const L = layoutRich(line, 170);
+  const L = layoutRich(line, 230);
   const bw = L.w + 14, bh = L.h + 9;
   const b = bubble(ui, 72, ui.h - 52, bw, bh, { side: 'left', at: 12 });
   drawLayout(ui, L, b.x + 1, b.y);
@@ -165,23 +169,23 @@ function report(x: number, y: number, anchor: { x: number; y: number }, pin = fa
 function kit() {
   floor({ x: 0, y: 0, w: ui.w, h: ui.h });
   // buttons in every state
-  plate(ui, 6, 6, 314, 112);
+  plate(ui, 6, 6, 314, 114);
   label(ui, 'buttons', 12, 11);
   const states = ['up', 'hover', 'down'] as const;
   let y = 20;
   for (const kind of ['paper', 'gold', 'active'] as const) {
     states.forEach((st, i) => {
       const x = 12 + i * 62;
-      forced(st, x, y, () => button(ui, `b-${kind}-${st}`, x, y, 58, 17, st === 'up' ? 'Build' : st === 'hover' ? 'Hover' : 'Down', { gold: kind === 'gold', active: kind === 'active' }));
+      forced(st, x, y, () => button(ui, `b-${kind}-${st}`, x, y, 58, 16, st === 'up' ? 'Build' : st === 'hover' ? 'Hover' : 'Down', { gold: kind === 'gold', active: kind === 'active' }));
     });
-    button(ui, `b-${kind}-dis`, 198, y, 58, 17, 'Locked', { disabled: true, gold: kind === 'gold' });
+    button(ui, `b-${kind}-dis`, 198, y, 58, 16, 'Locked', { disabled: true, gold: kind === 'gold' });
     label(ui, kind, 262, y + 6);
-    y += 21;
+    y += 19;
   }
-  forced('up', 12, y, () => button(ui, 'b-icon', 12, y, 74, 22, 'Research', { icon: 'research' }));
-  forced('hover', 90, y, () => button(ui, 'b-gold-big', 90, y, 96, 22, 'Sign here', { gold: true, big: true }));
-  forced('up', 190, y, () => button(ui, 'b-rich', 190, y, 120, 22, 'Buy {coin:25}', { gold: true }));
-  y += 26;
+  forced('up', 12, y, () => button(ui, 'b-icon', 12, y, 74, 21, 'Research', { icon: 'research' }));
+  forced('hover', 90, y, () => button(ui, 'b-gold-big', 90, y, 96, 21, 'Sign here', { gold: true, big: true }));
+  forced('up', 190, y, () => button(ui, 'b-rich', 190, y, 120, 21, 'Buy {coin:25}', { gold: true }));
+  y += 24;
   forced('up', 12, y, () => ui.button('ui-b', 12, y, 70, 16, 'ui.button'));
   forced('down', 86, y, () => ui.button('ui-b2', 86, y, 70, 16, 'pressed'));
 
@@ -216,12 +220,12 @@ function kit() {
   plate(ui, 6, 122, 200, 82);
   label(ui, 'meters', 12, 127);
   const m = (yy: number, f: number, o: Parameters<typeof meter>[6], s: string) => { meter(ui, 12, yy, 110, 7, f, o); drawRich(ui, s, 128, yy - 1); };
-  m(140, 27 / 30, { role: 'good', target: 1 }, '27/30 {soft:target}');
-  m(154, 27 / 36, { role: 'warn', target: 30 / 36 }, '{warn:27} of 30/min');
-  m(168, 1, { role: 'bad' }, '{bad:FULL}');
-  m(182, 0.42, { role: 'research', target: 0.6 }, '{research:42%}');
-  bar(ui, 12, 194, 110, 5, 0.7, C.gold);
-  ui.text('bar()', 128, 192, T.inkSoft);
+  m(139, 27 / 30, { role: 'good', target: 1 }, '27/30 {soft:target}');
+  m(152, 27 / 36, { role: 'warn', target: 30 / 36 }, '{warn:27} of 30/min');
+  m(165, 1, { role: 'bad' }, '{bad:FULL}');
+  m(178, 0.42, { role: 'research', target: 0.6 }, '{research:42%}');
+  bar(ui, 12, 191, 110, 5, 0.7, C.gold);
+  ui.text('bar()', 128, 189, T.inkSoft);
 
   // ribbons and bookmarks
   plate(ui, 210, 122, 424, 82);
@@ -240,7 +244,7 @@ function kit() {
   ui.clip(8, 262, 140, 90);
   rays(app, 70, 306, 70, C.gold);
   ui.unclip();
-  stamp(ui, 'S+', 70, 306, { scale: slamScale(t, 2) });
+  stamp(ui, 'S+', 70, 306, { scale: slamScale(Math.max(0.3, t), 2) });
   cells(app, 160, 280, 120, 8, 7, 10, C.moss3);
   sparkline(ui, 160, 296, 120, 20, [3, 4, 4, 6, 5, 7, 8, 8, 9, 12, 11, 13, 15, 14, 17, 18, 21], C.brass1);
   badge(ui, 160, 324, 'new');
@@ -398,6 +402,7 @@ function frameLoop(now: number) {
   ui.end();
   input.endFrame();
   (window as unknown as { __galleryIssues: AuditIssue[] }).__galleryIssues = issues;
+  (window as unknown as { __galleryRecs: number }).__galleryRecs = ui.lastAudit.length;
   (window as unknown as { __galleryReady: boolean }).__galleryReady = true;
   requestAnimationFrame(frameLoop);
 }

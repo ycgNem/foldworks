@@ -167,7 +167,7 @@ export function paperRaw(ctx: Ctx, x: number, y: number, w: number, h: number, o
 /** A brass grommet (7x7) round a punched hole, centred on (cx, cy). */
 export function grommetRaw(ctx: Ctx, cx: number, cy: number) {
   const a = art('h180_hole');
-  if (a) { ctx.drawImage(a.frames[0], Math.round(cx - a.w / 2), Math.round(cy - a.h / 2)); return; }
+  if (a) { ctx.drawImage(a.frames[0], Math.round(cx - a.ax), Math.round(cy - a.ay)); return; }
   const x = Math.round(cx) - 3, y = Math.round(cy) - 3;
   const P = ['..ddd..', '.dhhgd.', 'dhkkkld', 'dhkkkld', 'dgkkkld', '.dllld.', '..ddd..'];
   const col: Record<string, string> = { d: T.brassDeep, h: T.brassHi, g: T.brass, l: T.brassLo, k: C.ink1 };
@@ -197,7 +197,11 @@ export function stringRaw(ctx: Ctx, x0: number, y0: number, x1: number, y1: numb
 /** A red pushpin stuck in at (cx, cy): a pinned report. */
 export function pushpinRaw(ctx: Ctx, cx: number, cy: number) {
   const a = art('h180_pushpin');
-  if (a) { ctx.drawImage(a.frames[0], Math.round(cx - a.ax), Math.round(cy - a.ay)); return; }
+  if (a) {
+    if (a.frames[1]) ctx.drawImage(a.frames[1], Math.round(cx - a.ax) + 1, Math.round(cy - a.ay) + 1);
+    ctx.drawImage(a.frames[0], Math.round(cx - a.ax), Math.round(cy - a.ay));
+    return;
+  }
   const x = Math.round(cx) - 3, y = Math.round(cy) - 5;
   const P = ['..kkk..', '.krrhk.', 'krrrrrk', 'kRrrrRk', '.kRRRk.', '..kkk..', '...s...', '...s...'];
   const col: Record<string, string> = { k: C.ink, r: C.red, h: C.copper3, R: C.copper0, s: C.steel3 };
@@ -243,10 +247,9 @@ export function tagRaw(ctx: Ctx, x: number, y: number, w: number, h: number, o: 
   const hp = tagHole(x, y, w, h, hole);
   if (hp && o.anchor && !o.pin) stringRaw(ctx, hp.x, hp.y, Math.round(o.anchor.x), Math.round(o.anchor.y));
   const a = art('h180_tag');
-  if (a) {
-    if (o.shadow ?? true) { ctx.fillStyle = rgba(T.shadow, 0.3); ctx.fillRect(x + 2, y + 2, w, h); }
-    nineRaw(ctx, a, o.hover ? 1 : 0, x, y, w, h);
-  } else paperRaw(ctx, x, y, w, h, { cut: hole, hi: o.hover, shadow: o.shadow });
+  // the art carries its own shadow and nicks (frame 1, hovered, lifts 1 px up-left)
+  if (a) nineRaw(ctx, a, o.hover ? 1 : 0, x, y, w, h);
+  else paperRaw(ctx, x, y, w, h, { cut: hole, hi: o.hover, shadow: o.shadow });
   if (hp) {
     if (o.pin) pushpinRaw(ctx, hp.x, hp.y);
     else grommetRaw(ctx, hp.x, hp.y);
@@ -272,11 +275,13 @@ export function bubbleRaw(ctx: Ctx, x: number, y: number, w: number, h: number, 
       const f = side === 'bottom' ? (at < w / 2 ? 0 : 1) : side === 'left' ? 2 : side === 'right' ? 3 : 0;
       const img = tailArt.frames[Math.min(f, tailArt.frames.length - 1)];
       const tw = tailArt.w, th = tailArt.h;
-      if (side === 'bottom') ctx.drawImage(img, x + at - Math.floor(tw / 2), y + h - 1);
-      else if (side === 'left') ctx.drawImage(img, x - tw + 1, y + at - Math.floor(th / 2));
-      else if (side === 'right') ctx.drawImage(img, x + w - 1, y + at - Math.floor(th / 2));
+      // the tail's 2 rows (or columns) nearest the bubble lie over its line, opening it
+      const ov = 2;
+      if (side === 'bottom') ctx.drawImage(img, x + at - Math.floor(tw / 2), y + h - ov);
+      else if (side === 'left') ctx.drawImage(img, x - tw + ov, y + at - Math.floor(th / 2));
+      else if (side === 'right') ctx.drawImage(img, x + w - ov, y + at - Math.floor(th / 2));
       else {
-        ctx.save(); ctx.translate(x + at, y + 1); ctx.scale(1, -1);
+        ctx.save(); ctx.translate(x + at, y + ov); ctx.scale(1, -1);
         ctx.drawImage(img, -Math.floor(tw / 2), 0); ctx.restore();
       }
       return;
@@ -363,13 +368,20 @@ export function ribbonFor(r: Role): RibbonColor {
 /** The swallowtail cut at a ribbon's end: how far in the row `j` of `h` is cut. */
 const fork = (j: number, h: number, depth: number) => Math.max(0, depth - Math.abs(j - (h - 1) / 2) * (depth / ((h - 1) / 2)));
 
+/** The rows of a ribbon that carry its text: the art's band (rows 0-11), else the whole height. */
+export function ribbonBand(h: number): number {
+  const a = art('h180_ribbon');
+  return a && h <= 12 ? Math.min(a.h, 12) : h;
+}
+
 /** A ribbon w x h at (x, y). tails 'out': folded tails 6 px past each end, 3 px lower (the
  * ribbon spans x-6 .. x+w+6); 'in': the forks cut into its own ends; 'none': square ends. */
 export function ribbonRaw(ctx: Ctx, x: number, y: number, w: number, h: number, color: RibbonColor = 'moss', tails: 'out' | 'in' | 'none' = 'out') {
   x = Math.round(x); y = Math.round(y);
   const P = RIBBON[color];
   const a = art('h180_ribbon');
-  if (a) {
+  // the art's band is 12 rows: taller ribbons (display-face titles) are code-drawn
+  if (a && h <= Math.min(a.h, 12)) {
     const ci = RIBBON_COLORS.indexOf(color) * 3;
     const L = a.frames[ci], M = a.frames[ci + 1], R = a.frames[ci + 2];
     if (L && M && R) {
@@ -423,7 +435,8 @@ export function ribbonRaw(ctx: Ctx, x: number, y: number, w: number, h: number, 
 export function bookmarkRaw(ctx: Ctx, x: number, y: number, w: number, h: number, color: RibbonColor | 'paper', lit = false) {
   x = Math.round(x); y = Math.round(y);
   const a = art('h180_bookmark');
-  if (a && color !== 'paper') { nineRaw(ctx, a, RIBBON_COLORS.indexOf(color), x, y, w, h); return; }
+  // the art is one 10x16 bookmark (the notebook's tabs); wider tabs are code-drawn
+  if (a && color !== 'paper' && w >= a.w && w <= a.w + 2) { nineRaw(ctx, a, RIBBON_COLORS.indexOf(color), x, y, w, h); return; }
   const P = color === 'paper' ? { hi: T.paperHi, mid: lit ? T.paperHi : T.paperLo, lo: C.wood4, line: T.paperEdge } : RIBBON[color];
   // the swallowtail: a V cut up into the foot, its tip `depth` rows above the bottom
   const depth = Math.max(2, Math.min(4, Math.floor(w / 4)));
@@ -513,6 +526,30 @@ export function signRaw(ctx: Ctx, x: number, y: number, w: number, h: number, ro
  * foot. Returns the page rects. */
 export function bookRaw(ctx: Ctx, x: number, y: number, w: number, h: number, spine: number | null) {
   x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
+  const pa = art('h180_book');
+  if (pa) {
+    // the art's two frames are the whole spread, leather included: the left page up to the spine,
+    // the right page after it. One page: the left frame, its gutter edge swapped for the right
+    // frame's outer edge.
+    const [l, t, r, b] = pa.slice ?? [8, 5, 8, 7];
+    ctx.fillStyle = rgba(T.shadow, 0.4);
+    ctx.fillRect(x + 3, y + 3, w, h);
+    if (spine !== null) {
+      nineRaw(ctx, pa, 0, x, y, spine - x, h);
+      nineRaw(ctx, pa, 1, spine, y, x + w - spine, h);
+      return {
+        left: { x: x + l, y: y + t, w: spine - x - l, h: h - t - b },
+        right: { x: spine, y: y + t, w: x + w - spine - r, h: h - t - b } as { x: number; y: number; w: number; h: number } | null,
+      };
+    }
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, w - r, h); ctx.clip();
+    nineRaw(ctx, pa, 0, x, y, w, h);
+    ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(x + w - r, y, r, h); ctx.clip();
+    nineRaw(ctx, pa, 1, x + w - 3 * r, y, 3 * r, h);
+    ctx.restore();
+    return { left: { x: x + l, y: y + t, w: w - l - r, h: h - t - b }, right: null as { x: number; y: number; w: number; h: number } | null };
+  }
   // the cover
   ctx.fillStyle = rgba(T.shadow, 0.4);
   ctx.fillRect(x + 3, y + 3, w, h);
@@ -538,14 +575,8 @@ export function bookRaw(ctx: Ctx, x: number, y: number, w: number, h: number, sp
   fill(ctx, T.paper, px + 2, py + ph + 1, pw - 4, 1);
   const left = { x: px, y: py, w: (spine ?? px + pw) - px, h: ph };
   const right = spine !== null ? { x: spine, y: py, w: px + pw - spine, h: ph } : null;
-  const pa = art('h180_book');
-  if (pa) {
-    nineRaw(ctx, pa, 0, left.x, left.y, left.w, left.h);
-    if (right) nineRaw(ctx, pa, 1, right.x, right.y, right.w, right.h);
-  } else {
-    paperRaw(ctx, left.x, left.y, left.w + (right ? 1 : 0), left.h, { shadow: false, deckle: false });
-    if (right) paperRaw(ctx, right.x, right.y, right.w, right.h, { shadow: false, deckle: false });
-  }
+  paperRaw(ctx, left.x, left.y, left.w + (right ? 1 : 0), left.h, { shadow: false, deckle: false });
+  if (right) paperRaw(ctx, right.x, right.y, right.w, right.h, { shadow: false, deckle: false });
   if (spine !== null) {
     // the gutter: the paper curving down into the spine
     const bands = [0.5, 0.32, 0.18, 0.08];
@@ -638,7 +669,8 @@ export function chipRaw(ctx: Ctx, x: number, y: number, w: number, h: number, ro
   const a = art('h180_chip');
   const line = solid ? C.ink : role === 'ink' ? T.inkSoft : roleInk(role);
   const face = solid ? roleFill(role) : T.paperHi;
-  if (a && !solid) { nineRaw(ctx, a, 0, x, y, w, h); return; }
+  // the art is the neutral pill; a role's chip keeps its coloured line
+  if (a && !solid && (role === 'ink' || role === 'soft')) { nineRaw(ctx, a, 0, x, y, w, h); return; }
   for (let j = 0; j < h; j++) {
     const l = j === 0 || j === h - 1 ? 2 : j === 1 || j === h - 2 ? 1 : 0;
     if (j === 0 || j === h - 1) { fill(ctx, line, x + l, y + j, w - 2 * l, 1); continue; }

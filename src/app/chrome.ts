@@ -12,7 +12,7 @@ import { ITEM_IDS } from '../data/items';
 import type { UI, TipLine, Rect } from '../ui/ui';
 import { T, onPaper, accentRole, roleInk, roleFill, type Role } from '../ui/theme';
 import {
-  nineRaw, paperRaw, tagRaw, tagHole, holeToward, bubbleRaw, ribbonRaw, ribbonFor, RIBBON, signRaw, bookRaw, keycapRaw, keycapWidth,
+  nineRaw, paperRaw, ribbonBand, art, tagRaw, tagHole, holeToward, bubbleRaw, ribbonRaw, ribbonFor, RIBBON, signRaw, bookRaw, keycapRaw, keycapWidth,
   chipRaw, chipText, meterRaw, stampRaw, buttonRaw, pushpinRaw, stringRaw, grommetRaw, TAG_HEAD, KEY_H,
   type HoleSide, type TailSide, type RibbonColor,
 } from '../ui/paper';
@@ -408,7 +408,13 @@ export function lilyPad(ui: UI, cx: number, cy: number, w: number) {
  * a lily pad (Bramble's corner). */
 export function portrait(ui: UI, who: string, x: number, y: number, size: 48 | 24, o: { pad?: boolean } = {}) {
   const name = size === 48 ? `portrait_${who}` : `portrait_${who}_small`;
-  if (o.pad) lilyPad(ui, x + size / 2, y + size - 2, size + 14);
+  if (o.pad) {
+    if (hasArt('h180_lilypad') && size === 48) {
+      // the pad's sidecar says where the portrait sits on it
+      const s = sheet('h180_lilypad');
+      ui.ctx.drawImage(s.frames[0], x - 4, y + 42);
+    } else lilyPad(ui, x + size / 2, y + size - 2, size + 14);
+  }
   ui.fill(x - 1, y - 1, size + 2, size + 2, C.ink);
   if (hasArt(name)) {
     const s = sheet(name);
@@ -476,7 +482,7 @@ export function bubble(ui: UI, x: number, y: number, w: number, h: number, o: { 
 
 /** A ribbon's height for text in the display face (or the body face with `big: false`). */
 export const RIBBON_H = BIG_CAP_H + 6;
-export const RIBBON_H_SMALL = CAP_H + 6;
+export const RIBBON_H_SMALL = CAP_H + 5;
 
 /** A ribbon w wide at (x, y) carrying `text` centred (display face by default): titles, trophies,
  * celebrations. tails 'out' (default) folds tails 7 px past each end; 'in' cuts forks into its
@@ -496,8 +502,8 @@ export function ribbon(ui: UI, x: number, y: number, w: number, text = '', o: { 
   }
   if (text) {
     const cap = big ? BIG_CAP_H : CAP_H;
-    const ty = y + Math.floor((h - cap) / 2);
-    const shadow = color === 'gold' ? C.brass3 : P.line;
+    const ty = y + Math.floor((ribbonBand(h) - cap) / 2);
+    const shadow = color === 'gold' ? undefined : P.line;
     if (big) ui.big(text, tx, ty, P.text, { align: 'center', shadow });
     else ui.text(text, tx, ty, P.text, { align: 'center', shadow });
   }
@@ -596,3 +602,46 @@ export function pencil(ui: UI, x: number, y: number, w: number, col: string = T.
 
 /** The display face's width (for laying out titles). */
 export const titleWidth = (s: string) => bigWidth(s);
+
+/** A paper slip (a toast): the art's slip, or a sheet of paper. Returns the content rect. */
+export function slip(ui: UI, x: number, y: number, w: number, h: number, o: { blocking?: boolean } = {}): Rect {
+  x = Math.round(x); y = Math.round(y);
+  ui.region(x, y, w, h, 'panel', o.blocking ?? false);
+  const a = art('h180_slip');
+  if (a) nineRaw(ui.ctx, a, 0, x, y, w, h);
+  else paperRaw(ui.ctx, x, y, w, h);
+  return { x: x + 6, y: y + 5, w: w - 12, h: h - 10 };
+}
+
+/** The Inspector's clipboard (an audit's tag, the grade slip): a board with a steel clip at its
+ * top-left and a sheet on it. Returns the content rect on the sheet. */
+export function clipboard(ui: UI, x: number, y: number, w: number, h: number, o: { blocking?: boolean } = {}): Rect {
+  x = Math.round(x); y = Math.round(y);
+  ui.region(x, y, w, h, 'panel', o.blocking ?? true);
+  const a = art('h180_clipboard');
+  const ctx = ui.ctx;
+  if (a) {
+    nineRaw(ctx, a, 0, x, y, w, h);
+    const [l, t, r, b] = a.slice ?? [10, 8, 4, 4];
+    return { x: x + Math.max(5, l - 4), y: y + t + 1, w: w - Math.max(5, l - 4) - r - 2, h: h - t - b - 2 };
+  }
+  ctx.fillStyle = rgba(T.shadow, 0.35);
+  ctx.fillRect(x + 2, y + 4, w, h - 2);
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(x, y + 3, w, h - 3);
+  ctx.fillStyle = C.wood3;
+  ctx.fillRect(x + 1, y + 4, w - 2, h - 5);
+  ctx.fillStyle = T.woodHi;
+  ctx.fillRect(x + 1, y + 4, w - 2, 1);
+  paperRaw(ctx, x + 3, y + 7, w - 6, h - 10, { shadow: false });
+  // the clip
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(x + 3, y, 12, 7);
+  ctx.fillStyle = C.steel3;
+  ctx.fillRect(x + 4, y + 1, 10, 5);
+  ctx.fillStyle = C.steel4;
+  ctx.fillRect(x + 4, y + 1, 10, 1);
+  ctx.fillStyle = C.steel1;
+  ctx.fillRect(x + 7, y + 3, 4, 1);
+  return { x: x + 7, y: y + 10, w: w - 14, h: h - 16 };
+}

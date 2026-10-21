@@ -20,7 +20,8 @@ for (const s of scenes) {
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${out}/${s}.png` });
   const issues = await page.evaluate(() => window.__galleryIssues ?? []);
-  console.log(`${s}: ${issues.length} audit finding(s)${errors.length ? `, ${errors.length} error(s)` : ''}`);
+  const recs = await page.evaluate(() => window.__galleryRecs ?? 0);
+  console.log(`${s}: ${recs} records, ${issues.length} audit finding(s)${errors.length ? `, ${errors.length} error(s)` : ''}`);
   for (const i of issues.slice(0, 20)) console.log(`  ${i.type}: "${i.text}" ${i.other ? `vs ${i.other}` : ''} @${i.rect.x},${i.rect.y}`);
   for (const e of errors) console.log('  error:', e);
   bad += issues.length + errors.length;
