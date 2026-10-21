@@ -4,7 +4,7 @@
 export const ACTIONS = [
   'panUp', 'panDown', 'panLeft', 'panRight', 'zoomIn', 'zoomOut',
   'slot1', 'slot2', 'slot3', 'slot4', 'slot5', 'slot6', 'slot7', 'slot8', 'slot9',
-  'rotate', 'remove', 'fold', 'floor', 'research', 'orders', 'modules', 'cancel', 'pause', 'help', 'mute', 'hud', 'flow', 'debug',
+  'wheel', 'rotate', 'remove', 'fold', 'floor', 'research', 'orders', 'modules', 'cancel', 'pause', 'help', 'mute', 'hud', 'flow', 'debug',
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -15,20 +15,21 @@ export const SHOWN_ACTIONS = ACTIONS.filter((a) => a !== 'debug' || DEBUG_KEYS);
 
 export const ACTION_LABELS: Record<Action, string> = {
   panUp: 'Pan up', panDown: 'Pan down', panLeft: 'Pan left', panRight: 'Pan right', zoomIn: 'Zoom in', zoomOut: 'Zoom out',
-  slot1: 'Build slot 1', slot2: 'Build slot 2', slot3: 'Build slot 3', slot4: 'Build slot 4', slot5: 'Build slot 5',
-  slot6: 'Build slot 6', slot7: 'Build slot 7', slot8: 'Build slot 8', slot9: 'Build slot 9',
-  rotate: 'Rotate', remove: 'Remove tool', fold: 'Fold tool', floor: 'Switch floor', research: 'Research (the Hopper)',
-  orders: 'Orders (the Dock)', modules: 'Modules', cancel: 'Cancel', pause: 'Pause', help: 'Help and keys', mute: 'Sound on/off',
+  slot1: 'Wheel pick 1', slot2: 'Wheel pick 2', slot3: 'Wheel pick 3', slot4: 'Wheel pick 4', slot5: 'Wheel pick 5',
+  slot6: 'Wheel pick 6', slot7: 'Wheel pick 7', slot8: 'Wheel pick 8', slot9: 'Wheel pick 9',
+  wheel: 'Workbench Wheel', rotate: 'Rotate', remove: 'Remove tool', fold: 'Fold tool', floor: 'Switch floor', research: 'Research',
+  orders: 'Orders', modules: 'Modules', cancel: 'Cancel', pause: 'Pause', help: 'Options and keys', mute: 'Sound on or off',
   hud: 'HUD on/off', flow: 'Flow overlay', debug: 'Debug readout',
 };
 
 export const DEFAULT_BINDS: Record<Action, string[]> = {
   panUp: ['KeyW', 'ArrowUp'], panDown: ['KeyS', 'ArrowDown'], panLeft: ['KeyA', 'ArrowLeft'], panRight: ['KeyD', 'ArrowRight'],
-  zoomIn: ['Equal', 'NumpadAdd', 'KeyE'], zoomOut: ['Minus', 'NumpadSubtract', 'KeyQ'],
+  // Q opens the Workbench Wheel now, so zoom is the mouse wheel, +/- and E/Z
+  zoomIn: ['Equal', 'NumpadAdd', 'KeyE'], zoomOut: ['Minus', 'NumpadSubtract', 'KeyZ'],
   slot1: ['Digit1'], slot2: ['Digit2'], slot3: ['Digit3'], slot4: ['Digit4'], slot5: ['Digit5'],
   slot6: ['Digit6'], slot7: ['Digit7'], slot8: ['Digit8'], slot9: ['Digit9'],
-  rotate: ['KeyR'], remove: ['KeyX'], fold: ['KeyF'], floor: ['Tab'], research: ['KeyT'], orders: ['KeyO'], modules: ['KeyI'],
-  cancel: ['Escape'], pause: ['Space', 'KeyP'], help: ['Slash', 'F1'], mute: ['KeyM'], hud: ['KeyH'], flow: ['KeyL'], debug: ['Backquote'],
+  wheel: ['KeyQ', 'Space'], rotate: ['KeyR'], remove: ['KeyX'], fold: ['KeyF'], floor: ['Tab'], research: ['KeyT'], orders: ['KeyO'], modules: ['KeyI'],
+  cancel: ['Escape'], pause: ['KeyP'], help: ['Slash', 'F1'], mute: ['KeyM'], hud: ['KeyH'], flow: ['KeyL'], debug: ['Backquote'],
 };
 
 export function keyLabel(code: string): string {

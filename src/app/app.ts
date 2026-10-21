@@ -24,7 +24,7 @@ import { foldRefusal, gradedAudit } from '../sim/systems/audits';
 import { RULES } from '../data/rules';
 import { ffoldRefusal } from '../sim/systems/nested';
 import { factoryOpen } from '../sim/systems/modules';
-import { BUILD, STORE_TABS, type BuildKind } from '../data/machines';
+import { BUILD, type BuildKind } from '../data/machines';
 import { ITEMS, type ItemId } from '../data/items';
 import { MEGA } from '../data/megaprojects';
 import { CHUNKS, ANNEX } from '../data/land';
@@ -37,7 +37,7 @@ import { TILE } from '../render/ground';
 import { drawHud, drawTitle, newHudState, banner, type HudState } from './hud';
 import { TOWN_ROWS } from '../render/town';
 import { ICON } from '../ui/font';
-import { plateRaw } from './chrome';
+import { wheelFrameStart, wheelFrameEnd, wheelOpen, openWheel, closeWheel, wheelSlot } from './wheel';
 import { layout, type Layout } from './layout';
 import { Gazette } from './gazette';
 import type { ScreenName } from './screens';
@@ -87,7 +87,7 @@ export class App {
   /** belt drag in progress */
   drag: { x0: number; y0: number; path: { x: number; y: number; rot: Dir }[] } | null = null;
   /** right/middle-button pan in progress */
-  panDrag: { sx: number; sy: number; cx: number; cy: number; moved: boolean } | null = null;
+  panDrag: { sx: number; sy: number; cx: number; cy: number; moved: boolean; right: boolean } | null = null;
   hud: HudState = newHudState();
   flowOverlay = false;
   muted = false;
@@ -146,8 +146,6 @@ export class App {
     canvas.addEventListener('pointerleave', () => { this.mouseIn = false; });
     window.addEventListener('blur', () => { this.mouseIn = false; });
     this.ui.sfx = (id) => this.audio.sfx(id);
-    // tooltips wear the HUD's plate (the UI redesign: one calm panel language)
-    this.ui.tipSkin = (ctx, x, y, w, h) => plateRaw(ctx, x, y, w, h);
     window.addEventListener('resize', () => this.resize());
     document.addEventListener('visibilitychange', () => this.visibility());
     window.addEventListener('pointerdown', () => this.audio.unlock(), { once: false });
@@ -176,8 +174,8 @@ export class App {
     if (r.problem && r.data) {
       const ago = Math.max(0, Date.now() - (r.data.saved ?? Date.now())) / 60000;
       const when = ago < 1 ? 'less than a minute' : ago < 120 ? `${Math.round(ago)} minutes` : `${Math.round(ago / 60)} hours`;
-      this.loadNote = `Your last save could not be loaded (${r.problem}). Loaded the backup from ${when} ago; the damaged one is kept in Options.`;
-    } else if (r.problem) this.loadNote = `Your save could not be loaded (${r.problem}) and no backup loads. It is kept in Options.`;
+      this.loadNote = `{bad:${r.problem}} · the backup from ${when} ago · the damaged one waits in Options`;
+    } else if (r.problem) this.loadNote = `{bad:${r.problem}} · no backup loads · kept in Options`;
     else this.loadNote = null;
     return r;
   }
@@ -239,7 +237,7 @@ export class App {
   /** Switch the floor on screen (the Factory opens with the first fold). */
   setFloor(f: Floor, quiet = false) {
     if (f === 'factory' && !factoryOpen(this.game)) {
-      if (!quiet) this.refuse('The Factory floor opens with your first fold');
+      if (!quiet) this.refuse('opens with the first {u:fold} fold');
       return;
     }
     const first = f !== this.floor;
@@ -269,7 +267,7 @@ export class App {
   /** Copy an export string to the clipboard (falls back to a prompt to copy from). */
   copyExport() {
     const s = this.exportSave();
-    const done = () => this.toast('Save copied', 'Paste it into Import on any browser to carry on there.', C.leaf);
+    const done = () => this.toast('Save copied', '{k:CTRL}{k:V} into Import, on any browser', C.leaf);
     if (navigator.clipboard) navigator.clipboard.writeText(s).then(done, () => window.prompt('Copy your save string:', s));
     else window.prompt('Copy your save string:', s);
   }
@@ -278,7 +276,7 @@ export class App {
     const s = window.prompt('Paste a Foldworks save string:');
     if (!s) return;
     const r = this.importSave(s.trim());
-    if (r.ok) this.toast('Save loaded', 'Welcome back.', C.leaf);
+    if (r.ok) this.toast('Save loaded', '{good:all there}', C.leaf);
     else this.refuse(r.why ?? 'that save did not load');
   }
 
@@ -393,7 +391,10 @@ export class App {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.renderer.drawScreenFx(ctx, this.uiScale);
     this.ui.begin(ctx, this.input, this.uiScale, dt, false);
+    // the Workbench Wheel takes the clicks before anything under it can (src/app/wheel.ts)
+    wheelFrameStart(this);
     drawHud(this, dt);
+    wheelFrameEnd(this);
     this.ui.end();
     this.worldInput();
     this.audio.update(this.busyShare());
@@ -433,13 +434,13 @@ export class App {
             a.sfx('fanfare', 0.7);
             a.sfx('codex', 0.6, 1.2);
             this.renderer.firstMiner(e.x ?? 0, e.y ?? 0);
-            this.toast('Your first Miner!', 'It digs on its own: ore every 2 s, no clicks. Belt it into the furnace and the line runs while you watch.', C.gold, 'build');
+            this.toast('Your first Miner!', '{i:ironOre} every 2 s, no clicks · belt it to the furnace', C.gold, 'build');
           }
           // the first Mk2 machine: a fanfare and a banner
           if (e.id && /Mk2$/.test(e.id) && (e.floor ?? 'workshop') === 'workshop' && (this.game.s.counters.mk2Built ?? 0) <= 1 && this.game.s.ents.filter((q) => /Mk2$/.test(q.kind)).length === 1) {
             a.sfx('fanfare', 0.8);
             this.renderer.fx.kick(4);
-            banner(this, 'FIRST MK2!', `${BUILD[e.id as BuildKind]?.name ?? 'A Mk2 machine'}: ${BUILD[e.id as BuildKind]?.speed ?? 4}x the speed of its Mk1, in 2x2`, C.copper2);
+            banner(this, 'FIRST MK2!', `${BUILD[e.id as BuildKind]?.name ?? 'A Mk2 machine'} · ${BUILD[e.id as BuildKind]?.speed ?? 4}× its Mk1 · 2×2`, C.copper2);
             this.renderer.firstMk2(e.x ?? 0, e.y ?? 0);
           }
           break;
@@ -449,16 +450,16 @@ export class App {
         case 'upgrade':
           a.sfx('bellows');
           a.sfx('buy');
-          this.toast('Bellows bought!', 'The Hand Furnace runs itself now: an ingot every 2 s. Keep it fed with ore.', C.amber);
+          this.toast('Bellows bought!', '{i:ironOre} → {i:ironIngot} every 2 s · no cranking', C.amber);
           break;
-        case 'land': a.sfx('land'); this.toast('Land bought', `${CHUNKS.find((c) => c.id === e.id)?.name ?? 'New land'} is yours. Build on it.`, C.gold); break;
+        case 'land': a.sfx('land'); this.toast('Land bought', `${CHUNKS.find((c) => c.id === e.id)?.name ?? 'New land'} · yours to build on`, C.gold); break;
         // the Milestone 5-6 review round: the Factory annex and the Patent Drawer
-        case 'annex': a.sfx('land'); this.toast('Annex block bought', `Block ${e.value ?? 1} of the Factory annex: 16 more tiles beside the Factory Dock, yours until the next Reorganize.`, C.gold, 'factory'); break;
-        case 'keep': a.sfx('stamp'); this.toast('Kept in the Patent Drawer', `${e.id ?? 'The design'}: it waits there through every Reorganize, ready to unfold whole onto its box.`, C.violet); break;
+        case 'annex': a.sfx('land'); this.toast('Annex block bought', `block ${e.value ?? 1} · +${ANNEX.cols * FACTORY.h} tiles by the Factory Dock · {reset:until Reorganize}`, C.gold, 'factory'); break;
+        case 'keep': a.sfx('stamp'); this.toast('Kept in the Drawer', `${e.id ?? 'The design'} · kept through every Reorganize · unfolds whole`, C.violet); break;
         case 'research': {
           a.sfx('research');
           const d = RESEARCH[e.id as keyof typeof RESEARCH];
-          this.toast(`Research complete: ${d.name}`, `Unlocked ${d.unlocks}.`, C.ice, 'flask');
+          this.toast(`${d.name} done!`, `→ ${d.unlocks}`, C.ice, 'flask');
           this.renderer.fx.kick(2);
           break;
         }
@@ -467,22 +468,22 @@ export class App {
           const d = ORDER[e.id!];
           const c = CUSTOMERS[d.customer];
           const n = this.game.s.orders.done.length;
-          this.toast(`${d.name}: filled!`, `+${Num.of(d.pays).format()} coin, +${d.rep} reputation. "${c.thanks[(n - 1) % c.thanks.length]}"`, C.lime, 'crate');
+          this.toast(`${d.name} filled!`, `{coin:${Num.of(d.pays).format()}}  +${d.rep} {u:heart}  "${c.thanks[(n - 1) % c.thanks.length]}"`, C.lime, 'crate');
           this.gazette.push(`EXTRA! ${d.name} delivered to ${c.name}. ${Num.of(d.pays).format()} coin changes hands.`);
           // a reputation level: a fanfare and a banner naming what it gives
           const rep = this.game.s.orders.rep[d.customer];
           const reward = c.rewards.find((q) => q.rep === rep);
           a.sfx('fanfare', 0.7);
-          banner(this, `${ICON.heart.repeat(Math.max(1, Math.min(3, rep)))} REPUTATION ${rep}!`, `${c.name}: ${reward ? reward.text : 'a new house in town'}`, C.leaf);
+          banner(this, `${ICON.heart.repeat(Math.max(1, Math.min(3, rep)))} REPUTATION ${rep}!`, `${c.name} · ${reward ? reward.text : 'a new house in town'}`, C.leaf);
           // the Festival: the Factory floor, to watch the Gizmo parade into its Dock
           if (e.id === 'gizmoFestival' && !this.panel && this.floor !== 'factory') this.setFloor('factory', true);
           break;
         }
         case 'spark': a.sfx('spark'); break;
-        case 'sparkGet': a.sfx('sparkGet'); if (e.id === 'vein') this.toast('Lucky Vein!', "This patch's miners run 3x for 60 s.", C.gold); break;
-        case 'inspected': this.toast(`Inspector: grade ${e.id}`, `Score ${(e.d ?? 0).toFixed(2)}. Handed ${Num.of(e.value ?? 0).format()} items, a minute of this line's output, to research.`, C.gold); break;
-        case 'firstSlagJam': a.sfx('jam'); if (this.game.s.meta.runs === 0) this.toast('Blocked: slag!', 'Smelting leaves slag, and it has nowhere to go. Click the machine to shovel it, or build a Slag Heap beside it.', C.pipRed); break;
-        case 'firstSale': if (this.game.s.meta.runs === 0) this.toast('First sale!', 'The Dock buys what you make. Coin buys machines.', C.gold); break;
+        case 'sparkGet': a.sfx('sparkGet'); if (e.id === 'vein') this.toast('Lucky Vein!', 'this patch · Miners ×3 · 60 s', C.gold); break;
+        case 'inspected': this.toast(`Graded ${e.id}`, `score ${(e.d ?? 0).toFixed(2)} · ${Num.of(e.value ?? 0).format()} items, a minute of the line, to {research:research}`, C.gold); break;
+        case 'firstSlagJam': a.sfx('jam'); if (this.game.s.meta.runs === 0) this.toast('Choked on slag!', '{k:LMB} shovel · or a {i:slag} Heap beside it', C.pipRed); break;
+        case 'firstSale': if (this.game.s.meta.runs === 0) this.toast('First sale!', 'the Dock buys · {coin} buys machines', C.gold); break;
         case 'orderAccept': a.sfx('open'); break;
         case 'trophy': {
           a.sfx('milestone', 0.7);
@@ -498,7 +499,7 @@ export class App {
           // the player is reading another line's grade card: then its badge waits, glowing
           const reading = this.panel === 'grade' && this.gradeId !== null && this.game.s.audits.some((q) => q.id === this.gradeId && q.result);
           this.audio.sfx('auditTick');
-          if (e.id === 'S+') this.toast('S+! A flawless line', 'Every machine busy, every scrap of waste handled, not a tile wasted. Fold it: x1.35 for good.', C.gold, 'star');
+          if (e.id === 'S+') this.toast('S+! A flawless line', 'all busy · no waste · no tile spare · {k:F} fold ×1.35', C.gold, 'star');
           if (reading) break;
           this.panel = e.floor === 'factory' ? 'fgrade' : 'grade';
           if (e.floor !== 'factory' && e.value !== undefined) this.gradeId = e.value;
@@ -513,19 +514,19 @@ export class App {
         case 'powerOn':
           a.sfx('powerOn');
           this.renderer.fx.kick(2);
-          this.toast('Power on!', 'The grid hums. Powered machines run while supply meets demand; past it, everything on the grid slows together.', C.teal1, 'power');
+          this.toast('Power on!', '{u:power} the grid hums · demand past supply slows it all', C.teal1, 'power');
           break;
         case 'codex': {
           a.sfx('sparkGet');
           const it = ITEMS[e.id as ItemId];
-          this.toast('Codex entry!', `Unit 7 catalogues ${it ? it.name.toLowerCase() : 'it'}: ${Num.of(e.value ?? 0).format()} coin for the first one.`, C.gold, 'codex');
+          this.toast('Codex entry!', `${it ? `{i:${it.id}} ${it.name}` : 'a new item'} · {coin:${Num.of(e.value ?? 0).format()}} for the first`, C.gold, 'codex');
           a.sfx('fanfare', 0.5, 1.2);
-          banner(this, 'CODEX FIRST!', `${it ? it.name : 'A new item'}: +${Num.of(e.value ?? 0).format()} coin`, C.teal1);
+          banner(this, 'CODEX FIRST!', `${it ? it.name : 'A new item'} · +${Num.of(e.value ?? 0).format()} coin`, C.teal1);
           break;
         }
-        case 'claim': a.sfx('upgrade'); this.toast('Claims staked', `${e.value ?? 4} more ${ITEMS[e.id as ItemId]?.name.toLowerCase() ?? ''} claims: stamp more copies of modules that dig it.`, C.leaf, 'claim'); break;
+        case 'claim': a.sfx('upgrade'); this.toast('Claims staked', `+${e.value ?? 4} ${ITEMS[e.id as ItemId] ? `{i:${e.id}}` : ''} claims · more copies of its modules`, C.leaf, 'claim'); break;
         case 'parts': a.sfx('hopper', 0.5); break;
-        case 'bayOpen': a.sfx('milestone', 0.7); this.toast('The Megaproject Bay', 'Trunk Drill Bits, concrete and steel into it to build the Great Drill.', C.gold, 'mega'); break;
+        case 'bayOpen': a.sfx('milestone', 0.7); this.toast('The Megaproject Bay', 'trunk {i:drillBit} {i:concrete} {i:steel} in → the Great Drill', C.gold, 'mega'); break;
         case 'megaGive': break;
         case 'megaDone': {
           a.sfx('milestone');
@@ -536,7 +537,7 @@ export class App {
           this.toast(`${st?.name ?? 'Megaproject'}: done!`, st?.reward ?? '', C.gold, 'mega');
           break;
         }
-        case 'firstNested': this.toast('A module of modules', 'A depth-2 module: the group\'s rates in one tile, times its own grade.', C.gold, 'fold'); break;
+        case 'firstNested': this.toast('A module of modules', 'depth 2 · the group in one tile × its grade', C.gold, 'fold'); break;
         case 'inspectGift': break;
         case 'fold':
           a.sfx('fold');
@@ -544,11 +545,11 @@ export class App {
           if (e.id === 'S+') {
             a.sfx('fanfare', 0.8);
             this.hud.celebs.push({ kind: 'splus', t: 0, x: this.ui.w / 2, y: this.ui.h / 2, id: 'fold' });
-            this.toast('Folded at S+!', 'The best module there is: x1.35 its rates, in one tile. The Gazette is printing a special edition.', C.gold, 'star');
-          } else this.toast('Folded!', 'The line is a module now: one tile with its rates. Open Modules (I) or the Factory floor (Tab) to place it.', C.gold, 'module');
+            this.toast('Folded at S+!', '×1.35 its rates · one tile · a Gazette special', C.gold, 'star');
+          } else this.toast('Folded!', 'one tile, its rates · {k:Tab} the Factory floor · {k:I} Modules', C.gold, 'module');
           break;
         case 'firstFold':
-          if (this.game.s.meta.runs === 0) this.toast('The Factory floor is open', 'Press Tab or the Factory tab to go there. Modules run as rates; trunk belts carry 480 a minute.', C.gold, 'factory');
+          if (this.game.s.meta.runs === 0) this.toast('The Factory floor is open', `{k:Tab} go · modules run as rates · trunks ${FACTORY.trunkSpeed * 60}/min`, C.gold, 'factory');
           break;
         case 'stamp': a.sfx('stamp'); break;
         case 'unfold': a.sfx('place'); break;
@@ -558,7 +559,7 @@ export class App {
           // the card waits for the Gizmo parade into the Factory Dock to finish
           if (this.game.s.meta.runs > 0) {
             // a later run (DESIGN.md §19): the Festival again, celebrated briefly
-            this.toast('The Gizmo Festival, again', 'Bramble throws it every run. The swamp has learned to expect it.', C.gold, 'star');
+            this.toast('The Gizmo Festival, again', 'every run · the swamp expects it', C.gold, 'star');
             break;
           }
           if (this.renderer.parade && this.floor === 'factory') this.sliceAt = this.ui.time + Math.max(0.5, 3.6 - this.renderer.parade.t);
@@ -614,8 +615,17 @@ export class App {
     if (inp.wasPressed('zoomIn')) this.zoom(1);
     if (inp.wasPressed('zoomOut')) this.zoom(-1);
     if (inp.mouse.wheel && !this.ui.captured) this.zoom(-inp.mouse.wheel);
+    // the Workbench Wheel: Q or Space opens it at the cursor (again: shuts it), Esc shuts it, and
+    // any other tool or page key shuts it first
+    const wheel = wheelOpen(this);
+    if (inp.wasPressed('wheel')) {
+      if (wheel) closeWheel(this);
+      else openWheel(this, this.ui.mx, this.ui.my);
+    }
+    if (wheel && inp.wasPressed('cancel')) { closeWheel(this); inp.consume('cancel'); }
+    if (wheel && (['remove', 'floor', 'fold', 'modules', 'research', 'orders', 'help', 'flow'] as const).some((a) => inp.wasPressed(a))) closeWheel(this);
     if (inp.wasPressed('rotate')) {
-      if (this.mode.k === 'build' || this.mode.k === 'ftrunk' || this.mode.k === 'fmodule') { this.rot = ((this.rot + 1) % 4) as Dir; this.audio.sfx('rotate'); }
+      if (wheel || this.mode.k === 'build' || this.mode.k === 'ftrunk' || this.mode.k === 'fmodule') { this.rot = ((this.rot + 1) % 4) as Dir; this.audio.sfx('rotate'); }
       else if (this.hud.hoverTile) {
         const h = this.hud.hoverTile;
         this.act(this.floor === 'factory' ? { k: 'frotate', x: h.x, y: h.y } : { k: 'rotate', x: h.x, y: h.y });
@@ -635,25 +645,9 @@ export class App {
       else if (this.mode.k !== 'idle') this.setMode({ k: 'idle' });
       else { this.selected = null; this.fselected = null; }
     }
-    for (let i = 0; i < 9; i++) {
-      if (inp.wasPressed(('slot' + (i + 1)) as 'slot1')) {
-        if (this.floor === 'factory') {
-          // 1: trunk belts; 2-9: the module designs in inventory order
-          if (i === 0) this.setMode(this.mode.k === 'ftrunk' ? { k: 'idle' } : { k: 'ftrunk' });
-          else {
-            const d = this.game.s.designs[i - 1];
-            if (d) this.pickModule(d.id);
-          }
-          continue;
-        }
-        // keys 1-9 pick from the build bar's open tab (Build, Power, Heavy); from Upgrades they
-        // go back to the last building tab
-        if (this.hud.storeTab === 'upgrades') this.hud.storeTab = 'build';
-        const tab = STORE_TABS.find((q) => q.id === this.hud.buildTab) ?? STORE_TABS[0];
-        const kind = tab.kinds[i];
-        if (kind) this.pickBuild(kind);
-      }
-    }
+    // keys 1-9: hidden accelerators into the wheel's last building petal (on the Factory floor,
+    // 1 the trunk, 2-9 the designs)
+    for (let i = 0; i < 9; i++) if (inp.wasPressed(('slot' + (i + 1)) as 'slot1')) wheelSlot(this, i);
     if (this.floor === 'factory') this.renderer.clampCam(Math.ceil(this.factorySpan()), this.game.fh);
     else this.renderer.clampCam(this.game.W, this.game.H);
   }
@@ -670,7 +664,7 @@ export class App {
     const c = this.layout.center;
     const ui = this.ui;
     const m = 10;
-    const inside = this.mouseIn && !this.panel && ui.mx >= c.x && ui.my >= c.y && ui.mx < c.x + c.w && ui.my < c.y + c.h;
+    const inside = this.mouseIn && !this.panel && !wheelOpen(this) && ui.mx >= c.x && ui.my >= c.y && ui.mx < c.x + c.w && ui.my < c.y + c.h;
     const dx = !inside ? 0 : ui.mx < c.x + m ? -1 : ui.mx >= c.x + c.w - m ? 1 : 0;
     const dy = !inside ? 0 : ui.my < c.y + m ? -1 : ui.my >= c.y + c.h - m ? 1 : 0;
     if (!dx && !dy) { this.edgeT = 0; return; }
@@ -692,7 +686,7 @@ export class App {
 
   pickBuild(kind: BuildKind) {
     if (!this.game.unlocked(kind)) {
-      this.refusal = { text: `${BUILD[kind].name} needs research: ${RESEARCH[BUILD[kind].unlock!].name}`, t: 2 };
+      this.refusal = { text: `needs {research:${RESEARCH[BUILD[kind].unlock!].name}}`, t: 2 };
       this.audio.sfx('error');
       return;
     }
@@ -703,12 +697,12 @@ export class App {
   /** The Fold tool (F): drag a box over a working line (on the Factory floor, with Nested Folds:
    * over a group of modules). */
   toggleFold() {
-    if (!this.game.done('folding')) return this.refuse('Research Folding first');
+    if (!this.game.done('folding')) return this.refuse('needs {research:Folding}');
     if (this.floor === 'factory' && this.game.done('nestedFolds')) {
       const fa = this.game.s.faudit;
       if (fa) {
         this.panel = fa.result ? 'fgrade' : null;
-        return this.refuse(fa.result ? 'Fold or cancel the graded group first' : 'An audit is running on this floor: one at a time');
+        return this.refuse(fa.result ? 'fold or cancel the graded group' : 'one audit at a time here');
       }
       this.setMode(this.mode.k === 'fold' ? { k: 'idle' } : { k: 'fold' });
       return;
@@ -719,7 +713,7 @@ export class App {
       const ga = gradedAudit(this.game);
       this.panel = ga ? 'grade' : null;
       if (ga) { this.gradeId = ga.id; this.gradeAt = this.ui.time; this.hud.stamped = false; this.nameDraft = null; }
-      return this.refuse(ga ? 'Fold or cancel a graded line first' : `${maxAudits} audits are running: wait for a grade`);
+      return this.refuse(ga ? 'fold or cancel a graded line' : `${maxAudits} of ${maxAudits} audits running`);
     }
     this.setMode(this.mode.k === 'fold' ? { k: 'idle' } : { k: 'fold' });
   }
@@ -728,7 +722,7 @@ export class App {
   pickModule(id: number) {
     const d = this.game.design(id);
     if (!d) return;
-    if (d.spare < 1) return this.refuse(`No spare ${d.name}: stamp a copy`);
+    if (d.spare < 1) return this.refuse('no spare copy · {k:SHIFT}{k:LMB} stamp');
     if (this.floor !== 'factory') this.setFloor('factory');
     if (this.floor !== 'factory') return;
     this.panel = null;
@@ -863,7 +857,7 @@ export class App {
 
     // pan with the right or middle button held and moved
     const panBtn = inp.mouse.down[2] || inp.mouse.down[1];
-    if ((inp.mouse.pressed[2] || inp.mouse.pressed[1]) && !overUI) this.panDrag = { sx, sy, cx: this.renderer.cam.x, cy: this.renderer.cam.y, moved: false };
+    if ((inp.mouse.pressed[2] || inp.mouse.pressed[1]) && !overUI) this.panDrag = { sx, sy, cx: this.renderer.cam.x, cy: this.renderer.cam.y, moved: false, right: inp.mouse.pressed[2] };
     if (this.panDrag && panBtn) {
       const dx = sx - this.panDrag.sx, dy = sy - this.panDrag.sy;
       if (Math.abs(dx) + Math.abs(dy) > 4) this.panDrag.moved = true;
@@ -874,13 +868,17 @@ export class App {
     }
     if (this.panDrag && !panBtn) {
       if (!this.panDrag.moved) {
-        // a right click without a drag: cancel the tool, or close the report
+        // a right tap without a drag: drop the tool, or unpin the report, or open the Workbench
+        // Wheel at the cursor
         if (this.mode.k !== 'idle') this.setMode({ k: 'idle' });
-        else this.selected = null;
+        else if (this.selected !== null || this.fselected !== null) { this.selected = null; this.fselected = null; }
+        else if (this.panDrag.right) openWheel(this, this.ui.mx, this.ui.my);
       }
       this.panDrag = null;
     }
 
+    // the town's doors: Unit 7's observatory opens the Codex, Dame Voltaire's pavilion her orders
+    if (inp.mouse.pressed[0] && !overUI && !inFloor && this.mouseIn && this.mode.k === 'idle' && this.townDoor(sx, sy)) return;
     if (this.floor === 'factory') return this.factoryInput(t, overUI, pt);
     if (this.mode.k === 'fold') return this.foldInput(t, overUI, pt);
     if (this.mode.k === 'build' && this.mode.kind === 'belt') return this.beltDrag(t, overUI, pt);
@@ -912,6 +910,17 @@ export class App {
       else if (e.kind === 'hopper') this.togglePanel('research');
       else this.selected = this.selected === e.id ? null : e.id;
     } else this.selected = null;
+  }
+
+  /** A click on the town: a building with a page opens it. */
+  private townDoor(sx: number, sy: number): boolean {
+    const r = this.renderer;
+    const w = r.screenToWorld(sx, sy);
+    const piece = r.town.at(w.x, w.y);
+    if (!piece) return false;
+    if (piece.group === 'unit7') { this.togglePanel(this.game.s.orders.rep.unit7 >= 1 ? 'codex' : 'orders'); return true; }
+    if (piece.group === 'voltaire') { this.togglePanel('orders'); return true; }
+    return false;
   }
 
   /** The Fold tool: drag a box; on release, start the audit (or say why not). */
@@ -1086,6 +1095,9 @@ export class App {
     const s = this.renderer.toScreen(x + 0.5, y + 0.5);
     return { x: s.x / k, y: s.y / k };
   }
+  /** Open the Workbench Wheel at a UI point, the screen's centre by default (e2e); is it open. */
+  openWheelAt(x = this.ui.w / 2, y = this.ui.h / 2) { openWheel(this, x, y); }
+  get wheelIsOpen() { return wheelOpen(this); }
   uiToCss(x: number, y: number) {
     const k = this.uiScale / (window.devicePixelRatio || 1);
     return { x: x * k, y: y * k };
