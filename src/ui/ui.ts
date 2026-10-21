@@ -1,20 +1,50 @@
-// Immediate-mode UI kit drawn on the canvas in "UI pixels" (screen / scale). From the Sprocket &
-// Sprout engine layer by way of Trotline, recoloured for Foldworks. With `audit` on it records
-// every text, panel, button and opaque fill a frame draws, for the overlap audit
-// (src/ui/audit.ts, npm run screens).
+// Immediate-mode UI kit drawn on the canvas in "UI pixels" (screen / scale). The engine layer came
+// from Sprocket & Sprout by way of Trotline; the 180 (docs/hud-180.md) turned its look to ink on
+// paper: panels are paper, tags, bubbles, ribbons, the Purse's sign and the ledger book
+// (src/ui/paper.ts), text may carry markup (src/ui/rich.ts), colours are roles (src/ui/theme.ts).
+// With `audit` on it records every text, panel, button and opaque fill a frame draws, for the
+// overlap audit (src/ui/audit.ts, npm run screens).
 import { C, rgba } from '../data/palette';
 import type { Input } from '../engine/input';
-import { drawText, drawSmall, textWidth, smallWidth, wrapText, LINE_H, FONT_H, SMALL_H } from './font';
+import { drawText, drawSmall, textWidth, smallWidth, LINE_H, FONT_H, SMALL_H, drawBig, bigWidth, BIG_H } from './font';
 import type { AuditRec, AuditKind } from './audit';
+import { T, onPaper } from './theme';
+import { paperRaw, tagRaw, bubbleRaw, ribbonRaw, signRaw, bookRaw, meterRaw, buttonRaw, outlinedText, TAG_HEAD, holeToward, type HoleSide, type TailSide, type RibbonColor } from './paper';
+import { drawRich, layoutRich, drawLayout, CAP_H, BIG_CAP_H } from './rich';
 
 export interface Rect { x: number; y: number; w: number; h: number }
+/** A tooltip line; `text` may carry rich-text markup, `color` is its ink (light colours meant for
+ * the old slate boxes are mapped to their ink on paper). */
 export interface TipLine { text: string; color?: string }
 
 /** A tooltip placed around things it must not cover: `avoid` (the hovered tile and its
  * neighbours, the tile the goal points at), staying inside `bounds` where it can. */
 export interface TipPlace { avoid: Rect[]; bounds?: Rect }
 
-export type PanelStyle = 'dark' | 'raised' | 'inset' | 'paper';
+/** Panel styles. The 180's: tag, bubble, ribbon, sign, book. The old names draw paper now:
+ * 'dark' and 'paper' a sheet of paper, 'raised' a lit sheet, 'inset' a pressed well. */
+export type PanelStyle = 'dark' | 'raised' | 'inset' | 'paper' | 'tag' | 'bubble' | 'ribbon' | 'sign' | 'book';
+
+/** Options for the 180's panel styles (each style reads the ones it needs). */
+export interface PanelOpts {
+  /** tag: where its string runs to */
+  anchor?: { x: number; y: number } | null;
+  /** tag: pinned (a pushpin, no string) */
+  pin?: boolean;
+  /** tag: its head's side (default: toward the anchor, else left) */
+  hole?: HoleSide;
+  /** bubble: the tail's side and its offset along that side */
+  side?: TailSide;
+  at?: number;
+  /** ribbon: its colour */
+  color?: RibbonColor;
+  /** sign: where its ropes start (null: no ropes) */
+  ropeTop?: number | null;
+  /** book: the spine's x (null: one page) */
+  spine?: number | null;
+  /** the lit face */
+  hover?: boolean;
+}
 
 export class UI {
   ctx!: CanvasRenderingContext2D;
@@ -32,7 +62,7 @@ export class UI {
   private nextIds = new Map<string, Rect>();
   private prevBlocks: Rect[] = [];
   tooltip: TipLine[] | null = null;
-  /** paints a tooltip's box when set (the app hands over its 9-slice art); else the kit's own */
+  /** kept so old callers compile: the tooltip is the kit's tag now and this is not called */
   tipSkin: ((ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void) | null = null;
   tipWidth = 180;
   /** where this frame's tooltip may not sit, and the room it should stay in (a world tooltip:
@@ -54,6 +84,11 @@ export class UI {
 
   private rec(kind: AuditKind, x: number, y: number, w: number, h: number, s?: string) {
     this.auditLog.push({ kind, x, y, w, h, s, clip: this.clips[this.clips.length - 1], layer: this.auditLayer, seq: this.auditLog.length });
+  }
+
+  /** Record something custom-drawn for the overlap audit (rich text's icons, keycaps, chips). */
+  record(kind: AuditKind, x: number, y: number, w: number, h: number, s?: string) {
+    if (this.audit) this.rec(kind, Math.round(x), Math.round(y), w, h, s);
   }
 
   /** Start a UI frame. With `clear` false the UI draws over what is already on the canvas. */
@@ -123,47 +158,69 @@ export class UI {
     this.ctx.fillRect(x, y, w, h);
   }
 
-  panel(x: number, y: number, w: number, h: number, style: PanelStyle = 'dark', blocking = true) {
+  panel(x: number, y: number, w: number, h: number, style: PanelStyle = 'paper', blocking = true, o: PanelOpts = {}) {
     x = Math.round(x);
     y = Math.round(y);
     if (blocking) this.block(x, y, w, h);
     if (this.audit) this.rec('panel', x, y, w, h);
+    const ctx = this.ctx;
     switch (style) {
-      case 'dark':
-        this.fill(x, y, w, h, C.night, 0.92);
-        this.fill(x, y, w, 1, C.iron);
-        this.fill(x, y + h - 1, w, 1, C.ink);
-        this.fill(x, y, 1, h, C.iron);
-        this.fill(x + w - 1, y, 1, h, C.ink);
+      case 'tag':
+        tagRaw(ctx, x, y, w, h, { hole: o.hole, anchor: o.anchor, pin: o.pin, hover: o.hover });
         break;
-      case 'raised':
-        this.fill(x, y, w, h, C.ink);
-        this.fill(x + 1, y + 1, w - 2, h - 2, C.slate);
-        this.fill(x + 1, y + 1, w - 2, 1, C.steel);
-        this.fill(x + 1, y + h - 2, w - 2, 1, C.night);
+      case 'bubble':
+        bubbleRaw(ctx, x, y, w, h, o.side ?? 'bottom', o.at ?? 12);
+        break;
+      case 'ribbon':
+        ribbonRaw(ctx, x, y, w, h, o.color ?? 'moss', 'in');
+        break;
+      case 'sign':
+        signRaw(ctx, x, y, w, h, o.ropeTop ?? null);
+        break;
+      case 'book':
+        bookRaw(ctx, x, y, w, h, o.spine === undefined ? x + Math.floor(w / 2) : o.spine);
         break;
       case 'inset':
-        this.fill(x, y, w, h, C.ink, 0.9);
-        this.fill(x, y, w, 1, C.night);
-        this.fill(x, y, 1, h, C.night);
+        // a well pressed into the paper
+        ctx.fillStyle = rgba(T.paperLo, 0.75);
+        ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = rgba(T.paperEdge, 0.8);
+        ctx.fillRect(x, y, w, 1);
+        ctx.fillRect(x, y, 1, h);
+        ctx.fillStyle = rgba(T.paperHi, 0.8);
+        ctx.fillRect(x + 1, y + h - 1, w - 1, 1);
+        ctx.fillRect(x + w - 1, y + 1, 1, h - 1);
         break;
-      case 'paper':
-        this.fill(x, y, w, h, C.ink);
-        this.fill(x + 1, y + 1, w - 2, h - 2, C.cream);
-        this.fill(x + 1, y + 1, w - 2, 1, C.bone);
-        this.fill(x + 1, y + h - 2, w - 2, 1, C.tan);
-        break;
+      default:
+        paperRaw(ctx, x, y, w, h, { hi: style === 'raised' || o.hover });
     }
   }
 
-  text(s: string, x: number, y: number, c: string = C.bone, opts: { scale?: number; shadow?: string; align?: 'left' | 'center' | 'right'; small?: boolean } = {}) {
+  text(s: string, x: number, y: number, c: string = C.bone, opts: { scale?: number; shadow?: string; outline?: string; align?: 'left' | 'center' | 'right'; small?: boolean } = {}) {
     if (opts.small) return this.small(s, x, y, c, opts);
     const sc = opts.scale ?? 1;
     let tx = x;
     if (opts.align === 'center') tx = x - Math.floor((textWidth(s) * sc) / 2);
     else if (opts.align === 'right') tx = x - textWidth(s) * sc;
     if (this.audit && s.trim()) this.rec('text', Math.round(tx), Math.round(y), textWidth(s) * sc, FONT_H * sc, s);
+    if (opts.outline) return outlinedText(this.ctx, s, Math.round(tx), Math.round(y), c, opts.outline, sc);
     return drawText(this.ctx, s, Math.round(tx), Math.round(y), c, sc, opts.shadow ?? null);
+  }
+
+  /** Display-face text (Bullfrog: the Purse, titles, names, grade letters, button words). Returns
+   * the width drawn. `outline` draws light text over the floor with an ink outline. */
+  big(s: string, x: number, y: number, c: string = T.ink, opts: { scale?: number; shadow?: string; outline?: string; align?: 'left' | 'center' | 'right' } = {}) {
+    const sc = opts.scale ?? 1;
+    const w = bigWidth(s) * sc;
+    const tx = Math.round(opts.align === 'center' ? x - Math.floor(w / 2) : opts.align === 'right' ? x - w : x);
+    if (this.audit && s.trim()) this.rec('text', tx, Math.round(y), w, BIG_H * sc, s);
+    if (opts.outline) return outlinedText(this.ctx, s, tx, Math.round(y), c, opts.outline, sc, true);
+    return drawBig(this.ctx, s, tx, Math.round(y), c, sc, opts.shadow ?? null);
+  }
+
+  /** Rich text (src/ui/rich.ts) wrapped to `maxW`; returns the height used. */
+  rich(s: string, x: number, y: number, maxW = Infinity, c: string = T.ink, opts: { align?: 'left' | 'center' | 'right'; shadow?: string; floor?: boolean; lineH?: number } = {}) {
+    return drawRich(this, s, x, y, maxW, c, opts);
   }
 
   /** Small-font text (5 px capitals: labels, keys, prices). Returns the width drawn. */
@@ -174,28 +231,25 @@ export class UI {
     return drawSmall(this.ctx, s, Math.round(tx), Math.round(y), c, opts.shadow ?? null);
   }
 
-  /** wrapped paragraph; returns height used */
+  /** wrapped paragraph (it may carry rich-text markup; a plain one draws as before); returns
+   * height used */
   para(s: string, x: number, y: number, w: number, c: string = C.bone, lineH = LINE_H): number {
-    const lines = wrapText(s, w);
-    lines.forEach((l, i) => this.text(l, x, y + i * lineH, c));
-    return lines.length * lineH;
+    return drawRich(this, s, x, y, w, c, { lineH });
   }
 
-  button(id: string, x: number, y: number, w: number, h: number, label: string, opts: { disabled?: boolean; active?: boolean; tip?: TipLine[] | string; accent?: string; color?: string } = {}): boolean {
+  /** A paper button (an ink line, a lit top, a lip it presses down onto); `active` makes it the
+   * lit green of a tool that is on, `gold` brass with ink text. The label may carry markup; `big`
+   * sets it in the display face. */
+  button(id: string, x: number, y: number, w: number, h: number, label: string, opts: { disabled?: boolean; active?: boolean; tip?: TipLine[] | string; accent?: string; color?: string; gold?: boolean; big?: boolean } = {}): boolean {
     const hov = this.hover(x, y, w, h) && !opts.disabled;
     const down = hov && this.input.mouse.down[0];
     if (this.audit) this.rec('button', x, y, w, h);
-    const base = opts.disabled ? C.night : opts.active ? (opts.accent ?? C.clay) : C.iron;
-    const hi = opts.disabled ? C.slate : opts.active ? C.copper : C.steel;
-    this.fill(x, y, w, h, C.ink);
-    this.fill(x + 1, y + 1, w - 2, h - 2, hov ? hi : base);
-    if (!down) {
-      this.fill(x + 1, y + 1, w - 2, 1, hov ? C.fog : hi);
-      this.fill(x + 1, y + h - 2, w - 2, 1, C.night);
-    }
+    const state = opts.disabled ? 'disabled' : down ? 'down' : hov ? 'hover' : 'up';
+    const dy = buttonRaw(this.ctx, x, y, w, h, state, opts.gold ? 'gold' : opts.active ? 'active' : 'paper');
     if (label) {
-      const col = opts.disabled ? C.fog : (opts.color ?? C.bone);
-      this.text(label, x + w / 2, y + Math.floor((h - 7) / 2) + (down ? 1 : 0), col, { align: 'center', shadow: opts.disabled ? undefined : C.ink });
+      const col = opts.disabled ? T.inkSoft : onPaper(opts.color, T.ink);
+      if (opts.big) this.big(label, x + w / 2, y + 1 + Math.floor((h - 4 - BIG_CAP_H) / 2) + dy, col, { align: 'center' });
+      else drawRich(this, label, x + w / 2, y + 1 + Math.floor((h - 4 - CAP_H) / 2) + dy, Infinity, col, { align: 'center' });
     }
     if (hov) {
       this.hoverId = id;
@@ -232,9 +286,11 @@ export class UI {
     this.tipPlace = place;
   }
 
-  bar(x: number, y: number, w: number, h: number, frac: number, col: string, bg: string = C.ink) {
-    this.fill(x, y, w, h, bg);
-    this.fill(x + 1, y + 1, Math.round((w - 2) * Math.max(0, Math.min(1, frac))), h - 2, col);
+  /** A meter on paper: an ink-lined trough, the fill, an optional target notch (0..1). `bg` is
+   * kept for old callers and no longer drawn. */
+  bar(x: number, y: number, w: number, h: number, frac: number, col: string, bg: string = C.ink, target: number | null = null) {
+    if (this.audit && w > 2 && h > 2) this.rec('fill', x, y, w, h);
+    meterRaw(this.ctx, x, y, w, h, frac, col, target);
   }
 
   clip(x: number, y: number, w: number, h: number) {
@@ -304,28 +360,33 @@ export class UI {
     return null;
   }
 
+  /** The tooltip: a paper tag on a string, its lines rich text in ink. The string runs to the
+   * thing the tip is about (the first `avoid` rect's centre, else the cursor). */
   private drawTip(lines: TipLine[]) {
     const maxW = this.tipWidth;
-    const wrapped: { text: string; color: string }[] = [];
-    for (const l of lines) for (const t of wrapText(l.text, maxW)) wrapped.push({ text: t, color: l.color ?? C.bone });
-    let w = 0;
-    for (const l of wrapped) w = Math.max(w, textWidth(l.text));
-    w += 10;
-    const h = wrapped.length * LINE_H + 8;
-    let x = this.mx + 12, y = this.my + 12;
-    if (x + w > this.w) x = this.mx - w - 4;
+    const lays = lines.map((l) => ({ L: layoutRich(l.text, maxW), col: onPaper(l.color, T.ink) }));
+    let cw = 0, ch = 0;
+    for (const l of lays) { cw = Math.max(cw, l.L.w); ch += l.L.h; }
+    const padX = 6, padY = 5;
+    const w = cw + padX + TAG_HEAD + 2;
+    const h = Math.max(ch + padY * 2 - 1, 17);
+    let x = this.mx + 12, y = this.my + 10;
+    if (x + w > this.w) x = this.mx - w - 8;
     if (y + h > this.h) y = this.h - h - 2;
     x = Math.max(2, x);
     y = Math.max(2, y);
     const placed = this.tipPlace ? this.placeTip(w, h, this.tipPlace) : null;
     if (placed) ({ x, y } = placed);
-    this.fill(x + 2, y + 2, w, h, C.ink, 0.4);
-    if (this.tipSkin) this.tipSkin(this.ctx, x, y, w, h);
-    else {
-      this.fill(x, y, w, h, C.ink);
-      this.fill(x + 1, y + 1, w - 2, h - 2, C.night);
-      this.fill(x + 1, y + 1, w - 2, 1, C.amber);
+    const near = this.tipPlace?.avoid[0];
+    const anchor = near ? { x: near.x + Math.floor(near.w / 2), y: near.y + Math.floor(near.h / 2) } : { x: this.mx, y: this.my };
+    const hole: HoleSide = holeToward(x, y, w, h, anchor) === 'right' ? 'right' : 'left';
+    if (this.audit) this.rec('panel', x, y, w, h);
+    tagRaw(this.ctx, x, y, w, h, { hole, anchor });
+    let ty = y + padY;
+    const tx = hole === 'left' ? x + TAG_HEAD + 2 : x + padX;
+    for (const l of lays) {
+      drawLayout(this, l.L, tx, ty, l.col);
+      ty += l.L.h;
     }
-    wrapped.forEach((l, i) => this.text(l.text, x + 5, y + 5 + i * LINE_H, l.color));
   }
 }
