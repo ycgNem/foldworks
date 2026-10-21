@@ -208,18 +208,24 @@ on darks, `lamp1` on mids, `lamp2` on lights).
 
 ## The title scene
 
-`title_scene` (320×180, 8 frames, `title_scene.py`) is the revamp's showcase: the bayou at dusk
-(sky to dusk violet, far hills in blue-grey haze, a row of stilt houses with lantern windows, the
-moon and its streak on teal water), the Workshop deck at the bottom left with a miner on ore, a
-smelter and a belt running into the Dock and a brass module glowing, and Bramble in his top hat
-on the boardwalk at the right. Reflections shimmer row by row, lanterns flicker, the belt runs.
-Composition rule: the sky band (scene y 14–66) carries the logo and tagline, the open water in
-the middle (y 104+) the buttons, the dark water along the bottom the last line; the game places
-them in scene coordinates at a whole-number cover scale.
+`title_scene` (320×180, 8 frames at 8 fps, `pixel-art/title/build.py`, `node shot.mjs` shoots the
+real title at three sizes) is the sky island at morning: **the Workshop island on the left** (a
+grass rim and a paved plot with the line folded into an L: a miner on the iron outcrop, a furnace,
+a belt turn carrying ingots into the Dock, a brass module beside it; a frog worker, trees, ore
+veins in the cliff, two waterfalls, the underside sinking into the cloud sea) and **the town's
+island on the right** (Mayor Bramble drawn whole at 24×32 raising his hat to the sky, his house
+and a gable house on their footings, a red town pennant, a townsfrog, a waterfall); the sun top
+left, a warm horizon band, a hazed windmill islet under the buttons, birds over the gap. Nothing
+drifts across the frame (8 frames can't loop a drift): the falls, foam, belt, miner, furnace,
+module, pennant, birds, cloud puffs, the frog and Bramble move in place. Composition rule: the
+sky band (scene y 14–66) carries the logo and tagline, with nothing tall under x 50–270 there;
+the open sky between the islands (x 125–195 from y 104) the buttons; the cloud sea along the
+bottom the last line; at 1024×640 only scene x 32–288 shows, so everything that matters is
+inside it. The game places them in scene coordinates at a whole-number cover scale.
 
 ## Pictures and UI art
 
-The Megaproject and research scenes sit under the bayou's night (ink violets falling to slag and
+The Megaproject and research scenes (not redrawn for the sky island) sit under the bayou's night (ink violets falling to slag and
 violet, the town black against it with lit windows). Brass that is meant to look folded or
 struck (the logo, coins, grade letters, the menu frame's rod and plates) uses all four brass
 steps, `brass0` at the deepest fold and lantern gold (`lamp2`/`lamp3`) only on the lit face and
