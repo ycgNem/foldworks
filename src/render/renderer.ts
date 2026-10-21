@@ -93,6 +93,9 @@ export class Renderer {
   private jamSince = new Map<number, number>();
   /** recent crafting flashes: entity id -> time */
   private flashes = new Map<number, number>();
+  /** buildings just placed on the Workshop (tile key y * 4096 + x -> time): they drop in from
+   *  above and land with a squash and a puff of dust (the sky island: a tycoon's build, felt) */
+  private drops = new Map<number, { t: number; landed: boolean }>();
   /** sounds to play with the effects, drained by the HUD each frame */
   sounds: SoundReq[] = [];
   /** events that celebrate over the whole screen whatever floor is shown (the HUD draws them) */
@@ -250,8 +253,12 @@ export class Renderer {
         case 'place': {
           const big = e.id && e.id in BUILD ? BUILD[e.id as BuildKind].w : 1;
           const c = big * 8;
-          fx.burst(px + c, py + c * 2 - 2, 6 * big, [C.tan, C.clay, C.fog], 30, 80);
-          fx.ring(px + c, py + c, C.bone, 10 * big, 0.25, 6);
+          // belts are laid flat (a drag lays dozens); anything that stands up drops in, and its
+          // dust and ring wait for the landing (building())
+          if (e.id === 'belt' || e.floor === 'factory') {
+            fx.burst(px + c, py + c * 2 - 2, 6 * big, [C.tan, C.clay, C.fog], 30, 80);
+            fx.ring(px + c, py + c, C.bone, 10 * big, 0.25, 6);
+          } else this.drops.set((e.y ?? 0) * 4096 + (e.x ?? 0), { t: this.time, landed: false });
           if (e.id === 'pole') { fx.ring(px + 8, py + 8, C.teal1, (poleReach(g) + 0.5) * TILE, 0.5, 6); this.sfx('powerOn', 0.5); }
           if (e.floor === 'factory' && e.id === 'module' && (g.s.counters.modulesPlaced ?? 0) <= 1) {
             // the first module on the Factory floor
@@ -710,6 +717,44 @@ export class Renderer {
   // ---------------------------------------------------------------- buildings
 
   private building(g: Game, e: Ent) {
+    const d = this.drops.size ? this.drops.get(e.y * 4096 + e.x) : undefined;
+    if (!d) return this.buildingAt(g, e);
+    // the drop: 0.12 s falling 14 px (accelerating), then 0.16 s of squash on landing, about the
+    // footprint's bottom middle
+    const FALL = 0.12, SQUASH = 0.16;
+    const t = this.time - d.t;
+    if (t >= FALL + SQUASH) { this.drops.delete(e.y * 4096 + e.x); return this.buildingAt(g, e); }
+    const ctx = this.ctx;
+    const bx = (e.x + e.w / 2) * TILE, by = (e.y + e.h) * TILE;
+    if (t >= FALL && !d.landed) {
+      d.landed = true;
+      const c = e.w * 8;
+      this.fx.burst(bx, by - 2, 8 * e.w, [C.tan, C.clay, C.fog, C.pave3], 40, 90);
+      this.fx.ring(bx, by - c, C.bone, 12 * e.w, 0.25, 6);
+      this.sfx('place', 0.35, 0.8);
+    }
+    let dy = 0, sx = 1, sy = 1;
+    if (t < FALL) {
+      const u = t / FALL;
+      dy = -Math.round(14 * (1 - u * u));
+      // its shadow on the ground grows as it comes down
+      ctx.fillStyle = rgba(C.ink, 0.12 + 0.2 * u);
+      const sw = Math.round(e.w * TILE * (0.5 + 0.4 * u));
+      ctx.fillRect(Math.round(bx - sw / 2), by - 3, sw, 2);
+    } else {
+      const k = Math.sin(Math.PI * Math.min(1, (t - FALL) / SQUASH));
+      sx = 1 + 0.14 * k;
+      sy = 1 - 0.16 * k;
+    }
+    ctx.save();
+    ctx.translate(bx, by + dy);
+    ctx.scale(sx, sy);
+    ctx.translate(-bx, -by);
+    this.buildingAt(g, e);
+    ctx.restore();
+  }
+
+  private buildingAt(g: Game, e: Ent) {
     const ctx = this.ctx;
     const x = e.x * TILE, y = e.y * TILE;
     const W = e.w * TILE, Ht = e.h * TILE;
