@@ -107,6 +107,8 @@ export function offer(g: Game, x: number, y: number, dir: Dir, item: string, car
       to.inBuf[item] = (to.inBuf[item] ?? 0) + 1;
     }
   }
+  // a belt or logistics part that carried an item counts in the bills term (§19)
+  if (!isMachine(to.kind)) to.used = g.s.tick;
   g.onTransfer(x, y, dir, item);
   return true;
 }

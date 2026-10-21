@@ -33,6 +33,10 @@ export const RULES = {
   foldMax: r(8, '§10 the Fold box is at most 8x8 in the slice'),
   auditWarmup: r(10, '§10 Audit: 10 s warm-up'),
   auditWindow: r(60, '§10 Audit: a 60 s window'),
+  /** a kept design unfolded unchanged refolds after this check instead of a full audit */
+  refoldCheck: r(10, '§19 The Patent Drawer, refolding: a kept layout already graded refolds at its kept grade after a 10 s check that it runs with its ports fed (every machine about as busy as its audit found it, its product leaving the box): two crafts of the slowest slice machine, the same length as the warm-up of a full audit, so a check that fails has lost nothing (the full audit goes on)'),
+  /** how much less busy than its kept audit a line may run in the check */
+  refoldSlack: r(0.1, '§19 The Patent Drawer, refolding: the check passes when the machines run at least their kept U less 0.1 (a line just unfolded fills its belts in the first seconds; one starved of an input or power runs far below)'),
   /** Workshop lines audited at once */
   /** S+ needs at least this share of the byproducts made used inside the box */
   splusUsedInside: r(0.8, '§10 Grade S+: a zero-waste line uses its byproducts inside the box (80%: slag on belts at the window edges); routed out to a heap or a Dock it caps at S (the Milestone 4 review)'),
@@ -91,7 +95,9 @@ export const RULES = {
   tierStep: r(4, '§19 Filing: the rate tier steps every 4x of scale, a Mk2 machine\'s speed (§18): under 4 Mk1 machines\' worth of the last recipe x1, 4 (a Mk2, or four Mk1) x1.5, 16 x2, 64 x2.5'),
   tierBonus: r(0.5, '§19 Filing: +0.5 to the value per rate tier, so four times the line is worth half again a product\'s Patents, never four times (a bigger line is progress, not the whole of it)'),
   /** the bills term: log2(1 + bills standing and running / this) */
-  patentBillsDivisor: r(25000, '§19 Filing: the minor term, log2(1 + the bills of every building and module that ran in the last minute / 25,000): the slice-end factory stands on about 14K (0.6), the Act II bot\'s 4 h factory about 85K (2.1); coin on hand counts for nothing and an idle building for nothing, so a hoard is never burned for Patents (the Milestone 5 review)'),
+  patentBillsDivisor: r(25000, "§19 Filing: the minor term, log2(1 + bills / 25,000), each building and module counted by its measured work over the last 5 minutes (billsWindow): the slice-end factory stands on about 10K (0.5), the Act II bot's 4 h factory on about 33K (1.2); coin on hand counts for nothing, an idle building for nothing and a starved one by its satisfaction, so a hoard is never burned for Patents (the Milestone 5 review; the final round: a brownout farm of 239 refineries adds under 0.1)"),
+  /** the bills term's window, minutes: a building's bill counts by its measured share of this */
+  billsWindow: r(5, "§19 Filing, the bills term: each building counts by its measured work over the last 5 whole minutes (a machine's work times its grid's satisfaction, a power producer's burn share, a module's run fraction; belts and trunks if they carried items): long enough that a building bought and run a minute before a reset counts a fifth, short enough that the factory standing at the reset is the one counted (the final round: a machine that worked one second in the last 60 counted in full, so idle and browned-out buildings were farmed for Patents)"),
   /** a reset needs at least this many Patents to be taken (the preview says what to do first) */
   patentMin: r(1, '§19 Reorganize: at least one Patent, so a reset is never a loss by accident'),
   /** the Patent Drawer: designs kept, the box limit of a share string */

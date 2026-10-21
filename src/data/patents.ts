@@ -63,8 +63,10 @@ export const PATENTS: Record<PatentId, PatentDef> = {
   // Each is priced at about a Patent per 10-15 minutes of the first run it saves (1 at the least):
   // the designed first run files about 3.6 Patents an hour (§19), so a node pays back its price in
   // the minutes it saves over two or three runs. The tree is 40 Patents in all (it was 55): the
-  // designed campaign banks about 31 by the end of its third run (11-12 h), most of the tree, and
-  // all of it in the fourth (the review round: buy most of it in 5-15 h).
+  // designed campaign banks 30 by the end of its third run (14 + 7 + 9, about 10 h of play) and has
+  // bought 22 of the 29 nodes, most of the tree in 5-15 h (the review round). Measured in the final
+  // round, a fourth run files about 1 in 5 h (everything is on file and the Drill is done), so the
+  // last 10 Patents wait for the next floor's goals (Milestone 7), not for the fourth run.
   bellows: P({
     id: 'bellows', name: 'Bellows on the Bench', branch: 'head', cost: 1, requires: [], pos: [0, 0],
     effect: { k: 'head', upgrades: ['bellows'] },

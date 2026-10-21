@@ -36,12 +36,13 @@ import { BUILD, isMachine, isPower } from '../data/machines';
 import { RESEARCH_IDS, type ResearchId } from '../data/research';
 import { CUSTOMERS, type CustomerId } from '../data/orders';
 import { MEGA, megaStage } from '../data/megaprojects';
-import { START_LAYOUT } from '../data/land';
+import { FACTORY, START_LAYOUT } from '../data/land';
 import { IDLE_UPGRADES } from '../data/idle';
 import { PATENTS, type PatentId } from '../data/patents';
 import { newState, type Filed, type ModuleDesign, type State } from './world';
 import { BYPRODUCTS, mainItem, megaOpen } from './systems/modules';
 import { recipeKnown } from './transfer';
+import { workShare } from './systems/stats';
 import { prules } from './patents';
 
 /** What a Reorganize keeps, in words (the confirm card lists it). */
@@ -139,31 +140,55 @@ export function designValue(d: ModuleDesign): Valued | null {
 
 // ------------------------------------------------------------------ bills standing
 
-/** The bills of what stands and ran in the last minute: Workshop machines that worked, power on a
- * grid that ran something, every belt and logistics part, Factory modules that ran (their stamp
- * bill each) and trunks. Coin on hand and buildings left idle count for nothing (§19). */
+/** Pole bills on a grid count up to this share of its consumers' counted bills (a grid's poles
+ * cost a few percent of what they power: a field of poles beside one kiln is not a factory). */
+const POLE_SHARE = 0.25;
+
+/** The bills of the factory standing and running, each building weighted by its measured work
+ * over the last RULES.billsWindow whole minutes (§19, the Milestone 5-6 final round):
+ * - a Workshop machine or Miner by its work share times its grid's satisfaction (a brownout at 1%
+ *   of the power wanted counts 1% of the bill);
+ * - a power producer (and an engine's boiler) by its own burn share: an unfuelled one counts
+ *   nothing, a plant twice the load half each;
+ * - Poles by their grid's producers' burn share, at most a quarter of the grid's counted consumers;
+ * - belts and logistics parts, and Factory trunks, in full if they carried an item in the window;
+ * - Factory modules by their run fraction, at their stamp bill.
+ * Coin on hand counts for nothing, and a building bought and left idle, starved, blocked or
+ * browned out for nothing, so a hoard is never burned for Patents. */
 export function billsStanding(g: Game): number {
+  const win = RULES.billsWindow.value * 60 * TICK_RATE;
+  const carried = (e: { used?: number }) => e.used !== undefined && g.s.tick - e.used <= win;
   let b = 0;
-  // power on a grid that ran a machine in the last minute (an engine's boiler with it)
-  const live = new Set<number>();
-  for (const gr of g.grids) {
-    if (!(gr.supply > 0 && gr.consumers.some((c) => c.hist.includes('w')))) continue;
-    for (const p of [...gr.producers, ...gr.poles]) {
-      live.add(p.id);
-      const boiler = g.boilerOf.get(p.id);
-      if (boiler) live.add(boiler.id);
-    }
-  }
+  // each grid's counted consumers, and its producers' capacity and delivered share
+  const cons = new Map<number, number>(), cap = new Map<number, number>(), gave = new Map<number, number>();
   for (const e of g.s.ents) {
     if (e.kind === 'dock' || e.kind === 'hopper' || e.kind === 'furnace') continue;
     const cost = BUILD[e.kind]?.cost ?? 0;
-    if (isMachine(e.kind)) { if (e.hist.includes('w')) b += cost; }
-    else if (isPower(e.kind)) { if (live.has(e.id)) b += cost; }
-    else b += cost;
+    const gi = g.gridOf.get(e.id);
+    if (isMachine(e.kind)) {
+      const v = cost * workShare(e);
+      b += v;
+      if (gi !== undefined) cons.set(gi, (cons.get(gi) ?? 0) + v);
+    } else if (e.kind === 'pole') continue;
+    else if (isPower(e.kind)) {
+      const sh = workShare(e);
+      b += cost * sh;
+      const kw = BUILD[e.kind].power ?? 0;
+      if (gi !== undefined && kw) {
+        cap.set(gi, (cap.get(gi) ?? 0) + kw);
+        gave.set(gi, (gave.get(gi) ?? 0) + kw * sh);
+      }
+    } else if (carried(e)) b += cost;
   }
+  g.grids.forEach((gr, gi) => {
+    const pc = gr.poles.reduce((t, p) => t + (BUILD[p.kind]?.cost ?? 0), 0);
+    const c = cap.get(gi) ?? 0;
+    const util = c > 0 ? (gave.get(gi) ?? 0) / c : 0;
+    b += Math.min(pc * util, POLE_SHARE * (cons.get(gi) ?? 0));
+  });
   for (const e of g.s.factory.ents) {
-    if (e.kind === 'module') { if (e.hist.includes('w')) b += g.design(e.design)?.bill ?? 0; }
-    else if (e.kind === 'trunk') b += 2;
+    if (e.kind === 'module') b += (g.design(e.design)?.bill ?? 0) * workShare(e);
+    else if (e.kind === 'trunk' && carried(e)) b += FACTORY.trunkCost;
   }
   return b;
 }
@@ -190,7 +215,7 @@ export interface PatentLine {
   perMin: number;
 }
 
-export interface PatentGoal { kind: 'fold' | 'grade' | 'deeper' | 'bigger' | 'mega' | 'committee' | 'bills'; text: string; gain: number; item?: ItemId }
+export interface PatentGoal { kind: 'fold' | 'grade' | 'deeper' | 'bigger' | 'mega' | 'committee'; text: string; gain: number; item?: ItemId }
 
 export interface Preview {
   /** Patents a Reorganize gives now */
@@ -276,12 +301,10 @@ export function previewPatents(g: Game): Preview {
     if (!megaOpen(g, st)) goals.push({ kind: 'committee', gain: left, text: `Fill Committee orders: ${st.name} opens at their reputation ${st.rep} (now ${s.orders.rep.committee ?? 0}), worth +${fmt(left)}` });
     else if (left > 0.05) goals.push({ kind: 'mega', gain: left, text: `Finish ${st.name}: +${fmt(left)}` });
   }
-  // the bills that lift the total to the next whole Patent through the bills term alone
-  const need = Math.ceil(total + 1e-9) - total || 1;
-  const more = RULES.patentBillsDivisor.value * (Math.pow(2, bills + need) - 1) - billValue;
-  goals.push({ kind: 'bills', gain: need, text: `Run ${Num.of(Math.ceil(more)).format()} more coin of buildings and modules: +${fmt(need)}` });
+  // (no "run N more coin of buildings" goal: the final round, a goal to buy buildings for the bills
+  // term pointed at burning coin, the one thing the term is built not to pay for)
   goals.sort((a, b) => b.gain - a.gain);
-  const main = goals.filter((q) => q.kind !== 'bills' && q.kind !== 'mega' && q.kind !== 'committee')[0];
+  const main = goals.filter((q) => q.kind !== 'mega' && q.kind !== 'committee')[0];
   const nextStep = Math.floor(total + (main?.gain ?? 0) + 1e-9);
   return { now, total, lines, designs, mega, bills, billValue, nextStep, goals };
 }

@@ -87,6 +87,9 @@ export function foldAudited(g: Game, name: string | null, id?: number): ActResul
     bill,
     stamped: 0,
     spare: 1,
+    // a kept design refolds after a short check only if its machines ran in their normal modes
+    // (the parts list keeps no mode, so an overclocked line unfolds slower than it was graded)
+    normal: ents.every((e) => !isMachine(e.kind) || (e.mode ?? 'normal') === 'normal'),
   };
   g.s.designs.push(d);
   // the machines go into the module; the belts and the rest are refunded; the box empties
@@ -433,9 +436,11 @@ export function runModules(g: Game) {
     const d = g.design(m.design);
     if (!d) continue;
     // the Great Drill boosts modules with miners inside, but never one under audit: its rate is
-    // being measured, and a depth-2 module folded from it gets the boost again (Milestone 4 review)
+    // being measured, and a depth-2 module folded from it gets the boost again (Milestone 4 review).
+    // Overdrive likewise never reaches an audited module (the final round: an overdriven group
+    // folded 3x into the nested window)
     const audited = !!g.s.faudit && !g.s.faudit.result && g.s.faudit.ids.includes(m.id);
-    const k = (drill > 1 && !audited && Object.keys(oresOf(g, d)).length ? drill : 1) * ((m.od ?? 0) > 0 ? RULES.overdriveMult.value : 1);
+    const k = (drill > 1 && !audited && Object.keys(oresOf(g, d)).length ? drill : 1) * ((m.od ?? 0) > 0 && !audited ? RULES.overdriveMult.value : 1);
     if (m.od) { m.od--; if (!m.od) m.cool = Math.round(pr.overdriveCool * TICK_RATE); } else if (m.cool) m.cool--;
     // stopped by the player (DESIGN.md §20): runs at 0, takes nothing, holds its buffers
     if (m.paused) {
@@ -528,6 +533,7 @@ export function runModules(g: Game) {
     for (const t of r.tiles) {
       used.set(t.id, (used.get(t.id) ?? 0) + moved);
       t.flow = (used.get(t.id) ?? 0) * TICK_RATE;
+      if (moved > 1e-9) t.used = g.s.tick;
     }
   }
   // 3. whole items reaching the Factory Dock and Hopper are paid out by the docks system; the
@@ -557,6 +563,8 @@ export function runModules(g: Game) {
       m.sec = [0, 0, 0, 0];
       // seconds in a row at half speed or better
       m.ok = (m.fsum ?? 0) / TICK_RATE >= 0.5 ? (m.ok ?? 0) + 1 : 0;
+      // the bills term (§19) counts a module by its run fraction
+      m.wkAcc = (m.wkAcc ?? 0) + (m.fsum ?? 0);
       m.fsum = 0;
     }
     sliceEndCheck(g);

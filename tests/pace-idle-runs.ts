@@ -8,13 +8,13 @@ import { campaignStages, campaignHours, campaignRow, failed } from './pace-idle-
 
 const T = 400_000;
 
-export function laterRun(seed: number, run: number, hours = [1, 2, 3]) {
+export function laterRun(seed: number, run: number, hours = [1, 2, 3], timeout = T) {
   describe(`idle and offline at every stage (Milestone 6 exit), run ${run}, seed ${seed}`, () => {
     it(`plays run ${run} long enough to measure ${hours.join(', ')} h`, () => {
       const c = campaignStages(seed, run);
       expect(c.patentsBought).toBeGreaterThan(0);
       expect(campaignHours(c)).toEqual(expect.arrayContaining(hours));
-    }, T);
+    }, timeout);
     for (const hour of hours) {
       it(`${hour} h into run ${run}: active earns 1.5-4x open idle; 8 h offline pays between e and 1 of open idle and within check 12, at 0.5 and 0.75`, () => {
         expect(failed(campaignRow(seed, run, hour))).toEqual([]);

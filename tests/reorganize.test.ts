@@ -189,7 +189,9 @@ describe('the filing model (DESIGN.md §19)', () => {
     const g = sandbox();
     fakeDesign(g, 'gizmo', 'B', 1, { ironIngot: 0.5, copperWire: 0.5 });
     const kinds = new Set(previewPatents(g).goals.map((q) => q.kind));
-    for (const k of ['fold', 'grade', 'deeper', 'bigger', 'mega', 'bills']) expect(kinds.has(k as never), k).toBe(true);
+    for (const k of ['fold', 'grade', 'deeper', 'bigger', 'mega']) expect(kinds.has(k as never), k).toBe(true);
+    // no goal to buy buildings for the bills term (the final round: it pointed at burning coin)
+    expect(kinds.has('bills' as never)).toBe(false);
     // a stage shut on the Committee's reputation is a goal of its own
     g.s.mega.stage = 1;
     expect(previewPatents(g).goals.some((q) => q.kind === 'committee' && /reputation 3/.test(q.text))).toBe(true);

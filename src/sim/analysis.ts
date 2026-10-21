@@ -314,7 +314,7 @@ export function report(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' |
 /** How long a working machine runs on what it holds, with no input arriving (`inputs`) and/or
  * nothing taking its output (`output`): the crafts its buffer allows, at its speed now. */
 function runLeft(g: Game, m: Ent, r: RecipeDef, inputs: boolean, output: boolean): { sec: number; why: 'in' | 'out'; item: ItemId } | null {
-  const sp = baseSpeed(m) * veinBoost(g, m) * Math.min(1, powerFactor(g, m));
+  const sp = baseSpeed(g, m) * veinBoost(g, m) * Math.min(1, powerFactor(g, m));
   if (sp <= 0) return null;
   const craft = (r.time * TICK_RATE) / sp;
   let inN = Infinity, inItem: ItemId | null = null;

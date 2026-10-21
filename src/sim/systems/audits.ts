@@ -14,7 +14,7 @@ import { BUILD, isMachine, isPower } from '../../data/machines';
 import { RECIPE } from '../../data/recipes';
 import { RULES, SCORE_WEIGHTS, gradeFor, GRADES } from '../../data/rules';
 import { ITEMS, itemName, type ItemId } from '../../data/items';
-import { DX, DY, opposite, type AuditResult, type AuditState, type Box, type Dir, type Ent, type Port } from '../world';
+import { DX, DY, opposite, type AuditResult, type AuditState, type Box, type Dir, type Ent, type KeptDesign, type Port } from '../world';
 import { entName, feeders } from '../analysis';
 import { powerFactor } from './power';
 
@@ -131,11 +131,37 @@ export function findPorts(g: Game, b: Box): Port[] {
   return ports;
 }
 
+/**
+ * The kept design (the Patent Drawer, DESIGN.md §19) this box is an unchanged copy of, or null: the
+ * box exactly where the design was folded (the land and the ore lie the same every run), holding
+ * exactly its parts (every building, turned the same way, every crafting machine on the same
+ * recipe, nothing else in the box), every machine in its normal mode and none stopped, and the
+ * design kept with its audit (not imported, not folded out of its normal modes). Such a box refolds
+ * at its kept grade after a short check instead of a full audit.
+ */
+export function keptMatch(g: Game, b: Box): KeptDesign | null {
+  const ents = entsIn(g, b);
+  for (const k of g.s.meta.drawer) {
+    if (!k.card || k.x !== b.x || k.y !== b.y || k.w !== b.w || k.h !== b.h || k.parts.length !== ents.length) continue;
+    const same = k.parts.every((p) => {
+      const e = g.entAt(b.x + p.dx, b.y + p.dy);
+      if (!e || e.kind !== p.kind || e.x !== b.x + p.dx || e.y !== b.y + p.dy || e.rot !== p.rot) return false;
+      if (isMachine(e.kind) && ((e.mode ?? 'normal') !== 'normal' || e.paused)) return false;
+      return !p.recipe || e.recipe === p.recipe;
+    });
+    if (same) return k;
+  }
+  return null;
+}
+
+const checkTicks = () => RULES.refoldCheck.value * TICK_RATE;
+
 export function startAudit(g: Game, b: Box): ActResult {
   const why = foldRefusal(g, b);
   if (why) return no(why);
   const ms = entsIn(g, b).filter((e) => isMachine(e.kind));
-  g.s.audits.push({ id: g.s.nextAudit++, box: { ...b }, t: 0, ids: ms.map((m) => m.id), ins: {}, outs: {}, busy: {}, crafts0: {}, ports: findPorts(g, b), result: null, stall: {} });
+  const k = keptMatch(g, b);
+  g.s.audits.push({ id: g.s.nextAudit++, box: { ...b }, t: 0, ids: ms.map((m) => m.id), ins: {}, outs: {}, busy: {}, crafts0: {}, ports: findPorts(g, b), result: null, stall: {}, ...(k ? { kept: k.id, chk: {}, chkOut: 0 } : {}) });
   g.bump('audits');
   g.emit({ type: 'auditStart', x: b.x + b.w / 2, y: b.y + b.h / 2 });
   return OK;
@@ -165,7 +191,13 @@ export const auditTicks = (g?: Game) => warmTicks(g) + windowTicks(g);
 /** Count a transfer across a box edge (called from Game.onTransfer for every tile change). */
 export function auditTransfer(g: Game, x: number, y: number, dir: Dir, item: string) {
   for (const a of g.s.audits) {
-    if (a.result || a.t < warmTicks(g)) continue;
+    if (a.result) continue;
+    // the refold check: the kept product leaving the box
+    if (a.kept !== undefined && a.t <= checkTicks() && inBox(a.box, x - DX[dir], y - DY[dir]) && !inBox(a.box, x, y)) {
+      const k = g.s.meta.drawer.find((q) => q.id === a.kept);
+      if (k && item === k.product) a.chkOut = (a.chkOut ?? 0) + 1;
+    }
+    if (a.t < warmTicks(g)) continue;
     const from = inBox(a.box, x - DX[dir], y - DY[dir]), to = inBox(a.box, x, y);
     if (from === to) continue;
     const tally = to ? a.ins : a.outs;
@@ -177,6 +209,7 @@ export function runAudits(g: Game) {
   for (const a of g.s.audits) {
     if (a.result) continue;
     a.t++;
+    if (a.kept !== undefined && refoldCheck(g, a)) continue;
     const warm = warmTicks(g);
     if (a.t === warm) {
       for (const id of a.ids) {
@@ -206,6 +239,48 @@ export function runAudits(g: Game) {
       g.emit({ type: 'auditDone', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, id: a.result.grade.letter, d: a.result.grade.score, value: a.id });
     }
   }
+}
+
+/**
+ * The refold check (DESIGN.md §19, the final round): over its first RULES.refoldCheck seconds an
+ * audit of an unchanged kept layout counts each machine's work (at the power it got) and the kept
+ * product leaving the box. At the end of the check, if every machine ran about as busy as the kept
+ * audit found it (its U less RULES.refoldSlack) and the product left the box, the audit is graded
+ * at once at the kept card: the same grade and rates the design was folded with. Otherwise, or if
+ * the layout changed meanwhile, the audit goes on as a full one (the check was its warm-up). True
+ * when the audit is graded.
+ */
+function refoldCheck(g: Game, a: AuditState): boolean {
+  const k = g.s.meta.drawer.find((q) => q.id === a.kept);
+  const n = checkTicks();
+  if (!k?.card) { a.kept = undefined; return false; }
+  if (a.t <= n) {
+    const chk = (a.chk ??= {});
+    for (const id of a.ids) {
+      const m = g.byId.get(id);
+      if (m && m.state === 'work') chk[id] = (chk[id] ?? 0) + Math.min(1, powerFactor(g, m));
+    }
+    if (a.t < n) return false;
+  }
+  const ms = a.ids.map((id) => g.byId.get(id)).filter((m): m is Ent => !!m);
+  const busy: Record<string, number> = {};
+  let u = 0;
+  for (const m of ms) { busy[m.id] = Math.min(1, (a.chk?.[m.id] ?? 0) / n); u += busy[m.id]; }
+  u = ms.length ? u / ms.length : 0;
+  const pass = ms.length === a.ids.length && !!keptMatch(g, a.box) && u >= k.card.grade.u - RULES.refoldSlack.value - 1e-9 && (a.chkOut ?? 0) > 0;
+  a.kept = undefined;
+  if (!pass) return false;
+  let machineTiles = 0;
+  for (const m of ms) machineTiles += m.w * m.h;
+  a.result = {
+    grade: { ...k.card.grade },
+    ins: { ...k.card.ins }, outs: { ...k.card.outs },
+    byMade: 0, byHandled: 0, machineTiles, boxTiles: a.box.w * a.box.h, busy,
+    advice: [`Refolded at its kept grade (${k.card.grade.letter}): the layout is the one in the Patent Drawer, unchanged, and it ran with its ports fed for ${RULES.refoldCheck.value} s (${Math.round(u * 100)}% busy), so it needs no full audit.`],
+  };
+  g.bump('quickRefolds');
+  g.emit({ type: 'auditDone', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, id: a.result.grade.letter, d: a.result.grade.score, value: a.id });
+  return true;
 }
 
 /** Stock that drains by no more than this many of an item over the window is belts and buffers

@@ -100,6 +100,14 @@ export interface Ent {
   /** stopped by the player (the 'pause' command): takes nothing, makes nothing, draws no power;
    * splitters route around it as around any full machine */
   paused?: boolean;
+  // ---- the bills term (DESIGN.md §19, the Milestone 5-6 final round); absent on older saves
+  /** measured work this minute, in ticks: a machine's work x its grid's satisfaction, a Miner's
+   * digging, a power producer's burn share */
+  wkAcc?: number;
+  /** the work of each of the last whole minutes (seconds, newest last, at most RULES.billsWindow) */
+  wk?: number[];
+  /** a belt or logistics part: the tick it last took an item */
+  used?: number;
 }
 
 /** A box on the Workshop, in tiles. */
@@ -147,6 +155,11 @@ export interface AuditState {
   stall?: Record<string, Record<string, number>>;
   /** items held inside the box when the window opened (a counted measurement, not a stock) */
   stock0?: Record<string, number>;
+  /** the refold check (DESIGN.md §19, the final round): the kept design this box is unchanged from,
+   * each machine's work during the check, and its product's items out of the box during it */
+  kept?: number;
+  chk?: Record<string, number>;
+  chkOut?: number;
 }
 
 export interface AuditResult {
@@ -189,6 +202,9 @@ export interface ModuleDesign {
   spare: number;
   /** the Stamp Press keeps one spare copy of it (DESIGN.md §19, a Patent node) */
   auto?: boolean;
+  /** every machine in the box ran in its normal mode when it was folded (a kept design refolds
+   * after a short check only then: the final round); absent on designs from before */
+  normal?: boolean;
 }
 
 export type FKind = 'module' | 'trunk' | 'fdock' | 'fhopper' | 'fbay';
@@ -230,6 +246,11 @@ export interface FEnt {
   cool?: number;
   /** a module stopped by the player (DESIGN.md §20): runs at 0 and takes nothing */
   paused?: boolean;
+  /** the bills term (DESIGN.md §19): a module's run fraction this minute (ticks) and in each of the
+   * last whole minutes (seconds); a trunk's last tick carrying items */
+  wkAcc?: number;
+  wk?: number[];
+  used?: number;
 }
 
 export interface FactoryState {
@@ -293,6 +314,11 @@ export interface KeptDesign {
   run: number;
   /** the design it was kept from (absent for an imported string) */
   src?: number;
+  /** the audit it was folded with, before the grade multiplier (rates through its ports, and the
+   * grade card): an unchanged layout refolds at it after a short check (DESIGN.md §19, the final
+   * round). Absent for an imported string, a design kept before the final round, or one folded
+   * with a machine out of its normal mode: those refold after a full audit */
+  card?: { grade: GradeCard; ins: Partial<Record<ItemId, number>>; outs: Partial<Record<ItemId, number>> };
 }
 
 /** What the Patent Office has on file for a product (DESIGN.md §19): the best value filed so far,
@@ -445,7 +471,7 @@ export function newFEnt(id: number, kind: FKind, x: number, y: number, rot: Dir,
   const big = kind === 'fdock' || kind === 'fhopper' || kind === 'fbay';
   return {
     id, kind, x, y, w: big ? 2 : 1, h: big ? 2 : 1, rot, design,
-    inBuf: {}, outBuf: {}, f: 0, fAvg: 0, state: 'idle', why: null, rr: 0, flow: 0, hist: '', sec: [0, 0, 0, 0],
+    inBuf: {}, outBuf: {}, f: 0, fAvg: 0, state: 'idle', why: null, rr: 0, flow: 0, hist: '', sec: [0, 0, 0, 0], wk: [],
   };
 }
 
@@ -462,7 +488,7 @@ export function newEnt(id: number, kind: EntKind, x: number, y: number, w: numbe
     recipe: null, inBuf: {}, out: 0, outItem: null, by: 0, byItem: null, prog: 0, active: false, crafts: 0, state: 'idle', why: null,
     item: null, p: 0, mv: false, occ: 0, jam: 0,
     store: [], count: 0, rr: 0,
-    hist: '', sec: [0, 0, 0, 0],
+    hist: '', sec: [0, 0, 0, 0], wk: [],
   };
 }
 

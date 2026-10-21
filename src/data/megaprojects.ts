@@ -24,10 +24,10 @@ export const MEGA: MegaStage[] = [
   {
     stage: 1,
     name: 'The Great Drill, stage 1',
-    wants: { drillBit: 450, steel: 2000 },
+    wants: { drillBit: 650, steel: 2800 },
     reward: 'Every Miner and every module with miners inside runs +50%, for good',
     patents: 5,
-    derivation: '§18 Megaproject #1: from the slag the Act II bot Bay floor turns into bits (a bit is 2 concrete, 8 slag; about 35 slag/min, 5-6 bits/min while the Bay Steel runs, 2.5 after): 450 bits and 2,000 steel take it about 1.4 h, stage 1 at S+3:20, inside the S+4 h target; concrete is in the bits; §19 worth 5 Patents, a third of the first reset',
+    derivation: '§18 Megaproject #1: from the slag the Act II bot Bay floor turns into bits (a bit is 2 concrete, 8 slag; about 35 slag/min, 5-6 bits/min while the Bay Steel runs, 2.5 after): 650 bits and 2,800 steel (4.3 a bit) take it about 1.9 h from the Bay floor (S+1:46-1:48), stage 1 at S+3:42-3:44, inside the S+4 h target, so the first Reorganize comes after 4 h (the final round: the bot draining its slag reached the Bay 20 min sooner, and 450 bits and 2,000 steel put the first reset at 3:37-3:41, under the 4-6 h of §19); concrete is in the bits; §19 worth 5 Patents, a third of the first reset',
   },
   {
     stage: 2,

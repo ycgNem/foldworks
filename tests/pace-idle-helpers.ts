@@ -5,7 +5,7 @@
 //    tick, Sparks off as in a hidden tab);
 //  - offline: the same state closed for 8 h (runOffline), at the base efficiency 0.5 and at the
 //    0.75 ceiling the Night Shift and Patents can reach.
-// The stages: run 1 of the Act II bot (act2Run, 1 h to 5 h) and runs 2 and 3 of the campaign bot
+// The stages: run 1 of the Act II bot (act2Run, 1 h to 5 h) and runs 2, 3 and 4 of the campaign bot
 // (src/sim/campaign.ts: Reorganize, Patents spent, the next run with its head starts), at whole
 // hours into each run, on seeds 1000 and 8919. Rule 4 wants active 1.5-4x open idle; offline is
 // bounded against open idle: never more than it, at least e of it, and check 12 (b): the first
@@ -64,22 +64,28 @@ export const share = (off: number, r: { idle1h: number; idle8h: number }) => (of
 /** Stages where rule 4's band does not hold, measured, with the reason (DESIGN.md §20, open for
  * the lead: the bot's own build and the economy decide them, not the offline model). The offline
  * bounds are still checked there. Keys are seed:run:hour. */
-// Re-read after the reset layer's annex and campaign changes (the Milestone 5-6 review round):
-// run 1 at 3 h (was 4.01x) and seed 1000's run 2 at 2 h (was 0.54x) now pass (1.59 and 1.52: the
-// annex keeps a Gizmo chain selling past the Bay floor, so open idle no longer collapses there).
-// What is left is Overdrive's own arithmetic and the Bay rebuild, now earlier in run 3:
-// - 3x for 10 s, then 30 s cooling, is (30 + 30) / 40 = 1.5x for a line kept in Overdrive, which
-//   is exactly the band's floor. A stage where the bot only clicks (its plan done, or waiting on
-//   research) reads 1.47-1.52, and a line whose inputs can't keep up at 3x reads below 1.5.
-//   A 20 s cooldown was tried (1.67x): every one of these passed, but the faster factory moved
-//   seed 8919's first reset to 3:52, before the 4-6 h window, and left its Drill at stage 2.
-//   The lever is the lead's.
+// Re-read in the final round, with the bot buying claims and its annex blocks as soon as they are
+// affordable and a run-4 stage added past 12 h of play. Run 3 at 1 h now passes on both seeds (1.58
+// and 1.63; it read 0.77 and 0.72): its annex blocks come before the Bay floor, so the Gizmo chains
+// the Bay clears keep selling. What is left is two things:
+// - Overdrive's own arithmetic. 3x for 10 s, then 30 s cooling, is (30 + 30) / 40 = 1.5x for a line
+//   kept in Overdrive, which is exactly the band's floor. A stage where the bot only clicks (its plan
+//   done, or waiting on research) reads 1.48-1.52.
+// - The Bay floor rebuild, now in run 4's first hour: the head starts bring the Bay floor to about
+//   1:10 into the run, and the bot clears the floor's chains for it.
+// A 25 s cooldown was tried in this round (1.57x for a line kept in Overdrive) and rejected before
+// the stages were re-read, because it made seed 8919 worse in the Act II run: its 2 h reading fell
+// from 1.46 to 1.42, its longest wait between goals before the Bay floor
+// rose to 17.0 min (the bound is 15), and its run 3 never passed run 2's peak. A 20 s cooldown
+// (the review round) moved the first reset out of 4-6 h. Rule 4's floor is not lowered. The lever
+// is the lead's: Overdrive's duty cycle and rule 4's floor are the same number.
 export const RULE4_OPEN: Record<string, string> = {
-  '8919:2:2': 'active 1.49x idle: the bot waits on Nested Boxes\' research and clicks Overdrive (1.5x at most, 3x for 10 s in every 40); seed 1000 reads 1.52',
-  '8919:2:3': 'active 1.49x idle: the plan is done and the bot waits for its reset, clicking Overdrive (1.5x at most); seed 1000 reads 1.52',
-  '8919:3:3': 'active 1.47x idle: the plan is done (run 3 is the last, so it never resets), Overdrive alone (1.5x at most); seed 1000 reads 1.51',
-  '1000:3:1': 'active 0.77x idle: the Bay floor is laid in this half hour (67-69 min into run 3, the head starts bring it forward from run 2\'s 1:32): the campaign clears the Gizmo chains for it, so income falls from about 16K to 6K a minute while the untouched factory keeps them',
-  '8919:3:1': 'active 0.72x idle: the same Bay floor rebuild as seed 1000 at 1 h of run 3',
+  '1000:2:2': "active 1.48x idle: the bot waits on Nested Boxes' research and only clicks Overdrive (1.5x at most, 3x for 10 s in every 40); seed 8919 reads 1.50",
+  '8919:2:3': 'active 1.49x idle: the plan is done and the bot waits for its reset, clicking Overdrive (1.5x at most); seed 1000 reads 2.35',
+  '1000:4:1': 'active 0.98x idle: the Bay floor is laid in this half hour (about 1:10 into run 4, brought forward by the head starts): the campaign clears the Gizmo chains for it while the untouched factory keeps them',
+  '8919:4:1': 'active 0.97x idle: the same Bay floor rebuild as seed 1000 at 1 h of run 4',
+  '1000:4:3': 'active 1.48x idle: the plan is done (run 4 is the last, so it never resets), Overdrive alone (1.5x at most); seed 8919 reads 1.50',
+  '1000:4:4': 'active 1.49x idle: as at 3 h; seed 8919 reads 1.50',
 };
 
 /** Everything measured from one saved state. */
@@ -143,6 +149,8 @@ export function stageRow(seed: number, hour: number): StageRow {
 export interface CampaignStages {
   /** the run's length, seconds */
   length: number;
+  /** the play before the run (the runs before it), seconds */
+  before: number;
   /** snapshots at whole hours into the run */
   stages: Record<number, { snap: string; snapTick: number }>;
   /** lifetime coin at the end of each minute of the run */
@@ -162,11 +170,12 @@ export function campaignStages(seed: number, run: number): CampaignStages {
   const key = seed + ':' + run;
   const hit = camps.get(key);
   if (hit) return hit;
-  const out: CampaignStages = { length: 0, stages: {}, earnedByMin: [], patentsBought: 0, did: [] };
+  const out: CampaignStages = { length: 0, before: 0, stages: {}, earnedByMin: [], patentsBought: 0, did: [] };
   let seen = 0;
   const logs = playCampaign(new Game(seed), {
     runs: run,
-    cap: (r) => (r === 1 ? 6 * H : 4 * H),
+    // run 4 (the final round: stages past 12 h) plays 5 h, so its 4 h stage has its half hour after it
+    cap: (r) => (r === 1 ? 6 * H : r >= 4 ? 5 * H : 4 * H),
     minPatents: (r) => (r === 1 ? 12 : 4),
     onSecond: (g, rn, bot) => {
       if (rn !== run) return;
@@ -181,7 +190,8 @@ export function campaignStages(seed: number, run: number): CampaignStages {
   if (last.run !== run) throw new Error(`campaign ended at run ${last.run}, before run ${run}`);
   out.length = last.end - last.start;
   out.patentsBought = last.bought.length;
-  console.log(`[pace] seed ${seed}: campaign run ${run} played ${(out.length / H).toFixed(2)} h after buying ${last.bought.length} Patent nodes (${logs.map((l) => `run ${l.run} ${((l.end - l.start) / H).toFixed(2)} h`).join(', ')})`);
+  out.before = logs.slice(0, -1).reduce((t, l) => t + l.end - l.start, 0);
+  console.log(`[pace] seed ${seed}: campaign run ${run} played ${(out.length / H).toFixed(2)} h after buying ${last.bought.length} Patent nodes, from ${(out.before / H).toFixed(2)} h of play (${logs.map((l) => `run ${l.run} ${((l.end - l.start) / H).toFixed(2)} h`).join(', ')})`);
   camps.set(key, out);
   return out;
 }

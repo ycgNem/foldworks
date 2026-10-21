@@ -34,8 +34,9 @@ export const EXTRA_CHAINS: Step2[] = ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'].fl
   // the later two in the annex's blocks 2 and 3 (bought once claims allow a chain there), beside the
   // Factory annex's own chain in block 1 (bot2.ts ANNEX1), so the Bay floor keeps them
   // (a block is bought when the chain finds no room in the blocks owned: two chains fit a block)
-  // (only with coin to spare, twice the price: the Act II plan never waits on the annex)
-  ...(i >= 2 ? [{ k: 'annex', n: Math.min(3, Math.ceil(i / 2) + 1), for: ['Iron ingots', 'Copper wire'], opt: true, spare: 2 } as Step2] : []),
+  // (optional: the Act II plan never waits on the annex; a block not affordable yet waits beside
+  // the plan and is bought as soon as the coin is there, before the Bay floor: the final round)
+  ...(i >= 2 ? [{ k: 'annex', n: Math.min(3, Math.ceil(i / 2) + 1), for: ['Iron ingots', 'Copper wire'], opt: true } as Step2] : []),
   // the annex's block-1 chain and its lane first: the later chains sell through the lane
   ...(i === 2 ? [{ k: 'fplan', name: 'annex1extra', items: [...ANNEX1, ...LANE], opt: true, keep: true } as Step2] : []),
   { k: 'fmod', id: 'giz' + c, design: 'Gizmo works', to: { k: 'dock' }, hub: true, opt: i >= 2, annex: i >= 2 },
@@ -84,6 +85,9 @@ export interface CampaignOpts {
    * every run, until `horizon` seconds of play in all */
   loopAt?: number | 'slice';
   horizon?: number;
+  /** a loop that burns its coin before each reset (the final round): called once a run when the
+   * loop's reset time is reached, before the reset; it may act and step the game */
+  burn?: (g: Game) => void;
   /** called once a second */
   onSecond?: (g: Game, run: number, bot: Act2Bot | null) => void;
 }
@@ -106,6 +110,7 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
     const ring: number[] = [];
     const cap = o.cap(run);
     let reset = false;
+    let burned = false;
     // the Patents, spent first thing in the new run (the tree screen, one click a hand-beat)
     const bought: PatentId[] = [];
     for (;;) {
@@ -132,6 +137,7 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
       if (g.s.tick % TICK_RATE === 0) o.onSecond?.(g, run, bot);
       if (o.loopAt !== undefined && g.s.tick % TICK_RATE === 0) {
         const at = o.loopAt === 'slice' ? (handover >= 0 ? handover : Infinity) : o.loopAt;
+        if (runSeconds(g) >= at && o.burn && !burned) { burned = true; o.burn(g); }
         if (runSeconds(g) >= at && !reorganizeRefusal(g) && !g.s.audits.length && !g.s.faudit) {
           reset = true;
           break;
