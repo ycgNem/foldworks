@@ -566,12 +566,16 @@ async function main() {
       if (r?.drag) await dragTiles(page, r.drag);
       else if (r?.hoverIds) {
         // a chain of HUD elements hovered in turn (the wheel: a petal fans, then an item on it)
+        // (the fan animates in real time, so wait on the clock as well as on frames: a slow frame
+        // rate caught the items still sliding out, their price chips stacked)
         for (const id of r.hoverIds) {
           await frames(page, 8);
+          await page.waitForTimeout(350);
           const p = await page.evaluate((id) => { const a = window.__app; const q = a.ui.ids.get(id); return q ? a.uiToCss(q.x + q.w / 2, q.y + q.h / 2) : null; }, id);
           if (p) await page.mouse.move(p.x, p.y);
         }
         await frames(page, 8);
+        await page.waitForTimeout(350);
       } else if (r?.hoverId) {
         // a HUD element by its button id (drawn last frame), or the coin counter
         await frames(page, 2);
