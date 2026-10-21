@@ -3,17 +3,19 @@ wooden promenade along the plot's north edge with a railing, so the frogs stroll
 
 town_boardwalk: 16x16 deck tiles, 13 named variants (fps 0). The deck is a plank band (rows 3-12
 across a horizontal tile, columns 3-12 down a vertical one) that runs to the tile edge on every
-connected side, so tiles join seamlessly. Boards run across the walk (a seam every 4 px), the
-far edge lit, the near edge a 2 px timber fascia on stone footing blocks, the ink outline round
-it all. No stilts, no water: it sits on the ground (meadow or steel deck).
+connected side, so tiles join seamlessly. Long boards run along the walk (3 px each, staggered
+ends; boards across it read as a fence behind the rail at 1x), the far edge lit, the near edge
+a 2 px timber fascia, the ink outline round it all, a two-tread step down off each end. No
+stilts, no water: it sits on the ground (meadow or steel deck).
 Names: h, v; corner_ws, end_e; corner_es, corner_wn, corner_en, end_w, end_n, end_s; tee_s
 (W+E+S), tee_n (W+E+N), cross. src/render/town.ts lays end_w, h... h, end_e on the row above the
 plot; the rest are kept for the frame order (and any future turn).
 
 town_rail: 16x16, 3 named variants (fps 0): h, end_w, end_e. The railing on the deck's near
-(plot) side, drawn after the frogs, the stalls' feet and the deck so the frogs walk behind it: a
-lit top rail on rows 6-7, square posts every 8 px down to the fascia, the ends a stout newel
-post with an iron cap (the order wanted "Iron, flat": the caps and brackets are iron).
+(plot) side, drawn after the frogs, the stalls and the deck so the frogs walk behind it: a low
+lit rail on rows 9-10 (the frogs' feet are on row 7, so they show whole above it), short posts
+every 8 px down to the fascia, the ends a stout newel post with an iron cap (the order wanted
+"Iron, flat": the caps and brackets are iron).
 
 town_tuft: 16x8, 4 variants (fps 0): grass clumps the Workshop puts at the corners of a house's
 footing, so a house sits in its meadow instead of on it (no outline: grass on grass). The
@@ -91,15 +93,15 @@ def draw(s, name):
                     face.add((x, y + d))
     solid = m | face
     for (x, y) in m:
+        # long boards along the walk, a seam between every 3 px board, staggered board ends
         col = P["wood4"]
         if board_v(x, y):
-            if y % 4 == 3:
+            band = (x - A0) // 3
+            if (x - A0) % 3 == 2 or y == (5 + band * 6) % 16:
                 col = P["wood3"]
         else:
-            if x % 4 == 3:
-                col = P["wood3"]
-            # staggered board ends
-            if (x // 4) % 2 == 0 and y == 7 or (x // 4) % 2 == 1 and y == 10:
+            band = (y - A0) // 3
+            if (y - A0) % 3 == 2 or x == (5 + band * 6) % 16:
                 col = P["wood3"]
         if not inside(m, arms, x, y - 1):
             col = P["wood5"]
@@ -113,10 +115,6 @@ def draw(s, name):
         s.px(x, y, P["wood2"] if top else P["wood1"])
         if x % 8 in (3, 4):
             s.px(x, y, P["wood1"] if top else P["wood0"])
-    # stone footing blocks under the fascia, every 8 px (under the rail's posts)
-    for (x, y) in sorted(face):
-        if (x, y - 1) in face and x % 8 == 3 and (x + 1, y) in face and y + 1 <= 15:
-            pass
     # the outline: an ink ring round deck + fascia inside the tile (open arms run off the edge)
     for y in range(16):
         for x in range(16):
@@ -166,46 +164,48 @@ def build():
 
 # ------------------------------------------------------------------ the railing
 POSTS = (3, 11)
-RAIL_Y = 6   # the top rail's lit row (row 7 its shade; ink on 5 and 8)
+RAIL_Y = 9   # the top rail's lit row (row 10 its shade; ink on 8 and 11)
 POST_BOT = 13
 
 
-def post(s, x, newel=False):
-    """A square post at columns x, x+1 (lit, shade) from the rail down to the fascia, ink round."""
-    top = RAIL_Y - (3 if newel else 0)
-    w = 3 if newel else 2
-    for y in range(top, POST_BOT + 1):
-        s.px(x, y, P["wood4"])
-        for i in range(1, w):
-            s.px(x + i, y, P["wood2"] if i == w - 1 else P["wood3"])
-        s.px(x - 1, y, INK)
-        s.px(x + w, y, INK)
-    if newel:
-        # an iron cap
-        s.line(x - 1, top - 2, x + w, top - 2, INK)
-        s.line(x - 1, top - 1, x + w, top - 1, P["steel2"])
-        s.px(x - 1, top - 1, P["steel3"])
-        s.line(x, top - 1, x + w - 1, top - 1, P["steel3"])
-        s.px(x, top - 1, P["steel4"])
-        s.px(x - 2, top - 1, INK)
-        s.px(x + w + 1, top - 1, INK)
-        s.line(x - 1, top, x + w, top, INK)
-    else:
-        s.px(x, RAIL_Y - 1, INK)
-        s.px(x + 1, RAIL_Y - 1, INK)
-
-
 def rail_run(s, x0, x1):
-    """The top rail from column x0 to x1: ink above and below, lit top, shade under."""
+    """The rail from column x0 to x1: ink above and below, a lit top, its shade under."""
     for x in range(x0, x1 + 1):
         s.px(x, RAIL_Y - 1, INK)
         s.px(x, RAIL_Y, P["wood5"])
         s.px(x, RAIL_Y + 1, P["wood3"])
         s.px(x, RAIL_Y + 2, INK)
-    # an iron bracket where the rail meets each post
-    for px_ in POSTS:
-        if x0 <= px_ <= x1:
-            s.px(px_ + 1, RAIL_Y + 1, P["steel3"])
+
+
+def post(s, x):
+    """A short post under the rail (columns x, x+1) down to the fascia, an iron bracket on it."""
+    for y in range(RAIL_Y + 2, POST_BOT + 1):
+        s.px(x, y, P["wood4"])
+        s.px(x + 1, y, P["wood2"])
+        s.px(x - 1, y, INK)
+        s.px(x + 2, y, INK)
+    s.px(x, RAIL_Y + 1, P["steel3"])
+    s.px(x + 1, RAIL_Y + 1, P["steel2"])
+
+
+def newel(s, x):
+    """The stout end post (columns x..x+2) from row 6, capped in iron, over the rail's end."""
+    top = 6
+    for y in range(top, POST_BOT + 1):
+        s.px(x, y, P["wood4"])
+        s.px(x + 1, y, P["wood3"])
+        s.px(x + 2, y, P["wood2"])
+        s.px(x - 1, y, INK)
+        s.px(x + 3, y, INK)
+    s.px(x, top, P["wood5"])
+    # an iron cap, a pixel wider each side
+    s.line(x - 1, top - 3, x + 3, top - 3, INK)
+    s.px(x - 2, top - 2, INK)
+    s.px(x + 4, top - 2, INK)
+    s.line(x - 1, top - 2, x + 3, top - 2, P["steel3"])
+    s.px(x - 1, top - 2, P["steel4"])
+    s.px(x + 3, top - 2, P["steel2"])
+    s.line(x - 1, top - 1, x + 3, top - 1, INK)
 
 
 def draw_rail(s, name):
@@ -213,28 +213,14 @@ def draw_rail(s, name):
         rail_run(s, 0, 15)
         for x in POSTS:
             post(s, x)
-            s.px(x, RAIL_Y, P["wood5"])
-            s.px(x + 1, RAIL_Y, P["wood5"])
-            s.px(x, RAIL_Y - 1, INK)
-            s.px(x + 1, RAIL_Y - 1, INK)
-            s.px(x, RAIL_Y + 1, P["wood3"])
-            s.px(x + 1, RAIL_Y + 1, P["steel3"])
     elif name == "end_w":
-        rail_run(s, 6, 15)
+        rail_run(s, 5, 15)
         post(s, 11)
-        s.px(11, RAIL_Y, P["wood5"])
-        s.px(12, RAIL_Y, P["wood5"])
-        s.px(11, RAIL_Y - 1, INK)
-        s.px(12, RAIL_Y - 1, INK)
-        post(s, 4, newel=True)
+        newel(s, 3)
     elif name == "end_e":
-        rail_run(s, 0, 9)
+        rail_run(s, 0, 10)
         post(s, 3)
-        s.px(3, RAIL_Y, P["wood5"])
-        s.px(4, RAIL_Y, P["wood5"])
-        s.px(3, RAIL_Y - 1, INK)
-        s.px(4, RAIL_Y - 1, INK)
-        post(s, 9, newel=True)
+        newel(s, 10)
 
 
 def build_rail():

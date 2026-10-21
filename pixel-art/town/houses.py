@@ -160,8 +160,7 @@ def lily(s):
     # the round wall: bone plaster, shaded like a barrel
     s.rect(9, 15, 22, WALL_BOT, P["bone"])
     s.line(9, 15, 9, WALL_BOT, P["pave3"])
-    s.line(10, 15, 10, WALL_BOT, WHITE_ := P["cloud3"])
-    for x, c in ((19, P["pave3"]), (20, P["pave3"]), (21, P["pave2"]), (22, P["pave1"])):
+    for x, c in ((20, P["pave3"]), (21, P["pave2"]), (22, P["pave1"])):
         s.line(x, 15, x, WALL_BOT, c)
     s.line(9, 17, 22, 17, P["pave2"])
     # the pad: a wide flat ellipse, lit top-left, its thick rim underneath
@@ -195,11 +194,22 @@ def lily(s):
     s.line(15, 21, 15, WALL_BOT, P["moss1"])
     s.line(17, 21, 17, WALL_BOT, P["moss1"])
     s.px(16, 23, P["brass3"])
-    ascii_(s, 10, 20, [
-        ".kkk.",
-        "kWJ~k",
-        "kJ~Ik",
-        ".kkk.",
+    # a porthole either side of the door, ringed in brass
+    for px_ in (9, 18):
+        ascii_(s, px_, 20, [
+            ".zzz.",
+            "zW=~z",
+            "z=~Iz",
+            ".zYz.",
+        ])
+    # a lily bud on a stake by the door
+    ascii_(s, 24, 25, [
+        ".v",
+        "vB",
+        ".n",
+        "nn",
+        ".n",
+        ".n",
     ])
     step(s, 13, 18, 28)
     finish(s)
