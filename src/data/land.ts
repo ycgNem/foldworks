@@ -19,12 +19,12 @@ export interface ChunkDef {
 }
 
 export const CHUNKS: ChunkDef[] = [
-  { id: 'A', name: 'Chunk A', x: 0, y: 0, w: 8, h: 8, cost: 0, requires: null, derivation: '§9 chunk A: the starting land' },
-  { id: 'B', name: 'Chunk B (copper)', x: 8, y: 0, w: 8, h: 8, cost: 1000, requires: 'surveyEast', derivation: '§9 chunk B costs 1,000 after Survey East' },
-  { id: 'C', name: 'Chunk C (iron)', x: 0, y: 8, w: 8, h: 8, cost: 1000, requires: 'gizmoTheory', derivation: '§9 chunk C costs 1,000 after Gizmo Theory: the spending is its ~3,000 of gear lines, bought one by one, not a long save (§13 checks 10, 11)' },
-  { id: 'D', name: 'Chunk D', x: 8, y: 8, w: 8, h: 8, cost: 12000, requires: 'folding', derivation: '§9 chunk D costs 12,000 after Folding' },
-  { id: 'E', name: 'Chunk E (coal, sand)', x: 16, y: 0, w: 8, h: 8, cost: 60000, requires: 'coalSeams', derivation: '§18 Land: chunk E, 60,000 after Coal Seams: about 5 min of the slice-end factory (12,500/min with Overdrive and Sparks, 7,200 idle; it was 15,000, 1.2 min, the Milestone 4 review)' },
-  { id: 'F', name: 'Chunk F (coal, iron)', x: 16, y: 8, w: 8, h: 8, cost: 120000, requires: 'steamPower', derivation: '§18 Land: chunk F, 120,000 after Steam Power: about 10 min of the early Act II factory (12,000/min)' },
+  { id: 'A', name: 'Chunk A · the Yard', x: 0, y: 0, w: 8, h: 8, cost: 0, requires: null, derivation: '§9 chunk A: the starting land' },
+  { id: 'B', name: 'Chunk B · Copper Bank', x: 8, y: 0, w: 8, h: 8, cost: 1000, requires: 'surveyEast', derivation: '§9 chunk B costs 1,000 after Survey East' },
+  { id: 'C', name: 'Chunk C · Rust Hollow', x: 0, y: 8, w: 8, h: 8, cost: 1000, requires: 'gizmoTheory', derivation: '§9 chunk C costs 1,000 after Gizmo Theory: the spending is its ~3,000 of gear lines, bought one by one, not a long save (§13 checks 10, 11)' },
+  { id: 'D', name: 'Chunk D · the Back Forty', x: 8, y: 8, w: 8, h: 8, cost: 12000, requires: 'folding', derivation: '§9 chunk D costs 12,000 after Folding' },
+  { id: 'E', name: 'Chunk E · Coal Flats', x: 16, y: 0, w: 8, h: 8, cost: 60000, requires: 'coalSeams', derivation: '§18 Land: chunk E, 60,000 after Coal Seams: about 5 min of the slice-end factory (12,500/min with Overdrive and Sparks, 7,200 idle; it was 15,000, 1.2 min, the Milestone 4 review)' },
+  { id: 'F', name: 'Chunk F · Ironside', x: 16, y: 8, w: 8, h: 8, cost: 120000, requires: 'steamPower', derivation: '§18 Land: chunk F, 120,000 after Steam Power: about 10 min of the early Act II factory (12,000/min)' },
 ];
 
 export interface PatchDef {
