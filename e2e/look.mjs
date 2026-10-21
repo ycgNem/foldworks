@@ -199,6 +199,9 @@ else if (['factory', 'modules', 'sliceEnd', 'offline'].includes(state)) {
 }
 else if (state !== 'start') await mid();
 if (['research', 'orders', 'stats', 'trophies', 'options'].includes(state)) await page.evaluate((s) => window.__app.togglePanel(s), state);
+// ---- the 180, menus A: the notebook's Keys page (the drawn keyboard), over the mid game
+if (state === 'keys') await page.evaluate(() => { window.__app.panel = 'keys'; });
+// ---- end menus A
 await frames(page, state === 'megaDone' ? 40 : state === 'gradeSplus' ? 36 : 6);
 if (wheel) {
   await page.evaluate(async (wl) => {

@@ -1,142 +1,198 @@
-// Act II's screens (DESIGN.md §18): Unit 7's Codex (every item with its story; a first delivery
-// pays 30x its value once Unit 7 likes you), the Survey Office (deposit claims by ore, what holds
-// them, and blocks of 4 to buy) and the Megaproject (the Great Drill's Bay drawn large, what its
-// stage still wants, and a celebration when a stage is done). Reads the Game; acts through App.act.
-import { C } from '../data/palette';
+// Act II's pages in the notebook (DESIGN.md §18; docs/hud-180.md "Full-screen menus"): Unit 7's
+// Codex (every item a specimen pinned to the page, a first delivery paying 30x once Unit 7 likes
+// you), the Survey Office (a deed slip per ore: what holds its claims, blocks to buy) and the
+// Megaproject (the Great Drill's Bay pasted in large, what its stage still wants with meters and
+// ETAs, and the stamp and confetti when a stage is done). Ink on paper, the cast talking in
+// bubbles. Reads the Game; acts through App.act.
+import { C, rgba } from '../data/palette';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { CHUNKS, FACTORY, PATCHES, WORKSHOP } from '../data/land';
 import { RULES } from '../data/rules';
 import { MEGA, megaStage } from '../data/megaprojects';
 import { RECIPE } from '../data/recipes';
 import { RESEARCH } from '../data/research';
-import { ICON, textWidth, wrapText, ellipsize } from '../ui/font';
+import { ICON, textWidth, smallWidth, bigWidth, ellipsize, wrapText, LINE_H } from '../ui/font';
 import { itemIcon, sheet, hasArt } from '../render/sprites';
 import { bayFrame, megaFrac, mainOutput } from '../render/factory';
 import { claimsHeld, claimsUsed, claimPrice, copiesOf, oresOf } from '../sim/systems/claims';
 import { megaOpen } from '../sim/systems/modules';
 import { Num } from '../engine/num';
-import { frame, card, button, bar, section, label } from './chrome';
-import { screenHeader, icon, fmt, perMin, slamScale, rays, cells } from './widgets';
-import { customerPortrait, openOrders } from './orders';
-import { ORDERS, CUSTOMERS } from '../data/orders';
+import { button, meter, chip, chipWidth, rule, pencil, slip, stamp, ribbon, pushpin, portrait, T, type Role } from './chrome';
+import { menuTemplate, fmt, perMin, slamScale, rays, cells } from './widgets';
+import { openOrders } from './orders';
+import { CUSTOMERS, ORDERS } from '../data/orders';
 import { offeredOrders, orderFrac } from '../sim/systems/orders';
 import { confetti } from './fold';
+import { speaker, caption, ledgerRow, pencilIcon, tickStamp, penCircle } from './screens';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
+import { drawRich, richWidth, richHeight, CHIP_H } from '../ui/rich';
+
+/** A chip beside a page's title, when the header has room for it. */
+function titleChip(app: App, r: Rect, title: string, free: number, text: string, role: Role) {
+  const w = chipWidth(text);
+  if (free < w + 8) return;
+  chip(app.ui, r.x + 29 + bigWidth(title) + 6, r.y + Math.floor((20 - CHIP_H) / 2) + 2, text, { role });
+}
 
 // ------------------------------------------------------------------ the Codex
 
 /** Items the Codex can log: the ones the Dock pays for (slag, kits and drill bits never sell). */
 export const CODEX_ITEMS = ITEM_IDS.filter((id) => ITEMS[id].value > 0);
 
+/** Unit 7's line on its Codex (ALL CAPS, clipped, counting). */
+function unit7Line(app: App, open: boolean): string {
+  const logged = app.game.s.codex;
+  const mult = RULES.codexMult.value;
+  if (!open) return `FILL ONE ORDER FOR UNIT 7. THEN FIRSTS PAY ${mult}X.`;
+  if (CODEX_ITEMS.every((id) => logged.includes(id))) return 'COLLECTION COMPLETE. UNIT 7 IS... MOVED.';
+  const newest = logged[logged.length - 1];
+  if (!newest) return 'COLLECTION EMPTY. BRING UNIT 7 A FIRST.';
+  return `NEW SPECIMEN: ${ITEMS[newest].name.toUpperCase()}. COLLECTION ${Math.round((logged.length / CODEX_ITEMS.length) * 100)}%. PLEASING.`;
+}
+
 export function codexScreen(app: App, r: Rect) {
   const ui = app.ui;
   const g = app.game;
   const logged = g.s.codex;
   const open = g.s.orders.rep.unit7 >= 1;
-  screenHeader(app, r, `The Codex: ${logged.length} of ${CODEX_ITEMS.length}`, C.teal1, 'codex');
+  const title = 'The Codex';
+  const side = r.w >= 600 ? 200 : 150;
+  const { body, detail, free } = menuTemplate(app, r, { title, accent: T.research, icon: 'codex', detail: side });
+  titleChip(app, r, title, free, `${logged.length} of ${CODEX_ITEMS.length}`, 'research');
   const mult = RULES.codexMult.value;
+  // the specimens: every item pinned to the page
+  const n = ITEM_IDS.length;
+  let cols = Math.max(2, Math.floor((body.w + 4) / 100));
+  let rows = Math.ceil(n / cols);
+  while (rows > 1 && Math.floor((body.h + 3) / rows) - 3 < 27 && cols < 8) { cols++; rows = Math.ceil(n / cols); }
+  const cw = Math.floor((body.w + 4) / cols) - 4;
+  const ch = Math.min(56, Math.floor((body.h + 3) / rows) - 3);
+  const newest = logged[logged.length - 1];
+  let hovered: ItemId | null = null;
+  ITEM_IDS.forEach((id, i) => {
+    const x = body.x + (i % cols) * (cw + 4), y = body.y + Math.floor(i / cols) * (ch + 3);
+    if (specimen(app, id, x, y, cw, ch, id === newest, mult)) hovered = id;
+  });
+  // the right page: Unit 7, the collection, the specimen in hand, what is worth chasing
+  const dp = detail!;
+  const x = dp.x + 4, w = dp.w - 8;
+  let y = dp.y + 2;
+  y += speaker(app, 'unit7', unit7Line(app, open), x, y, w) + 6;
   const paid = logged.reduce((s, id) => s + ITEMS[id].value * mult, 0);
   const left = CODEX_ITEMS.filter((id) => !logged.includes(id)).reduce((s, id) => s + ITEMS[id].value * mult, 0);
-  // ---- the summary strip: Unit 7, coin paid and still to find, the progress bar
-  const y0 = r.y + 22;
-  frame(ui, r.x + 8, y0, r.w - 16, 30, 'inset');
-  customerPortrait(app, 'unit7', r.x + 12, y0 + 3, 24, open && logged.length > 0 && Math.floor(ui.time / 3) % 4 === 0);
-  const sx = r.x + 42;
-  if (open) {
-    ui.text('Paid so far', sx, y0 + 4, C.hull2);
-    ui.text(`${ICON.coin} ${Num.of(paid).format()}`, sx + textWidth('Paid so far') + 5, y0 + 4, C.gold, { shadow: C.ink });
-    const s2 = `Still to find: ${ICON.coin} ${Num.of(left).format()}`;
-    ui.text(s2, r.x + r.w - 14, y0 + 4, C.bone, { align: 'right' });
-  } else ui.text('UNIT 7 OPENS THE CODEX AT REPUTATION 1: FILL ONE OF ITS ORDERS.', sx, y0 + 4, C.teal1);
   const f = logged.length / CODEX_ITEMS.length;
-  bar(ui, sx, y0 + 16, r.w - 16 - (sx - r.x) - 36, 8, f, C.teal1);
-  ui.text(`${Math.round(f * 100)}%`, r.x + r.w - 14, y0 + 16, C.teal1, { align: 'right' });
-  // ---- the cards
-  const gy = y0 + 34, gw = r.w - 16, gh = r.y + r.h - 6 - gy;
-  const n = ITEM_IDS.length;
-  let cols = Math.max(2, Math.floor((gw + 4) / 118));
-  let rows = Math.ceil(n / cols);
-  while (rows > 1 && Math.floor((gh + 3) / rows) - 3 < 34 && cols < 8) { cols++; rows = Math.ceil(n / cols); }
-  const cw = Math.floor((gw + 4) / cols) - 4;
-  const ch = Math.min(64, Math.floor((gh + 3) / rows) - 3);
-  const newest = logged[logged.length - 1];
-  ITEM_IDS.forEach((id, i) => {
-    const x = r.x + 8 + (i % cols) * (cw + 4), y = gy + Math.floor(i / cols) * (ch + 3);
-    codexCard(app, id, x, y, cw, ch, id === newest);
-  });
-  // the last row's spare cells: Unit 7's notes on what is worth chasing
-  const spare = cols - (n % cols || cols);
-  if (spare >= 2) {
-    const x = r.x + 8 + (n % cols) * (cw + 4), y = gy + (rows - 1) * (ch + 3);
-    const w = spare * (cw + 4) - 4;
-    const inner = card(ui, x, y, w, ch, 'Unit 7 notes', C.teal1, 'codex');
-    const chase = CODEX_ITEMS.filter((id) => !logged.includes(id)).sort((p, q) => ITEMS[q].value - ITEMS[p].value);
-    let yy = inner.y;
-    if (!chase.length) ui.para('THE COLLECTION IS COMPLETE. UNIT 7 IS... MOVED.', inner.x, yy, inner.w, C.gold);
-    else if (!open) ui.para('FILL ONE ORDER FOR UNIT 7 AND EVERY FIRST DELIVERY PAYS 100X.', inner.x, yy, inner.w, C.teal1);
-    else {
-      ui.text('Worth chasing:', inner.x, yy, C.hull2);
-      let xx = inner.x + textWidth('Worth chasing:') + 6;
-      for (const id of chase) {
-        const s2 = Num.of(ITEMS[id].value * mult).format();
-        if (xx + 12 + textWidth(s2) > inner.x + inner.w) {
-          yy += 11;
-          xx = inner.x;
-          if (yy + 9 > inner.y + inner.h) break;
-        }
-        ui.ctx.drawImage(itemIcon(id), xx, yy);
-        xx += 14 + ui.text(s2, xx + 10, yy, C.gold);
+  caption(ui, 'the collection', x, y);
+  ui.big(`${Math.round(f * 100)}%`, x + w, y - 2, T.research, { align: 'right' });
+  y += 11;
+  meter(ui, x, y, w, 6, f, { role: 'research' });
+  y += 10;
+  y += ledgerRow(ui, '{soft:paid so far}', `{coin:${Num.of(paid).format()}}`, x, y, w);
+  y += ledgerRow(ui, '{soft:still to find}', `{coin:${Num.of(left).format()}}`, x, y, w) + 6;
+  const focus: ItemId | null = hovered ?? newest ?? CODEX_ITEMS[0] ?? null;
+  const end = dp.y + dp.h;
+  if (focus && y + 44 <= end) {
+    const it = ITEMS[focus];
+    const isLogged = logged.includes(focus);
+    const payable = it.value > 0;
+    const pays = it.value * mult;
+    // the specimen large, on its mount
+    ui.fill(x, y, 36, 36, T.ink);
+    ui.fill(x + 1, y + 1, 34, 34, T.paperHi);
+    ui.ctx.drawImage(itemIcon(focus), x + 2, y + 2, 32, 32);
+    if (isLogged) pushpin(ui, x + 18, y + 1);
+    const nx = x + 42, nw = w - 42;
+    if (bigWidth(it.name) <= nw) ui.big(it.name, nx, y + 2, T.ink);
+    else ui.text(ellipsize(it.name, nw), nx, y + 3, T.ink);
+    drawRich(ui, isLogged ? '{chip:good:CATALOGUED}' : payable ? `{chip:coin:FIRST PAYS ${mult}×}` : '{chip:soft:NOT SOLD}', nx, y + 17, nw, T.ink);
+    y += 40;
+    y += ui.para(it.flavor, x, y, w, T.ink) + 4;
+    const rowsF: [string, string][] = [
+      [`{i:${focus}} {soft:at the Dock}`, payable ? `{coin:${fmt(it.value)}}` : '{bad:refused}'],
+      [`{soft:first delivery}`, payable ? (isLogged ? `{good:${ICON.check}} {coin:${Num.of(pays).format()}}` : `{coin:${Num.of(pays).format()}}`) : '{soft:never pays}'],
+      [`{soft:delivered}`, g.s.delivered[focus] ? g.s.delivered[focus]!.format() : '{soft:never}'],
+    ];
+    for (const [k, v] of rowsF) {
+      if (y + LINE_H > end) break;
+      y += ledgerRow(ui, k, v, x, y, w);
+    }
+    y += 5;
+  }
+  // what is worth chasing: the uncatalogued, dearest first
+  const chase = CODEX_ITEMS.filter((id) => !logged.includes(id)).sort((p, q) => ITEMS[q].value - ITEMS[p].value);
+  if (open && chase.length && y + 22 <= end) {
+    y += caption(ui, 'worth chasing', x, y, T.research);
+    let xx = x;
+    for (const id of chase) {
+      const s = `{i:${id}} {coin:${Num.of(ITEMS[id].value * mult).format()}}`;
+      const sw = richWidth(s);
+      if (xx + sw > x + w) {
+        y += 12;
+        xx = x;
+        if (y + 10 > end) break;
       }
+      drawRich(ui, s, xx, y, Infinity, T.ink);
+      xx += sw + 6;
     }
   }
 }
 
-function codexCard(app: App, id: ItemId, x: number, y: number, w: number, h: number, isNew: boolean) {
+/** One specimen pinned to the Codex page. Returns true while hovered. */
+function specimen(app: App, id: ItemId, x: number, y: number, w: number, h: number, isNew: boolean, mult: number): boolean {
   const ui = app.ui;
   const g = app.game;
+  const ctx = ui.ctx;
   const it = ITEMS[id];
   const logged = g.s.codex.includes(id);
   const payable = it.value > 0;
-  const pays = it.value * RULES.codexMult.value;
-  frame(ui, x, y, w, h, logged ? 'paper' : 'inset');
-  const ctx = ui.ctx;
-  ui.fill(x + 3, y + 3, 20, 20, logged ? C.brass0 : C.ink);
-  ctx.globalAlpha = logged ? 1 : payable ? 0.45 : 0.25;
-  ctx.drawImage(itemIcon(id), x + 5, y + 5, 16, 16);
-  ctx.globalAlpha = 1;
-  const tx = x + 26, tw = x + w - 4 - tx;
+  const pays = Num.of(it.value * mult).format();
+  const hov = ui.hover(x, y, w, h);
+  ui.region(x, y, w, h, 'panel', false);
+  ui.mark('codex:' + id, x, y, w, h);
+  // the card: a mounted specimen, or its place pencilled in
+  if (logged) {
+    ctx.fillStyle = rgba(T.shadow, 0.3);
+    ctx.fillRect(x + 1, y + 1, w, h);
+    ui.fill(x, y, w, h, T.paperEdge);
+    ui.fill(x + 1, y + 1, w - 2, h - 2, hov ? C.lamp3 : T.paperHi);
+  } else {
+    ctx.fillStyle = rgba(T.paperEdge, 0.5);
+    for (let i = 0; i < w; i += 3) { ctx.fillRect(x + i, y, Math.min(2, w - i), 1); ctx.fillRect(x + i, y + h - 1, Math.min(2, w - i), 1); }
+    for (let j = 0; j < h; j += 3) { ctx.fillRect(x, y + j, 1, Math.min(2, h - j)); ctx.fillRect(x + w - 1, y + j, 1, Math.min(2, h - j)); }
+  }
+  const my = y + Math.min(4, Math.floor((h - 18) / 2));
+  if (logged) {
+    ui.fill(x + 3, my, 18, 18, T.ink);
+    ui.fill(x + 4, my + 1, 16, 16, T.paper);
+    ctx.drawImage(itemIcon(id), x + 4, my + 1, 16, 16);
+  } else pencilIcon(ui, 'item:' + id, itemIcon(id), x + 4, my + 1, 16, payable ? T.inkSoft : T.paperEdge);
+  const tx = x + 25, tw = x + w - 3 - tx;
   ui.clip(tx, y, tw, h);
-  ui.text(it.name, tx, y + 4, logged ? C.ink : payable ? C.bone : C.hull2);
-  const ps = Num.of(pays).format();
-  if (logged) ui.text(`${ICON.check} +${ps}`, tx, y + 14, C.moss);
-  else if (payable) ui.text(textWidth(`First pays ${ps}`) <= tw ? `First pays ${ps}` : `Pays ${ps}`, tx, y + 14, C.brass1);
-  else ui.text('Not for sale', tx, y + 14, C.hull1);
+  ui.text(ellipsize(it.name, tw - (logged ? 13 : 0)), tx, my, logged ? T.ink : T.inkSoft);
+  const val = logged ? `{coin:+${pays}}` : payable ? `{coin:${pays}}` : tw >= 60 ? '{chip:soft:NOT SOLD}' : '{soft:no sale}';
+  drawRich(ui, val, tx, my + 11, Infinity, T.ink);
   ui.unclip();
+  // the first-delivery note, a chip at the right of the value when it fits
+  if (!logged && payable) {
+    const ns = `${mult}×`;
+    const nw = chipWidth(ns);
+    if (richWidth(val) + nw + 6 <= tw) chip(ui, x + w - 3 - nw, my + 10, ns, { role: 'coin' });
+  }
+  // the flavour, one line, when the card is tall enough
+  if (h >= 46) {
+    ui.clip(x + 3, y, w - 6, h);
+    ui.text(ellipsize(it.flavor, w - 8), x + 4, y + h - 12, logged ? T.inkSoft : rgba(T.inkSoft, 0.8));
+    ui.unclip();
+  }
+  if (logged) tickStamp(ui, x + w - 14, y + 2);
+  // the newest: FIRST! stamped across its corner, a glint running over it
   if (isNew && logged) {
-    ui.fill(x + w - 22, y + 2, 20, 9, C.ink);
-    ui.fill(x + w - 21, y + 3, 18, 7, C.pipRed);
-    ui.text('NEW', x + w - 20, y + 3, C.bone);
+    stamp(ui, 'FIRST!', x + w - 24, h >= 46 ? y + h - 9 : my + 15, { angle: -0.18, alpha: 0.9 });
     const gl = (ui.time * 0.8) % 2;
-    if (gl < 1) ui.fill(x + 3 + Math.floor(gl * (w - 8)), y + 3, 2, h - 6, C.bone, 0.3);
+    if (gl < 1) ui.fill(x + 3 + Math.floor(gl * (w - 8)), y + 2, 2, h - 4, C.bone, 0.35);
   }
-  // the flavour text: as many whole lines as fit, the last one cut with an ellipsis
-  const fy = y + 25;
-  const nl = Math.floor((h - (fy - y) - 2) / 10);
-  if (nl > 0) {
-    const lines = wrapText(it.flavor, w - 8);
-    lines.slice(0, nl).forEach((l, k) => {
-      const cut = k === nl - 1 && lines.length > nl;
-      ui.text(cut ? ellipsize(l + ' ...', w - 8) : l, x + 4, fy + k * 10, logged ? C.shadow : C.hull1);
-    });
-  }
-  const got = g.s.delivered[id];
-  ui.hint(x, y, w, h, [
-    { text: it.name, color: logged ? C.gold : C.bone },
-    { text: it.flavor },
-    { text: payable ? `Worth ${fmt(it.value)} at the Dock. ${logged ? `Catalogued: Unit 7 paid ${Num.of(pays).format()}.` : `First Dock delivery pays ${Num.of(pays).format()} once Unit 7 likes you.`}` : 'The Dock refuses it, so the Codex never pays for it.', color: logged ? C.leaf : C.hull2 },
-    { text: got ? `Delivered so far: ${got.format()}` : 'Never delivered.', color: C.hull2 },
-  ], 180);
+  if (hov) penCircle(ui, x + 12, my + 9, 12, Math.floor(ui.time * 2.5) % 3);
+  return hov;
 }
 
 // ------------------------------------------------------------------ the Survey Office
@@ -147,101 +203,116 @@ const ORE_COL: Partial<Record<ItemId, string>> = { ironOre: C.iron1, copperOre: 
 
 export function surveyScreen(app: App, r: Rect) {
   const ui = app.ui;
-  const g = app.game;
-  screenHeader(app, r, 'The Survey Office', C.leaf, 'survey');
-  const y0 = r.y + 22;
-  const mapW = r.w >= 480 ? 132 : 0;
-  const rw = r.w - 16 - (mapW ? mapW + 6 : 0);
-  // the rule, in one sentence
-  const rule = `Ore never runs out. Each copy of a module with miners inside holds one claim on every ore it digs: you start with ${RULES.claimsBase.value} per ore, +${RULES.claimsPerDeposit.value} per deposit you own, and the Office sells ${RULES.claimsPerBlock.value} more at a time.`;
-  const sh = wrapText(rule, rw - 12).length * 10 + 7;
-  frame(ui, r.x + 8, y0, rw, sh, 'paper');
-  ui.para(rule, r.x + 14, y0 + 4, rw - 12, C.ink);
-  const bottom = r.y + r.h - 6;
+  const mapW = r.w >= 480 ? 140 : 0;
+  const { body, detail } = menuTemplate(app, r, { title: 'The Survey Office', accent: T.good, icon: 'survey', detail: mapW || undefined });
+  const x = body.x + 2, w = body.w - 4;
+  let y = body.y + 2;
+  // the rule, in the mayor's mouth
+  y += speaker(app, 'bramble', 'Ore never runs out! Each digging module copy holds a claim.', x, y, w) + 5;
   const ores = ORES.filter((o) => PATCHES.some((p) => p.item === o));
-  const ry = y0 + sh + 4;
-  const rh = Math.min(56, Math.floor((bottom - ry + 3) / ores.length) - 3);
-  ores.forEach((ore, i) => oreRow(app, ore, r.x + 8, ry + i * (rh + 3), rw, rh));
-  if (mapW) depositMap(app, r.x + r.w - 8 - mapW, y0, mapW, bottom - y0);
+  const bottom = body.y + body.h;
+  const rh = Math.min(60, Math.floor((bottom - y + 4) / ores.length) - 4);
+  ores.forEach((ore, i) => deed(app, ore, x, y + i * (rh + 4), w, rh));
+  if (detail) depositMap(app, detail);
 }
 
-function oreRow(app: App, ore: ItemId, x: number, y: number, w: number, h: number) {
+/** An ore's deed: its deposit tile, its claims used of held and where they come from, the next
+ * block's price and the button, and the modules holding them. */
+function deed(app: App, ore: ItemId, x: number, y: number, w: number, h: number) {
   const ui = app.ui;
   const g = app.game;
-  section(ui, x, y, w, h);
   const ctx = ui.ctx;
-  // the ore's deposit tile, large
-  ui.fill(x + 5, y + 5, 36, 36, C.ink);
+  const c = slip(ui, x, y, w, h, { blocking: true });
+  // the ore's deposit tile, like a stamp on the deed
   const ts = ORE_TILE[ore];
-  if (ts && hasArt(ts)) ctx.drawImage(sheet(ts).frames[0], x + 7, y + 7, 32, 32);
-  else ui.fill(x + 7, y + 7, 32, 32, ORE_COL[ore] ?? C.hull1);
-  ctx.drawImage(itemIcon(ore), x + 27, y + 27);
+  const ty = c.y + Math.max(0, Math.floor((c.h - 34) / 2) - 2);
+  ui.fill(c.x - 1, ty - 1, 34, 34, T.ink);
+  if (ts && hasArt(ts)) ctx.drawImage(sheet(ts).frames[0], c.x, ty, 32, 32);
+  else ui.fill(c.x, ty, 32, 32, ORE_COL[ore] ?? C.hull1);
+  ctx.drawImage(itemIcon(ore), c.x + 23, ty + 23);
   const held = claimsHeld(g, ore), used = claimsUsed(g, ore);
   const deps = PATCHES.filter((p) => p.item === ore && g.owned(p.x, p.y)).length;
   const blocks = g.s.claimBlocks[ore] ?? 0;
-  // the claims: name, used of held, a meter of every claim
-  const cx = x + 47;
-  const right = x + w - 6;
-  const buyW = 92;
-  const midR = right - buyW - 6;
-  ui.text(ITEMS[ore].name, cx, y + 5, C.bone, { shadow: C.ink });
-  const free = held - used;
-  const tag = free > 0 ? `${free} free` : free === 0 ? 'all in use' : `${-free} over`;
-  ui.text(`${used}/${held} claims`, midR, y + 5, free > 0 ? C.leaf : free === 0 ? C.pipYellow : C.pipRed, { align: 'right' });
-  cells(app, cx, y + 15, midR - cx, 6, used, held, free >= 0 ? C.leaf : C.pipRed);
-  ui.clip(cx, y + 23, midR - cx, 10);
-  ui.text(`${RULES.claimsBase.value} start + ${deps} deposit${deps === 1 ? '' : 's'} x${RULES.claimsPerDeposit.value} + ${blocks} block${blocks === 1 ? '' : 's'} x${RULES.claimsPerBlock.value}  (${tag})`, cx, y + 24, C.hull2);
+  const left = c.x + 39;
+  const right = c.x + c.w;
+  const buyW = Math.min(96, Math.max(80, Math.floor(c.w * 0.26)));
+  const midR = right - buyW - 8;
+  // the name, and the claims as a chip
+  ui.big(ITEMS[ore].name, left, c.y, T.ink);
+  const freeN = held - used;
+  const [ft, fr]: [string, Role] = freeN > 0 ? [`${freeN} FREE`, 'good'] : freeN === 0 ? ['ALL IN USE', 'warn'] : [`${-freeN} OVER`, 'bad'];
+  const cs = `${used}/${held} claims`;
+  const csW = textWidth(cs);
+  const fw = chipWidth(ft);
+  ui.text(cs, midR - fw - 6, c.y + 1, freeN >= 0 ? T.ink : T.bad, { align: 'right' });
+  chip(ui, midR - fw, c.y - 1, ft, { role: fr, solid: freeN < 0 });
+  void csW;
+  cells(app, left, c.y + 13, midR - left, 6, used, held, freeN >= 0 ? T.goodFill : T.badFill);
+  // where the claims come from, as a sum
+  const pd = RULES.claimsPerDeposit.value, pb = RULES.claimsPerBlock.value;
+  const long = `{soft:${RULES.claimsBase.value} start} + ${deps} {soft:deposit${deps === 1 ? '' : 's'}} ×${pd} + ${blocks} {soft:block${blocks === 1 ? '' : 's'}} ×${pb}`;
+  const sum = richWidth(long) <= midR - left ? long : `{soft:${RULES.claimsBase.value}} + ${deps} {u:survey}×${pd} + ${blocks} {u:claim}×${pb}`;
+  ui.clip(left, c.y + 21, midR - left, 11);
+  drawRich(ui, sum, left, c.y + 22, Infinity, T.ink);
   ui.unclip();
-  // the next block and Buy 4
+  ui.hint(left, c.y + 21, midR - left, 11, [{ text: `{big:${held} ${ITEMS[ore].name} claims}` }, { text: long }], 220);
+  // the next block and Buy
   const price = claimPrice(g, ore);
   const bx = right - buyW;
   if (price) {
-    ui.text('Next block', bx, y + 5, C.hull2);
-    ui.text(price.format(), right, y + 5, g.s.coin.gte(price) ? C.gold : C.pipRed, { align: 'right' });
-    const why = !g.done('surveying') ? 'Research Surveying first' : g.s.coin.lt(price) ? `Needs ${price.format()} coin` : null;
-    if (button(ui, 'claim:' + ore, bx, y + 15, buyW, 14, `Buy ${RULES.claimsPerBlock.value} claims`, { gold: !why, disabled: !!why, tip: why ?? `${RULES.claimsPerBlock.value} more ${ITEMS[ore].name.toLowerCase()} claims for ${price.format()} coin. Each later block costs +50% of the first, linear (the stamp rule).` })) app.act({ k: 'claim', item: ore });
-    if (why) {
-      ui.clip(bx, y + 30, buyW, 10);
-      ui.text(why, bx + buyW / 2, y + 31, C.hull1, { align: 'center' });
+    const afford = g.s.coin.gte(price);
+    const ps = `{coin:${price.format()}}`;
+    if (smallWidth('NEXT BLOCK') + 6 + richWidth(ps) <= buyW) caption(ui, 'next block', bx, c.y + 1);
+    else if (smallWidth('NEXT') + 6 + richWidth(ps) <= buyW) caption(ui, 'next', bx, c.y + 1);
+    drawRich(ui, ps, right, c.y, Infinity, afford ? T.coin : T.bad, { align: 'right' });
+    const why = !g.done('surveying') ? `{u:research} ${RESEARCH.surveying.name} first` : !afford ? `needs {coin:${price.format()}}` : null;
+    if (button(ui, 'claim:' + ore, bx, c.y + 11, buyW, 16, `Buy ${pb} claims`, { gold: !why, disabled: !!why, tip: why ?? [{ text: `{big:${pb} ${ITEMS[ore].name} claims}` }, { text: `{coin:${price.format()}}  {soft:each later block} +50% {soft:of the first}` }] })) app.act({ k: 'claim', item: ore });
+    if (why && c.y + 40 <= c.y + c.h + 2) {
+      ui.clip(bx, c.y + 29, buyW, 10);
+      drawRich(ui, why, bx + buyW / 2, c.y + 29, Infinity, T.bad, { align: 'center' });
       ui.unclip();
     }
   }
   // which designs hold them
   const holders = g.s.designs.filter((d) => (oresOf(g, d)[ore] ?? 0) > 0 && copiesOf(g, d) > 0);
-  const hy = y + h - 13;
-  if (hy < y + 34) return;
-  let hx = cx;
-  ui.text('Held by', hx, hy + 1, C.hull2);
-  hx += textWidth('Held by') + 5;
-  if (!holders.length) ui.text('nothing yet: no module digs it', hx, hy + 1, C.hull1);
+  const hy = c.y + 33;
+  if (hy + 10 > c.y + c.h + 3) return;
+  let hx = left;
+  hx += ui.text('held by', hx, hy, T.inkSoft) + 5;
+  if (!holders.length) ui.text('nothing yet', hx, hy, T.inkSoft);
   for (const d of holders) {
-    const label = `${d.name} x${copiesOf(g, d) * (oresOf(g, d)[ore] ?? 1)}`;
-    const lw = 11 + textWidth(label) + 8;
-    if (hx + lw > right) { ui.text('...', hx, hy + 1, C.hull2); break; }
-    ctx.drawImage(sheet('module').frames[0], hx, hy, 9, 9);
+    const n = copiesOf(g, d) * (oresOf(g, d)[ore] ?? 1);
+    const lab = `${d.name} ×${n}`;
+    const lw = 11 + textWidth(lab) + 8;
+    if (hx + lw > midR) { ui.text('...', hx, hy, T.inkSoft); break; }
+    ctx.drawImage(sheet('module').frames[0], hx, hy - 1, 9, 9);
     const out = mainOutput(g, d.id);
-    if (out) ctx.drawImage(itemIcon(out), hx + 1, hy + 1, 7, 7);
-    ui.text(label, hx + 11, hy + 1, C.bone);
-    ui.hint(hx, hy, lw - 4, 10, `${d.name}: ${copiesOf(g, d)} cop${copiesOf(g, d) === 1 ? 'y' : 'ies'} (spare and placed) dig ${ITEMS[ore].name.toLowerCase()}`, 170);
+    if (out) ctx.drawImage(itemIcon(out), hx + 1, hy, 7, 7);
+    ui.text(lab, hx + 11, hy, T.ink);
+    ui.hint(hx, hy - 1, lw - 4, 10, [{ text: `{big:${d.name}}` }, { text: `${copiesOf(g, d)} {soft:copies, spare and placed} · {i:${ore}} ×${oresOf(g, d)[ore] ?? 1} {soft:each}` }], 180);
     hx += lw;
   }
 }
 
-/** The Workshop's deposits on a little map: owned land lit, ore patches in their colours. */
-function depositMap(app: App, x: number, y: number, w: number, h: number) {
+/** The Workshop's deposits on a little map (owned land lit, ore patches in their colours), the
+ * deposits owned by ore, the claim blocks bought and the next prices, and land for sale. */
+function depositMap(app: App, page: Rect) {
   const ui = app.ui;
   const g = app.game;
-  const inner = card(ui, x, y, w, h, 'Deposits', C.leaf, 'workshop');
-  const k = Math.max(2, Math.floor(inner.w / WORKSHOP.w));
+  const x = page.x + 4, w = page.w - 8;
+  let y = page.y + 2;
+  ui.big('Deposits', x, y, T.ink);
+  y += 15;
+  const k = Math.max(2, Math.floor(w / WORKSHOP.w));
   const mw = WORKSHOP.w * k, mh = WORKSHOP.h * k;
-  const mx = inner.x + Math.floor((inner.w - mw) / 2), my = inner.y + 1;
-  ui.fill(mx - 1, my - 1, mw + 2, mh + 2, C.ink);
+  const mx = x + Math.floor((w - mw) / 2), my = y + 1;
+  ui.fill(mx - 1, my - 1, mw + 2, mh + 2, T.ink);
   for (const c of CHUNKS) {
     const own = g.s.land.includes(c.id);
     ui.fill(mx + c.x * k, my + c.y * k, c.w * k, c.h * k, own ? C.ground1 : C.shadow);
-    ui.fill(mx + c.x * k, my + c.y * k, c.w * k, 1, C.ink);
-    ui.fill(mx + c.x * k, my + c.y * k, 1, c.h * k, C.ink);
-    if (!own) ui.text(c.id, mx + c.x * k + (c.w * k) / 2, my + c.y * k + (c.h * k) / 2 - 3, C.hull1, { align: 'center' });
+    ui.fill(mx + c.x * k, my + c.y * k, c.w * k, 1, T.ink);
+    ui.fill(mx + c.x * k, my + c.y * k, 1, c.h * k, T.ink);
+    if (!own) ui.small(c.id, mx + c.x * k + (c.w * k) / 2, my + c.y * k + (c.h * k) / 2 - 2, C.hull2, { align: 'center' });
   }
   for (const p of PATCHES) {
     const own = g.owned(p.x, p.y);
@@ -249,37 +320,41 @@ function depositMap(app: App, x: number, y: number, w: number, h: number) {
     ui.ctx.globalAlpha = own ? 1 : 0.45;
     ui.fill(mx + p.x * k, my + p.y * k, p.w * k, p.h * k, pulse ? C.bone : ORE_COL[p.item] ?? C.hull2);
     ui.ctx.globalAlpha = 1;
-    ui.hint(mx + p.x * k, my + p.y * k, p.w * k, p.h * k, `${ITEMS[p.item].name} deposit${own ? `: yours, +${RULES.claimsPerDeposit.value} claims` : ': buy its land for +2 claims'}`, 150);
+    ui.hint(mx + p.x * k, my + p.y * k, p.w * k, p.h * k, [{ text: `{i:${p.item}} {big:${ITEMS[p.item].name}}` }, { text: own ? `{good:yours} +${RULES.claimsPerDeposit.value} claims` : `{soft:buy its land} +${RULES.claimsPerDeposit.value} claims` }], 150);
   }
-  let ly = my + mh + 5;
+  y = my + mh + 5;
+  const end = page.y + page.h;
   for (const ore of ORES) {
-    if (ly + 9 > inner.y + inner.h) break;
-    ui.fill(inner.x, ly + 1, 6, 6, ORE_COL[ore] ?? C.hull2);
-    ui.text(ITEMS[ore].name, inner.x + 9, ly, C.bone);
+    if (y + 10 > end) break;
     const own = PATCHES.filter((p) => p.item === ore && g.owned(p.x, p.y)).length;
     const all = PATCHES.filter((p) => p.item === ore).length;
-    ui.text(`${own}/${all}`, inner.x + inner.w, ly, own ? C.leaf : C.hull1, { align: 'right' });
-    ly += 10;
+    ui.fill(x, y + 2, 6, 6, T.ink);
+    ui.fill(x + 1, y + 3, 4, 4, ORE_COL[ore] ?? C.hull2);
+    ui.text(ITEMS[ore].name, x + 9, y, T.ink);
+    ui.text(`${own}/${all}`, x + w, y, own ? T.good : T.inkSoft, { align: 'right' });
+    rule(ui, x, y + 10, w);
+    y += 11;
   }
   // the price list: blocks bought and the next block's price, by ore
-  if (ly + 24 <= inner.y + inner.h) {
-    ly += 4;
-    ui.text('Claim blocks', inner.x, ly, C.leaf);
-    ui.text('next', inner.x + inner.w, ly, C.hull2, { align: 'right' });
-    ly += 10;
+  if (y + 24 <= end) {
+    y += 4;
+    caption(ui, 'claim blocks', x, y, T.good);
+    caption(ui, 'next', x + w, y, T.inkSoft, 'right');
+    y += 9;
     for (const ore of ORES) {
-      if (ly + 9 > inner.y + inner.h) break;
+      if (y + 10 > end) break;
       const pr = claimPrice(g, ore);
-      ui.ctx.drawImage(itemIcon(ore), inner.x, ly);
-      ui.text(`${g.s.claimBlocks[ore] ?? 0} bought`, inner.x + 10, ly, C.bone);
-      ui.text(pr ? pr.format() : '-', inner.x + inner.w, ly, pr && g.s.coin.gte(pr) ? C.gold : C.hull1, { align: 'right' });
-      ly += 10;
+      ui.ctx.drawImage(itemIcon(ore), x, y + 1);
+      ui.text(`${g.s.claimBlocks[ore] ?? 0} bought`, x + 10, y, T.ink);
+      drawRich(ui, pr ? `{coin:${pr.format()}}` : '-', x + w, y, Infinity, pr && g.s.coin.gte(pr) ? T.coin : T.inkSoft, { align: 'right' });
+      y += 11;
     }
   }
   const forSale = CHUNKS.find((c) => !g.s.land.includes(c.id) && (!c.requires || g.done(c.requires)) && PATCHES.some((p) => p.x >= c.x && p.x < c.x + c.w && p.y >= c.y && p.y < c.y + c.h));
-  if (forSale && ly + 20 <= inner.y + inner.h) {
-    ly += 3;
-    ui.para(`${forSale.name} is for sale: ${fmt(forSale.cost)} coin. Click it on the map.`, inner.x, ly, inner.w, C.gold);
+  if (forSale) {
+    const s = `{u:workshop} ${forSale.name} {soft:for sale} {coin:${fmt(forSale.cost)}}`;
+    const sh = richHeight(s, w);
+    if (y + 4 + sh <= end) drawRich(ui, s, x, y + 4, w, T.ink);
   }
 }
 
@@ -292,60 +367,73 @@ export function megaScreen(app: App, r: Rect) {
   const g = app.game;
   const stage = megaStage(g.s.mega.stage);
   const doneStage = MEGA.find((m) => m.stage === g.s.mega.stage) ?? null;
-  screenHeader(app, r, stage ? stage.name : doneStage ? `${doneStage.name}: complete` : 'The Megaproject', C.gold, 'mega');
-  const y0 = r.y + 22, bottom = r.y + r.h - 6;
   const t = ui.time - app.gradeAt;
   const celebrate = g.s.mega.stage >= 1 && t < 12 && t >= 0;
-  // ---- the Bay, large, on the left
-  const artH = bottom - y0;
-  // the art director's 48x48 stage art (mega_stage1) at a whole scale, else the 32x32 Bay frame;
-  // room is kept under it for the stage track and the Factory floor map
+  const side = Math.floor(r.w * 0.4);
+  const title = stage ? stage.name : doneStage ? doneStage.name : 'The Megaproject';
+  const { body, detail, free } = menuTemplate(app, r, { title: bigWidth(title) > r.w * 0.45 ? 'The Great Drill' : title, accent: T.coin, icon: 'mega', detail: side });
+  if (!stage && doneStage) titleChip(app, r, bigWidth(title) > r.w * 0.45 ? 'The Great Drill' : title, free, 'COMPLETE', 'good');
+  // the left page: what the stage wants (or the celebration)
+  if (stage) wants(app, stage, body);
+  else complete(app, body, celebrate, t);
+  // the right page: the Bay pasted in large, the stage track, where the Bay stands
+  bayPage(app, detail!);
+}
+
+/** The right page: the Bay's picture at a whole scale, the three stages as chips, the rule that
+ * the Drill's progress is kept, and the Factory floor in miniature with the Bay lit. */
+function bayPage(app: App, page: Rect) {
+  const ui = app.ui;
+  const g = app.game;
+  const ctx = ui.ctx;
+  const x = page.x + 4, w = page.w - 8;
   const big = hasArt('mega_stage1');
   const S0 = big ? 48 : 32;
-  const k = Math.max(big ? 1 : 2, Math.min(6, Math.floor((Math.min(artH - 34 - (big ? 50 : 0), r.w * 0.42) - 8) / S0)));
+  const k = Math.max(1, Math.min(5, Math.floor(Math.min(page.h - 80, w - 12) / S0)));
   const P = S0 * k;
-  const aw = P + 16;
-  frame(ui, r.x + 8, y0, aw, artH, 'inset');
-  const ctx = ui.ctx;
-  const ax = r.x + 16, ay = y0 + 8;
-  // a night sky over the pad; rays once the drill runs
-  ui.clip(r.x + 9, y0 + 1, aw - 2, artH - 2);
-  ui.fill(r.x + 9, y0 + 1, aw - 2, P + 8, C.shadow);
+  const ax = x + Math.floor((w - P) / 2), ay = page.y + 6;
+  // the picture: a night sky over the pad, pasted to the page with a paper border and tape
+  ctx.fillStyle = rgba(T.shadow, 0.35);
+  ctx.fillRect(ax - 3, ay - 3, P + 9, P + 9);
+  ui.fill(ax - 5, ay - 5, P + 10, P + 10, T.paperHi);
+  ui.fill(ax - 1, ay - 1, P + 2, P + 2, T.ink);
+  ui.clip(ax, ay, P, P);
+  ui.fill(ax, ay, P, P, C.shadow);
   for (let i = 0; i < 24; i++) {
-    const sx = r.x + 10 + ((i * 53) % (aw - 4)), sy = y0 + 3 + ((i * 29) % Math.max(1, P / 2));
+    const sx = ax + ((i * 53) % P), sy = ay + ((i * 29) % Math.max(1, Math.floor(P / 2)));
     if (Math.sin(ui.time * 2 + i) > 0.3) ui.fill(sx, sy, 1, 1, i % 3 ? C.hull2 : C.hot);
   }
   if (g.s.mega.stage >= 1) rays(app, ax + P / 2, ay + P / 2, P, C.gold, 14);
-  ui.unclip();
   if (big) {
     const st = sheet('mega_stage1');
     const flip = Math.floor(ui.time * (st.fps || 4)) % 2;
     const fi = g.s.mega.stage >= 1 ? 8 + flip : 2 * Math.min(3, Math.floor(megaFrac(g) * 4)) + flip;
     ctx.drawImage(st.frames[fi], ax, ay, P, P);
-  } else {
-    const bay = sheet('mega_bay');
-    ctx.drawImage(bay.frames[bayFrame(g, ui.time)], ax, ay, P, P);
-  }
-  let ty = ay + P + 8;
-  const sw = Math.floor((aw - 16 - 8) / 3);
+  } else ctx.drawImage(sheet('mega_bay').frames[bayFrame(g, ui.time)], ax, ay, P, P);
+  ui.unclip();
+  ctx.fillStyle = rgba(C.lamp3, 0.7);
+  ctx.fillRect(ax - 8, ay - 7, 14, 4);
+  ctx.fillRect(ax + P - 6, ay - 7, 14, 4);
+  let y = ay + P + 9;
+  // the three stages, as chips in a row
+  const sw = Math.floor((w - 8) / 3);
   for (let s = 1; s <= 3; s++) {
-    const sx = ax + (s - 1) * (sw + 4);
+    const sx = x + (s - 1) * (sw + 4);
     const done = g.s.mega.stage >= s, cur = g.s.mega.stage + 1 === s && !!megaStage(g.s.mega.stage);
-    ui.fill(sx, ty, sw, 14, C.ink);
-    ui.fill(sx + 1, ty + 1, sw - 2, 12, done ? C.brass1 : cur ? C.ground1 : C.shadow);
-    const shut = cur && !megaOpen(g, megaStage(g.s.mega.stage));
-    const curLabel = textWidth(`${ICON.lock} Stage ${s}`) + 4 <= sw ? `${ICON.lock} Stage ${s}` : `${ICON.lock} ${s}`;
-    ui.text(done ? `${ICON.check} ${s}` : cur ? (shut ? curLabel : `Stage ${s}`) : `${ICON.lock} ${s}`, sx + sw / 2, ty + 4, done ? C.ink : cur ? (shut ? C.violet : C.gold) : C.hull1, { align: 'center' });
-    ui.hint(sx, ty, sw, 14, MEGA[s - 1]?.reward ?? '', 160); // Milestone 5: stages 2 and 3
+    const shut = cur && !megaOpen(g, megaStage(g.s.mega.stage)!);
+    const lab = done ? `${ICON.check} ${s}` : cur && !shut ? (textWidth(`Stage ${s}`) + 8 <= sw ? `Stage ${s}` : `${s}`) : `${ICON.lock} ${s}`;
+    const role: Role = done ? 'good' : cur ? (shut ? 'reset' : 'coin') : 'soft';
+    const cwid = chipWidth(lab);
+    chip(ui, sx + Math.floor((sw - cwid) / 2), y, lab, { role, solid: done || (cur && !shut) });
+    if (cur) pencil(ui, sx + 2, y + CHIP_H + 1, sw - 4, T.bad);
+    const m = MEGA[s - 1];
+    if (m) ui.hint(sx, y, sw, CHIP_H, [{ text: `{big:${m.name}}` }, { text: m.reward }, ...(m.rep ? [{ text: `{reset:opens at the Committee's reputation} ${m.rep}` }] : [])], 190);
   }
-  ty += 18;
-  if (ty + 9 < bottom) ty += ui.para(g.s.mega.stage >= 1 ? 'The drill runs. Its progress survives every reset.' : 'Progress here survives every reset.', ax, ty, aw - 16, C.hull2) + 6;
+  y += CHIP_H + 6;
+  const keep = g.s.mega.stage >= 1 ? '{good:the drill runs} · {reset:kept through every reset}' : '{reset:kept through every reset}';
+  if (y + 10 <= page.y + page.h) y += drawRich(ui, keep, x + w / 2, y, w, T.ink, { align: 'center' }) + 6;
   // the Factory floor in miniature, the Bay lit in its corner
-  if (bottom - 6 - ty >= 12 + FACTORY.h * 3) bayMap(app, ax, ty, aw - 16, bottom - 6 - ty);
-  // ---- what the stage wants, on the right
-  const px = r.x + 8 + aw + 6, pw = r.x + r.w - 8 - px;
-  if (stage) wants(app, stage, px, y0, pw, bottom - y0);
-  else complete(app, px, y0, pw, bottom - y0, celebrate, t);
+  if (page.y + page.h - y >= 16 + FACTORY.h * 2) bayMap(app, x, y, w, page.y + page.h - y);
 }
 
 function bayFeeds(app: App): Partial<Record<ItemId, number>> {
@@ -360,214 +448,217 @@ function bayFeeds(app: App): Partial<Record<ItemId, number>> {
   return out;
 }
 
-function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, x: number, y: number, w: number, h: number) {
+function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, page: Rect) {
   const ui = app.ui;
   const g = app.game;
   // the Milestone 5-6 final round: a stage behind the Committee's reputation is the Committee's
-  // to open, so the panel's call to action is their orders, not the trunks
+  // to open, so the page's call to action is their orders, not the trunks
   if (stage.rep && !megaOpen(g, stage)) {
-    lockedStage(app, stage, card(ui, x, y, w, h, `Stage ${stage.stage} opens with the Committee`, C.violet, 'orders'));
+    lockedStage(app, stage, page);
     return;
   }
-  const inner = card(ui, x, y, w, h, 'Wanted, by trunk into the Bay', C.gold, 'mega');
+  const x = page.x + 2, w = page.w - 4;
   const bay = g.s.factory.ents.find((e) => e.kind === 'fbay');
   const feeds = bayFeeds(app);
-  const end = inner.y + inner.h - 17;
-  let yy = inner.y + 2;
+  const end = page.y + page.h - 19;
+  let y = page.y + 2;
+  ui.big('Wanted', x, y, T.ink);
+  caption(ui, 'by trunk into the bay', x + bigWidth('Wanted') + 8, y + 3);
+  y += 16;
   const ents = Object.entries(stage.wants) as [ItemId, number][];
-  const rowH = Math.max(24, Math.min(30, Math.floor((inner.h - 150) / ents.length)));
+  const rowH = 26;
   let slowest = 0;
   for (const [it, want] of ents) {
     const have = Math.min(want, Math.floor(g.s.mega.progress[it]?.toNumber() ?? 0));
     const f = have / want;
-    ui.fill(inner.x, yy, 20, 20, C.ink);
-    ui.fill(inner.x + 1, yy + 1, 18, 18, f >= 1 ? C.moss : C.shadow);
-    ui.ctx.drawImage(itemIcon(it), inner.x + 2, yy + 2, 16, 16);
-    ui.text(ITEMS[it].name, inner.x + 25, yy, f >= 1 ? C.leaf : C.bone);
+    const done = f >= 1;
+    ui.fill(x, y, 20, 20, T.ink);
+    ui.fill(x + 1, y + 1, 18, 18, done ? C.lily : T.paperHi);
+    ui.ctx.drawImage(itemIcon(it), x + 2, y + 2, 16, 16);
+    const nx = x + 25;
+    ui.text(ITEMS[it].name, nx, y, done ? T.good : T.ink);
     const rate = feeds[it];
-    if (rate) ui.text(`+${perMin(rate)}/min`, inner.x + 25 + textWidth(ITEMS[it].name) + 6, yy, C.leaf);
-    else if (f < 1) ui.text('not arriving', inner.x + 25 + textWidth(ITEMS[it].name) + 6, yy, C.pipYellow);
-    ui.text(`${fmt(have)} / ${fmt(want)}`, inner.x + inner.w, yy, f >= 1 ? C.leaf : C.gold, { align: 'right' });
-    bar(ui, inner.x + 25, yy + 10, inner.w - 25 - 28, 8, f, f >= 1 ? C.leaf : C.gold);
-    ui.text(f >= 1 ? ICON.check : `${Math.floor(f * 100)}%`, inner.x + inner.w, yy + 10, f >= 1 ? C.leaf : C.hull3, { align: 'right' });
-    if (f < 1) slowest = Math.max(slowest, rate ? (want - have) / rate : Infinity);
-    ui.hint(inner.x, yy, inner.w, rowH, rate && f < 1 ? `${perMin(rate)} a minute arriving: about ${eta((want - have) / rate)} to go.` : f >= 1 ? 'Enough of this one.' : `Nothing brings ${ITEMS[it].name.toLowerCase()} to the Bay yet: trunk a module making it into the Bay.`, 170);
-    yy += rowH;
+    const rx = nx + textWidth(ITEMS[it].name) + 6;
+    if (rate) chip(ui, rx, y - 2, `+${perMin(rate)}/min`, { role: 'good' });
+    else if (!done) chip(ui, rx, y - 2, 'NOT ARRIVING', { role: 'warn', solid: true });
+    ui.text(`${fmt(have)} / ${fmt(want)}`, x + w, y, done ? T.good : T.coin, { align: 'right' });
+    meter(ui, nx, y + 12, w - 25 - 30, 7, f, { role: done ? 'good' : 'coin' });
+    if (done) tickStamp(ui, x + w - 13, y + 9);
+    else ui.text(`${Math.floor(f * 100)}%`, x + w, y + 11, T.inkSoft, { align: 'right' });
+    if (!done) slowest = Math.max(slowest, rate ? (want - have) / rate : Infinity);
+    ui.hint(x, y, w, rowH - 2, rate && !done ? [{ text: `{i:${it}} +${perMin(rate)}/min {soft:arriving}` }, { text: `{u:clock} about ${eta((want - have) / rate)} to go` }] : done ? `{good:${ICON.check} enough} {i:${it}}` : [{ text: `{warn:nothing brings} {i:${it}} {warn:to the Bay}` }, { text: `{u:fold} a module making it · trunk it into the Bay` }], 180);
+    rule(ui, x, y + rowH - 4, w);
+    y += rowH;
   }
   // the whole stage: a big meter with quarter ticks
   const tf = megaFrac(g);
-  ui.text(`Stage ${stage.stage} in all`, inner.x, yy + 4, C.hull2);
-  ui.text(`${Math.floor(tf * 100)}%`, inner.x + inner.w, yy, C.gold, { align: 'right', scale: 2, shadow: C.brass0 });
-  yy += 19;
-  bar(ui, inner.x, yy, inner.w, 12, tf, C.hot);
-  for (const q of [0.25, 0.5, 0.75]) ui.fill(inner.x + Math.round(inner.w * q), yy + 1, 1, 10, tf >= q ? C.gold : C.hull0);
-  // a glint running along the filled part
-  const gl = (ui.time * 0.7) % 1.5;
-  if (gl < 1 && tf > 0.02) ui.fill(inner.x + 1 + Math.floor(gl * Math.max(1, inner.w * tf - 3)), yy + 1, 2, 10, C.bone, 0.5);
-  yy += 15;
-  if (yy + 10 <= end) {
-    ui.text(slowest === 0 ? 'Everything is in: the drill is about to wake.' : isFinite(slowest) ? `At these rates, done in about ${eta(slowest)}.` : 'Not everything is arriving: trunk the missing items in.', inner.x, yy, isFinite(slowest) ? C.leaf : C.pipYellow);
-    yy += 12;
+  caption(ui, `stage ${stage.stage} in all`, x, y + 4);
+  ui.big(`${Math.floor(tf * 100)}%`, x + w, y, T.coin, { align: 'right', scale: 2 });
+  y += 23;
+  meter(ui, x, y, w, 10, tf, { role: 'coin' });
+  for (const q of [0.25, 0.5, 0.75]) ui.fill(x + Math.round(w * q), y + 1, 1, 8, tf >= q ? T.brassLo : rgba(T.ink, 0.35));
+  y += 14;
+  if (y + 12 <= end) {
+    const s = slowest === 0 ? `{good:${ICON.check} everything in} · {soft:the drill wakes}` : isFinite(slowest) ? `{u:clock} {soft:done in about} ${eta(slowest)}` : `{chip:warn:NOT ALL ARRIVING}  {soft:trunk the missing in}`;
+    drawRich(ui, s, x, y, w, T.ink);
+    y += 14;
   }
   // the reward: what it pays, with what you have that it would boost
   const miners = g.miners.length;
   const srcMods = g.s.factory.ents.filter((e) => e.kind === 'module' && Object.keys(oresOf(g, g.design(e.design)!)).length).length;
-  const rh = 36;
-  if (stage.stage > 1 && yy + 10 <= end) yy += ui.para(`Reward: ${stage.reward}`, inner.x, yy, inner.w, C.gold) + 4; // Milestone 5
-  if (stage.stage === 1 && yy + rh <= end) {
-    frame(ui, inner.x, yy, inner.w, rh, 'paper');
-    ui.text('Reward: +50% to miners', inner.x + 6, yy + 4, C.brass0);
-    ui.text('and modules with miners inside', inner.x + 6, yy + 13, C.brass0);
-    const minerS = sheet('miner'), modS = sheet('module');
-    const half = Math.floor(inner.w / 2);
-    const rx = inner.x + 6, ry = yy + 23;
-    ui.ctx.drawImage(minerS.frames[Math.floor(ui.time * 6) % minerS.frames.length], rx, ry - 2, 10, 10);
-    ui.text(`${miners} Miner${miners === 1 ? '' : 's'}`, rx + 13, ry, C.ink);
-    ui.ctx.drawImage(modS.frames[0], rx + half - 6, ry - 2, 10, 10);
-    ui.clip(rx + half + 7, yy, inner.w - half - 14, rh);
-    ui.text(`${srcMods} source module${srcMods === 1 ? '' : 's'}`, rx + half + 7, ry, C.ink);
-    ui.unclip();
-    // a big +50% stamp on the right while there is room
-    const st = '+50%';
-    if (inner.w >= 230) {
-      const sx = inner.x + inner.w - textWidth(st) * 2 - 12;
-      ui.text(st, sx, yy + 5, Math.floor(ui.time * 2) % 2 ? C.copper1 : C.pipRed, { scale: 2 });
+  if (y + 14 <= end) {
+    caption(ui, 'the reward', x, y);
+    y += 9;
+    const stampW = stage.stage === 1 && w >= 220 ? 50 : 0;
+    const th = richHeight(stage.reward, w - 12 - stampW);
+    const rh = th + (stage.stage === 1 ? 14 : 0) + 10;
+    if (y + rh <= end) {
+      const c = slip(ui, x, y, w, rh);
+      drawRich(ui, stage.reward, c.x, c.y, c.w - stampW, T.ink);
+      if (stage.stage === 1) {
+        const ry = c.y + th + 2;
+        const minerS = sheet('miner'), modS = sheet('module');
+        ui.ctx.drawImage(minerS.frames[Math.floor(ui.time * 6) % minerS.frames.length], c.x, ry - 1, 10, 10);
+        const ms = `${miners} Miner${miners === 1 ? '' : 's'}`;
+        const mw = ui.text(ms, c.x + 13, ry, T.ink);
+        ui.ctx.drawImage(modS.frames[0], c.x + 13 + mw + 10, ry - 1, 10, 10);
+        ui.text(`${srcMods} source module${srcMods === 1 ? '' : 's'}`, c.x + 13 + mw + 23, ry, T.ink);
+        // a +50% stamp at the right while there is room
+        if (w >= 220) stamp(ui, '+50%', c.x + c.w - 22, c.y + 9, { angle: -0.12, scale: 1, alpha: Math.floor(ui.time * 2) % 2 ? 0.95 : 0.8 });
+        ui.hint(x, y, w, rh, [{ text: stage.reward }, { text: `{u:workshop} ${miners} Miners · {u:factory} ${srcMods} modules with miners inside` }], 190);
+      }
+      y += rh + 5;
     }
-    ui.hint(inner.x, yy, inner.w, rh, `${stage.reward}. Right now that is ${miners} Miner${miners === 1 ? '' : 's'} on the Workshop and ${srcMods} module${srcMods === 1 ? '' : 's'} on the Factory floor with miners folded inside.`, 190);
-    yy += rh + 4;
   }
-  // how a Drill Bit is made, and what is flowing in right now
+  // how a Drill Bit is made
   const bit = RECIPE.forgeDrillBit;
-  if (bit && yy + 10 <= end) {
-    ui.text('Drill Bit:', inner.x, yy, C.hull2);
-    let xx = inner.x + textWidth('Drill Bit:') + 5;
-    for (const inp of bit.inputs) {
-      const s2 = `${inp.n}`;
-      ui.ctx.drawImage(itemIcon(inp.item), xx, yy);
-      xx += 13 + ui.text(s2, xx + 10, yy, C.bone);
-    }
-    ui.text(`in an Assembler, ${bit.time} s`, xx + 2, yy, C.hull2);
-    yy += 11;
+  if (bit && y + 11 <= end) {
+    const eq = `${bit.inputs.map((inp) => `${inp.n} {i:${inp.item}}`).join(' + ')} → {i:drillBit}  {soft:Assembler} ${bit.time} s`;
+    ui.clip(x, y, w, 11);
+    drawRich(ui, eq, x, y, Infinity, T.ink);
+    ui.unclip();
+    y += 12;
   }
-  // the Milestone 5-6 review round: the drill-bit modules' rate and what holds them back
+  // the drill-bit modules' rate and what holds them back (the Milestone 5-6 review round)
   const bitMods = g.s.factory.ents.filter((e) => e.kind === 'module' && mainOutput(g, e.design) === 'drillBit');
-  if (bitMods.length && yy + 10 <= end) {
-    const rate = bitMods.reduce((t, e) => t + (g.design(e.design)?.outs.drillBit ?? 0) * e.fAvg, 0);
+  if (bitMods.length && y + 11 <= end) {
+    const rate = bitMods.reduce((s, e) => s + (g.design(e.design)?.outs.drillBit ?? 0) * e.fAvg, 0);
     const slow = bitMods.find((e) => e.state !== 'work' && e.why);
-    const lim = slow ? `${slow.state === 'blocked' ? 'blocked by' : 'short of'} ${ITEMS[slow.why as ItemId]?.name.toLowerCase() ?? slow.why}` : 'running flat out';
-    ui.text(`Drill bits: ${perMin(rate)}/min, ${lim}`, inner.x, yy, slow ? C.pipYellow : C.leaf);
-    ui.hint(inner.x, yy, inner.w, 10, `${bitMods.length} drill-bit module${bitMods.length === 1 ? '' : 's'} on the floor, at their recent run fraction. ${slow ? `The slowest is ${lim}: feed it more of that.` : 'Nothing holds them back.'}`, 180);
-    yy += 11;
+    const why = slow ? (ITEMS[slow.why as ItemId] ? `{i:${slow.why}}` : slow.why ?? '') : '';
+    const lim = slow ? (slow.state === 'blocked' ? `{chip:bad:BLOCKED} ${why}` : `{chip:warn:SHORT} ${why}`) : '{good:flat out}';
+    drawRich(ui, `{i:drillBit} ${perMin(rate)}/min  ${lim}`, x, y, w, T.ink);
+    ui.hint(x, y, w, 11, [{ text: `${bitMods.length} {soft:drill-bit modules · their recent run}` }, { text: slow ? `{soft:the slowest} ${lim}` : '{good:nothing holds them back}' }], 180);
+    y += 13;
   }
+  // what is arriving now
   const flowing = Object.entries(feeds) as [ItemId, number][];
-  if (yy + 10 <= end) {
-    ui.text(flowing.length ? 'Arriving:' : 'Nothing is trunked into the Bay yet.', inner.x, yy, flowing.length ? C.hull2 : C.pipYellow);
-    let xx = inner.x + textWidth('Arriving:') + 5;
-    for (const [it, r2] of flowing) {
-      const s2 = `${perMin(r2)}/min`;
-      ui.ctx.drawImage(itemIcon(it), xx, yy);
-      xx += 14 + ui.text(s2, xx + 10, yy, C.leaf);
-    }
+  if (y + 11 <= end) {
+    const s = flowing.length ? `{soft:arriving}  ${flowing.map(([it, r2]) => `{i:${it}} {good:${perMin(r2)}/min}`).join('  ')}` : '{warn:nothing trunked into the Bay yet}';
+    ui.clip(x, y, w, 11);
+    drawRich(ui, s, x, y, Infinity, T.ink);
+    ui.unclip();
+    y += 13;
   }
-  yy += 14;
   // the modules feeding it, each with its product and rate
   const feeders = g.routes.filter((rt) => rt.to?.kind === 'fbay' && !rt.by);
-  if (feeders.length && yy + 22 <= end) {
-    ui.text('Feeding the Bay', inner.x, yy, C.gold);
-    yy += 11;
+  if (feeders.length && y + 22 <= end) {
+    caption(ui, 'feeding the bay', x, y, T.coin);
+    y += 9;
     for (const rt of feeders) {
-      if (yy + 11 > end) break;
+      if (y + 11 > end) break;
       const d = g.design(rt.from.design);
       const it = mainOutput(g, rt.from.design);
       const last = rt.tiles[rt.tiles.length - 1];
-      ui.ctx.drawImage(sheet('module').frames[0], inner.x, yy - 3, 12, 12);
-      if (it) ui.ctx.drawImage(itemIcon(it), inner.x + 15, yy);
-      ui.clip(inner.x + 26, yy, inner.w - 90, 10);
-      ui.text(d?.name ?? 'module', inner.x + 26, yy, C.bone);
+      ui.ctx.drawImage(sheet('module').frames[0], x, y - 2, 12, 12);
+      if (it) ui.ctx.drawImage(itemIcon(it), x + 15, y);
+      const rs = last ? `${perMin(last.flow)}/min` : '-';
+      ui.clip(x + 26, y, w - 32 - textWidth(rs), 10);
+      ui.text(d?.name ?? 'module', x + 26, y, T.ink);
       ui.unclip();
-      const st = rt.from.state;
-      ui.text(last ? `${perMin(last.flow)}/min` : '-', inner.x + inner.w, yy, st === 'work' ? C.leaf : C.pipYellow, { align: 'right' });
-      yy += 12;
+      ui.text(rs, x + w, y, rt.from.state === 'work' ? T.good : T.warn, { align: 'right' });
+      y += 11;
     }
   }
   // where it is, or why it isn't there yet
-  const by = inner.y + inner.h - 14;
+  const by = page.y + page.h - 16;
   if (bay) {
-    if (button(ui, 'gotoBay', inner.x, by, inner.w, 14, 'Go to the Bay', { tip: 'The Factory floor, bottom-left corner. Lay trunks into it from your modules.' })) {
+    if (button(ui, 'gotoBay', x, by, w, 16, 'Go to the Bay', { tip: [{ text: '{u:factory} the Factory floor · bottom-left' }, { text: '{u:fold} trunk modules into it' }] })) {
       app.panel = null;
       app.setFloor('factory', true);
       app.lookAt(bay.x + 1, bay.y + 1);
     }
   } else if (g.done('greatDrill')) {
-    ui.para(`Clear the Factory floor's corner (tiles ${FACTORY.bay.x}-${FACTORY.bay.x + 1}, ${FACTORY.bay.y}-${FACTORY.bay.y + 1}): the Bay lands there.`, inner.x, by - 8, inner.w, C.pipRed);
-  } else ui.para(`Research ${RESEARCH.greatDrill.name} to bring the Bay.`, inner.x, by, inner.w, C.hull2);
+    drawRich(ui, `{bad:clear the corner} · tiles ${FACTORY.bay.x}-${FACTORY.bay.x + 1}, ${FACTORY.bay.y}-${FACTORY.bay.y + 1} {soft:the Bay lands there}`, x, by, w, T.ink);
+  } else drawRich(ui, `{u:research} ${RESEARCH.greatDrill.name} {soft:brings the Bay}`, x, by + 3, w, T.ink);
 }
 
 /** A stage shut behind the Committee's reputation (the Milestone 5-6 review round's gate, shown
- * as what to do about it in the final round): the Committee, its reputation now and needed, the
- * orders it has on offer with their progress, and a key to its tab on the Orders screen; what the
- * stage will want once open, quietly, under it. The Bay counts nothing meanwhile, so there is no
- * "not arriving" or ETA to show. */
-function lockedStage(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, inner: Rect) {
+ * as what to do about it in the final round): the Committee's line, its reputation now and
+ * needed, the orders it has on offer with their progress, and a key to its tab on the Orders
+ * page; what the stage will want once open, quietly, under it. The Bay counts nothing meanwhile,
+ * so there is no "not arriving" or ETA to show. */
+function lockedStage(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, page: Rect) {
   const ui = app.ui;
   const g = app.game;
   const need = stage.rep ?? 0;
   const rep = g.s.orders.rep.committee ?? 0;
-  const end = inner.y + inner.h - 19;
-  let yy = inner.y + 2;
-  // the Committee and its reputation: a pip for each level the stage needs
-  customerPortrait(app, 'committee', inner.x + 2, yy + 2, 24);
-  const nx = inner.x + 34;
-  ui.text(CUSTOMERS.committee.name, nx, yy + 2, C.violet, { shadow: C.ink });
-  ui.text(`Reputation ${rep} of ${need}`, nx, yy + 14, C.bone);
-  const px0 = nx + textWidth(`Reputation ${rep} of ${need}`) + 6;
+  const x = page.x + 2, w = page.w - 4;
+  const end = page.y + page.h - 20;
+  let y = page.y + 2;
+  ui.big(`Stage ${stage.stage}`, x, y, T.ink);
+  chip(ui, x + bigWidth(`Stage ${stage.stage}`) + 6, y - 1, 'SHUT', { role: 'reset', solid: true });
+  y += 16;
+  y += speaker(app, 'committee', '"psst." "fill our orders." "then we open the drill."', x, y, w) + 5;
+  // the Committee's reputation: a pip for each level the stage needs
+  const rs = `{reset:${CUSTOMERS.committee.name}} {soft:reputation} ${rep} of ${need}`;
+  drawRich(ui, rs, x, y, Infinity, T.ink);
+  const px0 = x + richWidth(rs) + 6;
   for (let i = 0; i < need; i++) {
-    ui.fill(px0 + i * 10, yy + 14, 8, 7, C.ink);
-    ui.fill(px0 + i * 10 + 1, yy + 15, 6, 5, i < rep ? C.violet : C.shadow);
+    ui.fill(px0 + i * 10, y + 1, 8, 7, T.ink);
+    ui.fill(px0 + i * 10 + 1, y + 2, 6, 5, i < rep ? T.resetFill : T.paperLo);
   }
-  yy += 32;
-  const more = Math.max(0, need - rep);
-  yy += ui.para(`Fill ${more === 1 ? "one more of their orders" : `${more} more of their orders`} to open stage ${stage.stage}: each is +1 reputation, kept through every reset. Until then the Bay counts nothing for it: steel goes on to the Dock and sells, drill bits are scrapped.`, inner.x, yy, inner.w, C.hull3) + 6;
+  y += 13;
+  y += drawRich(ui, '{chip:reset:+1 AN ORDER} {soft:kept through every reset}', x, y, w, T.ink) + 3;
+  y += drawRich(ui, '{soft:till then} {i:steel} {soft:sells at the Dock} · {i:drillBit} {soft:scrapped}', x, y, w, T.ink) + 6;
   // their orders on offer, the one under way first
   const offered = offeredOrders(g).filter((o) => o.customer === 'committee').sort((a, b) => (b.id === g.s.orders.active ? 1 : 0) - (a.id === g.s.orders.active ? 1 : 0));
-  if (yy + 10 <= end) { label(ui, offered.length ? 'their orders on offer' : 'no orders on offer yet', inner.x, yy, C.violet); yy += 10; }
-  if (!offered.length && yy + 10 <= end) {
+  if (y + 10 <= end) y += caption(ui, offered.length ? 'their orders on offer' : 'no orders on offer yet', x, y, T.reset);
+  if (!offered.length && y + 10 <= end) {
     const next = ORDERS.find((o) => o.customer === 'committee' && !g.s.orders.done.includes(o.id));
-    if (next) yy += ui.para(`Next: ${next.name}, after ${next.requires.filter((r) => !g.done(r)).map((r) => RESEARCH[r].name).join(' and ') || 'the Committee turns up'}.`, inner.x, yy, inner.w, C.hull2) + 2;
+    if (next) {
+      const after = next.requires.filter((q) => !g.done(q)).map((q) => `{u:research} ${RESEARCH[q].name}`).join(' · ') || '{soft:the Committee turns up}';
+      y += drawRich(ui, `{soft:next} ${next.name} {soft:after} ${after}`, x, y, w, T.ink) + 3;
+    }
   }
   for (const o of offered) {
-    if (yy + 22 > end) break;
+    if (y + 22 > end) break;
     const active = o.id === g.s.orders.active;
     const f = orderFrac(g, o.id);
-    ui.fill(inner.x, yy, inner.w, 21, C.ink, 0.5);
-    ui.text(o.name, inner.x + 3, yy + 2, active ? C.gold : C.bone);
-    const tag = active ? 'under way' : `+${o.rep} rep, ${fmt(o.pays)} coin`;
-    ui.text(tag, inner.x + inner.w - 3, yy + 2, active ? C.leaf : C.hull2, { align: 'right' });
-    let ix = inner.x + 3;
+    ui.text(o.name, x, y, T.ink);
+    if (active) pencil(ui, x, y + 9, textWidth(o.name), T.bad);
+    const tagS = active ? '{good:under way}' : `+${o.rep} {soft:rep} {coin:${fmt(o.pays)}}`;
+    drawRich(ui, tagS, x + w, y, Infinity, T.ink, { align: 'right' });
+    let ix = x;
     for (const [it, n] of Object.entries(o.wants) as [ItemId, number][]) {
       const have = Math.min(n, Math.floor(g.s.orders.progress[o.id]?.[it]?.toNumber() ?? 0));
-      ui.ctx.drawImage(itemIcon(it), ix, yy + 11);
-      ix += 11 + ui.small(`${fmt(have)}/${fmt(n)}`, ix + 10, yy + 13, C.hull3) + 6;
+      ui.ctx.drawImage(itemIcon(it), ix, y + 11);
+      ix += 11 + ui.small(`${fmt(have)}/${fmt(n)}`, ix + 10, y + 13, T.ink) + 6;
     }
-    bar(ui, Math.max(ix, inner.x + inner.w - 60), yy + 12, Math.min(57, inner.x + inner.w - 3 - ix), 6, f, active ? C.gold : C.violet);
-    ui.hint(inner.x, yy, inner.w, 21, `${o.pitch}${active ? '' : ' Pick it on the Orders screen, then send it to any Dock.'}`, 190);
-    yy += 24;
+    const mw = Math.min(57, x + w - ix);
+    if (mw > 12) meter(ui, x + w - mw, y + 12, mw, 6, f, { role: active ? 'coin' : 'reset', glint: false });
+    ui.hint(x, y, w, 21, [{ text: o.pitch }, ...(active ? [] : [{ text: '{u:orders} pick it on the Orders page · any Dock' }])], 190);
+    rule(ui, x, y + 21, w);
+    y += 24;
   }
   // what the stage wants once open, and what it pays
-  if (yy + 22 <= end) {
-    label(ui, `stage ${stage.stage}, once open`, inner.x, yy, C.hull2);
-    yy += 10;
-    let ix = inner.x;
-    for (const [it, n] of Object.entries(stage.wants) as [ItemId, number][]) {
-      ui.ctx.drawImage(itemIcon(it), ix, yy);
-      ix += 12 + ui.text(`${fmt(n)} ${ITEMS[it].name.toLowerCase()}`, ix + 11, yy, C.hull3) + 8;
-    }
-    yy += 12;
+  if (y + 20 <= end) {
+    y += caption(ui, `stage ${stage.stage} once open`, x, y);
+    const ws = (Object.entries(stage.wants) as [ItemId, number][]).map(([it, n]) => `${fmt(n)} {i:${it}}`).join('  ');
+    y += drawRich(ui, ws, x, y, w, T.ink) + 3;
   }
   // the reward whole or not at all (it must not run under the Committee's key)
-  const reward = `Reward: ${stage.reward}`;
-  if (yy + wrapText(reward, inner.w).length * 10 <= end) ui.para(reward, inner.x, yy, inner.w, C.gold);
-  if (button(ui, 'megaCommittee', inner.x, inner.y + inner.h - 15, inner.w, 15, "The Committee's orders", { gold: true, icon: 'orders', tip: 'The Orders screen, on the Committee\'s tab' })) openOrders(app, 'committee');
+  if (y + richHeight(stage.reward, w) <= end) drawRich(ui, stage.reward, x, y, w, T.ink);
+  if (button(ui, 'megaCommittee', x, page.y + page.h - 17, w, 17, "The Committee's orders", { gold: true, icon: 'orders', tip: '{u:orders} the Orders page · the Committee' })) openOrders(app, 'committee');
 }
 
 function eta(secs: number): string {
@@ -581,10 +672,10 @@ function bayMap(app: App, x: number, y: number, w: number, h: number) {
   const g = app.game;
   const t = Math.max(2, Math.min(8, Math.floor(Math.min((w - 4) / FACTORY.w, (h - 14) / FACTORY.h))));
   const mw = FACTORY.w * t, mh = FACTORY.h * t;
-  const mx = x + Math.floor((w - mw) / 2), my = y + 12;
-  ui.text('Where the Bay stands', x, y, C.hull2);
-  ui.fill(mx - 2, my - 2, mw + 4, mh + 4, C.ink);
-  ui.fill(mx - 1, my - 1, mw + 2, mh + 2, C.brass0);
+  const mx = x + Math.floor((w - mw) / 2), my = y + 11;
+  caption(ui, 'where the bay stands', x + w / 2, y, T.inkSoft, 'center');
+  ui.fill(mx - 2, my - 2, mw + 4, mh + 4, T.ink);
+  ui.fill(mx - 1, my - 1, mw + 2, mh + 2, T.brassLo);
   for (let ty = 0; ty < FACTORY.h; ty++) for (let tx = 0; tx < FACTORY.w; tx++) ui.fill(mx + tx * t, my + ty * t, t, t, (tx + ty) % 2 ? C.hull1 : C.hull0);
   const flowsIn = new Set<number>();
   for (const r of g.routes) if (r.to?.kind === 'fbay') for (const q of r.tiles) flowsIn.add(q.id);
@@ -594,10 +685,10 @@ function bayMap(app: App, x: number, y: number, w: number, h: number) {
       const lit = flowsIn.has(e.id);
       ui.fill(ex + Math.floor(t / 2) - 1, ey + Math.floor(t / 2) - 1, 2, 2, lit ? (Math.floor(ui.time * 4 + e.x) % 2 ? C.gold : C.hot) : C.shadow);
     } else if (e.kind === 'module') {
-      ui.fill(ex, ey, t, t, C.ink);
+      ui.fill(ex, ey, t, t, T.ink);
       ui.fill(ex + 1, ey + 1, t - 2, t - 2, C.brass1);
     } else if (e.kind === 'fdock' || e.kind === 'fhopper') {
-      ui.fill(ex, ey, e.w * t, e.h * t, C.ink);
+      ui.fill(ex, ey, e.w * t, e.h * t, T.ink);
       ui.fill(ex + 1, ey + 1, e.w * t - 2, e.h * t - 2, e.kind === 'fdock' ? C.leaf : C.teal0);
     }
   }
@@ -608,17 +699,18 @@ function bayMap(app: App, x: number, y: number, w: number, h: number) {
   ui.fill(bx - 1, by - 1, 2 * t + 2, 2 * t + 2, on ? C.gold : C.hot);
   ui.fill(bx + 1, by + 1, 2 * t - 2, 2 * t - 2, C.iron0);
   ui.fill(bx + 2, by + 2, 2 * t - 4, 2 * t - 4, C.iron1);
-  ui.hint(mx, my, mw, mh, `The Megaproject Bay: the Factory floor's bottom-left corner, tiles ${b.x}-${b.x + 1}, ${b.y}-${b.y + 1}. Lit dots are trunks carrying into it.`, 180);
+  ui.hint(mx, my, mw, mh, [{ text: '{big:The Megaproject Bay}' }, { text: `{u:factory} bottom-left · tiles ${b.x}-${b.x + 1}, ${b.y}-${b.y + 1}` }, { text: '{coinc:lit dots} {soft:trunks carrying into it}' }], 180);
 }
 
-function complete(app: App, x: number, y: number, w: number, h: number, celebrate: boolean, t: number) {
+/** The left page once a stage is done: the stamp slams down, rays turn, confetti flies; the stage's
+ * ribbon, its reward, what it boosts and the next stage. */
+function complete(app: App, page: Rect, celebrate: boolean, t: number) {
   const ui = app.ui;
   const g = app.game;
   const st = MEGA.find((m) => m.stage === g.s.mega.stage);
-  const inner = card(ui, x, y, w, h, 'Stage complete', C.gold, 'star');
-  const cx = inner.x + Math.floor(inner.w / 2);
-  // the stamp slams down (2x at rest), then confetti
-  const base = inner.w >= 200 ? 2 : 1;
+  const x = page.x + 2, w = page.w - 4;
+  const cx = x + Math.floor(w / 2);
+  const base = w >= 260 ? 2 : 1;
   const sc = celebrate ? slamScale(t, base) : base;
   if (celebrate && t >= 0.28 && landedAt !== app.gradeAt) {
     landedAt = app.gradeAt;
@@ -626,40 +718,33 @@ function complete(app: App, x: number, y: number, w: number, h: number, celebrat
     app.renderer.fx.kick(6);
     app.hud.confetti = 90;
   }
-  const label = `STAGE ${g.s.mega.stage} DONE`;
-  const tw = textWidth(label) * sc + 12 * sc;
-  const th = 7 * sc + 10 * sc;
-  const sy = inner.y + 8 + (celebrate && t < 0.28 ? 0 : 0);
-  if (celebrate || g.s.mega.stage >= 1) {
-    ui.clip(inner.x - 2, inner.y - 2, inner.w + 4, inner.h + 4);
-    rays(app, cx, sy + th / 2, Math.min(inner.w, 160), celebrate ? C.hot : C.brass1, 16);
-    ui.unclip();
-  }
-  ui.fill(cx - tw / 2, sy, tw, th, C.pipRed);
-  ui.fill(cx - tw / 2 + sc, sy + sc, tw - 2 * sc, th - 2 * sc, C.bone);
-  ui.fill(cx - tw / 2 + 2 * sc, sy + 2 * sc, tw - 4 * sc, th - 4 * sc, C.pipRed);
-  ui.text(label, cx, sy + 5 * sc, C.bone, { align: 'center', scale: sc });
-  confetti(app, cx, sy + th / 2);
-  let yy = sy + 7 * 2 + 10 * 2 + 10;
+  const lab = `STAGE ${g.s.mega.stage} DONE`;
+  const sy = page.y + 26;
+  ui.clip(page.x, page.y, page.w, page.h);
+  rays(app, cx, sy, Math.min(w, 170), celebrate ? C.lamp2 : C.brass2, 16);
+  ui.unclip();
+  stamp(ui, lab, cx, sy, { scale: sc, angle: -0.07 });
+  confetti(app, cx, sy);
+  let y = sy + 26;
   if (st) {
-    ui.text(st.name, cx, yy, C.gold, { align: 'center', shadow: C.ink });
-    yy += 12;
-    yy += ui.para(st.reward + '.', inner.x + 6, yy, inner.w - 12, C.bone) + 6;
+    y += ribbon(ui, x + 16, y, w - 32, bigWidth(st.name) <= w - 50 ? st.name : `Stage ${st.stage}`, { color: 'gold' }) + 6;
+    y += drawRich(ui, st.reward, cx, y, w - 12, T.ink, { align: 'center' }) + 8;
   }
   const miners = g.miners.length;
   const src = g.s.factory.ents.filter((e) => e.kind === 'module' && Object.keys(oresOf(g, g.design(e.design)!)).length).length;
   const rows: [string, string][] = [
-    ['Miners running +50%', fmt(miners)],
-    ['Source modules running +50%', fmt(src)],
-    ['Coin earned this run', g.s.earned.format()],
+    ['{u:workshop} {soft:Miners running} {good:+50%}', fmt(miners)],
+    ['{u:factory} {soft:source modules running} {good:+50%}', fmt(src)],
+    ['{coin} {soft:coin earned this run}', `{coinc:${g.s.earned.format()}}`],
   ];
+  const rw = Math.min(w - 12, 300), rx = cx - Math.floor(rw / 2);
   for (const [k2, v] of rows) {
-    if (yy + 10 > inner.y + inner.h - 18) break;
-    ui.text(k2, inner.x + 6, yy, C.hull2);
-    ui.text(v, inner.x + inner.w - 6, yy, C.gold, { align: 'right' });
-    yy += 11;
+    if (y + 12 > page.y + page.h - 40) break;
+    y += ledgerRow(ui, k2, v, rx, y, rw);
   }
   const nx = MEGA.find((m) => m.stage === g.s.mega.stage + 1);
-  if (nx && yy + 20 <= inner.y + inner.h - 16) ui.para(`Stage ${nx.stage} opens at the Committee's reputation ${nx.rep ?? 0} (now ${g.s.orders.rep.committee ?? 0}).`, inner.x + 6, yy + 2, inner.w - 12, C.teal1);
-  if (button(ui, 'megaOk', inner.x + Math.floor(inner.w / 2) - 55, inner.y + inner.h - 15, 110, 14, 'Magnificent', { gold: true, pulse: celebrate })) app.panel = null;
+  if (nx && y + 14 <= page.y + page.h - 22) drawRich(ui, `{u:mega} {soft:stage ${nx.stage} opens at the Committee's reputation} ${nx.rep ?? 0} · {soft:now} ${g.s.orders.rep.committee ?? 0}`, cx, y + 4, w - 12, T.ink, { align: 'center' });
+  if (button(ui, 'megaOk', cx - 60, page.y + page.h - 19, 120, 19, 'Magnificent', { gold: true, big: true, pulse: celebrate })) app.panel = null;
 }
+
+void wrapText; void portrait;
