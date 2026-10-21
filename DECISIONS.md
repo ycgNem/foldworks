@@ -1219,3 +1219,138 @@ The lead decided the fixes below. What was built and measured is in DESIGN.md §
   formulas. Antimatter Dimensions' Eternity Challenges and Realities pay for a new best, and
   Universal Paperclips' later stages count records. Ours files the best value per product, which
   only a game of folded products has. Flagged for the owner all the same.
+
+## The Milestone 5–6 final round (2026-10-20)
+
+The idle-critic's re-review of the review round found three blocking problems:
+- The bills term could be farmed. A building counted in full once it ran a second in the last
+  minute, so a field of starved machines, or generators with one fuelled, paid Patents.
+- Overdrive leaked into audits. A machine overdriven before its audit began folded at up to 3×
+  its rate.
+- The bot never bought deposit claims. The critic read that as the cap on rule 3.
+
+The lead asked for those fixes, a run-4 idle stage, a bot that uses the Patent Drawer, a refold
+rule for kept designs, and honest re-measures. What was built and measured is in DESIGN.md §10,
+§16, §18, §19 and §20.
+
+- 2026-10-20: **The bills term counts measured work, not a second of it.**
+  - Each building's bill is weighted by the work it did over the last 5 whole minutes
+    (`RULES.billsWindow`, minute buckets on each building):
+    - a crafting machine by its crafting time times its grid's satisfaction squared;
+    - a Miner by its digging time;
+    - a power producer (with its boiler) by its burn share;
+    - a Pole by its grid's use, capped at a quarter of the consumers it carries;
+    - belts, logistics and trunks only if they carried an item in the window;
+    - a module by its stamp bill times its run fraction.
+  - Why: a building that stands is not a factory that works. Satisfaction squared makes a
+    brownout pay almost nothing. The 5-minute window means a building bought just before a reset
+    counts a fifth.
+  - Tested (`tests/final-round.test.ts`):
+    - 239 refineries on one generator at 0.7% power add +0.09 Patents to the slice-end factory and
+      +0.04 to the 4 h one. The bound is 0.5.
+    - 119 generators bill the same with one fuelled as with all fuelled for one kiln.
+    - Idle buildings count 0.
+    - A reset loop at 35 min that burns all its coin into buildings banks 0.40 Patents an hour,
+      against the designed run's 2.83 (`tests/pace-reorganize.test.ts`).
+  - The card's goal "run N more coin of buildings" is dropped: it was the farm's instructions.
+  - The slice-end factory now stands on about 10K of bills (0.5 Patents), the 4 h factory on
+    about 33K (1.2). They were 14K and 80K.
+- 2026-10-20: **Overdrive never reaches an audited machine, Miner or module**, including one
+  clicked before the audit began. Its 3× stops at the audit's first tick, and its timer and
+  cooldown run on. This covers the Workshop, nested boxes, and Quick Audits' 5 s warm-up, which
+  is shorter than Overdrive's 10 s. Tested both ways. Why: §10 already said so; the code checked
+  the click, not the run.
+- 2026-10-20: **A kept design unfolded unchanged refolds after a 10 s check, at its kept grade**
+  (`RULES.refoldCheck`, `refoldSlack`).
+  - When an audit starts on a box that exactly matches a kept card, a check runs before the full
+    audit. The box must have the same parts, turns and recipes, every machine in normal mode, and
+    nothing paused. The kept card holds the grade and the raw ins and outs, stored at keep time.
+  - The check passes when every machine runs at no less than its kept busy fraction less 0.1 and
+    the kept product leaves the box. The fold then takes the card. Otherwise the full audit goes
+    on.
+  - Why it can't be gamed:
+    - The card is what a full audit of the same layout graded, so a refold never beats it.
+    - Any change to the layout gets a full audit.
+    - A design imported from a share string has no card.
+    - A check that fails has lost nothing: 10 s is the full audit's own warm-up.
+  - Tested: an unchanged line refolds at the same grade, ins and outs. A turned belt, a paused
+    miner, an overclocked machine and an imported string each get a full audit.
+- 2026-10-20: **The bots use the Patent Drawer and buy claims and annex blocks.**
+  - The Act II and campaign bots keep every Workshop design they fold. With the Draughtsman they
+    queue the kept designs in plan order. In a later run they unfold a kept design whenever its
+    box is empty and the plan wants exactly its parts.
+  - Measured: 7 designs kept in run 1, 5 unfolded in each later run, and 5–6 refolds on the check
+    a run.
+  - Before stamping or placing a copy that lacks claims, the bot buys a claims block if it costs
+    at most half the coin on hand.
+  - An optional copy or annex block that waits for coin, claims or research now waits beside the
+    plan (retried every 10 s) instead of being skipped for good. The campaign's extra chains are
+    no longer capped at four.
+  - Surveying needs slag bricks. The bot's copper slag heap now empties into a standing brick
+    press, whose bricks join the corridor to the Hopper. The press switches off once the bank
+    holds the bricks Surveying needs.
+  - Surveying's coal is counted as wanted only once Overdrive is researched. Counted from the
+    start, it kept the second coal miner flooding the spine, and the steel for Overdrive waited
+    behind it for 6–9 min.
+  - Overdrive is no longer clicked on a line the bot is about to fold, but only once that line is
+    ready to fold. Blocked from the start, the Steel and Circuits lines lost Overdrive for most of
+    an hour.
+- 2026-10-20: **The Great Drill's stage 1 is 650 bits and 2,800 steel** (it was 450 and 2,000).
+  - Why: with the slag drained into bricks, the bot reached the Bay floor 20 min sooner, and the
+    first Reorganize came at 3:37–3:41, outside §19's 4–6 h.
+  - At 650 and 2,800 the reset comes at 4:21–4:24 with 14 Patents, the Drill's stage 1 at
+    S+3:42–3:44 (target ≤ S+4 h), and runs 2 and 3 still finish stages 2 and 3.
+  - Steel stays over 4 a bit (4.3), so the steel is in before the bits, as §19 wants.
+- 2026-10-20: **Rule 2 is read without belt relays, and is open while the Bay fills.**
+  - The bot lifts and relays the Concrete boiler's feed belt every 16 s to clear sand its end never
+    takes. Each relay was logged as a "belt" decision.
+  - The review round's rule 2 reading (9.2–9.3 min to 5 h) was those relays. Read honestly, the
+    wait is 12.4–12.5 min up to the Bay floor (tested, ≤ 15), and 44–48 min while the Bay fills
+    (logged as open, the same wait as rule 1's).
+  - Relays are now logged as `relay`, and the test excludes them as it excludes Sparks.
+- 2026-10-20: **Rule 1's goal list counts annex blocks and claims blocks**, as DESIGN.md §16 says.
+  The Act II test's pattern had left them out.
+- 2026-10-20: **Rule 3 is open on both seeds, and claims were not the cap.**
+  - With the bot buying claims (one copper block a later run, with claims to spare) and its annex
+    blocks before the Bay floor, run 3 passes run 2's peak at 1:22 against limits of 1:00 and
+    0:56.
+  - Run 3's peak only equals run 2's (21.4K and 21.2K against 21.1K and 21.2K a minute). It
+    reaches it once its third annex block is filled. Both runs fill the same room.
+  - Open for the lead (`RULE3_OPEN`): the levers change what a reset keeps or how much room there
+    is.
+- 2026-10-20: **Overdrive's 30 s cooldown is kept; 25 s was tried and rejected. Rule 4's 1.5 floor
+  is not lowered.**
+  - What 25 s did (1.57× for a line kept in Overdrive) made seed 8919 worse:
+    - the Act II bot's 2 h rule 4 reading fell from 1.46 to 1.42;
+    - its longest wait between goals before the Bay floor rose to 17.0 min (the bound is 15);
+    - its run 3 never passed run 2's peak.
+  - Rule 4 is open at six of the 26 stage readings (`RULE4_OPEN`):
+    - four read 1.48–1.49, where the bot only clicks Overdrive;
+    - two are run 4's Bay floor rebuild at 1 h (0.97–0.98).
+  - The Act II bot's 2 h reading on seed 8919 is open too (1.46): its Bay floor is laid at 2:16,
+    inside the window.
+  - Run 3 at 1 h now passes (1.58 and 1.63; it read 0.77 and 0.72).
+- 2026-10-20: **The idle suite has a run-4 stage** (`tests/pace-idle-run4-*.test.ts`): runs 1–3 as
+  the campaign plays them, then run 4 for 5 h from 9.8–9.9 h of play. 8 h offline is measured at
+  each whole hour of it, so the stages stand to 13.9 h and run 4 plays to 14.9 h. Offline is honest
+  at every stage, both seeds, both efficiencies.
+- 2026-10-20: **The Patent tree is not finished by the fourth run**, and the comment that said so
+  is reworded.
+  - Measured on seed 1000: 22 of the 29 nodes are bought, and 30 of the 40 Patents banked, by
+    9.9 h of play.
+  - A fourth run files about 1 Patent in 5 h: everything is on file and the Drill is done, so only
+    the bills term is left.
+  - The last 10 Patents wait for the next floor's goals (Milestone 7). Open for the lead.
+- 2026-10-20: **DESIGN.md §19's step table is corrected** to what `chainSteps` computes. A slag
+  brick and gravel are 2 steps, because slag sits at its smelter's 1. Plastic is 1.
+
+### Flagged as derivative (the final round; owner to decide)
+
+- **Weighting the bills by satisfaction** uses the grid model's satisfaction, which resembles
+  Factorio's power satisfaction (the power model's resemblance is flagged earlier in this file). The
+  new part, a prestige term that counts measured work, has no shipped counterpart that we know of.
+- **The refold check** resembles skipping re-verification of a known blueprint. We know of no
+  shipped game with that rule; Factorio and shapez blueprints have no audit to skip. Flagged all
+  the same, since it touches the Drawer, which is already flagged.
+- **Buying deposit claims in blocks** at the Survey Office is unchanged from Milestone 4; only the
+  bot's use of it is new.

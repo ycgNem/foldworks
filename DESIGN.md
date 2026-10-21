@@ -224,7 +224,11 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
    and no Dock, Hopper or Hand Furnace, and every building in it wholly. Belts crossing the box
    edge become the module's **ports** (in or out, by belt direction). Power never crosses the
    box (§18). While a box is audited, Lucky Veins and Overdrive don't touch it, so a boost is
-   never folded in for good.
+   never folded in for good. *The final round:* that includes an Overdrive clicked before the
+   audit began. Its 3× stops at the audit's first tick for every machine, Miner and module in the
+   box, and its timer and cooldown run on. This holds for the Workshop, for nested boxes, and with
+   Quick Audits' 5 s warm-up, which is shorter than Overdrive's 10 s. It was leaking: a line
+   overdriven just before its audit folded at up to 3× its rate.
 2. **Audit.** The box keeps running for **70 s** of sim time (10 s warm-up + a 60 s window) while
    you play on. The game measures, per item: rate in through ports, rate out through ports, and
    items made inside (miners count as made inside). Over the window it also tracks each
@@ -340,8 +344,9 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
   the player can check (pillar 4).
 - **The forecast** (§20, "safe for overnight") is this same run on a copy of the game.
 - *Measured* (§13 check 12 and §20's stage table): at every stage measured (the slice end, run 1
-  at 1–5 h, the campaign's runs 2 and 3, seeds 1000 and 8919), 8 h offline pays 0.56–0.59 of 8 h
-  open and idle at 0.5 and 0.78–0.80 at the 0.75 ceiling; the 7 h after the first pay 0.50–0.53 and
+  at 1–5 h, the campaign's runs 2, 3 and 4 to 13.9 h of play, seeds 1000 and 8919), 8 h offline
+  pays 0.56–0.61 of 8 h open and idle at 0.5 and 0.78–0.81 at the 0.75 ceiling; the 7 h after the
+  first pay 0.50–0.54 and
   0.75–0.77 of what open idle pays in them. Open and idle the factory earns less every hour as
   heaps fill (the slice factory: 126K in its first hour, then 48K, then 40.5K an hour once 11 of 23
   Workshop machines have jammed).
@@ -521,20 +526,30 @@ If any answer is no, change the model here before building more.
 6. **No forced resets**: progress without resetting slows but never stops. The bot that never
    resets still reaches Act III by 30 h.
 
-**Rules 1 and 2, measured in Acts I-II** (the Milestone 5-6 review round, seeds 1000 and 8919;
-the Act II bot in `tests/pace-act2-run.test.ts` and the campaign bot's three runs):
-- **Rule 2 (read without Sparks)** holds: from the slice end, the longest stretch without a
-  build, research, order, fold or purchase is 9.2-9.3 min to 5 h (Act II bot); 9.2-10.5 min in
-  campaign runs 1 and 2, 4.0-4.1 in run 3. Counting a Spark click as a decision, it read 4.8-5.6.
-- **Rule 1 is not met.** It is read as the longest wait between goals reached (research, land,
-  folds, orders, modules placed, annex blocks, the Drill's stage). From the slice end to the Bay
-  floor that wait is 11.0-12.4 min in run 1 and 19-25 min in runs 2 and 3, where the head starts
-  bring the plan forward and leave the bot waiting on research. While the Bay fills it is 34-43 min
-  in runs 1 and 2: Shiny Things, then Nested Boxes' research, then the nested Gizmo works II and
-  its annex blocks. An annex block or a deposit claim is affordable throughout (0.7-1.3M coin on
-  hand from 2 h), so a goal within 3 min is always in reach, but the bot leaves them for later.
-  The gap is the bot's plan, not a wall; the open lever is buying claims and placing annex chains
-  as soon as the coin is there (DESIGN.md §19, open).
+**Rules 1 and 2, measured in Acts I-II** (re-read in the Milestone 5-6 final round, seeds 1000 and
+8919; the Act II bot in `tests/pace-act2-run.test.ts` and the campaign bot's three runs):
+- **Rule 2 holds up to the Bay floor, and is open while the Bay fills.** It is read without Sparks
+  and, from the final round, without *belt relays*. A relay is the bot lifting a belt and laying it
+  again to clear an item its end never takes: the Concrete boiler's feed belt, every 16 s.
+  - The review round counted relays as decisions, and that hid the wait. Its 9.2-9.3 min
+    (12.4-12.5 now, relays included) was relays every 16 s while the Bay filled.
+  - From the slice end to the Bay floor, the longest stretch without a build, research, order,
+    fold or purchase is 12.4-12.5 min (≤ 15; tested). In campaign runs 2 and 3 it is at most rule 1's
+    10-12 min below.
+  - While the Bay fills it is 39-48 min, the same wait as rule 1's below. Logged as open, not
+    tested.
+- **Rule 1 is not met.** It is read as the longest wait between goals reached: research, land,
+  folds, orders, modules placed, annex blocks, claims blocks and the Drill's stage. (Annex and
+  claims count from the final round; the test's goal list had left them out.)
+  - From the slice end to the Bay floor that wait is 12.5 min in run 1 and 10-12 min in runs 2
+    and 3.
+  - While the Bay fills it is 39.5-41.4 min in run 1. That covers Shiny Things, then Nested Boxes'
+    research, then the nested Gizmo works II and its two annex blocks.
+  - In later runs the bot now buys its annex blocks and claims before the Bay floor, as soon as
+    they are affordable (§19). After the Bay floor their waits run 27-35 min (run 2) and 84-93 min
+    (run 3, the last, which plays to its cap with its plan done).
+  - Run 1's wait while the Bay fills is research and the Drill's own parts. Nothing on the floor
+    is left to buy: the bot buys every claim and block its plan can use.
 - **Rule 4** at every stage measured: §20.
 
 ## 17. Readability at 1×
@@ -664,16 +679,20 @@ are possible and earn W = 1.*
 
 ### Megaproject #1: the Great Drill (stage 1)
 - Research *The Great Drill* (40 motors + 200 concrete) puts the **Megaproject Bay** (2×2) on
-  the Factory floor. Stage 1 wants **450 Drill Bits and 2,000 steel**, delivered by trunk (the
+  the Factory floor. Stage 1 wants **650 Drill Bits and 2,800 steel**, delivered by trunk (the
   concrete is in the bits, 2 each). Done, it lets every
   Miner and every source module run **+50%** for good. **Megaproject progress survives every
   reset** (stored apart from the run's state for Milestone 5). Stages 2 and 3 arrive with
   later floors. *Derivation: from the slag the Act II bot's Bay floor turns into bits: a Drill
   Bit is 2 concrete, 8 slag; the floor's Concrete module takes about 35 slag/min (a Steel and an
   Iron ingots copy), so bits come at 5–6 a minute while the Bay's Steel also runs and about 2.5
-  after; 450 bits and 2,000 steel take the bot about 1.4 h from the Bay floor (S+3:20 to S+3:40),
-  inside the S+4 h target with room for a slower player. +50% on ore is the biggest single boost
-  of the act, earned, permanent, and visible on every miner.*
+  after; 650 bits and 2,800 steel take the bot about 1.9 h from the Bay floor (S+1:46 to
+  S+3:41-3:47), inside the S+4 h target with room for a slower player. +50% on ore is the biggest
+  single boost of the act, earned, permanent, and visible on every miner.* *Re-paced in the final
+  round (it was 450 and 2,000):* the bot drains its slag into a brick press now, so it reaches the
+  Bay 20 minutes sooner. At 450 and 2,000 the first Reorganize then came at 3:37-3:41, under §19's
+  4-6 h. At 650 and 2,800 it comes at 4:21-4:24 with 14 Patents. Steel
+  is 4.3 a bit, still over stages 2 and 3's 4, so the steel is in before the bits.
 
 ### Rules settled while building it (Milestone 4)
 - A Boiler or Generator holds 4 fuel (`RULES.fuelCap`) and takes it from any side but a boiler's
@@ -699,29 +718,35 @@ to S, then the Act II bot in `src/sim/bot2.ts`, seeds 1000 and 8919, 5 h):
 
 | Goal | Target | Measured |
 |---|---|---|
-| Steel | ≤ S+25 min | S+18–19 |
-| Power | ≤ S+35 min | S+25–27 |
-| Circuits | ≤ S+60 min | S+55 |
-| Concrete fold | ≤ S+80 min | S+65–67 |
-| Drill works fold | (logged) | S+1:54–1:56 |
-| Great Drill stage 1 | ≤ S+4 h | S+3:20–3:23 |
-| Reorganize at 5 h | 12–20 Patents | 14 (4 h: 13; ×2 lifetime coin: 19) |
+| Steel | ≤ S+25 min | S+18 |
+| Power | ≤ S+35 min | S+23–24 |
+| Circuits | ≤ S+60 min | S+48–50 |
+| Concrete fold | ≤ S+80 min | S+59–61 |
+| Drill works fold | (logged) | S+1:45–1:48 |
+| Great Drill stage 1 (650 bits, 2,800 steel) | ≤ S+4 h | S+3:42–3:44 |
+| Reorganize at 5 h | 12–20 Patents | 14 (4 h: 14) |
 
-- **Rule 2** (dead air): the longest stretch without a decision is 5.8–6.0 min (≤ 15).
-- **Rule 4** (active over idle): from the same 2:00 state, 30 min of the bot (building, Sparks,
-  Overdrive on Workshop machines and on Factory module groups, at most 4 clicks a second) earns
-  1.70–1.84× an idle 30 min (band 1.5–4). Overdrive on the Factory floor is what lifts it: the
-  money after the slice is there (1.37× without it).
-- **Rule 1** (next goal): up to the Bay floor a goal (research, land, fold, module, stage) lands
-  at least every 13 min; while the Bay fills (about 1.4 h) the goals are the last research
-  nodes and the stage, about 40 min apart. Not met; Milestone 4's open item.
+*Measured in the Milestone 5-6 final round*; the rules are read as in §16:
+- **Rule 2** (dead air): the longest stretch without a decision is 12.4-12.5 min to the Bay floor
+  (≤ 15), not counting Sparks or belt relays. While the Bay fills it is open (§16).
+- **Rule 4** (active over idle): from the same 2:00 state, 30 min of the bot earns 1.60× an idle
+  30 min on seed 1000. The bot builds, clicks Sparks and uses Overdrive on Workshop machines and on
+  Factory module groups, at most 4 clicks a second. Seed 8919 reads **1.46, open**: its Bay floor
+  is laid at 2:16, inside the window, and clears the Gizmo chains for it. Overdrive on the Factory
+  floor is what lifts the reading: the money after the slice is there (1.37× without it, the
+  Milestone 4 reading).
+- **Rule 1** (next goal): up to the Bay floor, a goal lands at least every 12.5 min. Goals are
+  research, land, a fold, a module, the stage, an annex block or a claims block. While the Bay
+  fills (about 1.9 h), the goals are the last research nodes and the stage, 39-41 min apart. Not
+  met; Milestone 4's open item.
 - **Rule 5** (new thinking): ratios and power. The bot's own build shows them: every Act II line
   is a ratio problem (one steel line's slag sets the concrete rate; a kiln on one sand miner
   works half the time), and every mixed belt into a machine needs a splitter with an overflow;
   on the Factory floor, a module's outputs must be consumed in the ratio it makes them, or the
   surplus fills its buffer and stops the rest, so byproducts go to a sink that never waits.
-- Lifetime coin: 1.8M at 4 h, 2.0–2.05M at 5 h. Income about 12,500/min from S to the Bay floor,
-  4,300/min after (the Gizmo chains are cleared for it).
+- Lifetime coin (the Milestone 4 reading): 1.8M at 4 h, 2.0–2.05M at 5 h. Income about
+  12,500/min from S to the Bay floor, 4,300/min after (the Gizmo chains are cleared for it; with
+  the annex, from the review round, 5-6K).
 
 ## 19. Reorganize (Milestone 5, 5-15 h)
 
@@ -745,9 +770,10 @@ round (DECISIONS.md): Patents are filed, not re-earned.*
   rise: folding the same line again files nothing, so a reset loop dries up after its first run,
   and runs 2 and 3 earn only by pushing further.
 - **Steps folded** are the recipe steps the box holds: the product's depth from raw ore (by its
-  shallowest recipe: an ingot, glass (from sand) and a slag brick 1; plate, wire and steel 2; gear,
-  concrete and circuit 3; Gizmo and motor 4; Drill Bit 5) less the deepest item its ports take in,
-  at least 1.
+  shallowest recipe, as `chainSteps` reads it: an ingot, glass (from sand) and plastic (from oil)
+  1; plate, wire, steel, slag brick (slag is the smelter's byproduct, so it sits at the ingot's 1)
+  and gravel 2; gear, concrete and circuit 3; Gizmo and motor 4; Drill Bit 5) less the deepest item
+  its ports take in, at least 1.
   A Drill Bit assembler fed steel, concrete and circuits from outside is 2 steps; the whole chain
   in one nested box is 5. Byproducts never count.
 - **Grade**: §10's multiplier, C 0.9 to S+ 1.35 (D 0.75). The audit's lesson carries to the reset.
@@ -756,18 +782,32 @@ round (DECISIONS.md): Patents are filed, not re-earned.*
   `tierBonus` 0.5). A bigger line is progress, never four times the Patents.
 - **Megaproject term.** Each Great Drill stage is worth Patents (stage 1: 5, stage 2: 6, stage 3:
   8), paid in proportion as its parts are delivered in this run. Progress is kept, so never twice.
-- **Bills term (minor).** log2(1 + bills / 25,000), the bills of the Workshop machines, power,
-  belts and logistics, Factory modules (their stamp bill) and trunks that **ran in the last
-  minute**. Coin on hand counts for nothing and a building bought and left idle for nothing, so a
-  hoard is never burned for Patents. The slice-end factory stands on about 14K (0.6), the Act II
-  bot's 4 h factory on about 80K (2.1). It replaces the works term (coin invested), which paid
-  for spending anything.
+- **Bills term (minor).** log2(1 + bills / 25,000). *Rewritten in the final round: it counts
+  measured work, not a second of it.* Each building's bill is weighted by the work it did over
+  the last **5 whole minutes** (`billsWindow`, kept as minute buckets on each building):
+  - a crafting machine by its time crafting, times its grid's satisfaction squared, so a starved
+    or browned-out machine counts for almost nothing;
+  - a Miner by its time digging, and a power producer (with its boiler) by its burn share;
+  - a Pole by its grid's use, at most a quarter of the consumers it carries;
+  - a belt, splitter, merger, crate or trunk only if it carried an item in the window;
+  - a Factory module by its stamp bill times its run fraction.
+  Coin on hand counts for nothing, a building left idle for nothing, and one bought a minute
+  before a reset counts a fifth, so a hoard is never burned for Patents. The slice-end factory
+  stands on about 10K (0.5), the Act II bot's 4 h factory on about 33K (1.2). It replaced the
+  works term (coin invested), which paid for spending anything. Two farms fail the pace tests
+  (`tests/final-round.test.ts`):
+  - 239 refineries (2.15M coin) on one generator at 0.7% of their power add +0.09 Patents to the
+    slice-end factory and +0.04 to the 4 h one;
+  - 119 generators (309K coin) count 3,783 with one fuelled and 3,777 with all of them fuelled
+    for one kiln.
+  The card's "run N more coin of buildings" goal is gone: it was the farm's instruction.
 - A reset needs at least 1 Patent (`patentMin`) and no audit running.
 
 **Calibration.** k = 0.5 was set so the designed first run files 12-20 at a 4-6 h reset: the Act
 II bot's nine products are worth about 17 units (ingots 1 x S 1.25, wire 2 x S, Gizmos 4 x B,
 steel, concrete and circuits 2 each, plastic and glass 1, Drill Bits 2 at D), about 8 Patents;
-the Drill's stage 1 adds 5 and the bills term about 2. Measured: 15 (below).
+the Drill's stage 1 adds 5 and the bills term about 1. Measured: 14 (below: designs about 8.5, the
+Drill its 5, bills about 1.2).
 
 **Not derivative of a shipped prestige formula** (checked; DECISIONS.md, Milestone 5 and the
 review round): Cookie Clicker's heavenly chips and Antimatter Dimensions' infinity points are a
@@ -778,8 +818,9 @@ folded value of each product (recipe depth, audit grade, scale), and pays the ri
 (this run's best, what is on file, the Patents it files; marked **new**, **better** or **on
 file**), and the goals that raise it, biggest first: fold a product not folded yet, refold one at
 S+, fold one a step deeper, fold a bigger line (with the rate at the next tier), finish the Drill
-stage, fill Committee orders to open the next one, and the bills to the next whole Patent. The
-Reorganize card shows it all, with the runs so far.
+stage, and fill Committee orders to open the next one (the bills goal, "run N more coin of
+buildings", was dropped in the final round: it told the player to farm). The Reorganize card
+shows it all, with the runs so far.
 
 ### What is kept, what is lost
 
@@ -820,8 +861,12 @@ a Patent per 10-15 min of a run the node saves. Four branches:
 
 The campaign bot buys in a fixed priority (`PATENT_PRIORITY`): the Surveyor's Charter and the
 Bellows first, Overdrive by Habit, the Act I head starts in order, quality of life, then Act II's
-head starts. Run 1's 15 Patents buy 14 nodes; run 2's 7 buy 4 more (22 of 40); run 3's 9 would
-bring it to 31 of 40 by about 11 h, so most of the tree is bought in 5-15 h.
+head starts. *Measured in the final round (seed 1000):* run 1's 14 Patents buy 13 nodes, run 2's
+7 buy 5 more and run 3's 9 buy 4 more. That is 22 of the 29 nodes, and 30 of the 40 Patents, by
+9.9 h of play, so most of the tree is bought in 5-15 h. A fourth run files only 1 Patent in 5 h:
+every product is on file, the Drill is done, and only the bills term is left. The tree's last 10
+Patents wait for the next floor's goals (Milestone 7). The fourth run does not finish it, as the
+review round expected.
 
 ### The Patent Drawer
 
@@ -834,6 +879,34 @@ something stands in the box, or the coin is short. **The Draughtsman** unfolds t
 player queues, in their order, one every 5 s at most; one waiting only on coin holds the queue
 (the coin is saved for it), one waiting on land, research or room is passed over for now. Eight
 slots for the nine products the Act II bot folds: which lines to keep is a choice.
+
+**Refolding a kept design** (the final round). A kept design unfolded and left unchanged refolds
+after a **10 s check** at its kept grade, not a full 70 s audit (40 s with Quick Audits). When an
+audit starts, the box must match a kept card exactly (`keptMatch`):
+- the same box, parts, turns and recipes;
+- every machine in normal mode;
+- nothing paused.
+During the check, every machine must run at no less than its kept busy fraction less 0.1
+(`refoldSlack`), and the kept product must leave the box. If the check passes, the fold uses the
+kept card: the grade, and the ins and outs per Mk1 machine's worth, which the game stores when it
+keeps the design. If anything differs, or the check fails, the full audit just goes on.
+
+It can't be gamed:
+- The card is the grade the same layout earned in a full audit, and the check only confirms the
+  layout runs, so a refold never grades better than the audit did.
+- A layout changed in any part (a belt turned, a machine overclocked, a miner paused) gets a full
+  audit.
+- A design imported from a share string has no card, so it gets a full audit.
+- 10 s is the full audit's own warm-up. A check that fails has lost nothing.
+
+The Act II and campaign bots now use the Drawer (`src/sim/bot2.ts`):
+- they keep each Workshop design they fold;
+- with the Draughtsman, they queue the kept designs in plan order;
+- in a later run, they unfold a kept design whenever its box is empty and the plan wants exactly
+  its parts.
+Measured on both seeds, the bot keeps 7 designs in run 1. Runs 2 and 3 each unfold 5 of them,
+and the check refolds 5–6 a run: Plastic and Plastic II share one box, so it refolds twice. No
+unfolds come from the Draughtsman (`d` 0): the bot's own unfold reaches each box first.
 
 **Share strings** `FWD1.<data>.<checksum>`: a kept design's box, name and layout as a w x h grid
 of cell bytes (kind code + 1 + 32 x turn; 127 for the rest of a 2x2), then a recipe byte for each
@@ -853,9 +926,19 @@ Reorganize, like land. *Derivation:* the Bay floor needs the 12x8's middle, and 
 coin chains were cleared for it, so income fell to a third for the rest of the run while coin
 piled up; the first block is 12 minutes of Act II income for a Gizmo chain beside the Factory
 Dock, the three about half of what a run piles up by 4 h. East, not south, so the Floating City's
-+1 row (§15, Milestone 7) is never pre-empted. The Act II bot buys block 1 at 1:13-1:14 in run 1
-(0:18-0:42 in later runs) and lays a Gizmo chain in it; blocks 2 and 3 hold copies of the nested
-Gizmo works II once Nested Boxes and the Bay are in (3:47-3:53 in run 1, 2:14-2:59 later).
++1 row (§15, Milestone 7) is never pre-empted. The Act II bot buys block 1 at 1:11-1:14 in run 1
+and lays a Gizmo chain in it; blocks 2 and 3 hold copies of the nested Gizmo works II once Nested
+Boxes and the Bay are in (3:44-3:45 in run 1). *The final round:* in later runs the bot buys each
+block as soon as it is affordable, before the Bay floor: 0:19-0:29, 0:38-0:48 and 1:09-1:20 into
+the run (it was 0:18-0:42, then 2:14-2:59, since a block skipped while short was skipped for good).
+
+**Deposit claims** (the final round). Before stamping or placing a copy that lacks claims, the
+bot buys a block of claims for that ore at the Survey Office, if the block costs at most half the
+coin on hand. Before, it never bought claims: it cleared a chain or left the copy out. Surveying
+is researched at 1:16-1:19 in run 1 and 1:01-1:06 later. The bot buys a copper and an iron block
+in run 1 (for the annex's Gizmo works II copies) and one copper block in each later run, which
+leaves claims to spare (iron 7 of 9 and copper 7 of 9 held at 1.5 h). Claims are not what caps
+a later run; room is (rule 3, below).
 
 ### The Committee (three raccoons in a trench coat)
 
@@ -885,11 +968,11 @@ first draft's currency, are gone (DECISIONS.md, the review round).
 
 | Stage | Wants | Opens | Patents | Reward, for good |
 |---|---|---|---|---|
-| 1 | 450 bits, 2,000 steel | the Great Drill research | 5 | Miners and modules with miners +50% (§18) |
+| 1 | 650 bits, 2,800 steel | the Great Drill research | 5 | Miners and modules with miners +50% (§18) |
 | 2, the Bore | 250 bits, 1,000 steel | Committee reputation 3 | 6 | Miners dig from any tile beside an ore patch: a patch feeds three times the miners |
 | 3, Breakthrough | 300 bits, 1,200 steel | Committee reputation 5 | 8 | Chunk D gains a deep iron and a deep copper deposit |
 
-Steel is 4 a bit (under stage 1's 4.4), so the steel is in before the bits: with the bits full
+Steel is 4 a bit (under stage 1's 4.3), so the steel is in before the bits: with the bits full
 first, the bot's Bay floor jammed on its own slag. **The Bay never jams**: it takes steel and
 Drill Bits always, and what its stage can't count (the stage closed, or that part full) goes on to
 the Dock and sells (bits are scrapped), so a stage waiting on the Committee never stops the Bay
@@ -899,58 +982,86 @@ Progress survives every reset.
 
 ### Measured pace (`tests/pace-reorganize.test.ts`, the campaign bot, seeds 1000 and 8919)
 
-Run 1 is the Act I planner to the Festival, then the Act II policy; it resets when its plan is
-done, the preview grew under 0.25 in 20 min, no Committee order is filling, and it holds at least
-12 Patents (4 in later runs). Runs 2 and 3 buy Patents first, then play the same way.
+Run 1 is the Act I planner to the Festival, then the Act II policy. It resets when four things
+hold:
+- its plan is done;
+- the preview grew under 0.25 in 20 min;
+- no Committee order is filling;
+- it holds at least 12 Patents (4 in later runs).
+Runs 2 and 3 buy Patents first, then play the same way. *Re-measured in the final round:* the bot
+now buys claims and its annex blocks as soon as it can afford them, keeps and unfolds kept designs,
+and runs a brick press for Surveying. The Drill's stage 1 is now 650 bits and 2,800 steel.
 
 | | seed 1000 | seed 8919 |
 |---|---|---|
-| Run 1: reset at, Patents | 4:08, 15 | 4:13, 15 |
-| Run 1 peak (coin/min over 5 min) | 13,446 | 13,376 |
-| Run 2: reset at, Patents | 3:00, 7 | 2:59, 7 |
-| Run 2 passes run 1's peak at (limit: a third of run 1) | 0:16 (1:23) | 0:17 (1:24) |
-| Run 2 peak | 17,444 | 17,208 |
-| Run 3 passes run 2's peak at (limit 1:00) | never: 17,274 against 17,444 (open) | 0:28 |
+| Run 1: reset at, Patents | 4:24, 14 | 4:21, 14 |
+| Run 1 peak (coin/min over 5 min) | 14,812 | 14,318 |
+| Run 2: reset at, Patents | 3:02, 7 | 2:50, 7 |
+| Run 2 passes run 1's peak at (limit: a third of run 1) | 0:27 (1:28) | 0:16 (1:27) |
+| Run 2 peak | 21,086 | 21,155 |
+| Run 3 passes run 2's peak at (limit: a third of run 2) | 1:22 (1:00), open | 1:22 (0:56), open |
+| Run 3 peak | 21,434 | 21,203 |
 | Run 3's card at its 4 h cap | 9 | 9 |
-| Slice end (hand-over) in runs 1, 2, 3 | 0:31, 0:11, 0:11 | 0:31, 0:12, 0:10 |
+| Slice end (hand-over) in runs 1, 2, 3 | 0:31, 0:09, 0:12 | 0:30, 0:10, 0:10 |
 | Great Drill stage after runs 1, 2, 3 | 1, 2, 3 | 1, 2, 3 |
-| Committee reputation after runs 1, 2, 3 | 2, 4, 6 | 2, 4, 6 |
-| Coin on hand at about 4, 5, 6, 7 h of play | 0.82M, 0.58M, 1.29M, 0.98M | 0.81M, 0.56M, 1.31M, (run 2 resets at 7:11) |
-| Annex blocks bought in runs 1, 2, 3 (time into the run) | 1:14, 3:47, 3:47; 0:41, 2:59, 2:59; 0:19, 2:14, 2:14 | 1:13, 3:53, 3:53; 0:42, 2:59, 2:59; 0:18, 2:22, 2:22 |
+| Surveying researched in runs 1, 2, 3 | 1:19, 1:06, 1:01 | 1:16, 1:04, 1:02 |
+| Claims blocks bought in runs 1, 2, 3 | copper + iron; copper; copper | the same |
+| Annex blocks bought, run 1 | 1:14, 3:44, 3:44 | 1:11, 3:45, 3:45 |
+| Annex blocks bought, run 2 | 0:26, 0:47, 1:19 | 0:25, 0:47, 1:19 |
+| Annex blocks bought, run 3 | 0:20, 0:39, 1:11 | 0:19, 0:38, 1:09 |
+| Coin on hand at 4, 5, 6, 7 h of play | 0.74M, 0.15M, 0.30M, 1.05M | 0.72M, 0.18M, 0.37M, 1.10M |
 
-- **The first reset is worth taking at 4-6 h** with 12-20 Patents: 4:08-4:13, 15 on both seeds.
-- **Runs 2 and 3 earn only by pushing further**: run 2's 7 are the Drill's stage 2 (6) and the
-  bills term; it files one new design value (circuits at B, which run 1 folded at C). Run 3's 9
-  are stage 3 (8) and the bills. Nothing is paid twice.
+- **The first reset is worth taking at 4-6 h** with 12-20 Patents: 4:21-4:24, 14 on both seeds.
+- **Runs 2 and 3 earn only by pushing further.** Run 2's 7 are the Drill's stage 2 (6) and the
+  bills term. Run 3's 9 are stage 3 (8) and the bills. Nothing is paid twice. A fourth run files
+  only about 1 in 5 h (§19 tree, above).
 - **A reset loop never beats the designed run.** Measured as Patents banked per hour over the same
-  hours of play:
-  - The pace test (seed 1000, the designed runs 1 and 2, 7:08): designed 15 + 7 = 3.08 an hour.
-    Loops resetting at every slice end: 1.12. At every 1 h: 1.12. At every 2 h: 1.26.
-  - The scratch measure, with run 2 played to its 4 h cap (8.1-8.2 h): designed 2.70 (seed 1000)
-    and 2.68 (8919). Slice-end loops: 1.11 and 1.22. 1 h loops: 1.11 and 1.10.
-  - A loop files its products once (3 Patents, 7 at 2 h with steel and the Drill works) and then
-    earns 1 a run, from the bills term alone.
-- **Rule 3** holds for run 2 against run 1 on both seeds with margin (about a fifth of the limit)
-  and for run 3 against run 2 on seed 8919. On seed 1000 run 3's peak ties run 2's (17,274 against
-  17,444): both fill the same floor, and a later run's peak is capped by its room, not its speed.
-  Open (`RULE3_OPEN`), for the lead: keeping the annex through a Reorganize is the lever.
-- **Rule 6** (seed 1000, never resetting, 7 h): the preview climbs 3.6, 7.6, 12.1 and 15.6 at 1-4 h
-  and holds at 15.6 to 7 h. Coin earned is 0.32M, 1.06M, 1.59M, 2.00M, 2.52M, 3.04M and 3.55M at
-  1-7 h, and stage 1 stands at 3:46. Progress slows and never stops: the flat preview is the
-  pressure toward a reset, not a wall.
+  hours of play (seed 1000, the designed runs 1 and 2, 7:26). The designed run banks 14 + 7, which
+  is 2.83 an hour (seed 8919 reads 2.92 in the scratch measure). The loops:
+
+  | Loop | Runs | Patents | Per hour |
+  |---|---|---|---|
+  | Reset at every slice end | 8 | 9 | 1.21 |
+  | Reset at every 1 h | 7 | 8 | 1.08 |
+  | Reset at every 2 h | 4 | 10 | 1.35 |
+  | **The burn loop** (the final round): reset at 35 min, all coin burned before each reset | 2 | 3 | 0.40 |
+
+  The burn loop spends all its coin before each reset: one refinery, assembler, press or smelter
+  on every free tile it owns, and a Pole every few tiles. It then waits 6 min, so the bills window
+  sees the new buildings. It files 3 Patents in its first run and 0 in its second, which then
+  cannot reset (a reset needs 1 Patent). The buildings stand starved and unconnected, so they bill
+  nothing.
+  A loop files its products once (3 Patents, 7 at 2 h with steel and the Drill works), then earns
+  about 1 a run from the bills term alone.
+- **Rule 3** holds for run 2 against run 1 on both seeds, with margin (about a fifth of the
+  limit).
+  - *Re-measured in the final round,* run 3 against run 2 misses on both seeds: 1:22 against
+    limits of 1:00 and 0:56. Run 3's peak only equals run 2's (21.4K and 21.2K against 21.1K and
+    21.2K a minute).
+  - Run 3 reaches that peak once its third annex block holds a Gizmo works II copy (1:09-1:11).
+    Both runs fill the same floor.
+  - Claims are not the cap. The bot buys one copper block a later run and holds claims to spare.
+    So the critic's "the bot never buys claims" was true, but it was not what held run 3 back.
+  - Open (`RULE3_OPEN`), for the lead. The levers are room kept through a Reorganize (the annex)
+    or more of it.
+- **Rule 6** (seed 1000, never resetting, 7 h): the preview climbs 3.6, 7.5, 10.6 and 14.3 at 1-4
+  h, then holds at 14.6-14.7 to 7 h. Coin earned is 0.33M, 1.09M, 1.58M, 1.98M, 2.80M, 3.66M and
+  4.52M at 1-7 h, and stage 1 stands by 5 h. Progress slows and never stops. The flat preview is
+  the pressure toward a reset, not a wall.
 - **Rule 1 and rule 2** while the Bay fills: §16.
-- Honest: at most 4 clicks in any second in every run. The campaign takes about 4 min a seed.
+- Honest: at most 4 clicks in any second in every run. The campaign takes about 2 min a seed.
 
-### Open after the review round
+### Open after the final round
 
-- **Rule 3, run 3 against run 2, seed 1000** (above).
-- **Coin still piles up** (0.6-1.3M on hand at 4-7 h of play): the annex takes 900K a run, and
-  the bot does not buy deposit claims from the Survey Office, which would let more source copies
-  run in the annex. The bills term turns what runs into Patents, never what is hoarded.
-- **Rule 1 while the Bay fills** is not at 3 min (§16): the goals reached by the bot come 34-43 min
-  apart after the Bay floor in runs 1 and 2 (Nested Boxes' research, then the nested Gizmo works
-  II and its annex blocks); an affordable annex block or a claim is in reach throughout, but the
-  bot leaves them for later.
+- **Rule 3, run 3 against run 2, both seeds** (above). The cap is room, not claims.
+- **Coin still piles up**: 0.7-1.1M on hand at 4 and 7 h of play, and over 2M by 11 h.
+  - The bot buys what its plan can use: claims, annex blocks and its copies. After that, nothing on
+    the floor turns the coin into progress.
+  - The bills term counts measured work, so the hoard can't be burned for Patents either (the burn
+    loop above).
+  - What should take the coin is the next floor's content, the lead's call.
+- **Rule 1 and rule 2 while the Bay fills** (§16): the wait is 39-48 min.
+- **A fourth run files about 1 Patent** (above).
 
 ## 20. Idle and offline (Milestone 6)
 
@@ -1096,56 +1207,70 @@ derivation here.
   modules and the Night Shift in `upgrades` need no migration (absent means none).
 
 ### Measured (pace tests, `tests/pace-idle-*.test.ts` and `tests/pace-offline.test.ts`)
-Each stage is a saved state of a bot's factory. **Active** is what the bot earned in the next 30
-min; **idle** is the same state open with no input (live, tick by tick, Sparks off) for 30 min, 1 h
-and 8 h; **offline** is the same state closed for 8 h (`runOffline`) at e = 0.5 and at the 0.75
-ceiling. Run 1 is the Act II bot; runs 2 and 3 are the campaign bot after a Reorganize with its
-Patents spent (11 nodes bought for run 2, 5–6 more for run 3), so the stages span about 1 h to 12 h
-of play. "Share" is check 12 (b): what the 7 h after the first pay, as a fraction of what open
-idle pays in them (it must be e − 0.03 to e + 0.05). Seeds 1000 and 8919 read the same to two
-places wherever both were measured (Sparks are the only random part, and idle has none), so one
-row stands for both unless the seed is named.
+Each stage is a saved state of a bot's factory:
+- **Active** is what the bot earned in the next 30 min.
+- **Idle** is the same state left open with no input (live, tick by tick, Sparks off) for 30 min,
+  1 h and 8 h.
+- **Offline** is the same state closed for 8 h (`runOffline`), at e = 0.5 and at the 0.75 ceiling.
 
-| Stage | active 30 min | idle 30 min | active / idle | idle 1 h | 8 h idle | offline at 0.5 (of idle, share) | at 0.75 (of idle, share) | segments |
+Run 1 is the Act II bot. Runs 2, 3 and 4 are the campaign bot after a Reorganize with its Patents
+spent: 13 nodes bought for run 2, 5 more for run 3, 4 more for run 4.
+*From the final round*, run 4 is measured too. Runs 1-3 play and reset as the campaign plays them,
+then run 4 plays 5 h from 9.8-9.9 h of play. Its stages stand at 10.8-13.9 h. With 8 h offline
+measured at each, the stages run to past 12 h, and the run itself to 14.8-14.9 h.
+
+"Share" is check 12 (b): what the 7 h after the first pay, as a fraction of what open idle pays in
+them. It must be e − 0.03 to e + 0.05. Seeds 1000 and 8919 read the same to two places wherever
+both were measured (Sparks are the only random part, and idle has none), so one row stands for
+both unless the seed is named. Measured in the final round:
+
+| Stage (hours of play, seed 1000) | active 30 min | idle 30 min | active / idle | idle 1 h | 8 h idle | offline at 0.5 (of idle, share) | at 0.75 (of idle, share) | segments |
 |---|---|---|---|---|---|---|---|---|
 | Slice end (+10 min) | 80K (10 min) | 73–82K (10 min) | 0.98–1.09 | 437–490K | 3.22–3.27M | 1.88–1.94M (0.58–0.59, 0.52) | 2.55–2.61M (0.79–0.80, 0.76) | (not logged) |
-| Run 1, 1 h | 365K (8919: 370K) | 239K (241K) | 1.53 (1.54) | 446K | 3.22M | 1.91M (0.59, 0.53) | 2.57M (0.80, 0.77) | 3–5 |
-| Run 1, 2 h | 349K | 198K | 1.76 | 396K | 3.17M | 1.78M (0.56, 0.50) | 2.47M (0.78, 0.75) | 0 |
-| Run 1, 3 h | 172K (171K) | 110K (108K) | 1.56 (1.59) | 246K | 2.36M | 1.31M (0.56, 0.51) | 1.84M (0.78, 0.75) | 1 |
-| Run 1, 4 h | 263K | 164K | 1.61 | 333K | 2.73M | 1.53M (0.56, 0.50) | 2.13M (0.78, 0.75) | 0 |
-| Run 1, 5 h | 257K (242K) | 164K (156K) | 1.57 (1.55) | 333K | 2.73M | 1.53M (0.56, 0.50) | 2.12M (0.78, 0.75) | 0 |
-| Run 2, 1 h | 497K (496K) | 328K | 1.52 (1.51) | 655K | 5.24M | 2.95M (0.56, 0.50) | 4.09M (0.78, 0.75) | 0 |
-| Run 2, 2 h | 224K (226K) | 147K (152K) | 1.52 (**1.49**) | 295K | 2.36M | 1.33M (0.56, 0.50) | 1.84M (0.78, 0.75) | 0 |
-| Run 2, 3 h | 250K (248K) | 164K (166K) | 1.52 (**1.49**) | 328K | 2.64M | 1.48M (0.56, 0.50) | 2.06M (0.78, 0.75) | 0 |
-| Run 3, 1 h | 283K (264K) | 366K (367K) | **0.77 (0.72)** | 723K | 5.72M | 3.22M (0.56, 0.50) | 4.47M (0.78, 0.75) | 0 |
-| Run 3, 3 h | 238K (240K) | 158K (163K) | 1.51 (**1.47**) | 316K | 2.54M | 1.43M (0.56, 0.50) | 1.98M (0.78, 0.75) | 0 |
+| Run 1, 1 h | 379K (8919: 376K) | 250K (248K) | 1.52 (1.52) | 491–493K | 3.28M | 1.98–2.00M (0.60–0.61, 0.53–0.54) | 2.63–2.64M (0.80–0.81, 0.77) | 5–7 |
+| Run 1, 2 h | 317K | 198K | 1.60 | 396K | 3.17M | 1.80M (0.57, 0.51) | 2.48M (0.78, 0.75) | 1 |
+| Run 1, 3 h | 171K | 108K | 1.58 (1.59) | 221K | 2.28M | 1.27M (0.56, 0.51) | 1.78M (0.78, 0.76) | 3 |
+| Run 1, 4 h | 390K | 234K | 1.66 | 520K | 4.55M | 2.54M (0.56, 0.50) | 3.55M (0.78, 0.75) | 0 |
+| Run 1, 5 h | 427K (429K) | 281K (280K) | 1.52 (1.53) | 566–567K | 4.60M | 2.58M (0.56, 0.50) | 3.59M (0.78, 0.75) | 0 |
+| Run 2, 1 h (5.4 h) | 526K (528K) | 329K (328K) | 1.60 (1.61) | 655–657K | 5.24M | 2.95M (0.56, 0.50) | 4.10M (0.78, 0.75) | 0 |
+| Run 2, 2 h (6.4 h) | 352K | 238K (235K) | **1.48** (1.50) | 464–470K | 3.68–3.72M | 2.07–2.09M (0.56, 0.50) | 2.87–2.90M (0.78, 0.75) | 0 |
+| Run 2, 3 h (7.4 h) | 545K (522K) | 232K (349K) | 2.35 (**1.49**) | 463K (700K) | 3.71M (5.60M) | 2.09M (3.15M) (0.56, 0.50) | 2.90M (4.38M) (0.78, 0.75) | 0 |
+| Run 3, 1 h (8.4 h) | 518K (533K) | 328K | 1.58 (1.63) | 655K | 5.24M | 2.95M (0.56, 0.50) | 4.09–4.10M (0.78, 0.75) | 0 |
+| Run 3, 3 h (10.4 h) | 534K (532K) | 353K | 1.51 (1.51) | 706–707K | 5.64–5.66M | 3.18M (0.56, 0.50) | 4.41–4.42M (0.78, 0.75) | 0 |
+| Run 4, 1 h (10.9 h) | 359K (355K) | 367K (366K) | **0.98 (0.97)** | 724K | 5.72M | 3.22M (0.56, 0.50) | 4.47M (0.78, 0.75) | 0 |
+| Run 4, 2 h (11.9 h) | 436K (400K) | 226K (228K) | 1.93 (1.75) | 452–457K | 3.61–3.66M | 2.03–2.05M (0.56, 0.50) | 2.82–2.85M (0.78, 0.75) | 0 |
+| Run 4, 3 h (12.9 h) | 511K (523K) | 345K (349K) | **1.48** (1.50) | 692–698K | 5.54–5.59M | 3.12–3.14M (0.56, 0.50) | 4.33–4.37M (0.78, 0.75) | 0 |
+| Run 4, 4 h (13.9 h) | 514K (523K) | 346K (349K) | **1.49** (1.50) | 692–699K | 5.54–5.59M | 3.12–3.14M (0.56, 0.50) | 4.33–4.37M (0.78, 0.75) | 0 |
 
-- **Offline is honest at every stage, both seeds, both efficiencies**: 0.56–0.59 of open idle at
-  0.5 and 0.78–0.80 at 0.75, never more than open idle and never less than e of it, and the 7 h
-  after the first pay 0.50–0.53 and 0.75–0.77 of open idle's (check 12, restated). An 8 h offline
-  run takes 3–6 s in node at every stage (0–5 segments).
-- **Rule 4 holds at 13 of the 18 stage readings** (active 1.51–1.76× open idle) and is **open** at
-  five, listed in `RULE4_OPEN` with the reason and logged, not failed. *Re-read after the reset
-  layer's annex (the review round):* run 1 at 3 h (was 4.01×) and seed 1000's run 2 at 2 h (was
-  0.54×) now pass, because the annex keeps a Gizmo chain selling past the Bay floor and open idle
-  no longer collapses there. The five open readings:
-  - **Run 3 at 1 h, both seeds** (0.77× and 0.72×): the Bay floor is laid in this half hour (the
-    head starts bring it to 67–69 min), and the campaign clears the Gizmo chains for it, so income
-    falls from about 16K to 6K a minute while the untouched factory keeps them. This is run 2's
-    old 2 h dip, moved earlier.
-  - **Seed 8919's run 2 at 2 h and 3 h, and its run 3 at 3 h** (1.47–1.49×; seed 1000 reads
-    1.51–1.52): the bot only clicks Overdrive here, waiting on research or for its reset. Overdrive
-    is 3× for 10 s, then 30 s cooling, so (30 + 30) ÷ 40 = 1.5× for a line kept in it (§18): that is
-    the band's floor exactly, and a line whose inputs can't keep up at 3× reads just under.
-  - *Tried and rejected:* a 20 s cooldown (1.67×) passed all of these but run 3 at 1 h. It also
-    sped seed 8919's run 1 to a 3:52 reset, outside §19's 4–6 h window, and left its Drill at
-    stage 2. The lever is the lead's call.
+- **Offline is honest at every stage, both seeds, both efficiencies.** It pays 0.56-0.61 of open
+  idle at 0.5 and 0.78-0.81 at 0.75. It is never more than open idle and never less than e of it.
+  The 7 h after the first pay 0.50-0.54 and 0.75-0.77 of open idle's (check 12, restated). An 8 h
+  offline run takes 7-10 s in node at every stage with the suite running beside it, in 0-7
+  segments.
+- **Rule 4 holds at 20 of the 26 readings** (active 1.50-2.35× open idle). It is **open** at six,
+  listed in `RULE4_OPEN` with the reason and logged, not failed. *Re-read in the final round:* run
+  3 at 1 h now passes on both seeds (1.58 and 1.63, was 0.77 and 0.72). Its annex blocks now come
+  before the Bay floor, so the Gizmo chains the Bay clears keep selling. The six open readings:
+  - **Run 4 at 1 h, both seeds** (0.98× and 0.97×): the Bay floor is laid in this half hour (the
+    head starts bring it to about 1:10), and the campaign clears the Gizmo chains for it. This is
+    run 3's old dip, one run later.
+  - **Seed 1000's run 2 at 2 h and run 4 at 3 h and 4 h, and seed 8919's run 2 at 3 h**
+    (1.48-1.49×; the other seed reads 1.50 or more). The bot only clicks Overdrive here, waiting on
+    research or with its plan done. Overdrive is 3× for 10 s, then 30 s cooling, so
+    (30 + 30) ÷ 40 = 1.5× for a line kept in it (§18). That is the band's floor exactly, and a line
+    whose inputs can't keep up at 3× reads just under it.
+  - The Act II bot's 2 h reading on seed 8919 (1.46×) is open for a third reason. Its Bay floor
+    is laid at 2:16, inside the window (§18).
+  - *Tried and rejected:*
+    - A 20 s cooldown (the review round) moved the first reset out of 4–6 h.
+    - A 25 s cooldown (the final round, 1.57× for a line kept in Overdrive) made seed 8919 worse.
+      Its 2 h reading fell to 1.42, its longest wait between goals before the Bay floor rose to
+      17.0 min (the bound is 15), and its run 3 never passed run 2's peak.
+    - Rule 4's 1.5 floor is not lowered. The lever is the lead's call: Overdrive's duty cycle and
+      the band's floor are the same number.
 - **At the slice end rule 4 reads 0.98–1.09**: the planner's ten minutes after the Festival build
   nothing, so they earn what the untouched factory does. Logged, not tested: the slice's end is a
   pause by design, and the measure that matters there is check 12.
-- **Open idle after the Bay floor** is 3,600–5,500 coin/min with the annex (runs 1–3 from 3 h; it
-  was 1,100–1,400 without it). The Night Shift's prices are derived from the stages where it is
-  offered (above), and the payback test re-measures them; it still passes.
-- Stages measured to about 11 h of play (run 3 at 3 h after runs of 4.1–4.2 h and 3.0 h); the
-  exit's "15 h" is covered by run 3's settled factory (its 3 h reads like run 2's), and the next
-  run's stages come with the next milestone's bot.
+- **Open idle after the Bay floor** is 3,600–11,700 coin/min with the annex (runs 1–4 from 3 h).
+  The Night Shift's prices are derived from the stages where it is offered (above). The payback
+  test re-measures them, and it still passes.
