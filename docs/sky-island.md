@@ -51,15 +51,16 @@ marked out on it; the Factory is a riveted sky platform held up by brass rotors,
 ## Palette: B extended ("Lantern Bayou, with the sky")
 
 Appended after the pips in `PALETTE` (indices never move; `theme.ts` reads `PALETTE[40]`), named in
-`C` and in `pixel-art/sky/pal.py`. Proposed (the style test tunes them, then they are fixed):
+`C` and in `pixel-art/sky/pal.py`. **Fixed at the style test** (the first proposal is struck below:
+with it a deuteranope saw meadow and paving as the same beige; `pal.py` tests that now):
 
 | ramp | slots | proposed |
 |---|---|---|
-| sky | `sky0`..`sky4` (zenith to horizon) | `#3a78d4` `#5893e3` `#7fb2ee` `#a9d0f5` `#d4ebfb` |
-| cloud | `cloud0`..`cloud3` (deep shade to lit) | `#9cb4da` `#c3d6ef` `#e6f0fb` `#ffffff` |
-| grass | `grass0`..`grass3` | `#2f6e36` `#4c9a3e` `#73c14e` `#a3dd68` |
-| paving | `pave0`..`pave3` (grout to lit) | `#7d7468` `#a3988a` `#c4b8a5` `#ddd2bd` |
-| sun | `sun` (horizon glow) | `#ffe9c2` |
+| sky | `sky0`..`sky4` (zenith to horizon) | `#3570cc` `#4f8ae0` `#76aaec` `#a2cbf4` `#d2e9fa` |
+| cloud | `cloud0`..`cloud3` (deep shade to lit) | `#93add6` `#bdd2ee` `#e4eefa` `#ffffff` |
+| grass | `grass0`..`grass3` | `#275f35` `#3b8539` `#58a843` `#8bcb57` |
+| paving | `pave0`..`pave3` (grout to lit) | `#7a7064` `#9c9080` `#b9ad97` `#d2c6ac` |
+| sun | `sun` (horizon glow) | `#ffe6b8` |
 
 Rules: the paving must stay apart from the paper (`bone` `#eee2c6`) so floor tags read on it, and
 dark enough that steel base plates and belts pop; grass is brighter than `moss` (moss stays the
@@ -95,6 +96,48 @@ made by scripts in `pixel-art/sky/`.
 | `fplat_rotor` | 48x24 | 4 | a brass rotor pod under the platform, spinning (fps 12) |
 | `tile_ore_*` | as now | as now | the ores, re-seated on paving and grass (the outcrop's corners no longer show planks) |
 | `title_scene` | 320x180 | 8 | the title key art: the island at morning |
+
+## Decided at the style test (the lead, 2026-10-21)
+
+The mocks: `pixel-art/sky/out/mock_workshop_{A,B,C}.png`, `mock_zoomout.png`, `mock_factory.png`,
+`compare_paving.png`. `pixel-art/sky/mock_island.py` is the reference for how the island is put
+together; the code follows it.
+
+- **Paving C** (painted concrete, one flat fill, a dotted build grid, a small cross where four
+  tiles meet), the calmest floor: machines, belts, items and paper tags win on it at 1x and 2x.
+  A (flagstones) had more charm and the busiest joints; B (riveted plate) blurred into the
+  Factory's steel. Tiles that border the meadow get a grass tuft in the grout.
+- **The cliff** is one 64 px periodic texture: variant = world tile x mod 4 (never a hash), drawn
+  per pixel column under the top surface's silhouette so the face follows the edge's rounded
+  corners; land further south hides cliff behind it; the top row is the lip, the mid row repeats
+  down to the underside, the low row ends it. Strata sit on the same pixel rows in every variant.
+- **The underside**: 16 frames (fill, bottom, left slope, right slope; 4 variants each, variant =
+  x mod 4). Each column's depth runs from 1 tile at the island's ends to 9 in the middle, never
+  shallower than the next column outward; the tip hangs under the two deepest columns (anchor
+  [24, 0]). More crystals and roots by hash and a lighter bounce band keep its middle from
+  reading as one dark mass.
+- **The outline is monotone**: each coast steps only outward going south down to the widest
+  rows, then only inward (else a cliff hangs like a pillar beside the land). Organic comes from
+  the corner rounding and a wobbly lip.
+- **Waterfalls**: `isle_fall_top` (16x16 x4, the spring and its channel on the south edge tile),
+  `isle_fall_head` (16x16 x4, the water bowing over the lip, over the cliff's top tile),
+  `isle_fall` tiled down, the foam at the cloud sea's top with the fall continuing behind it.
+- **Veins** on the first mid row of a column's face, clipped to the rock.
+- **The sky's gradient** is baked at world-pixel size (W/zoom x H/zoom) and scaled up, so its
+  dither matches the world's pixels (8 px Bayer seams).
+- **The town** sprites end in two water-line rows (puddles on grass): every one is re-seated on
+  footings; `town_lily` goes. **The ores** bake the deck's shadow colours (wood0-3): they are
+  remapped onto paving and meadow.
+- **The Factory platform**: brass trim on the north deck, rotors on the side faces too, the town
+  on proper footings.
+
+### Flagged as derivative
+- A floating sky island as your base, other islands on the horizon: Roblox *Islands* (once
+  Skyblock) and Minecraft's Skyblock maps. Our art and our own rules; the concept is the owner's
+  pick, recorded in DECISIONS.md.
+- Brass rotor pods under a sky platform: the steampunk family (*BioShock Infinite*'s Columbia).
+  Generic.
+- Puff clouds: no outline, eyes or face (not Mario's).
 
 ## Code contract
 

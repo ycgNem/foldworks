@@ -21,22 +21,23 @@ export const PALETTE = [
   // status pips: code-only, never in sprite art (unchanged from palette A)
   '#66cc50', '#ffe466', '#c8362e', '#3d3c42', '#4a8fe2',
   // the sky island (docs/sky-island.md, 2026-10-21): palette B extended for the world. Appended
-  // after the pips so no earlier index moves (theme.ts reads PALETTE[40]); proposed hexes, the
-  // style test tunes them. Code reads them only through C (sky0.., cloud0.., grass0.., pave0.., sun).
-  '#3a78d4', '#5893e3', '#7fb2ee', '#a9d0f5', '#d4ebfb',
-  '#9cb4da', '#c3d6ef', '#e6f0fb', '#ffffff',
-  '#2f6e36', '#4c9a3e', '#73c14e', '#a3dd68',
-  '#7d7468', '#a3988a', '#c4b8a5', '#ddd2bd',
-  '#ffe9c2',
+  // after the pips so no earlier index moves (theme.ts reads PALETTE[40]); tuned at the style test
+  // (pixel-art/sky/pal.py, which checks them: the meadow apart from the paving for colour-blind
+  // players too). Code reads them only through C (sky0.., cloud0.., grass0.., pave0.., sun).
+  '#3570cc', '#4f8ae0', '#76aaec', '#a2cbf4', '#d2e9fa',
+  '#93add6', '#bdd2ee', '#e4eefa', '#ffffff',
+  '#275f35', '#3b8539', '#58a843', '#8bcb57',
+  '#7a7064', '#9c9080', '#b9ad97', '#d2c6ac',
+  '#ffe6b8',
 ] as const;
 
 /** The sky island's ramps (docs/sky-island.md, Palette): dark to light, the sky zenith to horizon. */
 const SKY = {
-  sky0: '#3a78d4', sky1: '#5893e3', sky2: '#7fb2ee', sky3: '#a9d0f5', sky4: '#d4ebfb',
-  cloud0: '#9cb4da', cloud1: '#c3d6ef', cloud2: '#e6f0fb', cloud3: '#ffffff',
-  grass0: '#2f6e36', grass1: '#4c9a3e', grass2: '#73c14e', grass3: '#a3dd68',
-  pave0: '#7d7468', pave1: '#a3988a', pave2: '#c4b8a5', pave3: '#ddd2bd',
-  sun: '#ffe9c2',
+  sky0: '#3570cc', sky1: '#4f8ae0', sky2: '#76aaec', sky3: '#a2cbf4', sky4: '#d2e9fa',
+  cloud0: '#93add6', cloud1: '#bdd2ee', cloud2: '#e4eefa', cloud3: '#ffffff',
+  grass0: '#275f35', grass1: '#3b8539', grass2: '#58a843', grass3: '#8bcb57',
+  pave0: '#7a7064', pave1: '#9c9080', pave2: '#b9ad97', pave3: '#d2c6ac',
+  sun: '#ffe6b8',
 } as const;
 
 /** Lantern Bayou's own slots (what the art scripts use): ramps dark to light. */
