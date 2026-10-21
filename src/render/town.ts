@@ -3,8 +3,10 @@
 // starts as two houses on stilts; The Boardwalk lays a boardwalk along the floor's top edge, Lamp
 // Posts stands lamps on it, the Gizmo Festival adds stalls, bunting and frogs walking, Unit 7's
 // and Dame Voltaire's first orders add their buildings, and every filled order (a reputation
-// level) adds a house. Placement is fixed (the same state always draws the same town), always on
-// water around the floor and drawn behind it. Pieces whose sprite is not drawn yet are skipped.
+// level) adds a house. Placement is fixed (the same state always draws the same town), always off
+// the floor and drawn behind it. Pieces whose sprite is not drawn yet are skipped. The sky island
+// (docs/sky-island.md): the town stands on the island's north rim (the Factory's north deck); the
+// lily pads went with the swamp, the island's own trees and bushes keep out of townZones().
 // Presentation only: reads the Game, never writes it.
 import { C, rgba } from '../data/palette';
 import { ORDER, CUSTOMERS, type CustomerId } from '../data/orders';
@@ -45,6 +47,18 @@ const HOUSE_SLOTS: { x: number; row: number }[] = [
   { x: -3, row: BACK }, { x: 24, row: BACK }, { x: 2, row: 99 }, { x: 6, row: 99 }, { x: 10, row: 99 },
 ];
 const LAMPS = [2, 7, 12, 15, 20, 23];
+
+/** Where the town may ever stand around a floor fw x fh (tile rects, x0 y0 inclusive, x1 y1
+ *  exclusive), sprites' height included: the island keeps its trees and bushes out of them (the
+ *  sky island, docs/sky-island.md). The rows above the floor from x -3 to fw + 3, and the row-99
+ *  slots under it. */
+export function townZones(fw: number, fh: number): { x0: number; y0: number; x1: number; y1: number }[] {
+  const xs = HOUSE_SLOTS.filter((s) => s.row === 99).map((s) => s.x);
+  return [
+    { x0: -3, y0: FAR - 2, x1: Math.min(fw, 24) + 3, y1: 0 },
+    { x0: Math.min(...xs), y0: fh, x1: Math.max(...xs) + 2, y1: fh + 2 },
+  ];
+}
 const STALLS = [5, 10, 18];
 
 const fmtTime = (tick: number) => {
@@ -52,14 +66,6 @@ const fmtTime = (tick: number) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}` : `${m}:${String(ss).padStart(2, '0')}`;
 };
-
-function hash(n: number) {
-  let x = (n * 2654435761) >>> 0;
-  x ^= x >>> 15;
-  x = Math.imul(x, 2246822519) >>> 0;
-  x ^= x >>> 13;
-  return x >>> 0;
-}
 
 export class Town {
   /** the tick each order was filled on, as seen by this session (labels say when) */
@@ -126,19 +132,6 @@ export class Town {
       const who = CUSTOMERS[d.customer].name;
       add({ key: 'rep' + i, group: 'rep:' + id, sprite: 'town_house', frame: HOUSE_VARIANTS[i % HOUSE_VARIANTS.length], x: slot.x, row: slot.row, w: 2, z: slot.row === FAR ? 1 : 2, label: `A new house: ${who}'s reputation ${n} (${this.label(id, d.name)})` });
     });
-    // lily pads and reeds in the water on the other three sides, more as the town grows
-    const lilies = Math.min(28, 6 + out.length);
-    const spots: { x: number; y: number }[] = [];
-    for (let i = 0; spots.length < lilies && i < 400; i++) {
-      const h = hash(i + 7);
-      const side = h % 3;
-      const x = side === 0 ? -1 - (h >>> 3) % 3 : side === 1 ? fw + (h >>> 3) % 3 : (h >>> 3) % (fw + 2) - 1;
-      const y = side === 2 ? fh + (h >>> 7) % 3 : (h >>> 7) % fh;
-      if (spots.some((q) => Math.abs(q.x - x) + Math.abs(q.y - y) < 2)) continue;
-      if (out.some((p) => y <= p.row && y > p.row - 3 && x >= p.x - 1 && x <= p.x + p.w)) continue;
-      spots.push({ x, y });
-    }
-    spots.forEach((q, i) => out.push({ key: 'lily' + i, group: 'swamp', sprite: 'town_lily', frame: hash(i * 31 + 3) % 6, x: q.x, row: q.y, w: 1, z: 0, label: 'Lily pads and reeds: the swamp' }));
     out.sort((a, b) => a.row - b.row || a.z - b.z || a.x - b.x);
     this.cache = { v, fw, fh, pieces: out };
     return out;
