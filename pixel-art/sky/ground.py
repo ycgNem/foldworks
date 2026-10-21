@@ -131,6 +131,34 @@ def seam(side):
     return img.rotate({"E": -90, "S": 180, "W": 90}[side])
 
 
+def pave_edge(side):
+    """The paving's edge where it meets land you don't own (meadow or the rim), frames N, E, S, W:
+    an overlay (clear elsewhere) of grass creeping into the grout along that side: two tufts and
+    a blade or two in the edge's joint, a crumb of broken grout. Drawn for N, turned for the rest
+    (the tufts lean the same way in all four: they are tiny, nobody can tell)."""
+    img = new(T, T)
+    # the joint along the edge (the meadow side): grout darkened where the grass has got in
+    for x in (2, 3, 9, 10, 11):
+        put(img, x, 0, P["pave1"])
+    # tuft 1: three blades, the lit tip on the left one, a root in the joint
+    draw(img, [(2, 1), (3, 1), (4, 1)], P["grass1"])
+    draw(img, [(2, 0), (4, 0)], P["grass2"])
+    put(img, 3, 0, P["grass0"])
+    put(img, 2, 2, P["grass1"])
+    put(img, 1, 0, P["grass3"])
+    # tuft 2, smaller
+    draw(img, [(10, 0), (11, 1)], P["grass1"])
+    put(img, 9, 0, P["grass2"])
+    put(img, 11, 0, P["grass3"])
+    # a single blade further along, and a crumb of grout
+    put(img, 14, 1, P["grass1"])
+    put(img, 14, 0, P["grass2"])
+    put(img, 6, 1, P["pave1"])
+    if side == "N":
+        return img
+    return img.rotate({"E": -90, "S": 180, "W": 90}[side])
+
+
 # ---------------------------------------------------------------- the meadow
 def grass(v):
     """Bright meadow: grass2 fill, a few dark tufts (grass1, a grass0 root) and lit blade tips
@@ -286,13 +314,16 @@ def build():
         frames = [fn(v) for v in range(4)]
         export(f"tile_pave_{k}", frames)
         looks[k] = frames
-    export("tile_pave_seam", [seam(s) for s in "NESW"])
+    # production (the style test's pick): paving C is the game's tile_pave
+    export("tile_pave", looks["C"], src=True)
+    export("tile_pave_edge", [pave_edge(s) for s in "NESW"], src=True, bg=P["pave2"], look_scale=6)
+    export("tile_pave_seam", [seam(s) for s in "NESW"], src=True)
     gr = [grass(v) for v in range(4)]
-    export("tile_grass", gr)
+    export("tile_grass", gr, src=True)
     deco = [grass_deco(i) for i in range(8)]
-    export("tile_grass_deco", deco, bg=P["grass2"])
+    export("tile_grass_deco", deco, bg=P["grass2"], src=True)
     pl = [plot(k) for k in range(9)]
-    export("tile_plot", pl, bg=P["grass2"])
+    export("tile_plot", pl, bg=P["grass2"], src=True)
     # a contact sheet: each option 6x4 tiles by hash; the meadow with a 4x3 plot; at 1x and 4x
     W = 3 * (6 * 16 + 4) + 4
     out = Image.new("RGBA", (W, 4 * 16 + 8 + 4 * 16 + 4), (40, 40, 60, 255))

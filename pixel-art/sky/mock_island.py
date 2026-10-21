@@ -35,7 +35,10 @@ class Island:
         towards the middle (the taper stays monotone)."""
         cx = (self.xs[0] + self.xs[-1] + 1) / 2
         hw = (self.xs[-1] - self.xs[0] + 1) / 2
-        ub = {x: self.bottom(x) + 1 + self.CLIFF_ROWS for x in self.xs}
+        foot = {x: self.bottom(x) + 1 + self.CLIFF_ROWS for x in self.xs}
+        # where a lobe drops the lip one row, the faces beside it (2 columns) run a row more, so
+        # the underside starts level under both; bigger steps stay steps
+        ub = {x: max([foot[x]] + [foot[x + k] for k in (-2, -1, 1, 2) if foot.get(x + k, -999) - foot[x] == 1]) for x in self.xs}
         bot = {}
         for x in self.xs:
             t = max(0.0, 1 - abs(x + 0.5 - cx) / hw)
@@ -68,7 +71,9 @@ class Island:
                 tx = (x * T + i) % island.CW
                 ys = [yy for yy in range(H - 1) if tp[wx, yy][3] and not tp[wx, yy + 1][3]]
                 for yb in ys:
-                    last = yb >= oy + lowest * T
+                    # the lowest exposure in this PIXEL column runs to the underside (an edge
+                    # tile's inset can leave a column whose lowest land is a tile higher)
+                    last = yb == ys[-1]
                     end = end_low if last else yb + 1 + self.CLIFF_ROWS * T
                     for k, y in enumerate(range(yb + 1, end)):
                         left = end - y

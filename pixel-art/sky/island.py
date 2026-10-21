@@ -318,9 +318,12 @@ def under(kind, v):
         for y in range(15, -1, -1):
             if inside(x, y):
                 if y < 15 and not inside(x, y + 1):
+                    # a 3 px band: steel2 on the very edge, steel1, then a paler rock pixel
                     put(img, x, y, P["steel2"])
-                    if inside(x, y - 1) and (x + v) % 3:
-                        put(img, x, y - 1, P["steel1"])
+                    if inside(x, y - 1):
+                        put(img, x, y - 1, P["steel1"] if (x + v) % 4 else P["steel2"])
+                    if inside(x, y - 2) and (x + v) % 2:
+                        put(img, x, y - 2, P["earth1"])
                 break
     if kind == "left":
         for y in range(16):
@@ -524,24 +527,89 @@ def foam(f):
 
 
 # ---------------------------------------------------------------- build
+def under_deco(i):
+    """16x16 overlays for the underside's fill tiles (clear elsewhere), placed by hash so its
+    middle never reads as one dark mass: 0-1 teal crystal clusters, 2-3 hanging roots, 4 an iron
+    node, 5 a pale boulder catching the bounce light, 6 a dark hollow with a glint, 7 moss and a
+    drip."""
+    img = new(T, T)
+    r = rng(2400 + i)
+    if i in (0, 1):
+        # crystals: two or three prisms, outlined, a sky4 shine on the lit face
+        spikes = [(6, 9, 4), (9, 8, 5), (11, 10, 3)] if i == 0 else [(5, 7, 3), (8, 6, 4)]
+        for (x, y, h) in spikes:
+            for k in range(h):
+                put(img, x, y - k, P["teal"])
+                put(img, x + 1, y - k, P["water3"])
+            put(img, x, y - h + 1, P["sky4"])
+            put(img, x, y - h, P["ink"])
+            put(img, x + 1, y - h, P["ink"])
+            for k in range(h):
+                put(img, x - 1, y - k, P["ink"]) if not get(img, x - 1, y - k)[3] else None
+                put(img, x + 2, y - k, P["ink"]) if not get(img, x + 2, y - k)[3] else None
+        draw(img, [(4, 10), (5, 10), (6, 10), (7, 10), (8, 10), (9, 10), (10, 10), (11, 11), (12, 11)], P["ink2"])
+    elif i in (2, 3):
+        # roots: two or three strands from the top, wandering down, a moss tip
+        for k in range(2 + (i == 3)):
+            x = 3 + k * 5 + (i == 3)
+            for y in range(0, 9 + k * 2):
+                put(img, x, y, P["wood1"] if y % 4 else P["wood0"])
+                if r.random() < 0.18:
+                    x += r.choice((-1, 1))
+            put(img, x, 9 + k * 2, P["moss3"])
+    elif i == 4:
+        # an iron node: rust facets with a silver glint
+        for (x, y, c) in ((6, 6, "copper2"), (7, 6, "copper1"), (6, 7, "copper1"), (7, 7, "copper0"), (8, 7, "copper0"),
+                          (7, 8, "copper0"), (9, 8, "copper1"), (9, 9, "copper0"), (8, 9, "ink2")):
+            put(img, x, y, P[c])
+        for (x, y) in ((5, 6), (6, 5), (7, 5), (8, 6), (9, 7), (10, 8), (10, 9), (9, 10), (8, 10), (7, 9), (6, 8), (5, 7)):
+            put(img, x, y, P["ink"])
+        put(img, 6, 6, P["steel4"])
+    elif i == 5:
+        # a pale boulder lit from below (the clouds' bounce): earth2 face, steel2 under-rim
+        for y in range(5, 11):
+            for x in range(4, 12):
+                if ((x - 7.5) / 4) ** 2 + ((y - 7.8) / 3) ** 2 <= 1:
+                    put(img, x, y, P["earth2"] if y < 9 else P["steel2"])
+        draw(img, [(5, 6), (6, 5)], P["earth3"])
+        draw(img, [(x, 11) for x in range(5, 11)], P["ink"])
+    elif i == 6:
+        # a hollow: an ink mouth with a dark rim and one teal glint inside
+        for y in range(6, 11):
+            for x in range(4, 12):
+                if ((x - 7.5) / 3.6) ** 2 + ((y - 8.3) / 2.4) ** 2 <= 1:
+                    put(img, x, y, P["ink"])
+        draw(img, [(5, 6), (6, 5), (7, 5), (8, 5), (9, 5), (10, 6)], P["earth2"])
+        put(img, 9, 8, P["teal"])
+    else:
+        # moss on a ledge and a drip falling
+        draw(img, [(3, 6), (4, 6), (5, 6), (6, 6), (7, 6), (8, 7)], P["moss3"])
+        draw(img, [(4, 5), (6, 5)], P["moss4"])
+        draw(img, [(4, 7), (6, 7), (7, 8)], P["moss2"])
+        put(img, 6, 10, P["sky3"])
+        put(img, 6, 11, P["sky2"])
+    return img
+
+
 def build():
     edges = [edge(m) for m in range(16)]
-    export("isle_edge", edges, bg=P["sky2"])
+    export("isle_edge", edges, bg=P["sky2"], src=True)
     rows = [cliff(r, v) for r in ("top", "mid", "low") for v in range(4)]
-    export("isle_cliff", rows, extra={"rows": ["top", "mid", "low"], "variants": 4})
+    export("isle_cliff", rows, extra={"rows": ["top", "mid", "low"], "variants": 4}, src=True)
     vnames, veins = [], []
     for ore in ("iron", "copper", "coal", "sand"):
         for v in range(4):
             vnames.append(f"{ore}{v}")
             veins.append(vein(ore, v))
-    export("isle_vein", veins, extra={"names": vnames}, bg=P["earth2"])
+    export("isle_vein", veins, extra={"names": vnames}, bg=P["earth2"], src=True)
     unders = [under(k, v) for k in ("fill", "bottom", "left", "right") for v in range(4)]
-    export("isle_under", unders, extra={"kinds": ["fill", "bottom", "left", "right"], "variants": 4})
-    export("isle_tip", [tip()], anchor=(24, 0))
-    export("isle_fall", [fall(f) for f in range(4)], fps=8)
-    export("isle_fall_top", [fall_top(f) for f in range(4)], fps=8)
-    export("isle_fall_head", [fall_head(f) for f in range(4)], fps=8)
-    export("isle_fall_foam", [foam(f) for f in range(4)], fps=8, bg=P["cloud1"])
+    export("isle_under", unders, extra={"kinds": ["fill", "bottom", "left", "right"], "variants": 4}, src=True)
+    export("isle_under_deco", [under_deco(i) for i in range(8)], bg=P["earth0"], src=True, look_scale=6)
+    export("isle_tip", [tip()], anchor=(24, 0), src=True)
+    export("isle_fall", [fall(f) for f in range(4)], fps=8, src=True)
+    export("isle_fall_top", [fall_top(f) for f in range(4)], fps=8, src=True)
+    export("isle_fall_head", [fall_head(f) for f in range(4)], fps=8, src=True)
+    export("isle_fall_foam", [foam(f) for f in range(4)], fps=8, bg=P["cloud1"], src=True)
     # a look sheet: a little island strip 6 tiles wide, edge over cliff over under, a waterfall
     W, H = 8 * 16, 9 * 16
     out = Image.new("RGBA", (W, H), (0x76, 0xaa, 0xec, 255))

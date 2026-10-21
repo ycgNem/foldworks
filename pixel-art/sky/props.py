@@ -9,7 +9,11 @@ Run `python props.py` from this folder.
 """
 import math
 
-from common import P, new, draw, put, rect, export, rng, hsh, vnoise, get, rgb, outline, scale
+from pathlib import Path
+
+from PIL import Image
+
+from common import P, new, draw, put, rect, export, rng, hsh, vnoise, get, rgb, outline, scale, recolor, flip
 
 L = (-0.55, -0.7, 0.45)
 _n = math.sqrt(sum(c * c for c in L))
@@ -44,6 +48,53 @@ def blobs(img, balls, ramp, rim=None, seed=0, leafy=True):
             put(img, x, y, ramp[i])
 
 
+def clumps(img, cx, cy, rx, ry, ramp, seed, n=9, rmin=3.2, rmax=4.6, fruit=None):
+    """A crown made of leaf clumps (the production trees): small spheres jittered inside an
+    ellipse, drawn back to front (the higher a clump, the further back), each shaded on its own
+    (lit top-left, shaded bottom-right) plus a crown-wide term, so the whole is lit top-left too;
+    a dark crease where a clump sits in front of another, a scalloped silhouette."""
+    r = rng(seed)
+    pts = []
+    # a jittered ring and a centre, so the crown is full and its edge is lumpy
+    for i in range(n):
+        if i == 0:
+            px, py = cx, cy
+        else:
+            a = (i / (n - 1)) * 2 * math.pi + r.uniform(-0.3, 0.3)
+            k = r.uniform(0.55, 0.85)
+            px, py = cx + math.cos(a) * rx * k, cy + math.sin(a) * ry * k
+        pts.append((px, py, r.uniform(rmin, rmax)))
+    # lower clumps first: the higher a clump, the nearer the eye (the view is from above), so each
+    # sits over the ones under it and its underside throws a dark crease on them
+    pts.sort(key=lambda p: -p[1])
+    owner = {}
+    W, H = img.size
+    for idx, (px, py, rr) in enumerate(pts):
+        g = -((px - cx) / rx) * 0.22 - ((py - cy) / ry) * 0.32
+        for y in range(int(py - rr) - 1, int(py + rr) + 2):
+            for x in range(int(px - rr) - 1, int(px + rr) + 2):
+                dx, dy = x + 0.5 - px, y + 0.5 - py
+                d2 = dx * dx + dy * dy
+                if d2 > rr * rr or not (0 <= x < W and 0 <= y < H):
+                    continue
+                z = math.sqrt(rr * rr - d2) / rr
+                lam = (dx / rr) * L[0] + (dy / rr) * L[1] + z * L[2]
+                v = lam * 0.75 + g + 0.12
+                i = 3 if v > 0.62 else 2 if v > 0.3 else 1 if v > -0.02 else 0
+                # the clump's underside over the clump below: a dark crease, a step lighter
+                # than the crown's own shadow at its edge
+                if d2 > (rr - 1.3) ** 2 and dy > -0.3 * rr and (x, y) in owner:
+                    i = 0 if dy > 0.4 * rr else min(i, 1)
+                put(img, x, y, ramp[i])
+                owner[(x, y)] = idx
+    if fruit:
+        for (fx, fy) in fruit:
+            if (fx, fy) in owner:
+                draw(img, [(fx, fy), (fx + 1, fy), (fx, fy + 1), (fx + 1, fy + 1)], P["red"])
+                put(img, fx, fy, P["copper3"])
+                put(img, fx + 1, fy + 1, P["copper0"])
+
+
 def shadow(img, cx, cy, rx, ry):
     for y in range(img.height):
         for x in range(img.width):
@@ -61,14 +112,48 @@ def trunk(img, x, y0, y1, w=3):
     put(img, x + w, y1, P["wood1"])
 
 
+RAW = Path(__file__).resolve().parent / "raw"
+
+
+def oak_draft():
+    """PixelLab draft 2 (prompts.md #2: a bushy oak, palette forced to grass, wood, ink1, moss1),
+    finished here: snapped to those colours, the dirt patch under it cleared (the meadow gets our
+    own soft shadow instead), the root flare kept. Its five clusters with dark gaps were what the
+    hand-drawn crowns lacked."""
+    from common import snap
+    src = Image.open(RAW / "pl_tree2.png").convert("RGBA")
+    pool = [rgb(P[c]) for c in ("ink1", "grass0", "grass1", "grass2", "grass3", "wood1", "wood2", "wood3", "moss1")]
+    img = snap(src, pool=pool)
+    w3 = rgb(P["wood3"])
+    for y in range(27, 32):
+        for x in range(32):
+            p = img.getpixel((x, y))
+            if p[3] and p[:3] == w3:
+                img.putpixel((x, y), (0, 0, 0, 0))
+    return img
+
+
 def tree(kind):
     img = new(32, 32)
+    if kind in (0, 3):
+        body = oak_draft()
+        if kind == 3:
+            # the blossom tree: the oak's silhouette turned round, its leaves peach and cream
+            body = recolor(flip(body), {P["grass3"]: P["bone"], P["grass2"]: P["copper3"], P["grass1"]: P["copper2"],
+                                        P["grass0"]: P["copper1"], P["moss1"]: P["copper0"]})
+            for (x, y) in ((7, 30), (23, 30), (26, 29)):
+                put(img, x, y, P["copper3"])
+        shadow(img, 18, 29.5, 10, 2.2)
+        img.alpha_composite(body)
+        return img
     G = (P["grass0"], P["grass1"], P["grass2"], P["grass3"])
     body = new(32, 32)
-    if kind == 0:      # oak: a broad round crown of three lobes
+    if kind == 0:      # oak: a broad round crown of leaf clumps
         trunk(body, 14, 19, 28)
+        # a fork showing between the clumps
+        draw(body, [(13, 19), (12, 18), (18, 19), (19, 18)], P["wood2"])
         crown = new(32, 32)
-        blobs(crown, [(10, 15, 7), (21, 14, 7.5), (16, 9, 8), (16, 17, 7)], G, seed=1)
+        clumps(crown, 16, 12, 10.5, 8.5, G, seed=1, n=10)
         body.alpha_composite(crown)
     elif kind == 1:    # pine: three stacked tiers, darker, a lit left edge
         trunk(body, 14, 24, 29, 3)
@@ -89,17 +174,18 @@ def tree(kind):
     elif kind == 2:    # apple: the oak's crown rounder, red fruit with a lit pixel
         trunk(body, 14, 20, 28)
         crown = new(32, 32)
-        blobs(crown, [(11, 14, 7), (21, 14, 7), (16, 10, 8)], G, seed=2)
+        clumps(crown, 16, 12, 9.5, 8, G, seed=2, n=8, rmin=3.4, rmax=4.8,
+               fruit=((10, 12), (19, 8), (22, 15), (13, 16), (17, 12)))
         body.alpha_composite(crown)
-        for (fx, fy) in ((10, 13), (19, 9), (22, 16), (14, 17), (17, 13)):
-            draw(body, [(fx, fy), (fx + 1, fy), (fx, fy + 1), (fx + 1, fy + 1)], P["red"])
-            put(body, fx, fy, P["copper3"])
-    else:              # blossom: a peach and cream crown on a dark trunk
+    else:              # blossom: a peach and cream crown of small clumps on a dark trunk
         trunk(body, 14, 19, 28)
         crown = new(32, 32)
         BL = (P["copper1"], P["copper2"], P["copper3"], P["bone"])
-        blobs(crown, [(10, 14, 6.5), (21, 13, 7), (16, 9, 7.5), (16, 16, 6)], BL, seed=3)
+        clumps(crown, 16, 12, 10, 8, BL, seed=3, n=11, rmin=2.8, rmax=4.0)
+        # a few petals fallen on the grass under it
         body.alpha_composite(crown)
+        for (x, y) in ((8, 29), (22, 30), (25, 28)):
+            put(img, x, y, P["copper3"])
     body = outline(body, P["ink1"])
     shadow(img, 19, 28.5, 9, 2.6)
     img.alpha_composite(body)
@@ -128,17 +214,32 @@ def bush(kind):
             put(body, fx, 8, P["lamp3"] if c != "lamp2" else P["copper2"])
             put(body, fx, 10, P["grass1"])
             put(body, fx + 1, 11, P["grass2"])
-    else:              # a stump with its rings
-        rect(body, 4, 8, 11, 13, P["wood2"])
-        draw(body, [(4, y) for y in range(8, 14)], P["wood3"])
-        draw(body, [(11, y) for y in range(8, 14)], P["wood1"])
-        for x in range(4, 12):
-            put(body, x, 7, P["wood4"])
-            put(body, x, 8, P["wood5"] if 5 <= x <= 10 else P["wood4"])
-        draw(body, [(6, 8), (7, 8), (8, 8), (9, 8)], P["wood4"])
-        put(body, 7, 8, P["wood3"])
-        draw(body, [(3, 13), (12, 13)], P["wood1"])
-        put(body, 9, 10, P["grass1"])
+    else:              # a round stump: an elliptic cut top with rings, a bark side, two roots
+        cx, top, rx, ry = 7.5, 8.0, 4.6, 2.2
+        for y in range(5, 15):
+            for x in range(1, 15):
+                dx = (x + 0.5 - cx) / rx
+                if abs(dx) > 1:
+                    continue
+                ytop = top - ry * math.sqrt(1 - dx * dx)
+                ybot = top + 4 + ry * math.sqrt(1 - dx * dx)
+                if ytop <= y + 0.5 <= ybot:
+                    # the bark: lit left, shaded right, vertical fissures
+                    c = P["wood3"] if dx < -0.45 else P["wood1"] if dx > 0.5 else P["wood2"]
+                    if x in (6, 10) and y > top:
+                        c = P["wood1"]
+                    put(body, x, y, c)
+        # the cut top: an ellipse of pale wood with two rings and the heart
+        for y in range(5, 11):
+            for x in range(2, 14):
+                e = ((x + 0.5 - cx) / (rx - 0.4)) ** 2 + ((y + 0.5 - top) / (ry - 0.2)) ** 2
+                if e <= 1:
+                    put(body, x, y, P["wood5"] if e > 0.55 else P["wood4"] if e > 0.18 else P["wood3"])
+        put(body, 7, 8, P["wood2"])
+        draw(body, [(1, 13), (2, 13), (2, 12), (13, 13), (12, 12)], P["wood2"])
+        put(body, 1, 12, P["wood3"])
+        put(body, 10, 12, P["moss4"])
+        put(body, 11, 11, P["moss3"])
     body = outline(body, P["ink1"])
     shadow(img, 10, 14, 5.5, 1.6)
     img.alpha_composite(body)
@@ -189,11 +290,11 @@ def fence(kind):
 
 
 def build():
-    export("prop_tree", [tree(k) for k in range(4)], anchor=(16, 29), bg=P["grass2"],
+    export("prop_tree", [tree(k) for k in range(4)], anchor=(16, 29), bg=P["grass2"], src=True,
            extra={"names": ["oak", "pine", "apple", "blossom"]})
-    export("prop_bush", [bush(k) for k in range(4)], bg=P["grass2"], look_scale=6,
+    export("prop_bush", [bush(k) for k in range(4)], bg=P["grass2"], look_scale=6, src=True,
            extra={"names": ["bush", "boulder", "flowerbed", "stump"]})
-    export("prop_fence", [fence(k) for k in range(4)], bg=P["grass2"], look_scale=6,
+    export("prop_fence", [fence(k) for k in range(4)], bg=P["grass2"], look_scale=6, src=True,
            extra={"names": ["h", "v", "post", "gate"]})
 
 
