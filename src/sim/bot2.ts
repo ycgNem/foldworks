@@ -666,8 +666,11 @@ export class Act2Bot {
     const ms = g.machines.filter((m) => m.kind !== 'furnace' && !(m.od ?? 0) && !(m.cool ?? 0) && m.state === 'work' && !!m.recipe && !RECIPE[m.recipe].byproduct);
     if (!ms.length) return;
     // nor a line it is about to fold (the final round: Overdrive never reaches an audited machine, so
-    // buffers filled at 3x just before the audit drained in the window and were measured as inputs)
-    const folding = [...this.bgFolds, ...(this.plan[this.step]?.k === 'fold' ? [this.plan[this.step] as Extract<Step, { k: 'fold' }>] : [])].map((f) => f.box);
+    // buffers filled at 3x just before the audit drained in the window and were measured as inputs),
+    // once the line is ready to fold: a line still warming up is overdriven like any other
+    const folding = [...this.bgFolds, ...(this.plan[this.step]?.k === 'fold' ? [this.plan[this.step] as Extract<Step, { k: 'fold' }>] : [])]
+      .filter((f) => !f.ready || f.ready(g, this))
+      .map((f) => f.box);
     const pick = ms
       .filter((m) => !auditLock(g, m.x, m.y) && !folding.some((b) => inside(b, m.x, m.y)))
       .filter((m) => shares(m).work >= 0.8)
@@ -979,6 +982,10 @@ export class Act2Bot {
     let n = 0;
     for (const id of WISH) {
       if (this.g.done(id)) continue;
+      // Surveying, last in turn, wants its coal once Overdrive is in: counted from the start, it kept
+      // the second coal miner flooding the spine, and the steel for Overdrive's research waited
+      // behind it for 6-9 minutes (the final round)
+      if (id === 'surveying' && item !== 'slagBrick' && !this.g.done('overdrive')) continue;
       const want = RESEARCH[id].cost[item];
       if (want) n += Math.max(0, want - (r.progress[id]?.[item]?.toNumber() ?? 0));
     }
@@ -1103,7 +1110,9 @@ export class Act2Bot {
       if (g.canPlace(p.kind, p.x, p.y)) continue;
       // a machine whose recipe is not known yet waits (it would pick the wrong one)
       if (p.recipe && !recipeKnown(g, RECIPE[p.recipe])) continue;
-      if (this.buy({ k: 'place', kind: p.kind, x: p.x, y: p.y, rot: this.rotOf(p) }, p.kind)) return;
+      // a belt lifted to clear it and laid again is logged as a relay, not a decision (rule 2)
+      const relay = this.relays.delete(`${p.x},${p.y}`);
+      if (this.buy({ k: 'place', kind: p.kind, x: p.x, y: p.y, rot: this.rotOf(p) }, relay ? 'relay' : p.kind)) return;
     }
     // a belt turned to a new job can keep an item from the old one that its new end never takes
     // (sand left on the belt now feeding the concrete boiler): a player lifts the belt and lays it
@@ -1114,10 +1123,14 @@ export class Act2Bot {
       if (!e || e.kind !== 'belt' || !e.item || auditLock(g, p.x, p.y)) continue;
       const f = g.entAt(p.x + DX[e.rot], p.y + DY[e.rot]);
       if (!f || (f.kind !== 'boiler' && f.kind !== 'generator') || accepts(g, f, e.item, e.rot)) continue;
-      if (this.act({ k: 'remove', x: p.x, y: p.y })) this.mine.delete(e.id);
+      if (this.act({ k: 'remove', x: p.x, y: p.y })) { this.mine.delete(e.id); this.relays.add(`${p.x},${p.y}`); }
       return;
     }
   }
+
+  /** Belts lifted to clear an item their end never takes, to lay again (the final round: a relay is
+   * upkeep, not a decision, so rule 2 does not read it as one). */
+  private relays = new Set<string>();
 
   // ---------------------------------------------------------------- folding
 
