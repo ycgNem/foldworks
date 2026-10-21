@@ -2,10 +2,11 @@
 
 Rewritten for the art revamp (DECISIONS.md, "The art revamp: Lantern Bayou", 2026-10-20; phase 3
 added the skid, the destinations, effects and every recipe redrawn in B). Owned
-by the `art-director`. The game's look in one line: **a lantern-lit plank deck on a dusk bayou;
-the deck is warm and calm, machines are blue-grey steel seen from above and in front, and the
-colour goes to what matters (ore, items, fire, brass modules, coin, the lanterns of the frog
-town round the floors).**
+by the `art-director`. **The world was redesigned on 2026-10-21 (`docs/sky-island.md`)**: the
+look in one line is now **a bright, sunlit island of grass and warm paving floating over a sea of
+clouds; the paving is calm, machines are blue-grey steel seen from above and in front, and the
+colour goes to what matters (ore, items, fire, brass modules, coin, the frog town on the rim).**
+The machines, items, cast and HUD keep their Lantern Bayou art.
 
 The build scripts live in `pixel-art/revamp/`, one module per family, each run as
 `python <script>.py` from that folder: `terrain.py`, `ores.py`, `machines.py`, `routers.py`, `items.py`,
@@ -14,18 +15,31 @@ The build scripts live in `pixel-art/revamp/`, one module per family, each run a
 `recolor_old.py` was the one-off A→B pass before the redraw; every sprite the game loads is now
 built by one of the scripts above. `prompts.md` logs every PixelLab job and its cost.
 
-## Palette: B, "Lantern Bayou" (51 colours + 5 pips)
+## Palette: B, "Lantern Bayou", extended for the sky (69 colours + 5 pips)
 
 `src/data/palette.ts` is the source of truth (`PALETTE` for the art scripts and the import
-snapper, `C` for code); `pixel-art/revamp/pal.py` mirrors it for the Python scripts.
+snapper, `C` for code); `pixel-art/revamp/pal.py` mirrors B's 51 for the Python scripts and
+`pixel-art/sky/pal.py` the 18 the sky island added (appended after the pips, so no index moved).
 
-| Ramp | Colours | Use |
+| The sky island's ramps | Colours | Use |
 |---|---|---|
+| `sky0-4` | 5 | the sky, zenith (`sky0`) to horizon (`sky4`), dithered on 8 px Bayer seams |
+| `cloud0-3` | 4 | clouds and the cloud sea (`cloud3` is pure white, lit tops only) |
+| `grass0-3` | 4 | the meadow (for-sale land) and the rim; brighter than `moss`, which stays the swampy accent |
+| `pave0-3` | 4 | the Workshop's paving (`pave0` grout to `pave3` lit), 16 OKLab L under `bone` so paper tags read on it |
+| `sun` | 1 | the sun's glow |
+
+`pixel-art/sky/pal.py` tests them: the meadow and the paving stay at least 10 ΔE apart under
+deuteranopia and protanopia, the paving apart from the paper and well over the machines' steel.
+
+| Lantern Bayou's ramps | Colours | Use |
+|---|---|---|
+
 | `ink` `ink1` `ink2` | 3 | outlines, night, the darkest UI; violet-leaning so the dark reads as dusk |
-| `water0-4` | 5 | the bayou round every floor; town waterlines; `water3` is A's `teal0` |
+| `water0-4` | 5 | waterfalls' depths, glass, research (`water3` is A's `teal0`); no longer a floor's surroundings |
 | `moss0-5` `lily` | 7 | swamp plants, Mayor Bramble, the Dock's pennant, orders (`moss3`/`moss5` are A's `moss`/`leaf`) |
-| `wood0-5` | 6 | the Workshop deck (`wood3-5`), pilings and frames (`wood0-2`, A's `ground0-2`) |
-| `earth0-3` | 4 | ore beds, unowned land |
+| `wood0-5` | 6 | the town's timber, the Boardwalk, frames (`wood0-2`, A's `ground0-2`); the HUD's wood |
+| `earth0-3` | 4 | the island's cliff and underside rock, ore beds |
 | `steel0-4` | 5 | machine bodies, the Factory's plate floor, buttons (`steel1-4` are A's `hull0-3`) |
 | `iron0-2` `copper0-3` | 7 | iron and copper ore, ingots, plates, wire; firebrick |
 | `lamp0-3` | 4 | heat and lantern light; `lamp1` is `glow`, `lamp3` is `hot`, `lamp2` is `gold` (coin) |
@@ -36,8 +50,8 @@ snapper, `C` for code); `pixel-art/revamp/pal.py` mirrors it for the Python scri
 Rules:
 - **Every palette-A slot name still exists** in `C`, mapped to the B colour that plays its role,
   so code and the code-drawn HUD plates keep working (`pal.ROLES`). New code may use the B names.
-- **The deck is light and quiet**: 8 px boards in `wood3-4`, seams in `wood2`, few board ends.
-  Seams never run as bright lines, so belts (dark steel with lit chevrons) and items win.
+- **The paving is light and quiet**: one flat fill with a dotted build grid and a small cross
+  where four tiles meet, so belts (dark steel with lit chevrons) and items win.
 - **Chroma only where the player looks.** Steel is low-chroma blue-grey; ore, items, fire and
   pips carry the saturated colour.
 - Every pixel snaps to the palette (`scripts/lib/pixel.mjs`; `common.export` checks). No
@@ -105,8 +119,8 @@ dog-eared paper corner bottom-left. `module_glow` and `module_od` heat the band,
 
 The Dock and the Hopper must read as *the* places items go, never as more machines
 (`destinations.py`, hand-drawn): the **Dock** is a slip of open water cut into the floor with a
-skiff of crates moored in it and a moss-green pennant with a gold coin (water is the only thing on
-the deck that is neither wood nor steel); the **Hopper** is a brass-rimmed funnel painted research
+skiff of crates moored in it and a moss-green pennant with a gold coin (on the sky island it reads
+as a little canal cut into the paving, the only water on the plot); the **Hopper** is a brass-rimmed funnel painted research
 teal, open mouth lit on its far slope, over a box with a glowing flask. Factory versions swap
 planks for steel and hazard stripes; the Lily Pad Dock floats pads and a lotus in the slip under a
 frog flag.
@@ -121,31 +135,49 @@ flickering lantern.
 
 ## Floors and ground
 
-- **Workshop**: the plank deck on pilings over the bayou; the shore's north face shows plank
-  ends and pilings, the south a mossy lip. Unowned land is the deck darkened, cooled and hatched.
+The sky island (`docs/sky-island.md` holds every frame and rule; the scripts are in
+`pixel-art/sky/`, `python build.py`; `e2e/skylook.mjs` shoots the island at 1x, 2x and 3x).
+
+- **Workshop**: the 24x16 plot on a floating island. **Owned land is paving** (painted concrete,
+  a dotted build grid, grass in the grout where it meets the meadow; a thin bolted seam between
+  two owned lots); **land for sale is meadow** with its plot marked out (corner stakes, a dashed
+  line) and its sign. Buying a lot paves it in a wave from the middle (code, 0.7 s, dust and a
+  coin shower). Owned and for-sale land differ in hue and lightness at 1x, colour-blind included.
+- **The island**: a grass rim (6 tiles north for the town, 3-5 elsewhere, an organic but
+  monotone coast, trees, bushes, fences and flowers by hash, never on the plot or the town's
+  ground); the south cliff in 3/4 view, 4 tiles under the lip (one 64 px periodic texture of
+  strata and roots, sampled per pixel column so it follows the rounded corners, with veins of the
+  floor's ores); the underside tapering in tiers to a rocky point (two rock tones, a bounce-light
+  band, crystals and roots by hash); waterfalls from springs on the lip into the cloud sea.
+- **The sky** (screen space): a dithered gradient, the sun, two cloud layers at parallax 0.15 and
+  0.35, far islets at 0.1, a bird flock now and then. The Factory's sky is higher: a deeper
+  zenith, the cloud sea closer, the Workshop island small far below.
+- **Factory**: the riveted `steel` floor tiles on a **sky platform**: a plaza of 32 px pale steel
+  plates to the north (the town stands on it), tread plate round the hall, brass-capped kerbs on
+  every edge, a girder face and truss under the south edge with brass rotor pods, outriggers with
+  rotors on the side faces, splices where annex blocks bolt on.
 - **Ore deposits** (`ores.py`, the ore revamp) are outcrops, not tiles: each ore is one 32×32
   drawn for its 2×2 patch in the 3/4 view (lit tops, shadowed front faces, a shadow cast
-  down-right on the planks), breaking up through a ragged hole in the deck so the boards show at
-  its corners and it never reads as a square. Told apart by silhouette first: **iron** a cluster
+  down-right on the ground), breaking up through a ragged hole in the ground so the paving or
+  meadow shows at its corners and it never reads as a square. Told apart by silhouette first: **iron** a cluster
   of irregular angular boulders of several sizes, some leaning (convex faceted rocks: no right
   angles, no flat tops), lit facets rust-red and ochre, the turned-away facets a dark hematite
   body (`ink`-`iron0`) striped by rust jasper layers, rust in the crevices, blue-grey metal only
   on lit ridges and as glints (never a whole face: blue-grey steel is the machines' language),
   **copper** one cracked, faceted mound of hard rock (grey-brown `earth` faces on its steep
   sides) under a verdigris/malachite skin, with native copper as zigzag veins along three
-  cracks and small angular nuggets catching the light (the most colourful thing on the deck),
+  cracks and small angular nuggets catching the light (the most colourful thing on the plot),
   **coal** tall faceted anthracite shards (flat
   facets, `steel2`-`steel3` sheen on the lit ridges, splinters on the hole's rim, embers in the
   cracks), **sand** a soft dune heap with no ink outline (long windward slope, a shaded slip face
   east, wind ripples, two shells). Each has a spill sheet: a few pebbles, rust or verdigris stains,
-  cracks or drift within 4 px of the hole on the neighbouring deck, never on another patch and
-  sparse enough not to read as ore. Frame 0 of `tile_ore_*` is the whole outcrop at 16×16 for
+  cracks or drift within 4 px of the hole on the neighbouring ground, never on another patch and
+  sparse enough not to read as ore. **Re-seated for the sky island** (`pixel-art/sky/ores_reseat.py`):
+  every quadrant and spill frame comes twice, on paving and on meadow. Frame 0 of `tile_ore_*` is the whole outcrop at 16×16 for
   screens that show one tile (the Survey Office). **Glints** are drawn live by `src/render/orefx.ts`
   (iron a silver cross, copper a lantern-bright gleam, coal a sheen and embers breathing, sand a
   quartz grain), 1–3 px, under anything standing on the patch, only on land you own; never a
   star with motes (that is a Spark).
-- **Factory**: riveted `steel` plates, two variants; belts and trunks sit on it as on the deck.
-- **Water** animates in 4 frames, phase-shifted per tile.
 
 ## The town (Bramble's Town)
 

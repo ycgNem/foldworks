@@ -71,31 +71,50 @@ swampy accent); the sky's lightest step sits under the horizon only.
 All in `src/art/` as `<name>.png` + `<name>.json` (`{frame:[w,h], frames, anchor, fps, names?}`),
 made by scripts in `pixel-art/sky/`.
 
-| name | frame | frames | what |
+As built (production, 2026-10-21; `src/render/skyart.ts` resolves every name, with a code-drawn
+fallback of the same frame size and order; bakes rebuild when art appears).
+
+| name | frame | frames | how it is drawn |
 |---|---|---|---|
-| `tile_pave` | 16x16 | 4+ | owned floor variants (the code picks by hash) |
-| `tile_pave_seam` | 16x16 | 4 | a chunk seam strip on owned land, edge N, E, S, W |
-| `tile_grass` | 16x16 | 4+ | meadow variants (for-sale land and the rim) |
-| `tile_grass_deco` | 16x16 | 8+ | sparse overlays: flowers, tufts, a pebble (rim and meadow) |
-| `tile_plot` | 16x16 | 9 | the plot outline on for-sale land: corners NW N NE W (none) E SW S SE |
-| `isle_edge` | 16x16 | 16 | the rim's edge into the sky, by 4-bit neighbour mask (N=1 E=2 S=4 W=8 = land there) |
-| `isle_cliff` | 16x16 | 12 | the south face: rows top (lip/overhang), mid, low, each 4 variants |
-| `isle_vein` | 16x16 | 4 per ore | ore veins on the cliff (`names`: iron0..3, copper0..3, coal0..3, sand0..3) |
-| `isle_under` | 16x16 | 12 | the underside: left edge, fill, right edge, 4 variants each |
-| `isle_tip` | 48x32 | 1 | the rocky point at the bottom |
-| `isle_fall` | 16x32 | 4 | a waterfall segment, animated (fps 8); `isle_fall_foam` 32x16 x4 where it meets clouds |
-| `sky_cloud` | 64x32 | 6 | cloud puffs (big, medium, small x2) |
-| `sky_islet` | 64x48 | 4 | far islands (pre-hazed) |
-| `sky_bird` | 8x8 | 4 | a flapping bird (fps 8) |
-| `prop_tree` | 32x32 | 4 | trees for the rim (anchor at the trunk foot) |
-| `prop_bush` | 16x16 | 4 | bushes, rocks, a flower bed |
-| `prop_fence` | 16x16 | 4 | rim-edge fence (h, v, post, gate) |
-| `town_*` | as now | as now | the town's sprites, re-seated on footings (same names and frames) |
-| `fplat_edge` | 16x16 | 16 | the Factory platform's girder rim, by 4-bit mask |
-| `fplat_under` | 16x16 | 6 | the platform's truss underside |
-| `fplat_rotor` | 48x24 | 4 | a brass rotor pod under the platform, spinning (fps 12) |
-| `tile_ore_*` | as now | as now | the ores, re-seated on paving and grass (the outcrop's corners no longer show planks) |
+| `tile_pave` | 16x16 | 4 | owned floor (paving C), picked by hash |
+| `tile_pave_edge` | 16x16 | 4 (N E S W) | grass in the grout on an owned chunk's edge tiles where the neighbour is not owned land |
+| `tile_pave_seam` | 16x16 | 4 (N E S W) | between two owned lots only, once per border (each lot draws its east and south) |
+| `tile_grass` | 16x16 | 4 | meadow (for-sale land) and the rim, by hash |
+| `tile_grass_deco` | 16x16 | 8 | flowers, tufts, pebbles on ~13% of rim and ~9% of meadow tiles |
+| `tile_plot` | 16x16 | 9 | the plot outline on for-sale chunk edges, frame = row*3 + col (4 unused) |
+| `isle_edge` | 16x16 | 16 | the rim's edge into the sky, a whole tile by 4-bit mask (N=1 E=2 S=4 W=8 = land there); 15 is `tile_grass` |
+| `isle_cliff` | 16x16 | 12 | row*4 + variant (lip, mid, low), assembled into one 64x48 strip sampled at world x mod 64, per pixel column under the silhouette, 4 tiles under a lip; the lowest exposure in each pixel column runs to the underside |
+| `isle_vein` | 16x16 | 16 (`names` iron0..3 copper0..3 coal0..3 sand0..3) | the floor's ores on the first mid row, clipped to the rock |
+| `isle_under` | 16x16 | 16 | kind*4 + (x mod 4): fill, bottom (3 px bounce light), left slope, right slope; depth 1 tile at the ends to 9 in the middle |
+| `isle_under_deco` | 16x16 | 8 | crystals, roots, an iron node, a pale boulder, a hollow, moss on ~30% of fill cells |
+| `isle_tip` | 48x32 | 1 | anchor [24, 0], under the two middle columns of the deepest row |
+| `isle_fall_top` | 16x16 | 4 | the spring and channel on a south lip tile whose mask is exactly N, E, W |
+| `isle_fall_head` | 16x16 | 4 | the water bowing over the lip, on the first cliff row |
+| `isle_fall` | 16x32 | 4 (fps 8) | tiled down to the cloud cushion |
+| `isle_fall_foam` | 32x16 | 4 | where the fall meets the cloud sea |
+| `sky_cloud` | 64x32 | 6 | 0-1 big, 2-3 medium, 4-5 small; the far layer uses 2-5 at 90% alpha |
+| `sky_islet` | 64x48 | 4 | far islands on the horizon |
+| `sky_bird` | 8x8 | 4 (fps 8) | a flock crossing for 16 s of every 41 |
+| `sky_below` | 48x32 | 1 | the Workshop island hazed, seen from the Factory's sky through the gap in the cloud sea |
+| `prop_tree` | 32x32 | 4 (oak, pine, apple, blossom) | anchor (16, 29) at the foot (tile x + 8, y + 14) |
+| `prop_bush` | 16x16 | 4 | bushes, rocks, a flower bed, a stump |
+| `prop_fence` | 16x16 | 4 | frame 0 along straight south-lip runs |
+| `tile_ore_<ore>` | 16x16 | 9 | 0 the whole outcrop (the Survey Office), 1-4 the quadrants on paving, 5-8 on meadow (`seats`) |
+| `tile_ore_<ore>_spill` | 16x16 | 32 | 0-15 the 4x4 apron on paving, 16-31 on meadow |
+| `fplat_deck` | 16x16 | 14 | the plaza's 32 px plates (`plain|hatch|vent` x `_nw|_ne|_sw|_se`), then `tread0`, `tread1` |
+| `fplat_edge` | 16x16 | 28 | overlays on the deck: `m0..m15` by mask, `in_*` concave corners, `cut_*` (destination-out), the annex `seam_*` |
+| `fplat_under` | 16x16 | 9 | `face_l face face_r face_splice truss_l truss truss_r face_lr face2` |
+| `fplat_rotor` | 48x24 | 4 (fps 12) | anchor (24, 0), hung at the truss's bottom, about one every 5 tiles |
+| `fplat_rotor_side` | 48x32 | 8 (`w0..3 e0..3`, fps 12) | the outriggers on the side faces, anchor (45, 15) west, mirrored east |
+| `town_*` | as before | as before | the town's sprites, re-seated on footings |
 | `title_scene` | 320x180 | 8 | the title key art: the island at morning |
+
+**The island's margins** (`RIM` n 6, s 3, w 4, e 4): each side is at least the town's minimum (3 on
+rows -3..-1), bulges 3-5 tiles in the plot rows, then follows the monotone hull; the last row is
+cut into lobes of at least 3 tiles. Every town slot is land (rows -3..-1 from x -3 to fw + 2; the
+row-99 houses on rows fh..fh + 1, x 2..11). Props keep out of the town's zones and the plot (trees
+a tile further). **The Factory platform** (`PLAT` in `factory.ts`): the plaza 2 tiles wider than
+the hall each side, the walk 2 tiles west, 3 east, 2 south; annex blocks splice on east.
 
 ## Decided at the style test (the lead, 2026-10-21)
 
