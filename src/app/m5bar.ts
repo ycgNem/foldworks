@@ -1,14 +1,15 @@
-// Milestones 5 and 6 on the redesigned top bar (DESIGN.md §19, docs/ui-redesign.md): Patents beside the
-// coin with the Reorganize button showing what a reset pays now, and the Patent Drawer and the
-// Patent Office as menus; the overnight check. Imported for its side effects by screens.ts.
-import { C } from '../data/palette';
-import { ICON, textWidth } from '../ui/font';
+// Milestones 5 and 6 on the 180's screen (DESIGN.md §19, docs/hud-180.md): the Committee's contract
+// slip under the Purse when a Reorganize would pay, and the Patent Drawer, the Patent Office and the
+// overnight check as pages of the notebook. Imported for its side effects by screens.ts.
+import { richWidth } from '../ui/rich';
+import { T } from '../ui/theme';
 import { previewPatents, runSeconds } from '../sim/reorganize';
 import { unfoldKeptRefusal } from '../sim/drawer';
 import { RULES } from '../data/rules';
 import { TICK_RATE } from '../engine/time';
 import { duration, plain } from '../engine/fmt';
-import { button } from './chrome';
+import { slip } from './chrome';
+import { customerPortrait } from './orders';
 import { registerCounter, registerMenu } from './topbar';
 import type { App } from './app';
 
@@ -17,7 +18,7 @@ import type { App } from './app';
  * matter, not at the first fold's +1 (the UI legibility round, 2026-10-20). */
 const FIRST_RUN_KEY = 6;
 
-/** Is a reset worth putting on the top bar? It must be possible (patentMin), and pay at least
+/** Is a reset worth a contract slip under the Purse? It must be possible (patentMin), and pay at least
  * half of what the last run banked (the first run: FIRST_RUN_KEY). The Patent Office's own
  * Reorganize... button is always there. */
 function resetMeaningful(app: App, now: number): boolean {
@@ -27,42 +28,47 @@ function resetMeaningful(app: App, now: number): boolean {
   return now >= (last ? Math.ceil(last.patents / 2) : FIRST_RUN_KEY);
 }
 
-/** "19 in 4h 36m, 4.1 an hour" */
+/** "19 in 4h 36m · 4.1 an hour" */
 function perHour(patents: number, ticks: number): string {
   const sec = ticks / TICK_RATE;
-  return `${patents} in ${duration(sec)}${sec >= 60 ? `, ${plain((patents * 3600) / sec, 1)} an hour` : ''}`;
+  return `${patents} in ${duration(sec)}${sec >= 60 ? ` · ${plain((patents * 3600) / sec, 1)} an hour` : ''}`;
 }
 
-/** Patents held, and a violet "Reorganize +N" key once a reset is worth taking. */
+/** The Committee's contract slip under the Purse, once a Reorganize is worth taking: their 24x24
+ * portrait and what it pays ("+19 {u:patents}"); a click opens the Reorganize page. The Patents held
+ * live on the Patents page and the Reorganize page (the Purse carries coin only). */
 registerCounter({
   id: 'patents',
-  show: (app) => app.game.s.meta.runs > 0 || app.game.s.meta.patents.gt(0) || resetMeaningful(app, previewPatents(app.game).now),
-  draw: (app, x, y, room) => {
+  show: (app) => resetMeaningful(app, previewPatents(app.game).now),
+  draw: (app, x, y) => {
     const ui = app.ui;
     const g = app.game;
-    let w = 0;
-    if (g.s.meta.runs > 0 || g.s.meta.patents.gt(0)) {
-      ui.text(ICON.star, x, y, C.violet, { shadow: C.ink });
-      w += 8 + ui.text(g.s.meta.patents.format(), x + 8, y, C.bone);
-      ui.hint(x - 2, 0, w + 4, 20, [{ text: 'Patents', color: C.violet }, { text: 'Kept through every Reorganize. Spend them in the Patent Office on head starts, rules and automation.' }], 190);
-      w += 4;
-    }
     const pv = previewPatents(g).now;
-    if (resetMeaningful(app, pv)) {
-      // where the bar is short of room, the reset icon stands for the word
-      const short = w + textWidth(`Reorganize +${pv}`) + 10 > room;
-      const label = short ? `+${pv}` : `Reorganize +${pv}`;
-      const bw = textWidth(label) + (short ? 26 : 10);
-      const m = g.s.meta;
-      const last = m.history[m.history.length - 1];
-      const tip = [
-        { text: 'Reorganize', color: C.violet },
-        { text: `Start a new run for ${pv} ${pv === 1 ? 'Patent' : 'Patents'}. A card says what it keeps and what it clears first.` },
-        { text: `This run: ${perHour(pv, runSeconds(g) * TICK_RATE)}.`, color: C.teal1 },
-        ...(last ? [{ text: `Last run: ${perHour(last.patents, last.ticks)}.`, color: C.hull2 }] : []),
-      ];
-      if (button(ui, 'reorganizeBar', x + w, short ? y - 5 : y - 4, bw, short ? 16 : 14, label, { active: app.panel === 'reorganize', tip, icon: short ? 'reset' : undefined })) app.togglePanel('reorganize');
-      w += bw;
+    const m = g.s.meta;
+    const last = m.history[m.history.length - 1];
+    const s = `{reset:+${pv}} {u:patents}`;
+    const w = 24 + 6 + richWidth(s) + 14;
+    const hov = ui.hover(x, y, w, 26);
+    ui.mark('reorganizeBar', x, y, w, 26);
+    const r = slip(ui, x, y, w, 26, { blocking: true });
+    ui.region(x, y, w, 26, 'button');
+    customerPortrait(app, 'committee', r.x - 2, y + 1, 24, hov);
+    ui.rich(s, r.x + 26, y + 9, Infinity, T.ink);
+    if (app.panel === 'reorganize' || hov) { ui.ctx.fillStyle = T.reset; ui.ctx.fillRect(r.x + 26, y + 20, w - 38, 1); }
+    if (hov) {
+      ui.hoverId = 'reorganizeBar';
+      ui.tip([
+        { text: '{big:Reorganize}' },
+        { text: '"psst." "a fresh start." "for patents."' },
+        { text: `this run {reset:${perHour(pv, runSeconds(g) * TICK_RATE)}}` },
+        ...(last ? [{ text: `last run {soft:${perHour(last.patents, last.ticks)}}` }] : []),
+        { text: '{k:LMB} read the contract' },
+      ], 200);
+      if (ui.clicked) {
+        ui.eat();
+        ui.sfx('click');
+        app.togglePanel('reorganize');
+      }
     }
     return w;
   },
@@ -70,7 +76,7 @@ registerCounter({
 
 registerMenu({
   id: 'drawer', icon: 'blueprint', name: 'Drawer', panel: 'drawer', group: 'game',
-  tip: 'The Patent Drawer: designs kept through every Reorganize; unfold one whole onto its box',
+  tip: '{u:blueprint} designs kept through every Reorganize',
   show: (app) => app.game.s.designs.length > 0 || app.game.s.meta.drawer.length > 0,
   // a dot until first opened in a later run, and while a kept design is ready to unfold
   dot: (app) => (!app.hud.opened.has('drawer') && app.game.s.meta.runs > 0) || (app.panel !== 'drawer' && app.game.s.meta.runs > 0 && app.game.s.meta.drawer.some((k) => !(app.game.s.drafted ?? []).includes(k.id) && !unfoldKeptRefusal(app.game, k))),
@@ -78,7 +84,7 @@ registerMenu({
 
 registerMenu({
   id: 'patents', icon: 'patents', name: 'Patents', panel: 'patents', group: 'game',
-  tip: 'The Patent Office: head starts, rules, automation, offline',
+  tip: '{u:patents} head starts · rules · automation · offline',
   show: (app) => app.game.s.meta.runs > 0,
   dot: (app) => app.game.s.meta.patents.gte(1) && app.panel !== 'patents',
 });
@@ -87,6 +93,6 @@ registerMenu({
 // Milestone 6: "safe for overnight" (src/app/overnight.ts), once a factory runs without you
 registerMenu({
   id: 'overnight', icon: 'overnight', name: 'Overnight', panel: 'overnight', group: 'game',
-  tip: 'Safe for overnight: see which lines would jam while you are away, and stop them first',
+  tip: '{u:overnight} which lines would jam while you are away',
   show: (app) => app.game.flag('factoryOpen'),
 });
