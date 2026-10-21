@@ -29,7 +29,7 @@ import type { Layout } from './layout';
 import type { Rect } from '../ui/ui';
 import type { App } from './app';
 import type { ScreenName } from './screens';
-import { bigSafe } from './tags';
+import { bigSafe, zones } from './tags';
 
 export function fmtRate(v: number) {
   return plain(v, v < 10 ? 1 : 0); // Milestone 6: through the one number helper (DESIGN.md §20)
@@ -159,7 +159,7 @@ function shippingTag(app: App, x: number, y: number) {
   const rows = b ? ITEM_IDS.filter((id) => (b.d[id] ?? 0) > 0).slice(0, 10) : [];
   const cw = 168;
   const rh = rows.length ? 10 + rows.length * 10 : 22;
-  const ch = BIG_LINE_H + 3 + LINE_H + 16 + LINE_H + 4 + rh;
+  const ch = BIG_LINE_H + 3 + LINE_H + 22 + LINE_H + 4 + rh;
   const sz = tagSize(cw, ch, 'left');
   ui.later(() => {
     const r = tag(ui, x, y, sz.w, sz.h, { hole: 'left', anchor: { x: x + 14, y: y - 6 }, blocking: false });
@@ -171,8 +171,9 @@ function shippingTag(app: App, x: number, y: number) {
     ui.rich(rate > 0 ? `{good:+${Math.round(rate).toLocaleString('en-US')}/min}` : '{soft:nothing selling yet}', r.x, yy);
     yy += LINE_H;
     sparkline(ui, r.x, yy, r.w, 12, g.s.income, C.brass1);
-    ui.small('THE LAST MINUTE', r.x + r.w, yy - 8, T.inkSoft, { align: 'right' });
-    yy += 16;
+    yy += 14;
+    ui.small('THE LAST MINUTE', r.x + r.w, yy, T.inkSoft, { align: 'right' });
+    yy += 8;
     ui.rich(`earned this run {coin:${g.s.earned.format()}}`, r.x, yy);
     yy += LINE_H + 1;
     rule(ui, r.x, yy, r.w);
@@ -314,7 +315,14 @@ function edgeArrow(app: App, wx: number, wy: number, col: string, word: string |
   const cx = ui.w / 2, cy = ui.h / 2;
   const dx = ux - cx, dy = uy - cy;
   const k = Math.min(Math.abs((cx - m) / (dx || 1e-6)), Math.abs((cy - m) / (dy || 1e-6)));
-  const ex = Math.round(cx + dx * k), ey = Math.round(cy + dy * k);
+  let ex = Math.round(cx + dx * k), ey = Math.round(cy + dy * k);
+  // off the corners' pieces: slide along the edge out of them
+  const horiz = Math.abs(ey - m) < 2 || Math.abs(ey - (ui.h - m)) < 2;
+  for (const z of zones) {
+    if (ex < z.x - 8 || ex > z.x + z.w + 8 || ey < z.y - 8 || ey > z.y + z.h + 8) continue;
+    if (horiz) ex = ex - z.x < z.x + z.w - ex && z.x - 10 > m ? z.x - 10 : Math.min(ui.w - m, z.x + z.w + 10);
+    else ey = ey - z.y < z.y + z.h - ey && z.y - 10 > m ? z.y - 10 : Math.min(ui.h - m, z.y + z.h + 10);
+  }
   const glyph = Math.abs(dx) * (ui.h / ui.w) > Math.abs(dy) ? (dx > 0 ? ICON.right : ICON.left) : dy > 0 ? ICON.down : ICON.up;
   const bob = Math.round(Math.sin(ui.time * 6) * 1.5);
   const bx = glyph === ICON.right ? bob : glyph === ICON.left ? -bob : 0, byy = glyph === ICON.down ? bob : glyph === ICON.up ? -bob : 0;
@@ -507,7 +515,9 @@ export function sectionTabs(app: App, L: Layout) {
 
 /** HUD rects the floor's tags and the reports keep off, this frame. */
 export function cornerZones(app: App, L: Layout, purseBottom: number): Rect[] {
+  const gs = app.ui.ids.get('gazetteSlip');
   return [
+    ...(gs ? [{ x: gs.x - 2, y: gs.y - 2, w: gs.w + 4, h: app.ui.h - gs.y + 2 }] : []),
     { x: 0, y: 0, w: L.purse.x + 150, h: purseBottom + 4 },
     { x: L.lift.x - 4, y: 0, w: L.lift.w + 10, h: L.lift.y + L.lift.h + 4 },
     { x: L.notebook.x - 4, y: L.notebook.y - 4, w: app.ui.w - L.notebook.x + 4, h: app.ui.h - L.notebook.y + 4 },

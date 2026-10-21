@@ -140,6 +140,7 @@ export function newspaper(app: App, L: Layout, left: number) {
     const kw = kick ? textWidth(kick) + 5 : 0;
     const line = kick ? `{bad:${kick}} ${ellipsize(rest, inner - kw)}` : ellipsize(rest, inner);
     const k = Math.min(1, t / 0.25);
+    ui.mark('gazetteSlip', sx, sy, sw, 17);
     const r = slip(ui, sx, sy + Math.round((1 - k) * 4), sw, 17, { blocking: true });
     ui.ctx.globalAlpha = k;
     drawLayout(ui, layoutRich(line), r.x, r.y);

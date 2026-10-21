@@ -133,9 +133,9 @@ export function drawHud(app: App, dt: number) {
     floorTags(app, L);
     diegetic(app, L);
     panArrows(app, L);
-    edgeArrows(app);
     auditBadge(app, L);
     corners(app, L, dt);
+    edgeArrows(app);
     pinnedReport(app, L);
   } else {
     // a page lies open on the desk: the floor goes behind dark wood
