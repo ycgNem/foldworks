@@ -80,6 +80,9 @@ def reseat(img):
     img = img.copy()
     px = img.load()
     w, h = img.size
+    # the town's own sprites are re-seated now (pixel-art/town, footings drawn): use them as they are
+    if not any(px[x, y][3] and px[x, y][:3] in WATER for y in range(h) for x in range(w)):
+        return img
     for y in range(h):
         for x in range(w):
             if px[x, y][3] and px[x, y][:3] in WATER:
