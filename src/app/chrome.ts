@@ -1,12 +1,26 @@
-// The UI kit's chrome, in the redesign's two weights (docs/ui-redesign.md): the calm code-drawn
-// plate for every HUD piece, and the ornate wood-and-brass 9-slice (the art director's ui_panel)
-// only for full-screen menus and celebration cards. Buttons, cards, bars, sparklines, badges,
-// counters and portraits draw from the palette's C slots, so a new palette restyles them; sprites
-// are found by name, never by their pixels.
+// The UI kit's chrome after the 180 (docs/hud-180.md, "The kit"): ink on paper. Paper plates,
+// tags on strings, speech bubbles, ribbons, the Purse's plank, the ledger book, paper buttons that
+// press 1 px, keycaps, chips, meters with a target notch, the red-ink stamp. Everything is
+// code-drawn (src/ui/paper.ts) and swapped for the art director's `h180_*` sheets when they load.
+// The pre-180 exports keep their signatures so every screen still compiles; they draw paper now,
+// and light colours meant for the old slate boxes are mapped to their ink (`onPaper`).
+// Sprites are found by name, never by their pixels.
 import { C, rgba } from '../data/palette';
-import { ICON, smallWidth, textWidth, drawText } from '../ui/font';
-import { sheet, hasArt, type SpriteSheet } from '../render/sprites';
-import type { UI, TipLine } from '../ui/ui';
+import { ICON, smallWidth, textWidth, drawText, bigWidth } from '../ui/font';
+import { sheet, hasArt, itemIcon, frameNamed, type SpriteSheet } from '../render/sprites';
+import { ITEM_IDS } from '../data/items';
+import type { UI, TipLine, Rect } from '../ui/ui';
+import { T, onPaper, accentRole, roleInk, roleFill, type Role } from '../ui/theme';
+import {
+  nineRaw, paperRaw, ribbonBand, art, tagRaw, tagHole, holeToward, bubbleRaw, ribbonRaw, ribbonFor, RIBBON, signRaw, bookRaw, keycapRaw, keycapWidth,
+  chipRaw, chipText, meterRaw, stampRaw, buttonRaw, pushpinRaw, stringRaw, grommetRaw, TAG_HEAD, KEY_H,
+  type HoleSide, type TailSide, type RibbonColor,
+} from '../ui/paper';
+import { setRichIcons, drawRich, richWidth, CAP_H, BIG_CAP_H, CHIP_H } from '../ui/rich';
+
+export { T, type Role } from '../ui/theme';
+export { type HoleSide, type TailSide, type RibbonColor, KEY_H, TAG_HEAD } from '../ui/paper';
+export { CHIP_H } from '../ui/rich';
 
 /** ui_icons.png frame order (the art director's export list) */
 export const UICON = {
@@ -29,102 +43,77 @@ const GLYPH: Record<UIconName, string> = {
 };
 
 /** What each accent colour means (docs/ui-redesign.md): gold is coin and "you can buy this", teal
- * research, leaf orders and customers, copper heat and jams, violet Patents and resets, blue power. */
+ * research, leaf orders and customers, copper heat and jams, violet Patents and resets, blue power.
+ * These are the pre-180 light accents; on paper use `T` (or `onPaper(ACCENT.x)`). */
 export const ACCENT = { coin: C.gold, research: C.teal1, orders: C.leaf, heat: C.copper2, reset: C.violet, power: C.pipBlue, plain: C.hull1 } as const;
 
 /** Spacing (docs/ui-redesign.md): a 4 px grid, 4 px between cards, 6 px inside them. */
 export const GAP = 4;
 export const PAD = 6;
 
+// ---------------------------------------------------------------- rich text's icons
+
+/** The 8x8 UI icon by its atlas name (UICON names, and the atlas's own: fastforward, bearings). */
+function smallIcon(ctx: CanvasRenderingContext2D, name: string, x: number, y: number) {
+  if (hasArt('ui_icons_small')) {
+    const s = sheet('ui_icons_small');
+    const i = s.order && s.order.includes(name) ? frameNamed(s, name) : name in UICON ? UICON[name as UIconName] : -1;
+    if (i >= 0 && s.frames[i]) { ctx.drawImage(s.frames[i], Math.round(x), Math.round(y)); return; }
+  }
+  const g = GLYPH[name as UIconName] ?? '?';
+  drawText(ctx, g, Math.round(x) + 4 - Math.floor(textWidth(g) / 2), Math.round(y), name === 'coin' ? T.coin : name === 'heart' ? T.bad : T.ink);
+}
+const ITEMS = new Set<string>(ITEM_IDS);
+setRichIcons({
+  item: { has: (id) => ITEMS.has(id), draw: (ctx, id, x, y) => ctx.drawImage(itemIcon(id), Math.round(x), Math.round(y)) },
+  ui: { has: (n) => n in UICON || n === 'fastforward' || n === 'bearings', draw: smallIcon },
+});
+
+// ---------------------------------------------------------------- 9-slices, plates, sections
+
 /** Draw a 9-slice sheet's frame tiled to w x h (edges and centre repeat, never stretch). */
 export function nine(ctx: CanvasRenderingContext2D, s: SpriteSheet, f: number, x: number, y: number, w: number, h: number) {
-  const img = s.frames[Math.min(f, s.frames.length - 1)];
-  const [l, t, r, b] = s.slice ?? [4, 4, 4, 4];
-  const cw = s.w - l - r, ch = s.h - t - b;
-  const iw = w - l - r, ih = h - t - b;
-  const part = (sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number) => {
-    if (dw <= 0 || dh <= 0 || sw <= 0 || sh <= 0) return;
-    for (let yy = 0; yy < dh; yy += sh)
-      for (let xx = 0; xx < dw; xx += sw) {
-        const pw = Math.min(sw, dw - xx), ph = Math.min(sh, dh - yy);
-        ctx.drawImage(img, sx, sy, pw, ph, dx + xx, dy + yy, pw, ph);
-      }
-  };
-  part(0, 0, l, t, x, y, l, t);
-  part(l, 0, cw, t, x + l, y, iw, t);
-  part(s.w - r, 0, r, t, x + w - r, y, r, t);
-  part(0, t, l, ch, x, y + t, l, ih);
-  part(l, t, cw, ch, x + l, y + t, iw, ih);
-  part(s.w - r, t, r, ch, x + w - r, y + t, r, ih);
-  part(0, s.h - b, l, b, x, y + h - b, l, b);
-  part(l, s.h - b, cw, b, x + l, y + h - b, iw, b);
-  part(s.w - r, s.h - b, r, b, x + w - r, y + h - b, r, b);
+  nineRaw(ctx, s, f, x, y, w, h);
 }
 
-/** Draw a plate straight to a context (no UI bookkeeping): for tooltips and floating cards. */
+/** Draw a plate straight to a context (no UI bookkeeping): for tooltips and floating cards. A
+ * sheet of paper now; `accent` inks a line along its top, `fill` and `a` are ignored (paper is
+ * opaque). */
 export function plateRaw(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, accent?: string, fill: string = C.ink, a = 0.94) {
-  ctx.fillStyle = rgba(fill, a);
-  ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
-  ctx.fillStyle = C.hull0;
-  ctx.fillRect(x + 2, y, w - 4, 1);
-  ctx.fillRect(x + 2, y + h - 1, w - 4, 1);
-  ctx.fillRect(x, y + 2, 1, h - 4);
-  ctx.fillRect(x + w - 1, y + 2, 1, h - 4);
-  ctx.fillRect(x + 1, y + 1, 1, 1);
-  ctx.fillRect(x + w - 2, y + 1, 1, 1);
-  ctx.fillRect(x + 1, y + h - 2, 1, 1);
-  ctx.fillRect(x + w - 2, y + h - 2, 1, 1);
-  ctx.fillStyle = accent ?? rgba(C.hull1, 0.7);
-  ctx.fillRect(x + 2, y + 1, w - 4, 1);
+  paperRaw(ctx, x, y, w, h);
+  if (accent) { ctx.fillStyle = onPaper(accent); ctx.fillRect(x + 2, y + 1, w - 4, 1); }
 }
 
-/** A plate: the HUD's one panel (docs/ui-redesign.md, "two weights"). Ink at 90%, a 1 px outline,
- * a 1 px lighter top edge (the accent colour when given), 2 px notched corners. No wood, no
- * rivets: calm, so the world and the numbers carry the colour. */
+/** A plate: the HUD's sheet of paper (a soft shadow, a lit edge, nicks on its free edges). The
+ * accent inks its top line; hover lights it. `fill` and `alpha` are kept for old callers. */
 export function plate(ui: UI, x: number, y: number, w: number, h: number, o: { accent?: string; blocking?: boolean; alpha?: number; hover?: boolean; kind?: 'panel' | 'button'; fill?: string } = {}) {
   x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
   ui.region(x, y, w, h, o.kind ?? 'panel', o.blocking ?? true);
-  const ctx = ui.ctx;
-  const a = o.alpha ?? 0.9;
-  ctx.fillStyle = rgba(o.fill ?? (o.hover ? C.shadow : C.ink), a);
-  ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
-  // the outline, its corners notched
-  ctx.fillStyle = o.hover ? C.hull1 : C.hull0;
-  ctx.fillRect(x + 2, y, w - 4, 1);
-  ctx.fillRect(x + 2, y + h - 1, w - 4, 1);
-  ctx.fillRect(x, y + 2, 1, h - 4);
-  ctx.fillRect(x + w - 1, y + 2, 1, h - 4);
-  ctx.fillRect(x + 1, y + 1, 1, 1);
-  ctx.fillRect(x + w - 2, y + 1, 1, 1);
-  ctx.fillRect(x + 1, y + h - 2, 1, 1);
-  ctx.fillRect(x + w - 2, y + h - 2, 1, 1);
-  // the lighter top edge, or the accent
-  ctx.fillStyle = o.accent ?? rgba(C.hull1, 0.7);
-  ctx.fillRect(x + 2, y + 1, w - 4, 1);
+  paperRaw(ui.ctx, x, y, w, h, { hi: o.hover });
+  if (o.accent) { ui.ctx.fillStyle = onPaper(o.accent); ui.ctx.fillRect(x + 2, y + 1, w - 4, 1); }
 }
 
-/** A section inside a full-screen menu: a flat dark well with a hairline outline, lighter than the
- * ornate frame around it (menus no longer nest wood inside wood). */
+/** A section inside a page: a faint well ruled with a pencil line (its accent inks the top). */
 export function section(ui: UI, x: number, y: number, w: number, h: number, accent?: string) {
   x = Math.round(x); y = Math.round(y);
   ui.region(x, y, w, h, 'panel', true);
   const ctx = ui.ctx;
-  ctx.fillStyle = rgba(C.ink, 0.6);
+  ctx.fillStyle = rgba(T.paperLo, 0.4);
   ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = rgba(C.hull0, 0.9);
-  ctx.fillRect(x, y, w, 1);
-  ctx.fillRect(x, y + h - 1, w, 1);
-  ctx.fillRect(x, y, 1, h);
-  ctx.fillRect(x + w - 1, y, 1, h);
+  ctx.fillStyle = rgba(T.paperEdge, 0.55);
+  ctx.fillRect(x + 1, y, w - 2, 1);
+  ctx.fillRect(x + 1, y + h - 1, w - 2, 1);
+  ctx.fillRect(x, y + 1, 1, h - 2);
+  ctx.fillRect(x + w - 1, y + 1, 1, h - 2);
   if (accent) {
-    ctx.fillStyle = accent;
+    ctx.fillStyle = onPaper(accent);
     ctx.fillRect(x + 1, y + 1, w - 2, 1);
   }
 }
 
-/** A small-caps label (a card's or a group's title) in its accent colour. Returns its width. */
-export function label(ui: UI, s: string, x: number, y: number, col: string = C.hull2, align: 'left' | 'center' | 'right' = 'left'): number {
-  return ui.small(s.toUpperCase(), x, y, col, { align, shadow: C.ink });
+/** A small-caps label (Pip) in ink (its colour mapped to paper). Returns its width. */
+export function label(ui: UI, s: string, x: number, y: number, col: string = T.inkSoft, align: 'left' | 'center' | 'right' = 'left'): number {
+  return ui.small(s.toUpperCase(), x, y, onPaper(col, T.inkSoft), { align });
 }
 
 /** A badge dot: "something new here" on an icon button, a tab or a slot. */
@@ -139,59 +128,44 @@ export function dot(ui: UI, x: number, y: number, col: string = C.pipRed) {
   ctx.fillRect(x, y, 1, 1);
 }
 
-/** A key cap: the hotkey letter or number in a slot's or a button's corner. */
+/** A key cap at (x, y): a little paper key with the name in Pip (`col` is kept for old callers).
+ * Prefer `keycapK`, which returns its width. */
 export function keycap(ui: UI, k: string, x: number, y: number, col: string = C.hull2) {
-  const w = smallWidth(k) + 2;
-  ui.ctx.fillStyle = rgba(C.ink, 0.85);
-  ui.ctx.fillRect(x, y, w, 7);
-  ui.small(k, x + 1, y + 1, col);
+  keycapK(ui, k, x, y);
+}
+
+/** A keycap (docs/hud-180.md): `{k:T}` as a widget. LMB, RMB and WHEEL draw the mouse. Returns
+ * its width; it is KEY_H tall. */
+export function keycapK(ui: UI, k: string, x: number, y: number, o: { down?: boolean } = {}): number {
+  const w = keycapWidth(k);
+  ui.record('text', x, y, w, KEY_H, `{k:${k}}`);
+  return keycapRaw(ui.ctx, k, x, y, o.down);
 }
 
 export type FrameStyle = 'wood' | 'paper' | 'inset';
 
-/** A framed panel: the ornate dark wood with brass trim and rivets (or the art's 9-slice). The
- * redesign keeps it for full-screen menus and celebration cards only; HUD pieces use `plate`. */
+/** A framed panel. 'wood' is the ledger book's cover with one page on it (full-screen menus and
+ * celebration cards), 'paper' a sheet, 'inset' a well pressed into a page. */
 export function frame(ui: UI, x: number, y: number, w: number, h: number, style: FrameStyle = 'wood', blocking = true) {
   x = Math.round(x); y = Math.round(y);
+  if (style === 'inset') { ui.panel(x, y, w, h, 'inset', blocking); return; }
   ui.region(x, y, w, h, 'panel', blocking);
-  const art = style === 'wood' ? 'ui_panel' : style === 'paper' ? 'ui_panel_light' : 'ui_inset';
-  if (hasArt(art)) return nine(ui.ctx, sheet(art), 0, x, y, w, h);
-  const f = (c: string, a: number, b: number, ww: number, hh: number) => { ui.ctx.fillStyle = c; ui.ctx.fillRect(x + a, y + b, ww, hh); };
-  if (style === 'inset') {
-    f(C.ink, 0, 0, w, h);
-    f(C.shadow, 1, 1, w - 2, h - 2);
-    f(C.ink, 1, 1, w - 2, 1);
-    return;
-  }
-  if (style === 'paper') {
-    f(C.ink, 0, 0, w, h);
-    f(C.brass0, 1, 1, w - 2, h - 2);
-    f(C.hull3, 2, 2, w - 4, h - 4);
-    f(C.bone, 2, 2, w - 4, 1);
-    return;
-  }
-  // wood: ink rim, brass trim, dark planks with a grain
-  f(C.ink, 0, 0, w, h);
-  f(C.brass0, 1, 1, w - 2, h - 2);
-  f(C.brass1, 1, 1, w - 2, 1);
-  f(C.ink, 2, 2, w - 4, h - 4);
-  f(C.ground0, 3, 3, w - 6, h - 6);
-  for (let yy = 3; yy < h - 3; yy += 6) f(rgba(C.shadow, 0.5), 3, yy + 5, w - 6, 1);
-  for (let yy = 3, i = 0; yy < h - 3; yy += 6, i++) f(rgba(C.ground1, 0.35), 3 + ((i * 37) % Math.max(1, w - 30)), yy + 2, 18, 1);
-  // corner rivets
-  for (const [a, b] of [[3, 3], [w - 5, 3], [3, h - 5], [w - 5, h - 5]]) { f(C.brass1, a, b, 2, 2); f(C.hot, a, b, 1, 1); }
+  if (style === 'paper') paperRaw(ui.ctx, x, y, w, h);
+  else bookRaw(ui.ctx, x, y, w, h, null);
 }
 
-/** A card inside a menu: a section with its title in small capitals over an accent hairline.
- * Returns the inner content origin (5 px in, the content starting under the title). */
+/** A card: a sheet of paper with a ribbon across its top carrying the title (the accent picks the
+ * ribbon's colour). Returns the inner content origin (5 px in, the content starting under the
+ * ribbon). */
 export function card(ui: UI, x: number, y: number, w: number, h: number, title: string, accent: string = C.brass1, icon?: UIconName) {
-  section(ui, x, y, w, h);
-  let tx = x + 5;
-  if (icon) { uiIcon(ui, icon, x + 4, y + 3, 0.5); tx += 10; }
-  label(ui, title, tx, y + 5, accent);
-  ui.fill(x + 4, y + 12, w - 8, 1, accent, 0.45);
+  x = Math.round(x); y = Math.round(y);
+  ui.region(x, y, w, h, 'panel', true);
+  paperRaw(ui.ctx, x, y, w, h, { shadow: true });
+  ribbon(ui, x + 2, y + 1, w - 4, title, { color: ribbonFor(accentRole(accent)), tails: 'in', icon, big: false });
   return { x: x + 5, y: y + 17, w: w - 10, h: h - 20 };
 }
+
+// ---------------------------------------------------------------- icons
 
 /** One UI icon at (x, y). `half` draws the 16x16 icon at 8x8 via the glyph fallback when small. */
 export function uiIcon(ui: UI, name: UIconName, x: number, y: number, half = 0) {
@@ -218,7 +192,7 @@ export function uiIcon(ui: UI, name: UIconName, x: number, y: number, half = 0) 
     ui.ctx.drawImage(fallbackIcon(name), Math.round(x), Math.round(y));
     return;
   }
-  ui.text(g, Math.round(x) + 1, Math.round(y) + 1, name === 'coin' ? C.gold : name === 'heart' ? C.pipRed : C.bone, { shadow: C.ink });
+  ui.text(g, Math.round(x) + 1, Math.round(y) + 1, name === 'coin' ? T.coin : name === 'heart' ? T.bad : T.ink);
 }
 
 /** Code-drawn 16x16 pictograms for the icons appended after the atlas was drawn (Milestones 5
@@ -256,8 +230,8 @@ const PICTO_INK: Record<string, string> = {
 
 const fallbacks = new Map<UIconName, HTMLCanvasElement>();
 
-/** The 16x16 stand-in for an icon the atlas lacks: its pictogram, or a dark key with the glyph
- * centred on it. */
+/** The 16x16 stand-in for an icon the atlas lacks: its pictogram, or a paper disc with the glyph
+ * inked on it. */
 function fallbackIcon(name: UIconName): HTMLCanvasElement {
   const hit = fallbacks.get(name);
   if (hit) return hit;
@@ -276,54 +250,58 @@ function fallbackIcon(name: UIconName): HTMLCanvasElement {
       }
     });
   } else {
-    // a key the size of an icon: ink rim, a dark face with a lighter top, the glyph centred
+    // a paper disc the size of an icon: ink rim, a lit face, the glyph inked on it
     ctx.fillStyle = C.ink;
-    ctx.fillRect(1, 0, 14, 16);
-    ctx.fillRect(0, 1, 16, 14);
-    ctx.fillStyle = C.shadow;
-    ctx.fillRect(1, 1, 14, 14);
-    ctx.fillStyle = C.hull0;
-    ctx.fillRect(2, 1, 12, 1);
+    ctx.fillRect(3, 0, 10, 16);
+    ctx.fillRect(1, 2, 14, 12);
+    ctx.fillRect(0, 3, 16, 10);
+    ctx.fillStyle = T.paper;
+    ctx.fillRect(3, 1, 10, 14);
+    ctx.fillRect(2, 2, 12, 12);
+    ctx.fillRect(1, 3, 14, 10);
+    ctx.fillStyle = T.paperHi;
+    ctx.fillRect(3, 1, 10, 1);
+    ctx.fillStyle = T.paperLo;
+    ctx.fillRect(3, 14, 10, 1);
     const g = GLYPH[name];
-    const col = name === 'coin' ? C.gold : name === 'heart' ? C.pipRed : C.bone;
-    drawText(ctx, g, 8 - Math.floor(textWidth(g) / 2), 4, col, 1, C.ink);
+    const col = name === 'coin' ? T.coin : name === 'heart' ? T.bad : T.ink;
+    drawText(ctx, g, 8 - Math.floor(textWidth(g) / 2), 4, col, 1);
   }
   fallbacks.set(name, cv);
   return cv;
 }
 
-/** A button with an optional icon; returns true when clicked. Code-drawn in the plate language:
- * a dark key with a lighter top edge; `gold` is the call to buy or to do (gold means coin and
- * "you can buy this"), `active` a tool or tab that is on (teal). */
-export function button(ui: UI, id: string, x: number, y: number, w: number, h: number, label: string, opts: { icon?: UIconName; disabled?: boolean; active?: boolean; gold?: boolean; tip?: TipLine[] | string; key?: string; pulse?: boolean } = {}): boolean {
+// ---------------------------------------------------------------- buttons
+
+/** A button with an optional icon; returns true when clicked. A paper button with an ink line
+ * that presses down 1 px; `gold` is brass with ink text (the call to buy or to do), `active` the
+ * lit green of a tool or tab that is on. The label may carry markup. */
+export function button(ui: UI, id: string, x: number, y: number, w: number, h: number, label: string, opts: { icon?: UIconName; disabled?: boolean; active?: boolean; gold?: boolean; tip?: TipLine[] | string; key?: string; pulse?: boolean; big?: boolean } = {}): boolean {
   ui.mark(id, x, y, w, h);
   x = Math.round(x); y = Math.round(y);
   const hov = ui.hover(x, y, w, h) && !opts.disabled;
   const down = hov && ui.input.mouse.down[0];
   ui.region(x, y, w, h, 'button');
   const pulse = opts.pulse && Math.floor(ui.time * 2.5) % 2 === 0;
-  const base = opts.disabled ? C.shadow : opts.gold ? (hov || pulse ? C.gold : C.brass1) : opts.active ? C.teal0 : hov ? C.hull0 : C.shadow;
-  const hi = opts.disabled ? C.shadow : opts.gold ? C.hot : opts.active ? C.teal1 : hov ? C.hull1 : C.hull0;
-  ui.fill(x, y, w, h, C.ink);
-  ui.fill(x + 1, y + 1, w - 2, h - 2, base);
-  if (!down) {
-    ui.ctx.fillStyle = hi;
-    ui.ctx.fillRect(x + 1, y + 1, w - 2, 1);
-    if (h > 8) { ui.ctx.fillStyle = opts.gold ? C.brass0 : rgba(C.ink, 0.6); ui.ctx.fillRect(x + 1, y + h - 2, w - 2, 1); }
-  }
-  const dy = down ? 1 : 0;
+  const state = opts.disabled ? 'disabled' : down ? 'down' : hov || pulse ? 'hover' : 'up';
+  const dy = buttonRaw(ui.ctx, x, y, w, h, state, opts.gold ? 'gold' : opts.active ? 'active' : 'paper');
+  // the face is h - 4 tall above the lip; things sit centred on it
+  const faceH = h - 4;
   let cx = x + w / 2;
-  const tcol = opts.disabled ? C.hull1 : opts.gold ? C.ink : opts.active ? C.hot : C.bone;
+  const tcol = opts.disabled ? T.inkSoft : T.ink;
   if (opts.disabled) ui.ctx.globalAlpha = 0.45;
   if (opts.icon && label) {
-    uiIcon(ui, opts.icon, x + 3, y + Math.floor((h - 16) / 2) + dy);
+    uiIcon(ui, opts.icon, x + 3, y + 1 + Math.floor((faceH - 16) / 2) + dy);
     cx = x + 20 + (w - 22) / 2;
   } else if (opts.icon) {
-    uiIcon(ui, opts.icon, x + Math.floor((w - 16) / 2), y + Math.floor((h - 16) / 2) + dy);
+    uiIcon(ui, opts.icon, x + Math.floor((w - 16) / 2), y + 1 + Math.floor((faceH - 16) / 2) + dy);
   }
   ui.ctx.globalAlpha = 1;
-  if (label) ui.text(label, cx, y + Math.floor((h - 7) / 2) + dy, tcol, { align: 'center', shadow: opts.gold || opts.disabled ? undefined : C.ink });
-  if (opts.key) ui.small(opts.key, x + w - 2, y + h - 7 + dy, opts.disabled ? C.hull1 : C.hull2, { align: 'right', shadow: C.ink });
+  if (label) {
+    if (opts.big) ui.big(label, cx, y + 1 + Math.floor((faceH - BIG_CAP_H) / 2) + dy, tcol, { align: 'center' });
+    else drawRich(ui, label, cx, y + 1 + Math.floor((faceH - CAP_H) / 2) + dy, Infinity, tcol, { align: 'center' });
+  }
+  if (opts.key) ui.small(opts.key, x + w - 3, y + h - 9 + dy, T.inkSoft, { align: 'right' });
   if (hov) {
     ui.hoverId = id;
     if (opts.tip) ui.tip(typeof opts.tip === 'string' ? [{ text: opts.tip }] : opts.tip);
@@ -336,42 +314,55 @@ export function button(ui: UI, id: string, x: number, y: number, w: number, h: n
   return false;
 }
 
-/** A progress bar with a shine and a dark trough. */
+// ---------------------------------------------------------------- bars and meters
+
+/** A progress bar on paper: an ink-lined trough, the fill with a lit top and a glint running
+ * along it. `trough` is kept for old callers. */
 export function bar(ui: UI, x: number, y: number, w: number, h: number, frac: number, col: string, trough: string = C.ink) {
-  frac = Math.max(0, Math.min(1, frac));
-  ui.fill(x, y, w, h, trough);
-  const fw = Math.round((w - 2) * frac);
-  if (fw > 0) {
-    ui.fill(x + 1, y + 1, fw, h - 2, col);
-    if (h > 3) ui.fill(x + 1, y + 1, fw, 1, rgba(C.bone, 0.45));
-    // a glint that runs along the filled part
-    const g = Math.floor((ui.time * 40) % (w + 20)) - 10;
-    if (g > 0 && g < fw - 2) ui.fill(x + 1 + g, y + 1, 2, h - 2, rgba(C.bone, 0.35));
-  }
+  meter(ui, x, y, w, h, frac, { col });
 }
 
-/** A sparkline of the last values (bars, newest at the right). */
+/** A meter (docs/hud-180.md, "bar"): an ink-lined trough with a notch at `target` (0..1; the tick
+ * stands 2 px above the bar). The fill is the role's colour (or `col`). */
+export function meter(ui: UI, x: number, y: number, w: number, h: number, frac: number, o: { role?: Role; col?: string; target?: number | null; glint?: boolean } = {}) {
+  const col = o.col ?? roleFill(o.role ?? 'good');
+  const f = Math.max(0, Math.min(1, frac));
+  const fw = Math.round((w - 2) * f);
+  const g = o.glint === false ? -1 : Math.floor((ui.time * 40) % (w + 20)) - 10;
+  ui.record('fill', x, y, w, h);
+  meterRaw(ui.ctx, x, y, w, h, f, col, o.target ?? null, g > 0 && g < fw - 2 ? g : -1);
+}
+
+/** A sparkline of the last values (bars, newest at the right) in a pencil-ruled well. */
 export function sparkline(ui: UI, x: number, y: number, w: number, h: number, values: number[], col: string) {
-  ui.fill(x, y, w, h, C.ink, 0.6);
+  ui.ctx.fillStyle = rgba(T.paperLo, 0.7);
+  ui.ctx.fillRect(x, y, w, h);
+  ui.ctx.fillStyle = rgba(T.paperEdge, 0.5);
+  ui.ctx.fillRect(x, y + h - 1, w, 1);
   if (!values.length) return;
   let max = 0;
   for (const v of values) max = Math.max(max, v);
   if (max <= 0) return;
   const n = Math.min(values.length, w - 2);
+  const ink = onPaper(col);
   for (let i = 0; i < n; i++) {
     const v = values[values.length - n + i];
     const bh = Math.max(1, Math.round((v / max) * (h - 2)));
-    ui.ctx.fillStyle = i === n - 1 ? C.gold : col;
+    ui.ctx.fillStyle = i === n - 1 ? T.ink : ink;
     ui.ctx.fillRect(x + w - 1 - n + i, y + h - 1 - bh, 1, bh);
   }
 }
 
-/** A little "NEW" style pill, in the small capitals. */
+/** A little "NEW" style pill in Pip: an ink line round a fill of `col`. */
 export function badge(ui: UI, x: number, y: number, text: string, col: string = C.pipRed) {
   const w = smallWidth(text.toUpperCase()) + 4;
-  ui.fill(x, y, w, 9, C.ink);
+  ui.fill(x + 1, y, w - 2, 9, C.ink);
+  ui.fill(x, y + 1, w, 7, C.ink);
   ui.fill(x + 1, y + 1, w - 2, 7, col);
-  ui.small(text.toUpperCase(), x + 2, y + 2, col === C.gold || col === C.hot || col === C.pipYellow ? C.ink : C.bone);
+  ui.ctx.fillStyle = rgba(C.bone, 0.35);
+  ui.ctx.fillRect(x + 1, y + 1, w - 2, 1);
+  const light = col === C.gold || col === C.hot || col === C.pipYellow || col === T.brass || col === C.lamp3 || col === T.paper || col === T.paperHi;
+  ui.small(text.toUpperCase(), x + 2, y + 2, light ? C.ink : C.bone);
 }
 
 /** The spinning coin (art: ui_coin, 6 frames). */
@@ -392,9 +383,38 @@ export function coinIcon(ui: UI, x: number, y: number, big = true) {
   if (w > 6) ui.fill(ox + Math.floor(w / 2) - 1, y + Math.floor(sz / 2) - 1, 2, 2, C.brass0);
 }
 
-/** A customer portrait (art: portrait_<who>), or a code-drawn frog for Bramble. */
-export function portrait(ui: UI, who: string, x: number, y: number, size: 48 | 24) {
+/** A lily pad under a portrait (Bramble's corner): an ink-lined pad with its notch. */
+export function lilyPad(ui: UI, cx: number, cy: number, w: number) {
+  const ctx = ui.ctx;
+  const rx = w / 2, ry = Math.max(3, Math.round(w / 8));
+  for (let j = -ry; j <= ry; j++) {
+    const half = Math.round(rx * Math.sqrt(Math.max(0, 1 - (j / (ry + 0.5)) ** 2)));
+    const yy = Math.round(cy + j);
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(Math.round(cx - half - 1), yy, half * 2 + 2, 1);
+    ctx.fillStyle = j < -ry + 2 ? C.moss5 : j > ry - 2 ? C.moss2 : C.moss3;
+    ctx.fillRect(Math.round(cx - half), yy, half * 2, 1);
+  }
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(Math.round(cx - rx - 1), Math.round(cy - ry - 1), Math.round(rx * 2 + 2), 1);
+  // the notch, toward the viewer
+  for (let k = 0; k < ry; k++) {
+    ctx.fillStyle = k === ry - 1 ? C.ink : C.water2;
+    ctx.fillRect(Math.round(cx + rx * 0.35 + k), Math.round(cy + k + 1), 2, 1);
+  }
+}
+
+/** A customer portrait (art: portrait_<who>), or a code-drawn frog for Bramble. `pad` sits it on
+ * a lily pad (Bramble's corner). */
+export function portrait(ui: UI, who: string, x: number, y: number, size: 48 | 24, o: { pad?: boolean } = {}) {
   const name = size === 48 ? `portrait_${who}` : `portrait_${who}_small`;
+  if (o.pad) {
+    if (hasArt('h180_lilypad') && size === 48) {
+      // the pad's sidecar says where the portrait sits on it
+      const s = sheet('h180_lilypad');
+      ui.ctx.drawImage(s.frames[0], x - 4, y + 42);
+    } else lilyPad(ui, x + size / 2, y + size - 2, size + 14);
+  }
   ui.fill(x - 1, y - 1, size + 2, size + 2, C.ink);
   if (hasArt(name)) {
     const s = sheet(name);
@@ -412,4 +432,216 @@ export function portrait(ui: UI, who: string, x: number, y: number, size: 48 | 2
   f(C.ink, 7, 16, 10, 1);
   f(C.ink, 8, 0, 8, 6); f(C.ink, 6, 5, 12, 2); f(C.shadow, 9, 1, 6, 4); f(C.copper1, 9, 4, 6, 1);
   f(C.pipRed, 2, 20, 20, 2);
+}
+
+// ---------------------------------------------------------------- the 180's pieces
+
+export interface TagOpts {
+  /** where its string runs to (a world point or a HUD object, UI pixels); null: no string */
+  anchor?: { x: number; y: number } | null;
+  /** pinned: a pushpin through its head, no string */
+  pin?: boolean;
+  /** its head's side (default: the side facing the anchor, else left) */
+  hole?: HoleSide;
+  hover?: boolean;
+  blocking?: boolean;
+  kind?: 'panel' | 'button';
+}
+
+/** Room a tag needs round its content: [left, top, right, bottom] for a head on `hole`. */
+export function tagPad(hole: HoleSide = 'left'): [number, number, number, number] {
+  return [hole === 'left' ? TAG_HEAD + 2 : 6, hole === 'top' ? TAG_HEAD + 1 : 5, hole === 'right' ? TAG_HEAD + 2 : 6, 5];
+}
+
+/** A tag's outer size for content cw x ch with its head on `hole`. */
+export function tagSize(cw: number, ch: number, hole: HoleSide = 'left'): { w: number; h: number } {
+  const [l, t, r, b] = tagPad(hole);
+  return { w: cw + l + r, h: Math.max(ch + t + b, 17) };
+}
+
+/** A paper tag (hover reports, the wheel's info, the floor's numbers, toasts): cut corners and a
+ * brass grommet on its head, a twine string to `anchor` (or a pushpin), nicks on its free edges.
+ * Returns the content rect inside it. */
+export function tag(ui: UI, x: number, y: number, w: number, h: number, o: TagOpts = {}): Rect {
+  x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
+  const hole = o.hole ?? (o.anchor ? holeToward(x, y, w, h, o.anchor) : 'left');
+  ui.region(x, y, w, h, o.kind ?? 'panel', o.blocking ?? true);
+  tagRaw(ui.ctx, x, y, w, h, { hole, anchor: o.anchor ?? null, pin: o.pin, hover: o.hover });
+  const [l, t, r, b] = tagPad(hole);
+  return { x: x + l, y: y + t, w: w - l - r, h: h - t - b };
+}
+
+/** A speech bubble (goals, hints, the cast's lines): its tail on `side`, `at` px along it (from
+ * the left or top), 5 px long. Returns the content rect. */
+export function bubble(ui: UI, x: number, y: number, w: number, h: number, o: { side?: TailSide; at?: number; blocking?: boolean } = {}): Rect {
+  x = Math.round(x); y = Math.round(y);
+  ui.region(x, y, w, h, 'panel', o.blocking ?? true);
+  bubbleRaw(ui.ctx, x, y, w, h, o.side ?? 'bottom', o.at ?? 12);
+  return { x: x + 6, y: y + 5, w: w - 12, h: h - 9 };
+}
+
+/** A ribbon's height for text in the display face (or the body face with `big: false`). */
+export const RIBBON_H = BIG_CAP_H + 6;
+export const RIBBON_H_SMALL = CAP_H + 5;
+
+/** A ribbon w wide at (x, y) carrying `text` centred (display face by default): titles, trophies,
+ * celebrations. tails 'out' (default) folds tails 7 px past each end; 'in' cuts forks into its
+ * own ends. Returns its height. */
+export function ribbon(ui: UI, x: number, y: number, w: number, text = '', o: { color?: RibbonColor; tails?: 'out' | 'in' | 'none'; h?: number; icon?: UIconName; big?: boolean; blocking?: boolean } = {}): number {
+  x = Math.round(x); y = Math.round(y);
+  const big = o.big ?? true;
+  const h = o.h ?? (big ? RIBBON_H : RIBBON_H_SMALL);
+  const color = o.color ?? 'moss';
+  ui.region(x, y, w, h, 'panel', o.blocking ?? false);
+  ribbonRaw(ui.ctx, x, y, w, h, color, o.tails ?? 'out');
+  const P = RIBBON[color];
+  let tx = x + w / 2;
+  if (o.icon) {
+    uiIcon(ui, o.icon, x + 4, y + Math.floor((h - 8) / 2), 1);
+    tx += 5;
+  }
+  if (text) {
+    const cap = big ? BIG_CAP_H : CAP_H;
+    const ty = y + Math.floor((ribbonBand(h) - cap) / 2);
+    const shadow = color === 'gold' ? undefined : P.line;
+    if (big) ui.big(text, tx, ty, P.text, { align: 'center', shadow });
+    else ui.text(text, tx, ty, P.text, { align: 'center', shadow });
+  }
+  return h;
+}
+
+/** A wooden plank on two ropes (the Purse), the ropes running up to `ropeTop`. Returns the
+ * content rect on the plank. */
+export function sign(ui: UI, x: number, y: number, w: number, h: number, o: { ropeTop?: number | null; blocking?: boolean } = {}): Rect {
+  x = Math.round(x); y = Math.round(y);
+  ui.region(x, y, w, h, 'panel', o.blocking ?? true);
+  signRaw(ui.ctx, x, y, w, h, o.ropeTop === undefined ? 0 : o.ropeTop);
+  return { x: x + 5, y: y + 4, w: w - 10, h: h - 8 };
+}
+
+export interface ChipOpts {
+  role?: Role;
+  /** the role's fill with light text (a loud status), instead of ink on lit paper */
+  solid?: boolean;
+  /** an 8x8 UI icon before the words */
+  icon?: UIconName;
+  /** an 8x8 item icon before the words */
+  item?: string;
+}
+
+/** A chip's width: its words (they may carry markup) and icon, padded. */
+export function chipWidth(text: string, o: ChipOpts = {}): number {
+  return richWidth(text) + 8 + (o.icon || o.item ? 10 : 0);
+}
+
+/** A chip (docs/hud-180.md): a rounded pill, icon + words in the role's ink on lit paper
+ * (`solid`: on the role's fill). CHIP_H tall. Returns its width. */
+export function chip(ui: UI, x: number, y: number, text: string, o: ChipOpts = {}): number {
+  x = Math.round(x); y = Math.round(y);
+  const role = o.role ?? 'ink';
+  const w = chipWidth(text, o);
+  ui.region(x, y, w, CHIP_H, 'panel', false);
+  chipRaw(ui.ctx, x, y, w, CHIP_H, role, o.solid);
+  let tx = x + 4;
+  if (o.icon) { uiIcon(ui, o.icon, tx, y + 2, 1); tx += 10; }
+  else if (o.item) { ui.ctx.drawImage(itemIcon(o.item), tx, y + 2); tx += 10; }
+  const col = chipText(role, !!o.solid);
+  drawRich(ui, text, tx, y + 3, Infinity, col, { shadow: o.solid && col === C.bone ? C.ink : undefined });
+  return w;
+}
+
+/** A red-ink rubber stamp centred on (cx, cy) (the grade, APPROVED, PAID): `scale` for the slam
+ * (see slamScale), `angle` in radians. */
+export function stamp(ui: UI, text: string, cx: number, cy: number, o: { col?: string; scale?: number; angle?: number; alpha?: number } = {}) {
+  stampRaw(ui.ctx, text, cx, cy, o.col ?? T.badFill, Math.max(1, Math.round(o.scale ?? 1)), o.angle ?? -0.08, o.alpha ?? 0.92);
+}
+
+/** The ledger book at r: leather, brass corners, stitching, the pages (two when `spine` is a
+ * screen x, one when null). Returns the page rects. */
+export function book(ui: UI, r: Rect, spine: number | null = null, blocking = true): { left: Rect; right: Rect | null } {
+  ui.region(r.x, r.y, r.w, r.h, 'panel', blocking);
+  return bookRaw(ui.ctx, r.x, r.y, r.w, r.h, spine);
+}
+
+/** A red pushpin at (cx, cy). */
+export function pushpin(ui: UI, cx: number, cy: number) {
+  pushpinRaw(ui.ctx, cx, cy);
+}
+
+/** A twine string from (x0, y0) to (x1, y1), sagging (a tag's, a sign's). */
+export function twine(ui: UI, x0: number, y0: number, x1: number, y1: number) {
+  stringRaw(ui.ctx, x0, y0, x1, y1);
+}
+
+/** A brass grommet centred on (cx, cy). */
+export function grommet(ui: UI, cx: number, cy: number) {
+  grommetRaw(ui.ctx, cx, cy);
+}
+
+/** Where a tag's hole sits (for callers that run their own strings). */
+export { tagHole, holeToward };
+
+/** The role ink for an accent (re-exported for callers moving off ACCENT). */
+export { onPaper, accentRole, roleInk, roleFill };
+
+/** A ruled pencil line across a page (lists ruled with faint paperLo lines). */
+export function rule(ui: UI, x: number, y: number, w: number, strong = false) {
+  ui.ctx.fillStyle = strong ? rgba(T.paperEdge, 0.8) : rgba(T.paperLo, 0.9);
+  ui.ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), 1);
+}
+
+/** A pencil underline under a selected row (not a highlight block). */
+export function pencil(ui: UI, x: number, y: number, w: number, col: string = T.inkSoft) {
+  const ctx = ui.ctx;
+  ctx.fillStyle = col;
+  for (let i = 0; i < w; i++) {
+    const dy = Math.round(Math.sin((x + i) * 0.7) * 0.5 + (i % 9 === 0 ? 0.5 : 0));
+    ctx.fillRect(Math.round(x + i), Math.round(y + dy), 1, 1);
+  }
+}
+
+/** The display face's width (for laying out titles). */
+export const titleWidth = (s: string) => bigWidth(s);
+
+/** A paper slip (a toast): the art's slip, or a sheet of paper. Returns the content rect. */
+export function slip(ui: UI, x: number, y: number, w: number, h: number, o: { blocking?: boolean } = {}): Rect {
+  x = Math.round(x); y = Math.round(y);
+  ui.region(x, y, w, h, 'panel', o.blocking ?? false);
+  const a = art('h180_slip');
+  if (a) nineRaw(ui.ctx, a, 0, x, y, w, h);
+  else paperRaw(ui.ctx, x, y, w, h);
+  return { x: x + 6, y: y + 5, w: w - 12, h: h - 10 };
+}
+
+/** The Inspector's clipboard (an audit's tag, the grade slip): a board with a steel clip at its
+ * top-left and a sheet on it. Returns the content rect on the sheet. */
+export function clipboard(ui: UI, x: number, y: number, w: number, h: number, o: { blocking?: boolean } = {}): Rect {
+  x = Math.round(x); y = Math.round(y);
+  ui.region(x, y, w, h, 'panel', o.blocking ?? true);
+  const a = art('h180_clipboard');
+  const ctx = ui.ctx;
+  if (a) {
+    nineRaw(ctx, a, 0, x, y, w, h);
+    const [l, t, r, b] = a.slice ?? [10, 8, 4, 4];
+    return { x: x + Math.max(5, l - 4), y: y + t + 1, w: w - Math.max(5, l - 4) - r - 2, h: h - t - b - 2 };
+  }
+  ctx.fillStyle = rgba(T.shadow, 0.35);
+  ctx.fillRect(x + 2, y + 4, w, h - 2);
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(x, y + 3, w, h - 3);
+  ctx.fillStyle = C.wood3;
+  ctx.fillRect(x + 1, y + 4, w - 2, h - 5);
+  ctx.fillStyle = T.woodHi;
+  ctx.fillRect(x + 1, y + 4, w - 2, 1);
+  paperRaw(ctx, x + 3, y + 7, w - 6, h - 10, { shadow: false });
+  // the clip
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(x + 3, y, 12, 7);
+  ctx.fillStyle = C.steel3;
+  ctx.fillRect(x + 4, y + 1, 10, 5);
+  ctx.fillStyle = C.steel4;
+  ctx.fillRect(x + 4, y + 1, 10, 1);
+  ctx.fillStyle = C.steel1;
+  ctx.fillRect(x + 7, y + 3, 4, 1);
+  return { x: x + 7, y: y + 10, w: w - 14, h: h - 16 };
 }

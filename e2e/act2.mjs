@@ -142,8 +142,8 @@ await shot('11-cooling-hover');
 // 8. the toasts, now in the left column (never over the floor)
 await page.evaluate(() => {
   const a = window.__app;
-  a.toast('Research complete: Steam Power', 'Unlocked Boilers, Steam Engines, Generators and Poles; land chunk F; Dame Voltaire.', '#96a9c6', 'flask');
-  a.toast('Codex entry!', 'Unit 7 catalogues glass: 800 coin for the first one.', '#ffbe48', 'codex');
+  a.toast('Steam Power researched', '{u:power} Boiler · Steam Engine · Generator · Pole · Chunk F · Dame Voltaire', '#93b6c9');
+  a.toast('Codex: glass', 'NEW SPECIMEN · {coin:800} for the first', '#ffbe48', 'codex');
   a.unfreeze();
 });
 await page.mouse.move(Math.floor(w / 2), Math.floor(h / 2));

@@ -425,8 +425,8 @@ const STATES = {
   trophies: () => { const a = window.__app; a.panel = 'trophies'; },
   toasts: () => {
     const a = window.__app; a.panel = null;
-    a.toast('Research complete: Pressing', 'Unlocked the Press and iron plates.', '#93b6c9');
-    a.toast('The Boardwalk: filled!', '+3,000 coin, +1 reputation. "Ribbit! The swamp thanks you."', '#86a64a');
+    a.toast('Pressing researched', '{u:research} the Press · {i:ironIngot} → {i:ironPlate}', '#93b6c9');
+    a.toast('The Boardwalk filled', '{coin:3,000}  +1 {u:heart}', '#86a64a');
   },
   rich: () => {
     const a = window.__app; const g = a.game; a.toasts = [];
@@ -435,9 +435,12 @@ const STATES = {
     a.renderer.ground = null; a.fitCamera(true);
   },
   huge: () => { const a = window.__app; const g = a.game; g.s.coin = g.s.coin.constructor.parse('4.56e123'); },
-  // the redesign's floating cards: a build slot's hover card, and the coin counter's drop-down
-  slotHover: () => { const a = window.__app; const g = a.game; g.s.coin = g.s.coin.constructor.of(1234); a.panel = null; return { hoverId: 'store_smelter' }; },
-  coinHover: () => { const a = window.__app; a.panel = null; return { hoverId: '@coin' }; },
+  // the 180 (docs/hud-180.md): the Workbench Wheel open at the cursor with an item's info tag,
+  // the Purse's Shipping tag, the drawn keyboard and the Gazette's page
+  slotHover: () => { const a = window.__app; const g = a.game; g.s.coin = g.s.coin.constructor.of(1234); a.panel = null; a.openWheelAt(); return { hoverIds: ['wheel_build', 'wheel_item_smelter'] }; },
+  coinHover: () => { const a = window.__app; a.panel = null; return { hoverId: 'purse' }; },
+  keys: () => { const a = window.__app; a.panel = 'keys'; },
+  gazette: () => { const a = window.__app; a.panel = 'gazette'; },
   // the first slag jam: a Miner feeding the Hand Furnace, no Slag Heap; the furnace hovered
   jam: () => {
     const a = window.__app;
@@ -459,7 +462,7 @@ const STATES = {
     a.toasts = [];
     a.trophyPops = [];
     a.selected = null;
-    a.toast('Blocked: slag!', 'Smelting leaves slag, and it has nowhere to go. Click the machine to shovel it, or build a Slag Heap beside it.', '#c8362e');
+    a.toast('Choked on slag!', '{i:slag} nowhere to go · {k:LMB} shovel or a Slag Heap', '#c8362e');
     return { hover: [f.x, f.y] };
   },
   // a busy Act II Workshop: a boiler and engine, Poles, five kilns and a mixer browning the grid
@@ -527,8 +530,8 @@ STATES.act2toasts = {
   base: 'act2power',
   post: () => {
     const a = window.__app;
-    a.toast('Research complete: Circuits', 'Unlocked the Assembler recipe for circuits: copper wire, plastic and glass.', '#93b6c9', 'flask');
-    a.toast('Lens Array: filled!', '+12,000 coin, +1 reputation. Unit 7 beeps twice, which you choose to read as thanks.', '#6fc1ae');
+    a.toast('Circuits researched', '{u:research} 3 {i:copperWire} + {i:plastic} + {i:glass} → {i:circuit}', '#93b6c9', 'flask');
+    a.toast('Lens Array filled', '{coin:12,000}  +1 {u:heart} · UNIT 7 BEEPS TWICE', '#6fc1ae');
     a.trophyPops = [{ id: 'estate', t: 0 }, { id: 'letThereBeLight', t: 0 }];
   },
 };
@@ -561,10 +564,18 @@ async function main() {
       // the goal card slides in when its goal changes: a state set from scratch shows it at rest
       await page.evaluate(() => { window.__app.hud.goalKey = null; });
       if (r?.drag) await dragTiles(page, r.drag);
-      else if (r?.hoverId) {
+      else if (r?.hoverIds) {
+        // a chain of HUD elements hovered in turn (the wheel: a petal fans, then an item on it)
+        for (const id of r.hoverIds) {
+          await frames(page, 8);
+          const p = await page.evaluate((id) => { const a = window.__app; const q = a.ui.ids.get(id); return q ? a.uiToCss(q.x + q.w / 2, q.y + q.h / 2) : null; }, id);
+          if (p) await page.mouse.move(p.x, p.y);
+        }
+        await frames(page, 8);
+      } else if (r?.hoverId) {
         // a HUD element by its button id (drawn last frame), or the coin counter
         await frames(page, 2);
-        const p = await page.evaluate((id) => { const a = window.__app; const q = id === '@coin' ? { x: 4, y: 2, w: 16, h: 16 } : a.ui.ids.get(id); return q ? a.uiToCss(q.x + q.w / 2, q.y + q.h / 2) : null; }, r.hoverId);
+        const p = await page.evaluate((id) => { const a = window.__app; const q = a.ui.ids.get(id); return q ? a.uiToCss(q.x + q.w / 2, q.y + q.h / 2) : null; }, r.hoverId);
         if (p) await page.mouse.move(p.x, p.y);
       } else if (r?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), r.hover); await page.mouse.move(p.x, p.y); }
       else await page.mouse.move(Math.floor(w / 2), Math.floor(h / 2) + 40);

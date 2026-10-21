@@ -15,8 +15,11 @@ import { ITEMS } from '../data/items';
 import { RULES } from '../data/rules';
 import { TICK_RATE } from '../engine/time';
 import type { GameEvent } from '../engine/events';
-import { drawText, textWidth, ICON } from '../ui/font';
+import { drawText, textWidth, bigWidth, ICON } from '../ui/font';
+import { T, onPaper } from '../ui/theme';
+import { paperRaw, tagRaw, chipRaw, coinRaw, COIN_W, outlinedText } from '../ui/paper';
 import { Ground, TILE } from './ground';
+import { drawOreFx } from './orefx';
 import { sheet, drawRot, frameAt, itemIcon, hasArt, spriteName } from './sprites';
 import { Fx, FOLD_DUR, FOLD_FLASH } from './fx';
 import { onGridKind, powered, gridIndex, cheb, wirePairs, reached, capacity } from './powerview';
@@ -50,7 +53,9 @@ export interface Overlay {
 }
 
 /** screen-space labels collected during the world pass, drawn on top at UI scale */
-interface Label { x: number; y: number; text: string; color: string; bg: string; /** widest it may be, screen px */ max?: number; /** used when text does not fit */ short?: string }
+interface Label { x: number; y: number; text: string; color: string; bg: string; /** widest it may be, screen px */ max?: number; /** used when text does not fit */ short?: string;
+  /** land for sale (the 180): a "for sale" sign tag with a price chip, its short form the chip alone */
+  sale?: { name: string; price: string; ready: boolean; afford: boolean } }
 
 const PIP: Record<string, string> = { work: C.pipGreen, starved: C.pipYellow, blocked: C.pipRed, idle: C.pipGrey };
 
@@ -383,6 +388,7 @@ export class Renderer {
     for (const ch of CHUNKS) ctx.drawImage(this.ground.chunk(ch.id), ch.x * TILE, ch.y * TILE);
     this.landLabels(g);
     this.veins(g);
+    drawOreFx(ctx, g, this.time, -ox / z, -oy / z, this.W / z, this.H / z);
 
     if (this.turnsV !== g.version) this.computeTurns(g);
 
@@ -434,10 +440,12 @@ export class Renderer {
       // centre the label on the part of the chunk inside the floor view; skip it if little shows
       const a = this.toScreen(ch.x, ch.y), b = this.toScreen(ch.x + ch.w, ch.y + ch.h), v = this.view;
       const x0 = Math.max(a.x, v.x), x1 = Math.min(b.x, v.x + v.w), y0 = Math.max(a.y, v.y), y1 = Math.min(b.y, v.y + v.h);
-      if (x1 - x0 < 48 || y1 - y0 < 24) continue;
+      // the sign needs room: a sliver of a chunk at the screen's edge gets none (the 180's sign is taller)
+      if (x1 - x0 < 120 || y1 - y0 < 90) continue;
       const s = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
       const ready = !ch.requires || g.done(ch.requires);
-      this.labels.push({ x: s.x, y: s.y, max: x1 - x0, short: ready ? `${ICON.coin}${ch.cost.toLocaleString('en-US')}` : ICON.lock, text: ready ? `${ch.name}: ${ch.cost.toLocaleString('en-US')} coin` : `${ch.name}: research first`, color: ready ? (g.s.coin.gte(ch.cost) ? C.gold : C.bone) : C.fog, bg: C.ink });
+      const price = ch.cost.toLocaleString('en-US');
+      this.labels.push({ x: s.x, y: s.y, max: x1 - x0, short: ready ? `${ICON.coin}${price}` : ICON.lock, text: ready ? `${ch.name}: ${price} coin` : `${ch.name}: research first`, color: ready ? (g.s.coin.gte(ch.cost) ? C.gold : C.bone) : C.fog, bg: C.ink, sale: { name: ch.name.replace(/\{[^}]*\}/g, '').trim(), price, ready, afford: g.s.coin.gte(ch.cost) } });
     }
   }
 
@@ -1341,43 +1349,46 @@ export class Renderer {
     fx.text(x, y - 26, 'FIRST MK2!', C.gold, 2.2, true);
   }
 
-  /** Pops and flying coins and labels, drawn in screen space at the UI scale (crisp text). */
+  /** Pops and flying coins and labels, drawn in screen space at the UI scale (crisp text). The
+   *  180 (docs/hud-180.md): labels are paper (land for sale is a sign tag with its price chip; notes
+   *  a slip of paper in ink), pops are light figures with an ink outline over the floor, big ones in
+   *  the display face. */
   drawScreenFx(ctx: CanvasRenderingContext2D, uiScale: number) {
     const z = this.cam.zoom;
     const { ox, oy } = this.origin();
-    for (const l0 of this.labels) {
-      let l = l0;
-      let w = textWidth(l.text) * uiScale;
-      if (l.max && w + 6 * uiScale > l.max) {
-        if (!l.short) continue;
-        l = { ...l0, text: l.short };
-        w = textWidth(l.text) * uiScale;
-      }
-      const x = Math.round(l.x - w / 2), y = Math.round(l.y - 5 * uiScale);
-      ctx.fillStyle = rgba(l.bg, 0.75);
-      ctx.fillRect(x - 3 * uiScale, y - 2 * uiScale, w + 6 * uiScale, 12 * uiScale);
-      drawText(ctx, l.text, x, y, l.color, uiScale);
+    const k = uiScale;
+    ctx.save();
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    for (const l of this.labels) {
+      const lx = l.x / k, ly = l.y / k, max = l.max ? l.max / k : Infinity;
+      if (l.sale) { saleSign(ctx, lx, ly, max, l.sale); continue; }
+      let text = l.text;
+      if (textWidth(text) + 8 > max) { if (!l.short) continue; text = l.short; }
+      const w = textWidth(text) + 8;
+      const x = Math.round(lx - w / 2), y = Math.round(ly - 6);
+      paperRaw(ctx, x, y, w, 13, { deckle: false });
+      drawText(ctx, text, x + 4, y + 2, onPaper(l.color));
     }
     for (const p of this.fx.pops) {
       const t = 1 - p.life / p.max;
       // big pops jump up with a bounce, then drift
       const rise = p.big ? 18 * Math.min(1, t * 4) + t * 8 : t * 14;
-      const sx = ox + p.x * z, sy = oy + (p.y - rise) * z;
+      const sx = (ox + p.x * z) / k, sy = (oy + (p.y - rise) * z) / k;
       const pop = p.big && t < 0.12 ? 1 + (0.12 - t) * 6 : 1;
-      const sc = Math.max(1, Math.round((p.big ? uiScale * 2 : uiScale) * pop));
+      const sc = Math.max(1, Math.round((p.big ? 2 : 1) * pop));
       ctx.globalAlpha = Math.min(1, p.life / p.max * 2);
-      const w = textWidth(p.text) * sc + (p.icon ? 10 * sc : 0);
+      const tw = (p.big ? bigWidth(p.text) : textWidth(p.text)) * sc;
+      const w = tw + (p.icon ? 10 * sc : 0);
       let x = Math.round(sx - w / 2);
       if (p.icon) {
-        const ic = itemIcon(p.icon);
-        ctx.fillStyle = C.ink;
-        ctx.fillRect(x - sc, Math.round(sy) - sc, 10 * sc, 10 * sc);
-        ctx.drawImage(ic, x, Math.round(sy), 8 * sc, 8 * sc);
+        chipRaw(ctx, x - sc, Math.round(sy) - sc, 10 * sc, 10 * sc, 'ink');
+        ctx.drawImage(itemIcon(p.icon), x, Math.round(sy), 8 * sc, 8 * sc);
         x += 10 * sc;
       }
-      drawText(ctx, p.text, x, Math.round(sy), p.color, sc, C.ink);
+      outlinedText(ctx, p.text, x, Math.round(sy), p.color, T.floorOutline, sc, p.big);
       ctx.globalAlpha = 1;
     }
+    ctx.restore();
     for (const f of this.fx.flyers) {
       if (f.t < 0) continue;
       const t = Math.min(1, f.t / f.dur);
@@ -1413,3 +1424,41 @@ export class Renderer {
 }
 
 const MODE_WORD: Record<string, string> = { normal: 'Normal', efficient: 'Efficient', overclock: 'Overclocked!', precision: 'Precision' };
+
+/** Land for sale (the 180): a paper sign tag on a stake with the chunk's name and a price chip
+ *  (coin ink when you can pay, soft when not; a padlock while it waits on research), centred on
+ *  (cx, cy) in UI px. Where the chunk shows too little for the name, the chip alone. */
+function saleSign(ctx: CanvasRenderingContext2D, cx: number, cy: number, max: number, s: { name: string; price: string; ready: boolean; afford: boolean }) {
+  const chipS = s.ready ? s.price : 'research first';
+  const chipW = (s.ready ? COIN_W + 3 : 9) + textWidth(chipS) + 8;
+  const nameW = textWidth(s.name);
+  // land you cannot buy yet is a padlock on a stake, quiet (its name is on hover); land for sale
+  // carries its name and price
+  if (!s.ready) {
+    const x = Math.round(cx - 8), y = Math.round(cy - 8);
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(Math.round(cx) - 2, y + 12, 4, 8);
+    ctx.fillStyle = C.wood3;
+    ctx.fillRect(Math.round(cx) - 1, y + 12, 2, 7);
+    tagRaw(ctx, x, y, 17, 15, { hole: 'none', anchor: null });
+    drawText(ctx, ICON.lock, x + 5, y + 4, T.inkSoft);
+    return;
+  }
+  const full = Math.max(nameW, chipW) + 16 <= max;
+  if (!full && chipW + 16 > max) return;
+  const w = (full ? Math.max(nameW, chipW) : chipW) + 12;
+  const h = full ? 30 : 19;
+  const x = Math.round(cx - w / 2), y = Math.round(cy - h / 2);
+  // the stake
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(Math.round(cx) - 2, y + h - 2, 4, 9);
+  ctx.fillStyle = C.wood3;
+  ctx.fillRect(Math.round(cx) - 1, y + h - 2, 2, 8);
+  tagRaw(ctx, x, y, w, h, { hole: 'top', anchor: null });
+  let yy = y + 6;
+  if (full) { drawText(ctx, s.name, Math.round(cx - nameW / 2), yy, T.ink); yy += 11; }
+  const chx = Math.round(cx - chipW / 2);
+  chipRaw(ctx, chx, yy, chipW, 12, s.ready ? (s.afford ? 'coin' : 'soft') : 'soft');
+  if (s.ready) { coinRaw(ctx, chx + 4, yy + 2); drawText(ctx, chipS, chx + 4 + COIN_W + 3, yy + 2, s.afford ? T.coin : T.inkSoft); }
+  else { drawText(ctx, ICON.lock, chx + 3, yy + 2, T.inkSoft); drawText(ctx, chipS, chx + 12, yy + 2, T.inkSoft); }
+}

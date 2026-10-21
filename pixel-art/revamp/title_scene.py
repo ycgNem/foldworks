@@ -4,13 +4,14 @@ scale that covers the screen, centred and cropped).
 The backdrop is PixelLab's dusk bayou (raw/title/bg_a.png, prompts.md), regraded into Lantern
 Bayou by region: the lower sky to dusk violet, the far hills to a blue-grey haze, the water to the
 bayou's teal. Over it, by hand, the game's own sprites: the Workshop deck at the bottom left with
-an ore patch, a miner, a smelter and a belt running into the Dock, a brass module glowing on the
+the iron outcrop (ores.py's rust-and-hematite boulders through a hole in the planks, its spill and
+a glint), a miner on it, a smelter and a belt running into the Dock, a brass module glowing on the
 deck; at the right a boardwalk with Mayor Bramble (top hat, sash, medal) and a frog townsperson
 under a lamp post; lily pads on the water.
 
 Motion: the lantern and moon reflections shimmer row by row, the horizon town's windows and every
 lantern flicker, stars twinkle, the belt runs and items ride it into the Dock, the module's band
-lanterns breathe. The calm areas the title screen draws on: the sky band behind the logo and
+lanterns breathe, the iron catches a silver glint once a loop. The calm areas the title screen draws on: the sky band behind the logo and
 tagline (y 14-66), the open water in the middle (x 120-200, y 100-140) under the buttons, and the
 dark water along the bottom for the last line."""
 import math
@@ -122,9 +123,24 @@ def foreground(img, f):
     draw(img, [(112, y) for y in range(118, 172)], P["ink"])
     draw(img, [(111, y) for y in range(120, 168) if y % 16 not in (7, 8)], P["wood1"])
     draw(img, [(113, y) for y in range(120, 172) if y % 3], P["water0"])
-    # an iron ore patch, a miner on it, a smelter, a belt into the Dock
+    # an iron outcrop (ores.py, the ore revamp) breaking up through the deck, a miner on it, a
+    # smelter, a belt into the Dock. As ground.ts bakes it: the spill on the deck tiles round the
+    # patch (dx, dy in -1..2 from its top-left; only those on the planks, not the moss lip above
+    # or off the left edge), then the outcrop's four quadrants (frames 1-4, after the 16x16 mini)
+    for dy in range(0, 3):
+        for dx in range(0, 3):
+            if dx < 2 and dy < 2:
+                continue
+            put(sprite("tile_ore_iron_spill", (dy + 1) * 4 + (dx + 1)), dx * 16, 120 + dy * 16)
     for i, (dx, dy) in enumerate(((0, 0), (16, 0), (0, 16), (16, 16))):
-        put(sprite("tile_ore_iron", i), dx, 120 + dy)
+        put(sprite("tile_ore_iron", 1 + i), dx, 120 + dy)
+    # orefx.ts's iron glint, once a loop on a lit facet clear of the miner: a point, a cross, a point
+    gx, gy = 3, 124
+    if f in (1, 3):
+        draw(img, [(gx, gy)], P["steel4"])
+    elif f == 2:
+        draw(img, [(gx - 1, gy), (gx + 1, gy), (gx, gy - 1), (gx, gy + 1)], P["steel4"])
+        draw(img, [(gx, gy)], P["bone"])
     for x in (48, 64):
         put(sprite("belt", f % 4), x, 128)
     put(sprite("miner", f % 4, row=0), 16, 128)

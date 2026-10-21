@@ -1,14 +1,18 @@
 // Shared pieces for the screens: icons found by their atlas name (the atlas is append-only,
-// STYLE.md), tabs, the one full-screen menu template (docs/ui-redesign.md: header bar with icon,
-// title, the menu's tabs and close; content; an optional detail panel on the right), a stamp that
-// slams down, star bursts, meters and number formatting for rates. Presentation only.
+// STYLE.md), tabs (bookmark ribbons since the 180), the one full-screen menu template (the ledger
+// book, docs/hud-180.md "Full-screen menus": the menu's tabs as bookmarks along the top, the title
+// in the display face at the top of the left page, the detail panel as the right page), a stamp
+// that slams down, star bursts, meters and number formatting for rates. Presentation only.
 import { C, rgba } from '../data/palette';
-import { ICON, textWidth, smallWidth } from '../ui/font';
+import { ICON, textWidth, smallWidth, bigWidth } from '../ui/font';
 import { sheet, hasArt } from '../render/sprites';
-import { button, frame, label } from './chrome';
+import { button, keycapK, chip, chipWidth } from './chrome';
 import type { App } from './app';
 import type { ScreenName } from './screens';
 import type { Rect, TipLine } from '../ui/ui';
+import { T, onPaper } from '../ui/theme';
+import { bookRaw, bookmarkRaw, keycapWidth, RIBBON, type RibbonColor } from '../ui/paper';
+import { CAP_H, BIG_CAP_H } from '../ui/rich';
 import { perMin as fmtPerMin, amount } from '../engine/fmt'; // Milestone 6: one number helper (DESIGN.md §20)
 
 /** ui_icons.png / ui_icons_small.png names, in atlas order (append-only, STYLE.md). */
@@ -34,7 +38,7 @@ export function icon(app: App, name: IconName, x: number, y: number, small = fal
     ui.ctx.drawImage(sheet(at).frames[i], Math.round(x), Math.round(y));
     return;
   }
-  ui.text(GLYPH[name] ?? '?', Math.round(x) + (small ? 1 : 5), Math.round(y) + (small ? 0 : 4), name === 'coin' ? C.gold : name === 'heart' ? C.pipRed : C.bone, { shadow: C.ink });
+  ui.text(GLYPH[name] ?? '?', Math.round(x) + (small ? 1 : 5), Math.round(y) + (small ? 0 : 4), name === 'coin' ? T.coin : name === 'heart' ? T.bad : T.ink);
 }
 
 /** Per-minute figures from a per-second rate: 480, 37.5, 0.75. */
@@ -45,31 +49,35 @@ export function perMin(r: number): string {
 /** A whole number with separators. */
 export const fmt = (n: number) => amount(Math.floor(n));
 
-/** A tab, code-drawn in the plate language: a dark key, lit with a gold underline when active.
- * An optional icon and a badge (a count or "!") on its corner. Returns true on click. */
+/** The bookmark colour of an active tab, and of the rest. */
+const TAB_ON: RibbonColor = 'gold';
+const TAB_OFF: RibbonColor = 'moss';
+
+/** A tab, a bookmark ribbon forked at its foot: gold when active, moss otherwise, lit paper while
+ * disabled. An optional icon and a badge (a count or "!") on its corner. Returns true on click. */
 export function tab(app: App, id: string, x: number, y: number, w: number, h: number, label: string, o: { active?: boolean; icon?: IconName; disabled?: boolean; tip?: TipLine[] | string; badge?: string } = {}): boolean {
   const ui = app.ui;
   ui.mark(id, x, y, w, h);
   ui.region(x, y, w, h, 'button');
   const hov = ui.hover(x, y, w, h) && !o.disabled;
   const ctx = ui.ctx;
-  ctx.fillStyle = C.ink;
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = o.active ? C.hull0 : hov ? C.shadow : rgba(C.shadow, 0.6);
-  ctx.fillRect(x + 1, y + 1, w - 2, h - 1);
-  ctx.fillStyle = o.active ? C.hull1 : C.hull0;
-  ctx.fillRect(x + 1, y + 1, w - 2, 1);
-  if (o.active) { ctx.fillStyle = C.gold; ctx.fillRect(x + 2, y + h - 2, w - 4, 1); }
+  const col: RibbonColor | 'paper' = o.disabled ? 'paper' : o.active ? TAB_ON : TAB_OFF;
+  // a hovered bookmark slides 1 px down out of the book
+  const dy = hov && !o.active ? 1 : 0;
+  bookmarkRaw(ctx, x, y, w, h - 1 + dy, col, hov);
+  const ink = col === 'paper' ? T.inkSoft : RIBBON[col].text;
+  const shadow = col === 'paper' ? undefined : col === 'gold' ? C.brass3 : RIBBON[col].line;
+  const faceH = h - 4;
   let tx = x + Math.floor(w / 2);
   if (o.icon) {
     const iw = label ? 9 + textWidth(label) : 8;
     const ix = x + Math.floor((w - iw) / 2);
     ctx.globalAlpha = o.disabled ? 0.4 : 1;
-    icon(app, o.icon, ix, y + Math.floor((h - 8) / 2), true);
+    icon(app, o.icon, ix, y + Math.floor((faceH - 8) / 2) + dy, true);
     ctx.globalAlpha = 1;
     tx = ix + 9 + Math.floor(textWidth(label) / 2);
   }
-  if (label) ui.text(label, tx, y + Math.floor((h - 7) / 2), o.disabled ? C.hull1 : o.active ? C.gold : C.bone, { align: 'center', shadow: C.ink });
+  if (label) ui.text(label, tx, y + Math.floor((faceH - CAP_H) / 2) + dy, ink, { align: 'center', shadow });
   if (o.badge) {
     const bw = smallWidth(o.badge) + 4;
     ui.fill(x + w - bw - 1, y - 3, bw, 8, C.ink);
@@ -115,56 +123,79 @@ function linked(app: App): MenuTab[] {
   return tabs.map((t) => ({ id: 'nav:' + t.id, label: t.label, icon: t.icon, tip: t.tip, active: app.panel === t.id, onClick: () => { if (app.panel !== t.id) { app.panel = t.id; app.audio.sfx('open'); } } }));
 }
 
-/** The header bar's height: content starts below it (r.y + MENU_HEAD + 2). */
+/** The header band's height: content starts below it (r.y + MENU_HEAD + 2). */
 export const MENU_HEAD = 20;
 
-/** Draw the menu template's frame and header bar: the ornate frame (menus are the rare, special
- * weight), the icon, the title in the accent colour, the tabs, Esc and close. Returns the header's
- * free width left of the tabs. */
-function menuHead(app: App, r: Rect, title: string, accent: string, ic: IconName, tabs: MenuTab[]): number {
+/** Draw the book and its header: the leather cover and the pages (two, split at `spine`, or one),
+ * the icon and the title in the display face at the top of the left page over a pencil rule in
+ * the accent's ink, the tabs as bookmark ribbons hanging from the top edge, the Esc keycap and the
+ * close button. Returns the header's free width left of the tabs. */
+function menuHead(app: App, r: Rect, title: string, accent: string, ic: IconName, tabs: MenuTab[], spine: number | null): number {
   const ui = app.ui;
-  frame(ui, r.x, r.y, r.w, r.h);
-  ui.fill(r.x + 3, r.y + 3, r.w - 6, MENU_HEAD - 4, C.ink, 0.7);
-  ui.fill(r.x + 3, r.y + MENU_HEAD - 2, r.w - 6, 1, accent);
-  icon(app, ic, r.x + 6, r.y + 2);
-  ui.text(title, r.x + 26, r.y + 7, accent, { shadow: C.ink });
-  // close: an x key at the right, with its key named beside it
-  const cx = r.x + r.w - 20;
-  if (button(ui, 'closeScreen', cx, r.y + 4, 14, 12, ICON.cross, { tip: 'Close (Esc)' })) app.panel = null;
-  label(ui, 'esc', cx - 3, r.y + 8, C.hull1, 'right');
-  const right = cx - 3 - smallWidth('ESC') - 6;
-  const titleEnd = r.x + 26 + textWidth(title) + 8;
-  if (!tabs.length) return right - titleEnd;
+  ui.region(r.x, r.y, r.w, r.h, 'panel', true);
+  const ctx = ui.ctx;
+  const { left, right } = bookRaw(ctx, r.x, r.y, r.w, r.h, spine);
+  const ink = onPaper(accent);
+  // the rule under the header: the accent's ink, a faint second line under it
+  const ruleY = r.y + MENU_HEAD - 1;
+  ctx.fillStyle = ink;
+  ctx.fillRect(left.x + 4, ruleY, (right ? left.w : left.w) - 8, 1);
+  ctx.fillStyle = rgba(T.paperLo, 0.9);
+  ctx.fillRect(left.x + 4, ruleY + 2, left.w - 8, 1);
+  if (right) {
+    ctx.fillStyle = rgba(T.paperEdge, 0.6);
+    ctx.fillRect(right.x + 4, ruleY, right.w - 8, 1);
+  }
+  const headTop = left.y, headH = ruleY - left.y;
+  icon(app, ic, r.x + 9, headTop + Math.floor((headH - 16) / 2));
+  const titleX = r.x + 29;
+  ui.big(title, titleX, headTop + Math.floor((headH - BIG_CAP_H) / 2), T.ink);
+  // close: a paper key with an x at the right, its Esc keycap beside it
+  const cx = r.x + r.w - 23;
+  if (button(ui, 'closeScreen', cx, headTop + 1, 15, 14, ICON.cross, { tip: 'Close {k:Esc}' })) app.panel = null;
+  const kw = keycapWidth('Esc');
+  keycapK(ui, 'Esc', cx - 3 - kw, headTop + Math.floor((headH - 10) / 2));
+  // the coin you hold: the book covers the Purse, and pages sell things (claims, stamps, Patents)
+  const coin = `{coin:${app.game.s.coin.format()}}`;
+  const cw = chipWidth(coin, { role: 'coin' });
+  chip(ui, cx - 3 - kw - 6 - cw, headTop + Math.floor((headH - 12) / 2), coin, { role: 'coin' });
+  const right0 = cx - 3 - kw - 6 - cw - 6;
+  const titleEnd = titleX + bigWidth(title) + 8;
+  if (!tabs.length) return right0 - titleEnd;
   const want = (lab: boolean) => tabs.reduce((s, t) => s + (lab ? Math.max(40, 22 + textWidth(t.label)) : 18) + 2, 0);
-  const lab = right - titleEnd >= want(true);
-  if (!lab && right - titleEnd < want(false)) return right - titleEnd;
-  let x = right - want(lab);
-  const left = x - titleEnd;
+  const lab = right0 - titleEnd >= want(true);
+  if (!lab && right0 - titleEnd < want(false)) return right0 - titleEnd;
+  let x = right0 - want(lab);
+  const free = x - titleEnd;
   for (const t of tabs) {
     const tw = lab ? Math.max(40, 22 + textWidth(t.label)) : 18;
-    if (tab(app, t.id, x, r.y + 4, tw, 13, lab ? t.label : '', { icon: t.icon, active: t.active, tip: t.tip, badge: t.badge, disabled: t.disabled })) t.onClick();
+    // bookmarks hang from the book's top edge; the active one hangs lower
+    const th = t.active ? MENU_HEAD - 2 : MENU_HEAD - 5;
+    if (tab(app, t.id, x, r.y + 1, tw, th, lab ? t.label : '', { icon: t.icon, active: t.active, tip: t.tip, badge: t.badge, disabled: t.disabled })) t.onClick();
     x += tw + 2;
   }
-  return left;
+  return free;
 }
 
-/** A screen's title strip: the template's header, with the tabs of the screen's group. Returns the
- * strip's free width left of the tabs (for callers that add their own controls). */
+/** A screen's title strip: the book (one page) and its header, with the tabs of the screen's
+ * group. Returns the strip's free width left of the tabs (for callers that add their own
+ * controls). */
 export function screenHeader(app: App, r: Rect, title: string, accent: string, ic: IconName): number {
-  return menuHead(app, r, title, accent, ic, linked(app));
+  return menuHead(app, r, title, accent, ic, linked(app), null);
 }
 
-/** The one full-screen menu template (docs/ui-redesign.md): the ornate frame, a header bar (icon,
- * title, the menu's tabs, Esc and close), the content, and an optional detail panel `detail` px
- * wide on the right (the research tree's node card is the model). Returns where to draw.
+/** The one full-screen menu template: the ledger book, its header (icon, title, the menu's tabs
+ * as bookmarks, Esc and close), the content on the left page, and an optional detail panel
+ * `detail` px wide as the right page (the research tree's node card is the model). Returns where
+ * to draw.
  *   const { body, detail } = menuTemplate(app, r, { title: 'Patents', accent: C.violet, icon: 'star', detail: 170 });
  */
 export function menuTemplate(app: App, r: Rect, o: { title: string; accent: string; icon: IconName; tabs?: MenuTab[]; detail?: number }): { body: Rect; detail: Rect | null; free: number } {
-  const free = menuHead(app, r, o.title, o.accent, o.icon, o.tabs ?? linked(app));
   const top = r.y + MENU_HEAD + 4, h = r.h - MENU_HEAD - 10;
   const dw = o.detail ? Math.min(o.detail, Math.floor(r.w * 0.4)) : 0;
   const body = { x: r.x + 8, y: top, w: r.w - 16 - (dw ? dw + 6 : 0), h };
   const detail = dw ? { x: r.x + r.w - 8 - dw, y: top, w: dw, h } : null;
+  const free = menuHead(app, r, o.title, o.accent, o.icon, o.tabs ?? linked(app), detail ? detail.x - 3 : null);
   return { body, detail, free };
 }
 
@@ -190,7 +221,7 @@ export function rays(app: App, cx: number, cy: number, rad: number, col: string,
   }
 }
 
-/** A segmented meter: n cells, `on` filled; cells past `cap` drawn red (over-use). */
+/** A segmented meter on paper: n cells in an ink-lined trough, `on` filled with `col`. */
 export function cells(app: App, x: number, y: number, w: number, h: number, on: number, n: number, col: string) {
   const ui = app.ui;
   ui.fill(x, y, w, h, C.ink);
@@ -199,7 +230,8 @@ export function cells(app: App, x: number, y: number, w: number, h: number, on: 
   for (let i = 0; i < n; i++) {
     const cx = x + 1 + i * cw;
     if (cx + cw - 1 > x + w) break;
-    ui.fill(cx, y + 1, cw - 1, h - 2, i < on ? col : C.shadow);
+    ui.fill(cx, y + 1, cw - 1, h - 2, i < on ? col : T.paperLo);
     if (i < on) ui.fill(cx, y + 1, cw - 1, 1, rgba(C.bone, 0.4));
+    else ui.fill(cx, y + 1, cw - 1, 1, C.wood4);
   }
 }

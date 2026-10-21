@@ -1,26 +1,32 @@
-// The Patent Drawer on screen (DESIGN.md §19, the Milestone 5-6 review round): the designs kept
-// through every Reorganize, each with its product, grade, rate and bill and a readable picture of
-// its layout, and what it can do now: Unfold (whole, onto the box it was folded from), Queue (for
-// the Draughtsman), Copy its share string, Forget. Below them, this run's Workshop designs, each
-// with a Keep button. Built on menuTemplate with a detail panel (src/app/widgets.ts). It replaces
-// the Blueprint Book: no ghosts, no drones, no pasted outlines waiting to be built (DECISIONS.md).
-// Presentation only: every change is a command (keep, forget, unfoldKept, queueKept, importDesign).
-import { C } from '../data/palette';
+// The Patent Drawer, a page of the ledger (DESIGN.md §19, the Milestone 5-6 review round;
+// docs/hud-180.md): the designs kept through every Reorganize as folded paper cards, each with a
+// brass band, its product's icon, its grade stamped in red ink, its rate and bill as chips and
+// what it can do in this run; below them this run's Workshop designs, each with a Keep button. The
+// right page is the selected design in full: its layout drawn big enough to read, its facts as
+// ruled rows, its FWD1 share string in a paper field, and Unfold (whole, onto the box it was folded
+// from), Queue (for the Draughtsman), Copy and Forget. It replaces the Blueprint Book: no ghosts,
+// no drones, no pasted outlines waiting to be built (DECISIONS.md). Presentation only: every change
+// is a command (keep, forget, unfoldKept, queueKept, importDesign).
+import { C, rgba } from '../data/palette';
 import { BUILD } from '../data/machines';
 import { RECIPE } from '../data/recipes';
 import { ITEMS, type ItemId } from '../data/items';
-import { ICON, textWidth, ellipsize } from '../ui/font';
+import { ellipsize, bigWidth } from '../ui/font';
 import { itemIcon } from '../render/sprites';
-import { keepRefusal, keptBill, keptLand, keptState, unfoldKeptRefusal, encodeDesign } from '../sim/drawer';
+import { keepRefusal, keptBill, keptLand, unfoldKeptRefusal, encodeDesign } from '../sim/drawer';
 import { previewPatents, designValue } from '../sim/reorganize';
 import { prules } from '../sim/patents';
 import { mainItem } from '../sim/systems/modules';
 import { Num } from '../engine/num';
 import type { DesignPart, KeptDesign, ModuleDesign } from '../sim/world';
-import { card, button, frame } from './chrome';
+import { button, chip, chipWidth, section, rule } from './chrome';
 import { menuTemplate, perMin } from './widgets';
+import { layoutRich, drawLayout } from '../ui/rich';
+import { T } from '../ui/theme';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
+import { bookArea, heading, kvRow, gradeStamp, speak, ROW_H } from './ledger';
+import { committeeFallback } from './reorganize';
 
 /** the row selected (a kept design, or one of this run's designs), the scroll, a two-click Forget */
 const st = { sel: null as null | { k: 'kept' | 'run'; id: number }, scroll: 0, armForget: -1, armUntil: 0 };
@@ -40,8 +46,9 @@ function partCol(kind: string): string {
   return C.gold;
 }
 
-/** A layout drawn at k px a tile: buildings by family, each crafting machine with its product's
- * icon once the tiles are big enough to read (8 px), belts with a dot pointing their way. */
+/** A layout drawn at k px a tile, as the floor it came from: buildings by family, each crafting
+ * machine with its product's icon once the tiles are big enough to read (8 px), belts with a dot
+ * pointing their way. */
 function picture(app: App, parts: DesignPart[], w: number, h: number, x: number, y: number, k: number) {
   const ui = app.ui;
   ui.fill(x - 1, y - 1, w * k + 2, h * k + 2, C.ink);
@@ -65,46 +72,58 @@ function picture(app: App, parts: DesignPart[], w: number, h: number, x: number,
   }
 }
 
-export function drawerScreen(app: App, r: Rect) {
+/** A kept design's state as a chip: ready, unfolded this run, or what it waits for. */
+function stateChip(app: App, k: KeptDesign): { text: string; role: 'good' | 'soft' | 'warn'; why: string | null } {
+  const g = app.game;
+  if ((g.s.drafted ?? []).includes(k.id)) return { text: 'unfolded', role: 'soft', why: null };
+  const why = unfoldKeptRefusal(g, k);
+  if (!why) return { text: 'ready', role: 'good', why: null };
+  const WAITS = { coin: 'needs coin', land: 'needs land', research: 'needs research', room: 'box blocked' } as const;
+  return { text: WAITS[why.waits], role: 'warn', why: why.why };
+}
+
+export function drawerScreen(app: App, r0: Rect) {
   const ui = app.ui;
   const g = app.game;
   const m = g.s.meta;
   const slots = prules(g).drawerSlots;
-  const { body, detail } = menuTemplate(app, r, { title: `The Patent Drawer: ${m.drawer.length} of ${slots} kept`, accent: C.violet, icon: 'fold', detail: 190 });
-  // the tools row
-  let bx = body.x;
-  const tool = (id: string, label: string, tip: string, on: () => void, disabled = false) => {
-    const w = textWidth(label) + 14;
-    if (button(ui, id, bx, body.y, w, 14, label, { tip, disabled })) on();
-    bx += w + 4;
-  };
-  tool('kdImport', 'Import a string', 'Paste an FWD1 share string: a design from another save, kept here like your own', () => importPrompt(app), m.drawer.length >= slots);
+  const r = bookArea(r0);
+  const { body, detail } = menuTemplate(app, r, { title: 'The Patent Drawer', accent: C.violet, icon: 'fold', detail: Math.floor(r.w * 0.4) });
+  // ---- the tools: import a string, and who unfolds the queue
+  const iw = layoutRich('{u:blueprint} Import a string').w + 14;
+  if (button(ui, 'kdImport', body.x, body.y, iw, 15, '{u:blueprint} Import a string', { disabled: m.drawer.length >= slots, tip: [{ text: '{u:blueprint} paste an FWD1 share string' }, { text: 'a design from another save, kept here like your own', color: T.inkSoft }] })) importPrompt(app);
   const draught = prules(g).draughtsmanEvery;
-  const note = draught ? `The Draughtsman unfolds the queue (${m.queue.length}) as land, research and coin allow` : 'Kept designs unfold whole onto the box they were folded from';
-  if (bx + textWidth(note) < body.x + body.w) ui.text(note, body.x + body.w, body.y + 4, C.hull3, { align: 'right' });
-  // the kept designs
-  const ky = body.y + 18;
+  const note = draught ? `{u:build} the Draughtsman unfolds the queue {chip:reset:${m.queue.length}}` : '{u:fold} a kept design unfolds whole onto its box';
+  const NL = layoutRich(note);
+  if (body.x + iw + 8 + NL.w <= body.x + body.w) drawLayout(ui, NL, body.x + body.w, body.y + 4, T.inkSoft, { align: 'right' });
+  // ---- the kept designs
+  let y = body.y + 20;
   const runDesigns = g.s.designs.filter((d) => !d.fparts && !m.drawer.some((k) => k.src === d.id));
-  const runH = runDesigns.length ? Math.min(Math.floor(body.h * 0.36), 22 + Math.ceil(runDesigns.length / 2) * 16) : 0;
-  const keptH = body.y + body.h - ky - (runH ? runH + 4 : 0);
-  const inner = card(ui, body.x, ky, body.w, keptH, 'Kept: unfold them in any run', C.violet, 'star');
+  const runH = runDesigns.length ? Math.min(Math.floor(body.h * 0.36), 18 + Math.ceil(runDesigns.length / 2) * 17) : 0;
+  const keptEnd = body.y + body.h - (runH ? runH + 4 : 0);
+  heading(ui, 'Kept', body.x, y, body.w, 'reset', `{soft:${m.drawer.length} of ${slots} slots}`);
+  y += 16;
   if (!m.drawer.length) {
-    ui.para('Nothing kept yet. A design folded this run can be kept here (below): it waits through every Reorganize, and in a later run it unfolds whole onto its box, every machine and belt at once, ready to audit and fold again.', inner.x + 2, inner.y + 2, Math.min(inner.w - 4, 340), C.hull3);
+    // the Committee explains it in their own words
+    speak(app, 'committee', '"keep a good one." "it outlives us." "everything does."', body.x, y, Math.min(body.w, 280), { size: 24, fallback: committeeFallback });
+    drawLayout(ui, layoutRich('{u:fold} fold → {u:blueprint} keep → {u:reset} reset → {u:fold} unfold whole', body.w), body.x, y + 32, T.inkSoft);
   } else {
-    const rowH = 28;
-    const per = Math.max(1, Math.floor(inner.h / rowH));
+    const rowH = 32;
+    const per = Math.max(1, Math.floor((keptEnd - y) / rowH));
     st.scroll = Math.max(0, Math.min(st.scroll, m.drawer.length - per));
-    if (ui.hover(inner.x, inner.y, inner.w, inner.h) && app.input.mouse.wheel) st.scroll = Math.max(0, Math.min(m.drawer.length - per, st.scroll + Math.sign(app.input.mouse.wheel)));
-    m.drawer.slice(st.scroll, st.scroll + per).forEach((k, i) => keptRow(app, k, inner.x, inner.y + i * rowH, inner.w, rowH - 2));
-    if (m.drawer.length > per) ui.text(`${st.scroll + 1}-${Math.min(m.drawer.length, st.scroll + per)} of ${m.drawer.length} (scroll)`, inner.x + inner.w, inner.y - 13, C.hull1, { align: 'right' });
+    if (ui.hover(body.x, y, body.w, keptEnd - y) && app.input.mouse.wheel) st.scroll = Math.max(0, Math.min(m.drawer.length - per, st.scroll + Math.sign(app.input.mouse.wheel)));
+    m.drawer.slice(st.scroll, st.scroll + per).forEach((k, i) => keptCard(app, k, body.x, y + i * rowH, body.w, rowH - 4));
+    if (m.drawer.length > per) drawLayout(ui, layoutRich(`{k:WHEEL} ${st.scroll + 1}-${Math.min(m.drawer.length, st.scroll + per)} of ${m.drawer.length}`), body.x + body.w, keptEnd - 10, T.inkSoft, { align: 'right' });
   }
-  // this run's designs, to keep
+  // ---- this run's designs, to keep
   if (runH) {
-    const rin = card(ui, body.x, body.y + body.h - runH, body.w, runH, 'Folded this run: keep the ones worth unfolding again', C.gold, 'fold');
-    const cw = Math.floor((rin.w - 4) / 2);
-    runDesigns.slice(0, Math.max(0, Math.floor(rin.h / 16)) * 2).forEach((d, i) => runRow(app, d, rin.x + (i % 2) * (cw + 4), rin.y + Math.floor(i / 2) * 16, cw, 14));
+    const ry = body.y + body.h - runH;
+    heading(ui, 'Folded this run', body.x, ry, body.w, 'coin', '{soft:keep the good ones}');
+    const cw = Math.floor((body.w - 6) / 2);
+    const rows = Math.max(0, Math.floor((runH - 16) / 17));
+    runDesigns.slice(0, rows * 2).forEach((d, i) => runRow(app, d, body.x + (i % 2) * (cw + 6), ry + 16 + Math.floor(i / 2) * 17, cw, 15));
   }
-  // the detail panel
+  // ---- the right page
   if (!detail) return;
   const sel = st.sel;
   const kd = sel?.k === 'kept' ? m.drawer.find((k) => k.id === sel.id) : undefined;
@@ -112,31 +131,65 @@ export function drawerScreen(app: App, r: Rect) {
   if (kd) keptDetail(app, kd, detail);
   else if (rd) runDetail(app, rd, detail);
   else {
-    const inn = card(ui, detail.x, detail.y, detail.w, detail.h, 'Pick a design', C.violet);
-    ui.para('Click a kept design to see its layout and unfold it; click one of this run\'s designs to keep it.', inn.x + 2, inn.y + 2, inn.w - 4, C.hull3);
+    heading(ui, 'Pick a design', detail.x, detail.y, detail.w, 'reset');
+    drawLayout(ui, layoutRich('{k:LMB} a kept design · see it, unfold it', detail.w), detail.x, detail.y + 18, T.ink);
+    drawLayout(ui, layoutRich("{k:LMB} one of this run's · keep it", detail.w), detail.x, detail.y + 32, T.ink);
   }
 }
 
-function keptRow(app: App, k: KeptDesign, x: number, y: number, w: number, h: number) {
+/** A kept design as a folded paper card: a brass band down its left edge, its picture, the
+ * product's icon and name, its grade stamped, its facts as chips, a turned-down corner. */
+function keptCard(app: App, k: KeptDesign, x: number, y: number, w: number, h: number) {
   const ui = app.ui;
   const g = app.game;
   const on = st.sel?.k === 'kept' && st.sel.id === k.id;
-  // the row's click region first, under its text, not over it (the overlap audit)
+  const hov = ui.hover(x, y, w, h);
+  ui.panel(x, y, w, h, 'paper', false, { hover: hov || on });
   ui.region(x, y, w, h, 'button', false);
-  frame(ui, x, y, w, h, 'inset', false);
-  if (on) ui.fill(x + 1, y + 1, 2, h - 2, C.violet);
+  const ctx = ui.ctx;
+  // the brass band, and the corner folded down
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(x + 3, y + 1, 5, h - 2);
+  ctx.fillStyle = T.brass;
+  ctx.fillRect(x + 4, y + 1, 3, h - 2);
+  ctx.fillStyle = T.brassHi;
+  ctx.fillRect(x + 4, y + 1, 1, h - 2);
+  for (let i = 0; i < 6; i++) {
+    ctx.fillStyle = T.paperLo;
+    ctx.fillRect(x + w - 7 + i, y + 1 + i, 6 - i, 1);
+    ctx.fillStyle = T.paperEdge;
+    ctx.fillRect(x + w - 7 + i, y + 1 + i, 1, 1);
+  }
+  if (on) { ctx.fillStyle = rgba(T.reset, 0.9); ctx.fillRect(x + 10, y + h - 3, w - 20, 1); }
+  // the picture, small
   const t = Math.max(1, Math.min(3, Math.floor((h - 6) / Math.max(k.w, k.h))));
-  picture(app, k.parts, k.w, k.h, x + 5, y + 3 + Math.floor((h - 6 - k.h * t) / 2), t);
-  const tx = x + 10 + Math.max(24, k.w * t);
-  if (k.product) ui.ctx.drawImage(itemIcon(k.product), tx, y + 3);
+  picture(app, k.parts, k.w, k.h, x + 12, y + 3 + Math.floor((h - 6 - k.h * t) / 2), t);
+  const tx = x + 16 + Math.max(20, k.w * t);
+  if (k.product) ctx.drawImage(itemIcon(k.product), tx, y + 4);
   const queued = g.s.meta.queue.indexOf(k.id);
-  const name = `${k.name}${queued >= 0 ? `  ${ICON.right}${queued + 1}` : ''}`;
-  const facts = `${k.grade ? `${k.grade}, ` : 'imported, '}${k.rate ? `${perMin(k.rate)}/min, ` : ''}${Num.of(keptBill(k)).format()} coin`;
-  ui.text(ellipsize(name, w - (tx - x) - 11 - textWidth(facts) - 12), tx + 11, y + 4, C.gold);
-  ui.text(facts, x + w - 6, y + 4, C.bone, { align: 'right' });
-  const state = keptState(g, k);
-  ui.text(ellipsize(state, w - (tx - x) - 8), tx, y + 15, state.startsWith('ready') ? C.leaf : state.startsWith('unfolded') ? C.hull2 : C.hull3);
-  if (ui.hover(x, y, w, h) && ui.clicked) { ui.eat(); st.sel = { k: 'kept', id: k.id }; ui.sfx('click'); }
+  // the grade, stamped at the right; the facts as chips on the second line
+  const gx = x + w - 20;
+  const nameRoom = gx - 14 - (tx + 11) - (queued >= 0 ? chipWidth(`#${queued + 1}`) + 4 : 0);
+  const name = bigWidth(k.name) <= nameRoom ? `{big:${k.name}}` : ellipsize(k.name, nameRoom);
+  drawLayout(ui, layoutRich(name), tx + 11, y + 3, T.ink);
+  if (queued >= 0) chip(ui, gx - 14 - chipWidth(`#${queued + 1}`), y + 2, `#${queued + 1}`, { role: 'reset', solid: true });
+  if (k.grade) gradeStamp(ui, k.grade, gx, y + Math.floor(h / 2));
+  else drawLayout(ui, layoutRich('{soft:FWD1}'), gx + 8, y + Math.floor(h / 2) - 4, T.inkSoft, { align: 'right' });
+  const sc = stateChip(app, k);
+  const facts = [
+    ...(k.rate ? [{ text: `${perMin(k.rate)}/min`, role: 'ink' as const }] : []),
+    { text: `{coin:${Num.of(keptBill(k)).format()}}`, role: 'coin' as const },
+    { text: sc.text, role: sc.role },
+  ];
+  let cx = tx;
+  for (const f of facts) {
+    const cw = chipWidth(f.text);
+    if (cx + cw > gx - 14) break;
+    chip(ui, cx, y + h - 14, f.text, { role: f.role });
+    cx += cw + 3;
+  }
+  if (hov) ui.tip([{ text: `{big:${k.name}}` }, ...(sc.why ? [{ text: `{warn:${sc.why}}` }] : []), { text: '{k:LMB} open it on the right page', color: T.inkSoft }], 200);
+  if (hov && ui.clicked) { ui.eat(); st.sel = { k: 'kept', id: k.id }; ui.sfx('click'); }
 }
 
 function runRow(app: App, d: ModuleDesign, x: number, y: number, w: number, h: number) {
@@ -145,44 +198,63 @@ function runRow(app: App, d: ModuleDesign, x: number, y: number, w: number, h: n
   const it = mainItem(d);
   const on = st.sel?.k === 'run' && st.sel.id === d.id;
   ui.region(x, y, w - 44, h, 'button', false);
-  ui.fill(x, y, w, h, on ? C.hull0 : C.shadow);
-  if (it) ui.ctx.drawImage(itemIcon(it), x + 2, y + 3);
-  ui.text(ellipsize(`${d.name} (${d.grade.letter})`, w - 56), x + 13, y + 4, C.bone);
+  if (on || ui.hover(x, y, w - 44, h)) section(ui, x, y, w - 42, h);
+  if (it) ui.ctx.drawImage(itemIcon(it), x + 2, y + 4);
+  const label = `${d.name} {soft:${d.grade.letter}}`;
+  const room = w - 59; // inside the row's region (w - 44 from x, the label starting at x + 13)
+  drawLayout(ui, layoutRich(layoutRich(label).w <= room ? label : ellipsize(d.name, room - 14) + ` {soft:${d.grade.letter}}`), x + 13, y + 4, T.ink);
+  if (on) rule(ui, x + 13, y + h - 1, w - 58, true);
   const why = keepRefusal(g, d.id);
-  if (button(ui, `keep${d.id}`, x + w - 40, y + 1, 38, 12, 'Keep', { disabled: !!why, tip: why ?? 'Keep it in the Patent Drawer: it survives every Reorganize' })) app.act({ k: 'keep', id: d.id });
+  if (button(ui, `keep${d.id}`, x + w - 40, y, 40, h, 'Keep', { disabled: !!why, tip: why ? `{warn:${why}}` : '{u:blueprint} into the Patent Drawer · it survives every Reorganize' })) app.act({ k: 'keep', id: d.id });
   if (ui.hover(x, y, w - 44, h) && ui.clicked) { ui.eat(); st.sel = { k: 'run', id: d.id }; ui.sfx('click'); }
 }
 
-/** One kept design in full: its picture big enough to read, what it makes, needs and costs, and
- * the four things it can do. */
+/** One kept design in full: its picture big enough to read, its facts as rows, its share string,
+ * and the four things it can do. */
 function keptDetail(app: App, k: KeptDesign, r: Rect) {
   const ui = app.ui;
   const g = app.game;
-  const inner = card(ui, r.x, r.y, r.w, r.h, ellipsize(k.name, r.w - 20), C.violet, 'star');
-  let yy = inner.y;
-  const t = Math.max(3, Math.min(10, Math.floor(Math.min(inner.w - 4, 90) / Math.max(k.w, k.h))));
-  picture(app, k.parts, k.w, k.h, inner.x + Math.floor((inner.w - k.w * t) / 2), yy + 1, t);
-  yy += k.h * t + 6;
-  const row = (a: string, b: string, col: string = C.bone) => {
-    ui.text(a, inner.x, yy, C.hull2);
-    ui.text(ellipsize(b, inner.w - textWidth(a) - 6), inner.x + inner.w, yy, col, { align: 'right' });
-    yy += 10;
-  };
-  if (k.product) row('Makes', `${ITEMS[k.product as ItemId].name}${k.rate ? `, ${perMin(k.rate)}/min` : ''}`, C.gold);
-  row('Graded', k.grade ? `${k.grade} (run ${k.run})` : 'not audited here: imported', k.grade ? C.bone : C.hull3);
-  row('Box', `${k.w}x${k.h} at ${k.x},${k.y}, on land ${keptLand(k).join(', ')}`);
+  let y = r.y;
+  const nameRoom = r.w - (k.grade ? 30 : 0);
+  const NL = layoutRich(`{big:${k.name}}`, nameRoom);
+  drawLayout(ui, NL, r.x, y, T.ink);
+  if (k.grade) gradeStamp(ui, k.grade, r.x + r.w - 13, y + 8, { scale: 1 });
+  y += NL.h + 3;
+  const t = Math.max(3, Math.min(10, Math.floor(Math.min(r.w - 4, 90) / Math.max(k.w, k.h))));
+  const ph = Math.min(k.h * t, 60);
+  const tt = Math.max(2, Math.min(t, Math.floor(ph / k.h)));
+  picture(app, k.parts, k.w, k.h, r.x + Math.floor((r.w - k.w * tt) / 2), y + 1, tt);
+  y += k.h * tt + 6;
+  const foot = r.y + r.h - 54;
+  const row = (a: string, b: string) => { if (y + ROW_H <= foot) y += kvRow(ui, r.x, y, r.w, a, b); };
+  if (k.product) row(`{i:${k.product}} makes`, `${ITEMS[k.product as ItemId].name}${k.rate ? ` · ${perMin(k.rate)}/min` : ''}`);
+  row('{u:fold} graded', k.grade ? `${k.grade} · run ${k.run}` : '{soft:imported}');
+  row('{u:claim} box', `${k.w}x${k.h} at ${k.x},${k.y} · land ${keptLand(k).join(' ')}`);
   const machines = k.parts.filter((p) => p.kind !== 'belt');
-  row('Bill', `${Num.of(keptBill(k)).format()} coin (${machines.length} buildings, ${k.parts.length - machines.length} belts)`);
+  row('{u:coin} bill', `{coin:${Num.of(keptBill(k)).format()}} · ${machines.length} {u:build} ${k.parts.length - machines.length} belts`);
   const filed = k.product ? g.s.meta.patented?.[k.product] : undefined;
-  if (filed) row('On file', `${filed.grade}, ${filed.steps} step${filed.steps === 1 ? '' : 's'}, tier ${filed.tier}`, C.violet);
-  yy += 2;
-  const why = unfoldKeptRefusal(g, k);
+  if (filed) row('{u:reset} on file', `{reset:${filed.grade} · ${filed.steps} step${filed.steps === 1 ? '' : 's'} · tier ${filed.tier}}`);
+  // what it can do in this run
+  const sc = stateChip(app, k);
   const drafted = (g.s.drafted ?? []).includes(k.id);
-  yy += ui.para(drafted ? 'Unfolded in this run already. Audit it and fold it again to file a better design.' : why ? why.why : 'Ready: one click lays every machine and belt on its box.', inner.x, yy, inner.w, drafted ? C.hull2 : why ? C.pipYellow : C.leaf) + 4;
-  // the buttons: Unfold and Queue on one line, Copy and Forget on the next
-  const bw = Math.floor((inner.w - 4) / 2);
-  const by = inner.y + inner.h - 32;
-  if (button(ui, 'kdUnfold', inner.x, by, bw, 14, 'Unfold', { gold: !why, disabled: !!why, tip: why?.why ?? `Unfold it onto ${k.x},${k.y} for ${Num.of(keptBill(k)).format()} coin` })) {
+  if (y + ROW_H <= foot + 14) {
+    const cw = chip(ui, r.x, y + 1, sc.text, { role: sc.role, solid: sc.role === 'good' });
+    const said = drafted ? '{soft:audit it, fold it again, file it better}' : sc.why ? `{warn:${sc.why}}` : '{soft:one click lays every machine and belt}';
+    const L = layoutRich(said, r.w - cw - 4);
+    if (y + L.h + 2 <= foot + 14) drawLayout(ui, L, r.x + cw + 4, y + 3, T.ink);
+    y += Math.max(ROW_H, L.h + 4);
+  }
+  // the share string in a paper field, Copy beside it
+  const by = r.y + r.h - 50;
+  const code = encodeDesign(k);
+  const fw = r.w - 46;
+  section(ui, r.x, by, fw, 15);
+  ui.text(ellipsize(code, fw - 8), r.x + 4, by + 4, T.inkSoft);
+  if (button(ui, 'kdCopy', r.x + fw + 4, by, 42, 15, 'Copy', { tip: [{ text: '{u:blueprint} copy its FWD1 share string' }, { text: `${code.length} characters`, color: T.inkSoft }] })) copyString(app, k);
+  // Unfold and Queue, then Forget
+  const bw = Math.floor((r.w - 4) / 2);
+  const why = unfoldKeptRefusal(g, k);
+  if (button(ui, 'kdUnfold', r.x, by + 18, bw, 16, 'Unfold', { gold: !why, disabled: !!why, tip: why ? `{warn:${why.why}}` : `{u:fold} onto ${k.x},${k.y} · {coin:${Num.of(keptBill(k)).format()}}` })) {
     if (app.act({ k: 'unfoldKept', id: k.id }).ok) {
       app.panel = null;
       app.setFloor('workshop', true);
@@ -191,10 +263,9 @@ function keptDetail(app: App, k: KeptDesign, r: Rect) {
   }
   const draught = prules(g).draughtsmanEvery > 0;
   const q = g.s.meta.queue.includes(k.id);
-  if (button(ui, 'kdQueue', inner.x + bw + 4, by, bw, 14, q ? 'Unqueue' : 'Queue', { disabled: !draught, active: q, tip: draught ? (q ? 'Take it out of the Draughtsman\'s queue' : 'The Draughtsman unfolds it in every run, in queue order, as land, research and coin allow') : 'Buy The Draughtsman (a Patent) to unfold kept designs for you' })) app.act({ k: 'queueKept', id: k.id });
-  if (button(ui, 'kdCopy', inner.x, by + 17, bw, 14, 'Copy string', { tip: 'Copy its share string (FWD1) to the clipboard' })) copyString(app, k);
+  if (button(ui, 'kdQueue', r.x + bw + 4, by + 18, bw, 16, q ? 'Unqueue' : 'Queue', { disabled: !draught, active: q, tip: draught ? (q ? '{u:build} out of the Draughtsman\'s queue' : '{u:build} the Draughtsman unfolds it every run · in queue order · as land, research and coin allow') : '{u:lock} needs the Draughtsman · a Patent' })) app.act({ k: 'queueKept', id: k.id });
   const armed = st.armForget === k.id && ui.time < st.armUntil;
-  if (button(ui, 'kdForget', inner.x + bw + 4, by + 17, bw, 14, armed ? 'Sure?' : 'Forget', { gold: armed, tip: armed ? 'Click again to forget it for good' : 'Forget it (two clicks): its slot frees up' })) {
+  if (button(ui, 'kdForget', r.x, by + 36, r.w, 14, armed ? 'Sure? Forget it' : 'Forget', { gold: armed, tip: armed ? '{bad:click again} · gone for good' : '{u:remove} two clicks · its slot frees up' })) {
     if (armed) { app.act({ k: 'forget', id: k.id }); st.armForget = -1; st.sel = null; }
     else { st.armForget = k.id; st.armUntil = ui.time + 3; }
   }
@@ -204,21 +275,31 @@ function keptDetail(app: App, k: KeptDesign, r: Rect) {
 function runDetail(app: App, d: ModuleDesign, r: Rect) {
   const ui = app.ui;
   const g = app.game;
-  const inner = card(ui, r.x, r.y, r.w, r.h, ellipsize(d.name, r.w - 20), C.gold, 'fold');
-  let yy = inner.y;
-  const t = Math.max(3, Math.min(10, Math.floor(Math.min(inner.w - 4, 90) / Math.max(d.box.w, d.box.h))));
+  let y = r.y;
+  const NL = layoutRich(`{big:${d.name}}`, r.w - 30);
+  drawLayout(ui, NL, r.x, y, T.ink);
+  gradeStamp(ui, d.grade.letter, r.x + r.w - 13, y + 8);
+  y += NL.h + 3;
+  const t = Math.max(3, Math.min(10, Math.floor(Math.min(r.w - 4, 90) / Math.max(d.box.w, d.box.h))));
   const parts = d.parts.map((p) => ({ kind: p.kind as DesignPart['kind'], dx: p.dx, dy: p.dy, rot: p.rot, recipe: p.recipe }));
-  picture(app, parts, d.box.w, d.box.h, inner.x + Math.floor((inner.w - d.box.w * t) / 2), yy + 1, t);
-  yy += d.box.h * t + 6;
+  picture(app, parts, d.box.w, d.box.h, r.x + Math.floor((r.w - d.box.w * t) / 2), y + 1, t);
+  y += d.box.h * t + 6;
   const v = designValue(d);
   const line = previewPatents(g).lines.find((l) => l.item === v?.item);
   if (v) {
-    yy += ui.para(`${ITEMS[v.item].name}: ${v.steps} step${v.steps === 1 ? '' : 's'} folded x ${v.grade} x tier ${v.tier}, ${perMin(v.rate)}/min.`, inner.x, yy, inner.w, C.bone) + 2;
-    if (line) yy += ui.para(line.status === 'filed' ? 'Its product is on file at this value or better: it files nothing more.' : `Files +${line.patents.toFixed(1)} Patents at the next Reorganize${line.status === 'improved' ? ' (better than the one on file)' : ' (a new product)'}.`, inner.x, yy, inner.w, line.status === 'filed' ? C.hull3 : C.violet) + 4;
+    y += kvRow(ui, r.x, y, r.w, `{i:${v.item}} ${ITEMS[v.item].name}`, `${perMin(v.rate)}/min`);
+    y += kvRow(ui, r.x, y, r.w, '{u:fold} value', `${v.steps} step${v.steps === 1 ? '' : 's'} × ${v.grade} × tier ${v.tier}`);
+    if (line) {
+      const files = line.status === 'filed' ? '{soft:on file · files nothing more}' : `{reset:+${line.patents.toFixed(1)}} ${line.status === 'improved' ? '{chip:research:better}' : '{chip:good:new}'}`;
+      y += kvRow(ui, r.x, y, r.w, '{u:reset} files', files);
+    }
   }
   const why = keepRefusal(g, d.id);
-  if (why) yy += ui.para(why, inner.x, yy, inner.w, C.pipYellow) + 2;
-  if (button(ui, 'rdKeep', inner.x, inner.y + inner.h - 15, inner.w, 14, 'Keep in the drawer', { gold: !why, disabled: !!why, tip: why ?? 'It survives every Reorganize: unfold it whole in a later run' })) {
+  if (why) {
+    const L = layoutRich(`{warn:${why}}`, r.w);
+    if (y + L.h < r.y + r.h - 20) drawLayout(ui, L, r.x, y + 2, T.warn);
+  }
+  if (button(ui, 'rdKeep', r.x, r.y + r.h - 17, r.w, 17, '{u:blueprint} Keep in the Drawer', { gold: !why, disabled: !!why, tip: why ? `{warn:${why}}` : '{u:reset} it survives every Reorganize · unfold it whole in a later run' })) {
     if (app.act({ k: 'keep', id: d.id }).ok) {
       const k = g.s.meta.drawer[g.s.meta.drawer.length - 1];
       if (k) st.sel = { k: 'kept', id: k.id };
@@ -228,13 +309,14 @@ function runDetail(app: App, d: ModuleDesign, r: Rect) {
 
 function copyString(app: App, k: KeptDesign) {
   const s = encodeDesign(k);
-  const done = () => app.toast('Design string copied', `${k.name}: ${s.length} characters. Paste it into Import on any save.`, C.violet);
-  if (navigator.clipboard) navigator.clipboard.writeText(s).then(done, () => window.prompt('Copy this design string:', s));
-  else window.prompt('Copy this design string:', s);
+  const done = () => app.toast('Design string copied', `{u:blueprint} ${k.name} · ${s.length} characters`, C.violet);
+  if (navigator.clipboard) navigator.clipboard.writeText(s).then(done, () => window.prompt('Copy this design string', s));
+  else window.prompt('Copy this design string', s);
 }
 
 function importPrompt(app: App) {
-  const s = window.prompt('Paste a Foldworks design string (FWD1...):');
+  const s = window.prompt('Paste a Foldworks design string, FWD1...');
   if (!s) return;
-  if (app.act({ k: 'importDesign', code: s.trim() }).ok) app.toast('Design imported', 'It is in the Patent Drawer: unfold it onto its box when the land is yours.', C.violet);
+  if (app.act({ k: 'importDesign', code: s.trim() }).ok) app.toast('Design imported', '{u:blueprint} in the Drawer · unfold it onto its box', C.violet);
 }
+
