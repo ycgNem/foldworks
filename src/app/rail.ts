@@ -20,6 +20,7 @@ import { researchFrac } from '../sim/systems/research';
 import { offeredOrders, orderFrac } from '../sim/systems/orders';
 import { bubble, button, meter, chip, chipWidth, lilyPad, portrait, rule } from './chrome';
 import { nextGoal, type Speaker } from './goals';
+import { bigSafe } from './tags';
 import { toolboxButton } from './wheel';
 import type { Layout } from './layout';
 import { nodeIcon } from './screens';

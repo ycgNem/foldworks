@@ -15,7 +15,7 @@ import { FACTORY } from '../data/land';
 import { megaStage } from '../data/megaprojects';
 import { TICK_RATE } from '../engine/time';
 import { plain, pct, duration } from '../engine/fmt';
-import { bigWidth, BIG_LINE_H, LINE_H } from '../ui/font';
+import { bigWidth, hasBigGlyph, BIG_LINE_H, LINE_H } from '../ui/font';
 import { layoutRich, drawLayout, richWidth, CHIP_H } from '../ui/rich';
 import { T, type Role } from '../ui/theme';
 import { itemIcon } from '../render/sprites';
@@ -57,6 +57,9 @@ export interface Report {
 }
 
 const rich = (s: string, opt = false): Row => ({ t: 'rich', s, opt });
+
+/** Text for the display face: characters Bullfrog lacks become their nearest ('·' a dash) or go. */
+export const bigSafe = (s: string) => [...s].map((c) => (c === ' ' || hasBigGlyph(c) ? c : c === '·' ? '-' : c === '…' ? '...' : '')).join('').replace(/ {2,}/g, ' ');
 const RULE: Row = { t: 'rule' };
 
 /** per minute, the one number helper */
@@ -172,7 +175,7 @@ function machineReport(app: App, e: Ent): Report {
     else rows.push(rich(`{chip:bad:${frontless ? 'BLOCKED' : 'FULL'}} ${icon(e.why ?? main)} ${frontless ? 'front leads nowhere' : 'front takes no more'}${share(sh.blocked)}`));
   } else rows.push(rich('{chip:soft:IDLE}'));
   const pf = Math.min(1, powerFactor(g, e));
-  if (pf < 0.999 && e.why !== 'power') rows.push(rich(`{chip:warn:BROWNOUT ${Math.round(pf * 100)}%} runs at that speed`));
+  if (pf < 0.999 && e.why !== 'power') rows.push(rich(`{chip:warn:BROWNOUT ${Math.round(pf * 100)}%} its speed`));
   // ---- Overdrive
   const odOn = g.done('overdrive') && !firstMin;
   const od = e.od ?? 0, cool = e.cool ?? 0;
@@ -452,9 +455,9 @@ function factoryReport(app: App, e: FEnt): Report {
 
 // ------------------------------------------------------------------ laying out and drawing
 
-interface Laid { rep: Report; rows: { row: Row; h: number }[]; cw: number; w: number; h: number; verbsH: number; modesH: number }
+interface Laid { rep: Report; rows: { row: Row; h: number }[]; cw: number; w: number; h: number; verbsH: number; modesH: number; /** rows left out to fit (optional ones count half) */ cut: number }
 
-const ROW_GAP = 2;
+const ROW_GAP = 1;
 const BAR_H = 9;
 const MODES_H = 15;
 const MIN_CW = 116;
@@ -469,7 +472,7 @@ function rowH(r: Row, cw: number): number {
  * go first, then rows are cut with a count of how many more there are. */
 function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: boolean): Laid {
   let rows: Row[] = full ? [...rep.rows, ...(rep.more ?? [])] : rep.rows;
-  const titleW = bigWidth(rep.title) + (rep.item || rep.uicon ? 12 : 0) + (closeBtn ? 16 : 0);
+  const titleW = bigWidth(bigSafe(rep.title)) + (rep.item || rep.uicon ? 12 : 0) + (closeBtn ? 16 : 0);
   const natural = Math.max(...rows.map((r) => (r.t === 'rich' ? richWidth(r.s) : r.t === 'bar' ? 150 : 0)), rep.verbs ? richWidth(rep.verbs) : 0);
   const cw = Math.min(maxCw, Math.max(MIN_CW, titleW, natural));
   const modesH = full && rep.modes ? MODES_H + ROW_GAP : 0;
@@ -480,16 +483,18 @@ function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: 
     return { hs, outer: tagSize(cw, ch, 'left').h };
   };
   let m = measure(rows);
-  if (m.outer > maxH) { rows = rows.filter((r) => !r.opt); m = measure(rows); }
+  let cut = 0;
+  if (m.outer > maxH) { const n = rows.length; rows = rows.filter((r) => !r.opt); cut += (n - rows.length) / 2; m = measure(rows); }
   if (m.outer > maxH) {
     let keep = rows.length;
     while (keep > 1 && measure([...rows.slice(0, keep), rich('x')]).outer > maxH) keep--;
-    const cut = rows.length - keep;
-    rows = [...rows.slice(0, keep), rich(`{soft:+${cut} more ${cut > 1 ? 'rows' : 'row'}}`)];
+    const more = rows.length - keep;
+    cut += more;
+    rows = [...rows.slice(0, keep), rich(`{soft:+${more} more ${more > 1 ? 'rows' : 'row'}}`)];
     m = measure(rows);
   }
   const sz = tagSize(cw, BIG_LINE_H + 3 + m.hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + modesH + verbsH, 'left');
-  return { rep, rows: m.hs, cw, w: sz.w, h: sz.h, verbsH, modesH };
+  return { rep, rows: m.hs, cw, w: sz.w, h: sz.h, verbsH, modesH, cut };
 }
 
 /** Draw a laid-out report as a tag at (x, y): on a string to `anchor`, or pinned. */
@@ -497,7 +502,7 @@ function drawLaid(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: nu
   const ui = app.ui;
   const rep = L.rep;
   const r = tag(ui, x, y, L.w, L.h, { hole: 'left', anchor: o.pin ? null : o.anchor ?? null, pin: o.pin, blocking: o.blocking ?? !!o.pin });
-  ui.big(rep.title, r.x, r.y, T.ink);
+  ui.big(bigSafe(rep.title), r.x + (o.pin ? 2 : 0), r.y, T.ink);
   let ix = r.x + r.w - 8 - (o.close ? 16 : 0);
   if (rep.item && rep.item in ITEMS) ui.ctx.drawImage(itemIcon(rep.item), ix, r.y + 1);
   else if (rep.uicon) uiIcon(ui, rep.uicon, ix, r.y + 1, 1);
@@ -605,15 +610,21 @@ export function pinnedReport(app: App, L: Layout) {
     close = () => { app.fselected = null; };
   }
   if (!rep || !near) return;
-  // docked on the right above the notebook (the slips stop short of it), or on the left when it
-  // would sit on what it reports on
-  const top = L.slips.y + 40;
-  const laid = lay(rep, true, L.wide ? 206 : 186, L.notebook.y - 6 - top, true);
-  const right = ui.w - 6 - laid.w, left = 6;
-  const y = Math.max(top, L.notebook.y - 6 - laid.h);
-  const under = (x0: number) => near!.x + near!.w > x0 - 8 && near!.x < x0 + laid.w + 8 && near!.y + near!.h > y - 8 && near!.y < y + laid.h + 8;
-  const x = under(right) && !under(left) ? left : right;
-  pinTop = x === right ? y : Infinity;
+  // docked on the right, from under the lift down to the notebook (the slips stop short of it),
+  // or on the left between the Purse and the speaker's corner when it would sit on what it reports on
+  const cw = L.wide ? 206 : 198;
+  const rTop = L.slips.y + 18, rBot = L.notebook.y - 6;
+  const lTop = app.hud.purseBottom + 6, lBot = (app.hud.cornerRect?.y ?? ui.h - 96) - 6;
+  const rLaid = lay(rep, true, cw, rBot - rTop, true);
+  const ry = Math.max(rTop, rBot - rLaid.h);
+  const rx = ui.w - 6 - rLaid.w;
+  const under = (x0: number, y0: number, w: number, h: number) => near!.x + near!.w > x0 - 8 && near!.x < x0 + w + 8 && near!.y + near!.h > y0 - 8 && near!.y < y0 + h + 8;
+  let laid = rLaid, x = rx, y = ry;
+  // the left when the right would sit on it, or would leave out more rows
+  const lLaid = lay(rep, true, cw, lBot - lTop, true);
+  const rBad = under(rx, ry, rLaid.w, rLaid.h), lBad = under(6, lTop, lLaid.w, lLaid.h);
+  if ((rBad && !lBad && lLaid.cut <= rLaid.cut) || (!lBad && lLaid.cut < rLaid.cut)) { laid = lLaid; x = 6; y = lTop; }
+  pinTop = x === rx ? y : Infinity;
   pinRect = { x, y, w: laid.w, h: laid.h };
   drawLaid(app, laid, x, y, { pin: true, close, blocking: true });
 }
@@ -639,7 +650,7 @@ export function hoverEnt(app: App, e: Ent | null, fe: FEnt | null): boolean {
   if (!rep) return false;
   const ent = (e ?? fe)!;
   const near = worldRect(app, ent.x, ent.y, ent.w, ent.h);
-  const laid = lay(rep, false, 200, ui.h - 10, false);
+  const laid = lay(rep, false, 232, ui.h - 10, false);
   const p = place(app, { x: near.x - 6, y: near.y - 6, w: near.w + 12, h: near.h + 12 }, laid.w, laid.h, pinRect ? [pinRect] : []);
   const anchor = { x: near.x + Math.floor(near.w / 2), y: near.y + Math.floor(near.h / 2) };
   ui.later(() => drawLaid(app, laid, p.x, p.y, { anchor, blocking: false }));
@@ -650,7 +661,7 @@ export function hoverEnt(app: App, e: Ent | null, fe: FEnt | null): boolean {
 export function reportLines(app: App, e: Ent): { text: string; color?: string }[] {
   const rep = entReport(app, e);
   if (!rep) return [];
-  return [{ text: `{big:${rep.title}}` }, ...[...rep.rows, ...(rep.more ?? [])].filter((r): r is Extract<Row, { t: 'rich' }> => r.t === 'rich').map((r) => ({ text: r.s }))];
+  return [{ text: `{big:${bigSafe(rep.title)}}` }, ...[...rep.rows, ...(rep.more ?? [])].filter((r): r is Extract<Row, { t: 'rich' }> => r.t === 'rich').map((r) => ({ text: r.s }))];
 }
 
 void C; void LINE_H;

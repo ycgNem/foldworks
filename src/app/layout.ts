@@ -59,7 +59,7 @@ export function layout(w: number, h: number): Layout {
   const wide = w >= 600;
   const center = { x: 0, y: 0, w, h };
   const overlay = { x: 3, y: 3, w: w - 6 - TABS_W, h: h - 6 };
-  const tabs = { x: overlay.x + overlay.w - 2, y: overlay.y + 24, w: TABS_W + 3, h: overlay.h - 30 };
+  const tabs = { x: overlay.x + overlay.w, y: overlay.y + 24, w: TABS_W + 1, h: overlay.h - 30 };
   const purse = { x: 6, y: 7, w: 96, h: 30 };
   const bell = { x: 8, y: purse.y + purse.h + 22, w: 40, h: 22 };
   const lift = { x: w - 6 - 44, y: 6, w: 44, h: 26 };

@@ -28,7 +28,7 @@ import { purse, bell, counters, lift, notebook, sectionTabs, edgeArrows, cornerZ
 import { rail, diegetic, type Cameo } from './rail';
 import { newspaper } from './gazette';
 import { floorTags } from './floortags';
-import { pinnedReport, hoverEnt, worldTip, zones, pinTop } from './tags';
+import { pinnedReport, hoverEnt, worldTip, zones, pinTop, bigSafe } from './tags';
 import { drawWheel } from './wheel';
 import { nextGoal } from './goals';
 import type { App } from './app';
@@ -248,7 +248,7 @@ function slips(app: App, L: Layout, dt: number) {
     const icon = t.icon ? (TOAST_ICON[t.icon] ?? (t.icon in UICON ? (t.icon as UIconName) : null)) : null;
     const tx = icon ? 12 : 0;
     const cw = w - 12 - tx;
-    const title = layoutRich(`{big:${t.title.replace(/[{}]/g, '')}}`, cw);
+    const title = layoutRich(`{big:${bigSafe(t.title.replace(/[{}]/g, ''))}}`, cw);
     let body = t.text ? layoutRich(t.text, cw) : null;
     let h = 10 + title.h + (body ? body.h : 0);
     if (y + h > bottom) {
@@ -271,7 +271,7 @@ function slips(app: App, L: Layout, dt: number) {
   // trophies: a gold ribbon drops from the top centre, holds, and lifts away
   app.trophyPops.slice(-2).forEach((p, i) => {
     const t = TROPHIES.find((q) => q.id === p.id)!;
-    const s = `Trophy! ${t.name}`;
+    const s = bigSafe(`Trophy! ${t.name}`);
     const rw = Math.min(ui.w - 40, bigWidth(s) + 40);
     const drop = p.t < 0.25 ? (1 - p.t / 0.25) * -30 : p.t > 3.6 ? (p.t - 3.6) * -90 : Math.round(Math.sin(Math.min(1, (p.t - 0.25) * 4) * Math.PI) * 2);
     const ry = Math.round(6 + i * 20 + drop);
@@ -315,6 +315,7 @@ export function banner(app: App, title: string, sub: string, color: string = C.g
 function bannerRibbon(app: App, cx: number, y: number, title: string, sub: string, color: RibbonColor, sc: number) {
   const ui = app.ui;
   const ctx = ui.ctx;
+  title = bigSafe(title);
   const tw = bigWidth(title) * sc;
   const rh = BIG_H * sc + 8;
   const rw = Math.min(ui.w - 24, tw + 36);
@@ -465,10 +466,10 @@ function hoverReport(app: App) {
     if (!g.owned(h.x, h.y)) {
       const ch = g.chunkAt(h.x, h.y)!;
       const ready = !ch.requires || g.done(ch.requires);
-      ui.tip([{ text: `{big:${ch.name}}` }, { text: ready ? `{k:LMB} buy {coin:${ch.cost.toLocaleString('en-US')}}` : `{u:lock} research ${RESEARCH[ch.requires!].name} first` }], 180, at);
+      ui.tip([{ text: `{big:${bigSafe(ch.name)}}` }, { text: ready ? `{k:LMB} buy {coin:${ch.cost.toLocaleString('en-US')}}` : `{u:lock} research ${RESEARCH[ch.requires!].name} first` }], 180, at);
     } else if (g.oreAt(h.x, h.y)) {
       const ore = g.oreAt(h.x, h.y)!;
-      ui.tip([{ text: `{big:${itemName(ore)}} {i:${ore}}` }, { text: '{k:LMB} 1 into a machine beside it' }, { text: '{soft:a Miner goes on it}' }], 180, at);
+      ui.tip([{ text: `{big:${bigSafe(itemName(ore))}} {i:${ore}}` }, { text: '{k:LMB} 1 into a machine beside it' }, { text: '{soft:a Miner goes on it}' }], 180, at);
     }
     return;
   }
@@ -483,7 +484,7 @@ function hoverReport(app: App) {
   }
   if (e.kind === 'heap') { ui.tip([{ text: '{big:Slag Heap}' }, { text: `{i:slag} ${e.count} / ${BUILD.heap.capacity}` }, { text: '{soft:empties out its front}' }], 170, on); return; }
   if (e.kind === 'crate') { ui.tip([{ text: '{big:Buffer Crate}' }, { text: `${e.store.length} / ${BUILD.crate.capacity}${e.store.length ? ` {i:${e.store[0]}}` : ''}` }], 150, on); return; }
-  ui.tip([{ text: `{big:${BUILD[e.kind].name}}` }, { text: BUILD[e.kind].blurb }, { text: '{k:R} turn  {k:X} remove' }], 180, on);
+  ui.tip([{ text: `{big:${bigSafe(BUILD[e.kind].name)}}` }, { text: BUILD[e.kind].blurb }, { text: '{k:R} turn  {k:X} remove' }], 180, on);
 }
 
 // ------------------------------------------------------------------ title

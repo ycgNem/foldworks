@@ -29,6 +29,7 @@ import type { Layout } from './layout';
 import type { Rect } from '../ui/ui';
 import type { App } from './app';
 import type { ScreenName } from './screens';
+import { bigSafe } from './tags';
 
 export function fmtRate(v: number) {
   return plain(v, v < 10 ? 1 : 0); // Milestone 6: through the one number helper (DESIGN.md §20)
@@ -494,7 +495,7 @@ export function sectionTabs(app: App, L: Layout) {
     if (p.dot && !on && Math.floor(ui.time * 2.5) % 2 === 0) dot(ui, R.x + w - 2, y, C.pipRed);
     if (hov) {
       ui.hoverId = 'page:' + p.id;
-      ui.tip([{ text: `{big:${p.name}}${p.key ? `  {k:${p.key}}` : ''}` }], 160);
+      ui.tip([{ text: `{big:${bigSafe(p.name)}}${p.key ? `  {k:${p.key}}` : ''}` }], 160);
       if (ui.clicked) {
         ui.eat();
         if (!on) { app.panel = p.panel; app.audio.sfx('tab'); }

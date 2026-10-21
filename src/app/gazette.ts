@@ -21,6 +21,7 @@ import { hasArt, sheet, frameNamed } from '../render/sprites';
 import { slip, rule, ribbon, stamp } from './chrome';
 import { menuTemplate } from './widgets';
 import { registerScreen } from './screens';
+import { bigSafe } from './tags';
 import type { Layout } from './layout';
 import type { App } from './app';
 
@@ -193,7 +194,7 @@ function gazettePage(app: App, r: { x: number; y: number; w: number; h: number }
   const { kick, rest } = split(lead.text);
   let y = body.y;
   if (kick) { ribbon(ui, body.x, y, Math.min(body.w, bigWidth(kick) + 30), kick, { color: lead.extra ? 'red' : 'moss', tails: 'none' }); y += 19; }
-  y += ui.rich(`{big:${rest.charAt(0).toUpperCase() + rest.slice(1)}}`, body.x, y, body.w) + 4;
+  y += ui.rich(`{big:${bigSafe(rest.charAt(0).toUpperCase() + rest.slice(1))}}`, body.x, y, body.w) + 4;
   if (lead.extra) stamp(ui, 'EXTRA!', body.x + body.w - 34, body.y + 8, { angle: 0.12 });
   rule(ui, body.x, y, body.w, true);
   y += 6;
