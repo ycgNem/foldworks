@@ -2931,3 +2931,15 @@ corner's machine states. **No data or sim number moved.**
   laid, Floating City waited on servos from 19:30, and once the District stood full it idled 155
   minutes to the run's cap (no step before chemistry had a give-up). The cause of the circuit-less
   fold (the run's state after run 3's longer chain) is not found yet.
+
+### Act IV opens when Act III's Megaprojects stand (2026-10-22, after the fourth bot pass)
+- **Charting (the World floor) now needs the Floating City and the Scrap Transmuter complete**
+  (`megas`, as the Last Fold needs the Lighthouse and the Anchor). Why: the fourth bot pass opened
+  the World at 11:46 and took the first Relocate at 18:00 (§22's targets: 40-45 h), because
+  Charting was gated only on District Folds and priced at 20-30 min of the District; Act III's
+  spine (its two Megaprojects, §21) was skipped in two hours. A content gate, not a price rise:
+  the act ends when its projects stand, however fast a player builds them (pillar 1: building
+  first). Re-measured by the next bot pass.
+- **The bot's Relocate waits for the preview's "raises it" goals to stop paying** (its threshold
+  of 20 Legacy took a move that would have banked ~35 with the World built): a bot policy, not a
+  number. Relocation's price stays.
