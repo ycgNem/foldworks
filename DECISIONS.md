@@ -1786,3 +1786,14 @@ bottleneck is never hidden: every route says what it carries of what it is wante
 - **The Patent Office's lower branches share the width by their column count** (four-wide Rules
   and Automation rows crowded at 1024 px with equal widths).
 - **UI icons `district` and `chute`** were drawn with the ui-icons pipeline (appended at 34, 35).
+
+## Momentum: the gate review alongside Act IV (2026-10-22)
+
+The owner: *"you dont have to get too caught up in a random test check, make sure things get
+moving one way or another cause you have a lot to do … run autonomously."* So the second gate
+(Milestone 8: the idle-critic and the pacing-auditor) reviews Acts I-III **while** Act IV's sim
+and art and Milestone 12's sound are built in worktrees; the gate's findings are applied as they
+come, and Milestone 9 is marked done only after the gate is. Milestones still finish in order
+(CLAUDE.md's ask-before list is unchanged). The long pace tests run in the background and never
+hold a merge; their results are recorded when they land. The Act III bot was time-boxed: what it
+has measured is committed, and any target it hasn't shown holding is listed as open.
