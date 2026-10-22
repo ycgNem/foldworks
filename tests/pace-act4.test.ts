@@ -68,6 +68,28 @@ describe(`Act IV pacing to ${HOURS} h (seed ${SEED})`, () => {
     expect(goals.length).toBeGreaterThan(0);
   }, T);
 
+  // the idle-critic's Act IV-V review asks (DESIGN.md §22): the island climb against 6-8 h and the
+  // Legacy nodes it had (the critic: plausible only after the Regrader, the Town Plan and the Group
+  // Drawer, about 24 Legacy); each floor's best value against "7-10 a floor" and the Legacy preview
+  // against the model's ~35 at the first move; the Patent preview over 30-40 h
+  it('the critic\'s asks: island climbs, floor bests and the Legacy preview, the Patent preview 30-40 h (logged)', () => {
+    const r = act4Campaign(SEED);
+    const fmt = (b: Record<string, number | null>) => Object.entries(b).map(([f, v]) => `${f} ${v ?? 'none'}`).join(', ');
+    for (const c of r.climbs) console.log(`[pace4] climb on ${c.world}: Relocate ${hmm(c.from)}, World ${c.worldAt === null ? 'never' : `${hmm(c.worldAt)} (${((c.worldAt - c.from) / H).toFixed(1)} h; target 6-8 h)`}; Legacy owned [${c.owned.join(', ')}], affordable [${c.affordable.join(', ')}]`);
+    if (!r.climbs.length) console.log('[pace4] climbs: none (no Relocate)');
+    for (const s of r.beforeRelocate) console.log(`[pace4] before the Relocate at ${hmm(s.at)} from ${s.world}: floor bests ${fmt(s.bests)} (target 7-10 a floor); Legacy preview ${s.preview} (model ~35 on the first move)`);
+    const e = r.atEnd;
+    console.log(`[pace4] at ${HOURS} h on ${e.world}: floor bests ${fmt(e.bests)} (target 7-10 a floor); Legacy preview ${e.preview} (model ~35 at the first move); Legacy ${e.legacy}, owned [${e.owned.join(', ')}]`);
+    const p = r.patents30;
+    if (p.length) {
+      const byH = new Map<number, typeof p>();
+      for (const q of p) { const h = Math.floor(q.t / H); byH.set(h, [...(byH.get(h) ?? []), q]); }
+      console.log(`[pace4] Patent preview 30-${HOURS} h: ${[...byH].map(([h, qs]) => `${h} h ${Math.min(...qs.map((q) => q.p)).toFixed(1)}-${Math.max(...qs.map((q) => q.p)).toFixed(1)} (${qs[qs.length - 1].nodes}/${r.patentNodes} nodes)`).join('; ')}`);
+    }
+    for (const f of ['workshop', 'factory', 'district', 'world']) if ((e.bests[f] ?? 0) < 7) console.log(`[pace4] OPEN ${f} best ${e.bests[f] ?? 'none'} at ${HOURS} h (§22 assumes 7-10)`);
+    expect(r.atEnd.world).toBeDefined();
+  }, T);
+
   it('ticks the biggest World (or District) inside the frame budget (e2e/perf.mjs: 4 ms a tick)', () => {
     const r = act4Campaign(SEED);
     const ms = tickCost(r);

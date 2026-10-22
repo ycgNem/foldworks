@@ -12,6 +12,26 @@ import { TICK_RATE } from '../src/engine/time';
 import { takeSnapshot, restore } from '../src/sim/snapshot';
 import { worldOf } from '../src/sim/systems/islands';
 import type { WorldId } from '../src/data/worlds';
+import { floorBests, previewLegacy, LEGACY_FLOORS } from '../src/sim/relocate';
+import { previewPatents } from '../src/sim/reorganize';
+import { legacyRefusal } from '../src/sim/legacy';
+import { LEGACY_IDS } from '../src/data/legacy';
+import { PATENT_IDS } from '../src/data/patents';
+import type { Game as G } from '../src/sim/Game';
+
+/** Each floor's best design value this world (DESIGN.md §22: steps x grade x tier), the Legacy
+ * preview to the next island, and the Legacy nodes owned and affordable (the critic's asks). */
+export interface WorldSnap { at: number; world: WorldId; bests: Record<string, number | null>; preview: number; legacy: number; owned: string[]; affordable: string[] }
+
+export function worldSnap(g: G): WorldSnap {
+  const fb = floorBests(g);
+  const bests: Record<string, number | null> = {};
+  for (const f of LEGACY_FLOORS) bests[f] = fb[f] ? +fb[f]!.value.toFixed(2) : null;
+  return {
+    at: g.s.tick / TICK_RATE, world: worldOf(g), bests, preview: previewLegacy(g).now, legacy: g.s.meta.legacy?.toNumber() ?? 0,
+    owned: [...(g.s.meta.legacyNodes ?? [])], affordable: LEGACY_IDS.filter((id) => !legacyRefusal(g, id)),
+  };
+}
 
 export const H = 3600;
 export const HOURS = Number(process.env.FOLD_ACT4_HOURS ?? 40);
@@ -37,6 +57,15 @@ export interface Act4Record {
   /** every decision and what it was, in play time */
   decisions: number[];
   what: string[];
+  /** the world's state just before each Relocate, and at the horizon */
+  beforeRelocate: WorldSnap[];
+  atEnd: WorldSnap;
+  /** each island climb: from a Relocate to the World floor opening on the new island (null: never),
+   * with the Legacy nodes owned and affordable when the World opened (or at the horizon) */
+  climbs: { world: WorldId; from: number; worldAt: number | null; owned: string[]; affordable: string[] }[];
+  /** the Patent preview each minute from 30 h, with the Patent nodes owned (of all) */
+  patents30: { t: number; p: number; nodes: number }[];
+  patentNodes: number;
   /** the state with the biggest World (or District, when no World stood) for the perf case */
   final: { snap: string; snapTick: number };
   wallMs: number;
@@ -56,6 +85,11 @@ export function act4Campaign(seed: number): Act4Record {
   let maxWorld = 0, maxDistrict = 0, worldBest = 0;
   let biggest: { snap: string; snapTick: number } | null = null;
   let folds = 0, foldsSeen = 0;
+  let snap: WorldSnap | null = null;
+  const beforeRelocate: WorldSnap[] = [];
+  const climbs: Act4Record['climbs'] = [];
+  let moves = 0;
+  const patents30: Act4Record['patents30'] = [];
   const logs = playCampaign(g, {
     runs: 60,
     cap: (r) => (r === 1 ? 6 * H : 12 * H),
@@ -70,6 +104,21 @@ export function act4Campaign(seed: number): Act4Record {
       for (const r of ['chemistry', 'robotics', 'districtFolds', 'charting', 'relocation'] as const) if (at[r] === null && gg.done(r)) at[r] = t;
       const w = worldOf(gg);
       if (!islands.some((i) => i.world === w)) islands.push({ world: w, at: t });
+      // a Relocate happened since the last second: the snapshot taken just before it is that
+      // world's, and the new island's climb starts
+      const rel = gg.s.meta.relocations ?? 0;
+      if (rel > moves) {
+        moves = rel;
+        if (snap) beforeRelocate.push(snap);
+        climbs.push({ world: w, from: t, worldAt: null, owned: [], affordable: [] });
+      }
+      const climb = climbs[climbs.length - 1];
+      if (climb && climb.worldAt === null && gg.s.world) {
+        const ws = worldSnap(gg);
+        climb.worldAt = t;
+        climb.owned = ws.owned;
+        climb.affordable = ws.affordable;
+      }
       for (const id of ['city', 'transmuter', 'lighthouse', 'anchor'] as const) {
         const ms = gg.s.megas?.[id];
         const n = (ms?.done?.length ?? 0) || (ms?.stage ?? 0);
@@ -79,6 +128,8 @@ export function act4Campaign(seed: number): Act4Record {
       if (fc > foldsSeen) folds += fc - foldsSeen;
       foldsSeen = fc;
       if (t % 60 === 0) {
+        snap = worldSnap(gg);
+        if (t >= 30 * H) patents30.push({ t, p: +previewPatents(gg).total.toFixed(2), nodes: gg.s.meta.nodes.length });
         const wm = (gg.s.world?.ents ?? []).filter((e) => e.kind === 'module').length;
         const dm = (gg.s.district?.ents ?? []).filter((e) => e.kind === 'module').length;
         maxWorld = Math.max(maxWorld, wm);
@@ -97,8 +148,11 @@ export function act4Campaign(seed: number): Act4Record {
     if (l.relocated) relocates.push({ at: l.end, from: l.world, to: l.relocated, legacy: l.legacy ?? 0 });
     for (const id of l.legacyBought ?? []) legacy.push({ id, at: l.start });
   }
+  const end = worldSnap(g);
+  for (const c of climbs) if (c.worldAt === null) { c.owned = end.owned; c.affordable = end.affordable; }
   const rec: Act4Record = {
     seed, logs, at, relocates, islands, stages, legacy, districtFolds: folds, maxWorld, maxDistrict, decisions, what,
+    beforeRelocate, atEnd: end, climbs, patents30, patentNodes: PATENT_IDS.length,
     final: biggest ?? takeSnapshot(g), wallMs: Date.now() - t0,
   };
   cache.set(seed, rec);
