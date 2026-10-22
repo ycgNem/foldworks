@@ -176,6 +176,17 @@ const SHORT: Record<ChallengeId, [string, string]> = {
   leanPower: ['power ×0.5', 'Circuits'],
   threeKinds: ['3 kinds of machine', 'a fold at S'],
   smallBoxes: ['boxes 4×4', 'Gizmo Festival'],
+  // Milestone 11's ten (placeholders added by the sim agent for the typecheck; the UI agent owns them)
+  cleanHands: ['no Slag Heaps', '400 concrete'],
+  mk1Only: ['no Mk2', '100 motors'],
+  handMade: ['no stamping', '8 modules'],
+  strictInspector: ['grades -1', 'a fold at A'],
+  beltBudget: ['60 belts', '1,000 steel'],
+  headwinds: ['skiffs ×0.5', '30 robot arms'],
+  shortHaul: ['routes max 5', '10 Engineers'],
+  zoningFreeze: ['no District lots', 'Specimen Drawer'],
+  roughSeas: ['barges carry 1', '10 World modules'],
+  lightFleet: ['3 skiffs a route', 'a Megaproject stage'],
 };
 
 const quit = { armedUntil: -1 };

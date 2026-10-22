@@ -18,6 +18,7 @@ import { DX, DY, opposite, type AuditResult, type AuditState, type Box, type Dir
 import { entName, feeders } from '../analysis';
 import { powerFactor } from './power';
 import { byEvery } from './machines';
+import { compactFull, splusShare, strictGrade } from './challenges';
 
 export const inBox = (b: Box, x: number, y: number) => x >= b.x && y >= b.y && x < b.x + b.w && y < b.y + b.h;
 const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -361,7 +362,7 @@ export function gradeAudit(g: Game, a: AuditState): AuditResult {
   let machineTiles = 0;
   for (const m of ms) machineTiles += m.w * m.h;
   const boxTiles = a.box.w * a.box.h;
-  const c = Math.min(1, machineTiles / boxTiles / RULES.compactFull.value);
+  const c = Math.min(1, machineTiles / boxTiles / compactFull(g));
   const score = SCORE_WEIGHTS.u * u + SCORE_WEIGHTS.w * w + SCORE_WEIGHTS.c * c;
   const gr = gradeFor(score);
   const rate = (t: Record<string, number>) => {
@@ -374,8 +375,11 @@ export function gradeAudit(g: Game, a: AuditState): AuditResult {
   // S+ is a zero-waste line: its byproducts are used inside the box (bricks, gravel), or it makes
   // none. A line that only routes its slag out to a heap or a Dock tops out at S (the Milestone 4
   // review: a miner and a smelter graded S+)
-  const gr2 = splusGate(gr, score, byMade, usedInside);
-  if (gr2 !== gr) advice.unshift(`One step to S+: use the ${[...byItems].map((i) => itemName(i as ItemId).toLowerCase()).join(' and ')} inside the box (a press making bricks, a crusher making gravel); routed out to a heap, it caps the grade at S.`);
+  const gated = splusGate(gr, score, byMade, usedInside, splusShare(g));
+  if (gated !== gr) advice.unshift(`One step to S+: use the ${[...byItems].map((i) => itemName(i as ItemId).toLowerCase()).join(' and ')} inside the box (a press making bricks, a crusher making gravel); routed out to a heap, it caps the grade at S.`);
+  // the Strict Inspector (a Challenge, DESIGN.md §24): a letter lower while it holds
+  const gr2 = strictGrade(g, gated);
+  if (gr2 !== gated) advice.unshift(`The Strict Inspector marks it down a letter this run: ${gated.letter} becomes ${gr2.letter}.`);
   return {
     grade: { letter: gr2.letter, score, u, w, c, mult: gr2.mult },
     ins, outs, byMade, byHandled, machineTiles, boxTiles, busy,
@@ -384,8 +388,8 @@ export function gradeAudit(g: Game, a: AuditState): AuditResult {
 }
 
 /** S+ needs the byproducts used inside the box (RULES.splusUsedInside of them), or none made. */
-export function splusGate<T extends { letter: string }>(gr: T, score: number, byMade: number, usedInside: number): T {
-  if (gr.letter !== 'S+' || byMade <= 0 || usedInside >= byMade * RULES.splusUsedInside.value) return gr;
+export function splusGate<T extends { letter: string }>(gr: T, score: number, byMade: number, usedInside: number, share: number = RULES.splusUsedInside.value): T {
+  if (gr.letter !== 'S+' || byMade <= 0 || usedInside >= byMade * share) return gr;
   return (GRADES.find((q) => q.letter === 'S') as unknown as T) ?? gr;
 }
 
@@ -447,7 +451,7 @@ function advise(g: Game, ms: Ent[], busy: Record<string, number>, p: { u: number
   }
   if (p.c < 1) {
     const lost = SCORE_WEIGHTS.c * (1 - p.c);
-    const need = Math.ceil(bt * RULES.compactFull.value);
+    const need = Math.ceil(bt * compactFull(g));
     lines.push({ lost, text: `${mt} of ${bt} tiles are machines; ${need} would be fully compact. Draw the box tighter. (${worth(score, lost)})` });
   }
   if (!lines.length) lines.push({ lost: 0, text: score >= 0.97 ? 'Flawless: every machine busy, waste handled, nothing wasted on space.' : 'Nothing to fix: every part scores full marks.' });

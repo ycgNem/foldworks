@@ -7,6 +7,7 @@ import { RULES } from '../../data/rules';
 import { TICK_RATE } from '../../engine/time';
 import { TROPHIES, type TrophyDef } from '../../data/trophies';
 import { isMachine } from '../../data/machines';
+import { boardsOnFile, codexCompletion, codexTierHave, grantCosmetics, noteBoard, repMin, trophiesEarned } from '../longtail';
 
 /** Count this tick's state for a machine (called by the systems that run it). */
 export function note(m: Ent) {
@@ -41,6 +42,9 @@ export function runStats(g: Game) {
     for (const m of g.s.factory.ents) if (m.kind === 'module') rollWork(m, n);
   }
   checkTrophies(g);
+  // the long tail (DESIGN.md §24): cosmetics newly earned, a Scenario board's bests
+  grantCosmetics(g);
+  noteBoard(g);
   g.s.income.push(g.s.incomeSec);
   if (g.s.income.length > win) g.s.income.shift();
   g.s.incomeSec = 0;
@@ -101,17 +105,52 @@ export function trophyValue(g: Game, t: TrophyDef): number {
     case 'machines': return s.ents.filter((e) => isMachine(e.kind) && e.kind !== 'furnace').length;
     case 'research': return s.research.done.length;
     case 'orders': return s.orders.done.length;
-    case 'rep': return s.orders.rep.bramble;
+    case 'rep': return s.orders.rep[t.stat.who ?? 'bramble'] ?? 0;
     case 'land': return s.land.length;
     case 'upgrades': return s.upgrades.length;
+    // Milestone 11 (DESIGN.md §24)
+    case 'repMin': return repMin(g);
+    case 'lifetime': return (s.meta.lifetime.delivered[t.stat.item]?.toNumber() ?? 0) + (s.delivered[t.stat.item]?.toNumber() ?? 0);
+    case 'lifetimeEarned': return s.meta.lifetime.earned.toNumber() + s.earned.toNumber();
+    case 'codexTier': return codexTierHave(g, t.stat.tier);
+    case 'codexAll': return codexCompletion(g).have;
+    case 'meta': return metaStat(g, t.stat.name);
+    case 'mega': {
+      const id = t.stat.id;
+      if (id === 'drill') return s.mega.stage;
+      const m = s.megas?.[id];
+      return Math.max(m?.stage ?? 0, m?.done?.length ?? 0);
+    }
+    case 'board': return s.meta.boards?.[t.stat.id] ? 1 : 0;
+    case 'trophies': return trophiesEarned(g);
+    case 'seedS': return (s.meta.seeds ?? []).filter((c) => c.grade === 'S' || c.grade === 'S+').length;
+  }
+}
+
+/** A number the reset layers keep, for a trophy (DESIGN.md §24). */
+function metaStat(g: Game, name: Extract<TrophyDef['stat'], { k: 'meta' }>['name']): number {
+  const m = g.s.meta;
+  switch (name) {
+    case 'patentsEarned': return m.patentsEarned.toNumber();
+    case 'legacyEarned': return m.legacyEarned?.toNumber() ?? 0;
+    case 'kernelsEarned': return m.kernelsEarned?.toNumber() ?? 0;
+    case 'visited': return m.visited?.length ?? 1;
+    case 'drawer': return m.drawer.length;
+    case 'cosmetics': return m.cosmetics?.length ?? 0;
+    case 'patentNodes': return m.nodes.length;
+    case 'legacyNodes': return m.legacyNodes?.length ?? 0;
+    case 'kernelNodes': return m.kernelNodes?.length ?? 0;
+    case 'challenges': return m.challenges?.length ?? 0;
+    case 'boards': return boardsOnFile(g).length;
   }
 }
 
 /** Award trophies whose stat has reached its mark (once a second). */
 export function checkTrophies(g: Game) {
+  const have = new Set(g.s.flags);
   for (const t of TROPHIES) {
     const f = 'trophy:' + t.id;
-    if (g.s.flags.includes(f)) continue;
+    if (have.has(f)) continue;
     if (trophyValue(g, t) >= t.n) {
       g.s.flags.push(f);
       g.emit({ type: 'trophy', id: t.id });

@@ -81,7 +81,9 @@ export function fingerprint(g: Game): string {
   // the layer-3 state (DESIGN.md §23): Kernels, the universe, the Ledger
   const m = s.meta;
   const meta = `${m.kernels?.toString() ?? ''}:${(m.kernelNodes ?? []).join(',')}:${m.lastFolds ?? 0}:${m.ledger?.n ?? 0}`;
-  return [s.tick, s.coin.toString(), s.earned.toString(), s.rng, s.research.done.join(','), ents, JSON.stringify(s.research.bank), meta].join('#');
+  // the long tail (DESIGN.md §24): the shelf, the cosmetics and skins, the boards, the free buildings
+  const tail = `${s.flags.filter((f) => f.startsWith('trophy:')).join(',')}|${(m.cosmetics ?? []).join(',')}|${JSON.stringify(m.skins ?? {})}|${JSON.stringify(m.boards ?? {})}|${s.ents.filter((e) => e.free).map((e) => e.id).join(',')}|${s.challenge ?? ''}:${(m.challenges ?? []).join(',')}`;
+  return [s.tick, s.coin.toString(), s.earned.toString(), s.rng, s.research.done.join(','), ents, JSON.stringify(s.research.bank), meta, tail].join('#');
 }
 
 export { Num };

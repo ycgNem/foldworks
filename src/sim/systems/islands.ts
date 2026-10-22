@@ -23,6 +23,7 @@ import { OLD_RUBBLE, WORLDS, rubblePrice, type WorldDef, type WorldId } from '..
 import type { Ent } from '../world';
 import { lrules } from '../legacy';
 import { buildPrice } from './challenges';
+import { trules } from '../longtail';
 import { note } from './stats';
 
 /** The island the town is on. */
@@ -114,7 +115,8 @@ export function setupIsland(g: Game) {
 /** What repairing this ruin costs now: a quarter of its price, or nothing with Salvage Crews. */
 export function repairPrice(g: Game, e: Ent): number {
   if (softened(g, 'oldworks')) return 0;
-  return Math.ceil(buildPrice(g, e.kind as BuildKind) * RULES.ruinRepair.value);
+  // the Trophy Shelf's repair trophies take a share off (DESIGN.md §24)
+  return Math.ceil(buildPrice(g, e.kind as BuildKind) * RULES.ruinRepair.value * (1 - trules(g).repair));
 }
 
 export function repair(g: Game, x: number, y: number): ActResult {

@@ -221,6 +221,8 @@ export function relocate(g: Game, world: WorldId): ActResult {
   m.standing = m.standing ?? null;
   startRun(g);
   g.bump('relocations');
+  // an island visited, in any universe (the Codex's island pages, DESIGN.md §24)
+  g.bump('visit:' + world);
   g.emit({ type: 'relocate', id: world, value: p, d: m.relocations });
   return OK;
 }

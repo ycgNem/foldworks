@@ -16,6 +16,7 @@ import { isMachine } from '../../data/machines';
 import { rand, type Spark } from '../world';
 import { lines, gradeLine, endsAtSink } from '../analysis';
 import { shares } from './stats';
+import { trules } from '../longtail';
 
 export function runSparks(g: Game) {
   const s = g.s;
@@ -43,7 +44,8 @@ export function runSparks(g: Game) {
 }
 
 function pickSpark(g: Game): Spark | null {
-  const life = RULES.sparkLife.value * TICK_RATE;
+  // the Trophy Shelf's Spark trophies keep it a few seconds longer (DESIGN.md §24)
+  const life = (RULES.sparkLife.value + trules(g).sparkLife) * TICK_RATE;
   const options: Spark[] = [];
   // a vein: a patch with a working miner on it
   const patches = new Set<number>();

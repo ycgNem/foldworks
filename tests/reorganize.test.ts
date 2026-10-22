@@ -20,6 +20,7 @@ import { stampCost, megaOpen } from '../src/sim/systems/modules';
 import { annexPrice } from '../src/sim/systems/annex';
 import { billsStanding, billsTerm, chainSteps, designValue, previewPatents, reorganizeRefusal, customerMet, runSeconds, stepsFolded } from '../src/sim/reorganize';
 import { prules, patentRefusal } from '../src/sim/patents';
+import { trules } from '../src/sim/longtail';
 import { offlineEfficiency } from '../src/sim/offline';
 import { decodeDesign, encodeDesign, keptBill, unfoldKeptRefusal } from '../src/sim/drawer';
 import { restore, savePayload, fingerprint, stateFrom } from '../src/sim/snapshot';
@@ -245,8 +246,10 @@ describe('the reset (DESIGN.md §19)', () => {
     expect(s.counters.folds).toBe(7);
     // the Night Shift bought with coin is kept (the lead's decision 6); the Bellows was a run's
     expect(s.upgrades).toEqual(['nightForeman']);
-    // lost
-    expect(s.coin.toNumber()).toBe(0);
+    // lost (but the coin trophies' head start, DESIGN.md §24: Pocket Money's 25 and what the
+    // sandbox earned on the way)
+    expect(s.coin.toNumber()).toBe(trules(g).startCoin);
+    expect(trules(g).startCoin).toBeGreaterThanOrEqual(25);
     expect(s.earned.toNumber()).toBe(0);
     expect(s.land).toEqual(['A']);
     expect(s.research.done).toEqual([]);
@@ -270,7 +273,8 @@ describe('the reset (DESIGN.md §19)', () => {
     expect(g.entAt(2, 3)?.kind).toBe('miner');
     expect(s.research.done).toEqual(['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing']);
     expect(s.land).toContain('B');
-    expect(s.coin.toNumber()).toBe(2000);
+    // the Grant's 2,000, and the coin trophies earned on the way (DESIGN.md §24)
+    expect(s.coin.toNumber()).toBe(2000 + trules(g).startCoin);
   });
 
   it('a reset in the command log replays to the same state', () => {
@@ -463,7 +467,8 @@ describe('the Patent Drawer (DESIGN.md §19)', () => {
     nested.depth = 2;
     nested.fparts = [];
     expect(g.act({ k: 'keep', id: nested.id }).why).toMatch(/nested design/);
-    expect(prules(g).drawerSlots).toBe(RULES.drawerSlots.value);
+    // (and the Drawer trophies the sandbox earned: Well Read, DESIGN.md §24)
+    expect(prules(g).drawerSlots).toBe(RULES.drawerSlots.value + trules(g).drawer);
     must(g, { k: 'forget', id: k.id });
     expect(g.s.meta.drawer).toHaveLength(0);
   });

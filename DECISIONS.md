@@ -2069,3 +2069,85 @@ their derivations are DESIGN.md §23; all are model estimates until an Act V bot
   a waste into an input, one node.
 - The Seed: a roguelite's carried-over item. Re-derived: the World folded into one tile, its sides
   a routing puzzle.
+
+## Milestone 11: the long tail's sim (2026-10-22)
+Built autonomously (the owner: "decide everything, don't ask"), sim, data, tests and docs; the
+screens are another agent's. No new currency, floor, reset layer or tree; no price curve (lots stay
+linear, a Challenge's reward is a share off one price). Numbers and derivations: DESIGN.md §24.
+- **Every trophy has a bonus, one of twelve kinds, and every kind is capped** (`TROPHY_CAPS`):
+  `speed` (a product's craft +5%, at most +10%), `free` (the first n of a Workshop building free),
+  `skiffs`, `routes`, `drawer`, `sparkLife`, `heap`, `startCoin`, `cool`, `repair`, `chute`,
+  `cosmetic`. The bonus names what earned it (100 bars of iron: smelting iron; the first route: a
+  skiff more a route; the first slag jam: a free Slag Heap, the owner's own example). The caps are
+  the decision that keeps the shelf from becoming a multiplier on its own size; each cap sits under
+  what one tree node gives (pillar 1: growth comes from layouts, not the trophy count).
+- **A free building is marked** (`Ent.free`) and refunds nothing when lifted or folded; the first n
+  are counted among the free ones standing, so lifting one frees its place again. Never in a
+  Scenario (a board's coin is its rule). `buildPrice` stays the list price (refunds, repairs).
+- **Trophies sum over every run**: the long deliveries count `meta.lifetime.delivered` plus this
+  run (a reset never takes a trophy's progress); a first of tier 5 counts every run too.
+- **No craft speed or Overdrive cooling in the first run** (measured, `pace-reorganize`): the first
+  cut gave the slice's delivery trophies +5% crafts and counted the Act I long deliveries at 10,000
+  gears and 5,000 Gizmos; the campaign bot earned them all in run 1, its peak rose 9% and seed 1000's
+  run 2 passed it at 0:59 against a limit of 0:42 (rule 3). The slice's delivery trophies now give a
+  machine free, the Act I long deliveries count 50,000-100,000, Floor It, Spade Work and Slag Magnet
+  count ten times further, and Bar Hopping gives a Smelter, not heap room (heap room in the first
+  hour moved `tests/idle.test.ts`'s offline jam past its hour: the first heap's 400 is §12's lesson).
+- **Hidden trophies (18)** show as "???" (`trophyFace`) with no icon until earned; the shelf's count
+  still includes them.
+- **`startCoin` is a head start** (it counts as `granted`), paid at every run's start after a reset
+  (`startRun`), never the first run, so the slice pace tests are untouched by it.
+- **The Codex counts `s.codex`** (Unit 7's collection, which starts at Unit 7's rep 1), not every
+  delivery: it is the robot's codex (PLAN.md). 56 items, 9/10/16/13/8 by tier; slag, kits and project
+  parts are never in it (the Dock pays nothing for them).
+- **Lore pages are Unit 7's**: every page in its capitals and third person, as the orders and the
+  Gazette already write it; one a tier, a floor and an island, opened by firsts kept through every
+  reset. Home's page opens with the first Relocate (a place is seen once it is left). Island pages
+  read a new `visit:<island>` counter, since a Last Fold forgets `meta.visited`.
+- **Unit 7's ending** opens with the first Last Fold: the World folded is the last specimen, the
+  collection complete, and Unit 7 opens a new empty drawer. It reuses its rep-3 thanks line ("UNIT 7
+  IS OFTEN PLEASED. THIS IS MORE.") as its last words (pillar 5).
+- **Ten Challenges** (Acts II-IV): Clean Hands, Old Faithful, Hand-Made, The Strict Inspector, Belt
+  Budget (II); Headwinds, Short Haul, Zoning Freeze (III); Rough Seas, Light Fleet (IV). Goals are
+  this run's: deliveries, an order, a fold graded A after the drop, modules standing at once, a
+  counter raised from the run's start (`challengeBase` now holds whichever count the goal reads).
+  Acts III and IV's are offered only once that floor has stood in some run (`needs`), so a run-2
+  player is not offered a Challenge they cannot finish. The Strict Inspector lowers every fold a
+  letter (Workshop, nested, District, World and the Last Fold's audit alike: it is the run's rule).
+- **Every Challenge won also pays a skin**; rewards stay rules (no multiplier on income).
+- **Five Scenario boards**: Pocket Workshop, Slag Mountain, The Antique Shop, Night Market, Thin
+  Vein. Three are Challenges as boards (Small Boxes, Clean Hands, Old Faithful), scored instead of
+  won; Night Market adds a `perKw` measure (kW drawn by the box's machines in Normal mode).
+- **The efficiency boards live in `meta.boards`** (the task asked for meta, kept through every
+  reset): a Scenario game notes its own once a second; the town takes them with `{ k: 'boards' }`
+  (checked and merged field by field, only a better value kept), so they are in the town's save and
+  replay. Each best is the best of its own (four may come from four designs). The app's older
+  `foldworks_scenario_best` store is the UI's to retire or keep.
+- **Cosmetics are one list** (`src/data/cosmetics.ts`): the Ledger's three and its ribbons (its ids
+  kept as they were, `gilded`..., so saves need nothing), eight from reputation (rep 3 and 5), fifteen
+  from Challenges, fifteen from trophies. A decoration is a skin of the Dock or Hopper. Skins dress
+  kinds (`slots`), plus `module`, `skiff`, `barge` and `courier`. Ids stay plain (`gilded`); the
+  sprite is `skin_<id>_<kind>` (`skinSprite`), as kernels.ts already promised.
+- **The skin command is logged and replayed** like any command (`meta.skins[kind]`) but no system
+  reads it; a test runs a game with and without a skin to the same coin and rng.
+- **Saves**: `SAVE_VERSION` 11; the fingerprint now covers the trophy flags, cosmetics, skins,
+  boards, free buildings and the Challenges.
+- **Tests updated, with the reason**: `tests/reorganize.test.ts`'s exact run-start coin and Drawer
+  slots now add the trophies the sandbox earns on its way (`trules`); `tests/act5.test.ts` follows
+  the save chain to v11.
+- **Open**: no bot plays the new Challenges, so their goal times (15-60 min of the act's lines) are
+  the model's; the screens and the skin art are not built.
+
+### Flagged as derivative (owner to decide)
+- **Achievements with bonuses** resemble Antimatter Dimensions' achievement rewards and Cookie
+  Clicker's milk (kittens scaling with the achievement count). Re-derived: each bonus is a small rule
+  about the thing that earned it (that product's craft, that floor's routes, that machine free), and
+  each kind is capped, so nothing grows with the number of trophies. Drop option: make every bonus a
+  `cosmetic` (the data allows it; the sim reads the rest through `trules` only).
+- **Challenges** resemble Antimatter Dimensions' Challenges (flagged at §21). Re-derived as the first
+  five: factory goals done this run, rule rewards, no multiplier; three are also Scenario boards.
+- **Efficiency boards** resemble Zachtronics' histograms (cost, cycles, area). Re-derived: the three
+  numbers are the fold audit's own terms (per tile is C, waste is W, per kW is §18's power), local
+  only, no distribution of other players. Drop option: keep the board's single score (§21).
+- **Hidden achievements shown as "???"** are a convention of nearly every achievement list (Steam's
+  hidden achievements); kept as genre furniture, with names and conditions this game's own.

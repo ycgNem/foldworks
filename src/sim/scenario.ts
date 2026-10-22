@@ -1,8 +1,10 @@
 // Scenarios (DESIGN.md §21 Scenarios): a board set up on a fresh game, its twist read by the
-// systems through these helpers, and its score (the best fold of its product this game). The app
-// keeps the personal bests; the sim only knows the game it is playing.
+// systems through these helpers, and its score (the best fold of its product this game). The
+// efficiency boards (each board's bests per tile, per kW and waste, DESIGN.md §24) are kept in
+// `meta.boards`, by the Scenario game itself and, handed over, by the town (src/sim/longtail.ts).
 import type { Game } from './Game';
 import { Num } from '../engine/num';
+import { BUILD } from '../data/machines';
 import { RESEARCH, RESEARCH_IDS } from '../data/research';
 import { SCENARIOS, type ScenarioDef, type ScenarioId } from '../data/scenarios';
 import type { ModuleDesign } from './world';
@@ -39,7 +41,20 @@ export function beltsLeft(g: Game): number {
 export function designScore(d: ModuleDesign, def: ScenarioDef): number {
   if ((d.depth ?? 1) !== 1) return 0;
   const perMin = (d.outs[def.product] ?? 0) * 60;
+  if (def.measure === 'perKw') {
+    // per kW its machines draw in Normal mode (DESIGN.md §24): an unpowered fold scores nothing here
+    const kw = designKwOf(d);
+    return kw > 0 ? perMin / kw : 0;
+  }
   return def.measure === 'perTile' ? perMin / (d.box.w * d.box.h) : perMin;
+}
+
+/** kW a Workshop design's machines draw at full speed in Normal mode (src/sim/longtail.ts reads it
+ * for the efficiency boards). */
+export function designKwOf(d: ModuleDesign): number {
+  let kw = 0;
+  for (const p of d.parts) kw += BUILD[p.kind]?.kw ?? 0;
+  return kw;
 }
 
 /** The board's best fold so far: its score, grade and design, or null before the first. */

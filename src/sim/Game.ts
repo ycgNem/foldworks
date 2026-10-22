@@ -61,6 +61,10 @@ import type { KernelId } from '../data/kernels';
 import { buyKernel, setKeptLegacy } from './kernels';
 import { lastFold, startLastFoldAudit } from './lastfold';
 import { runSeed } from './systems/seed';
+// the long tail (DESIGN.md §24, Milestone 11): trophy bonuses, skins, the efficiency boards
+import { freeBuild, setSkin, takeBoards } from './longtail';
+import type { SkinSlot } from '../data/cosmetics';
+import type { BoardRecord } from './world';
 import type { PatchDef } from '../data/land';
 
 export interface Intake {
@@ -154,7 +158,11 @@ export type Cmd =
   | { k: 'lastFoldAudit' }
   | { k: 'lastFold' }
   | { k: 'kernel'; id: KernelId }
-  | { k: 'keepLegacy'; id: LegacyId };
+  | { k: 'keepLegacy'; id: LegacyId }
+  // the long tail (DESIGN.md §24): wear a skin on every building of a kind (null: plain); the town
+  // takes a Scenario game's efficiency-board bests into its own meta
+  | { k: 'skin'; kind: SkinSlot; id: string | null }
+  | { k: 'boards'; boards: Record<string, BoardRecord> };
 
 export interface Logged { t: number; c: Cmd }
 
@@ -518,6 +526,8 @@ export class Game {
       case 'lastFold': return lastFold(this);
       case 'kernel': return buyKernel(this, c.id);
       case 'keepLegacy': return setKeptLegacy(this, c.id);
+      case 'skin': return setSkin(this, c.kind, c.id);
+      case 'boards': return takeBoards(this, c.boards);
       default: return no('unknown command');
     }
   }
@@ -560,7 +570,7 @@ export class Game {
     const rule = challengeBuildRefusal(this, kind);
     if (rule) return rule;
     if (kind === 'belt' && beltsLeft(this) <= 0) return 'No belt tiles left on this board (the Scenario)';
-    const free = kind === 'crate' && this.s.freeCrates > 0;
+    const free = (kind === 'crate' && this.s.freeCrates > 0) || freeBuild(this, kind);
     const price = buildPrice(this, kind);
     if (!free && this.s.coin.lt(price)) return `Needs ${price} coin`;
     return null;
@@ -580,9 +590,13 @@ export class Game {
     const why = this.canPlace(kind, x, y);
     if (why) return no(why);
     const d = BUILD[kind];
+    // a trophy's "the first n free" (DESIGN.md §24): the building is marked, and refunds nothing
+    let trophyFree = false;
     if (kind === 'crate' && this.s.freeCrates > 0) this.s.freeCrates--;
+    else if (freeBuild(this, kind)) trophyFree = true;
     else this.s.coin = this.s.coin.sub(buildPrice(this, kind));
-    this.addEnt(kind, x, y, rot);
+    const placed = this.addEnt(kind, x, y, rot);
+    if (trophyFree) placed.free = true;
     if ((d.speed ?? 1) > 1) this.bump('mk2Built');
     this.emit({ type: 'place', x, y, id: kind });
     return OK;
@@ -598,7 +612,8 @@ export class Game {
     if (e.kind === 'heap' && e.count > 0) return no(`The heap holds ${e.count} slag: let it drain out its front first`);
     // full refund in the slice (ROADMAP.md Milestone 1 step 2), at today's price; a ruin of the Old
     // Works is hauled away for nothing (it was never bought: DESIGN.md §22)
-    if (!e.ruined) this.s.coin = this.s.coin.add(isMachine(e.kind) || e.kind === 'splitter' ? buildPrice(this, e.kind as BuildKind) : BUILD[e.kind].cost);
+    // (a trophy's free one was never bought either: §24)
+    if (!e.ruined && !e.free) this.s.coin = this.s.coin.add(isMachine(e.kind) || e.kind === 'splitter' ? buildPrice(this, e.kind as BuildKind) : BUILD[e.kind].cost);
     this.s.ents = this.s.ents.filter((q) => q !== e);
     this.layoutDirty = true;
     this.emit({ type: 'remove', x, y, id: e.kind });

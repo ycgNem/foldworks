@@ -32,6 +32,8 @@ import { prules } from '../patents';
 import { lrules } from '../legacy';
 import { hasKernel } from '../kernels';
 import { KERNELS } from '../../data/kernels';
+import { trules } from '../longtail';
+import { compactFull, lotFactor, lotRule, routeRule, skiffCapRule, skiffRules, splusShare, strictGrade } from './challenges';
 
 const DT = 1 / TICK_RATE;
 
@@ -131,14 +133,21 @@ export function routeDist(a: FEnt, b: FEnt): number {
  * Long Skiffs (a Patent) a tile a second to the speed (DESIGN.md §21). */
 export function skiffStats(g: Game, id: HighFloorId): { load: number; speed: number; dwell: number } {
   const f = HIGH[id];
-  return {
+  // the Challenges' rules and rewards on top (Headwinds, Rough Seas, Light Fleet: DESIGN.md §24)
+  return skiffRules(g, id, {
     load: f.load + (g.s.orders.rep.bramble >= 4 ? RULES.brambleSkiffLoad.value : 0),
     // Long Skiffs flies the District's; the Lighthouse's Lens Room the World's barges (DESIGN.md §22)
     // (Beyond's couriers: neither, DESIGN.md §23)
     speed: f.speed + (id === 'district' ? prules(g).skiffSpeed : id === 'world' && megaDone(g, 'lighthouse', 1) ? RULES.lighthouseSpeed.value : 0),
     // the Lighthouse's Beacon: loading in half the time on every high floor
     dwell: f.dwell * (megaDone(g, 'lighthouse', 2) ? RULES.lighthouseDwell.value : 1),
-  };
+  });
+}
+
+/** Skiffs a route takes at most on this floor now: 12 (§21), the Trophy Shelf's skiff bonuses, and
+ * the Challenges' (Short Haul won, Light Fleet while it holds: DESIGN.md §24). */
+export function maxSkiffs(g: Game, id: HighFloorId): number {
+  return skiffCapRule(g, HIGH[id].maxSkiffs + trules(g).skiffs);
 }
 
 /** Items a second one skiff carries on a route this long on this floor now (the Lighthouse's Light
@@ -177,7 +186,7 @@ export const drillFactor = (g: Game) => (g.s.mega.stage >= 1 ? 1 + RULES.drillBo
  * Splitters Challenge's 20 once won. */
 export function maxRoutes(g: Game, id: HighFloorId): number {
   const st = g.s[id];
-  return RULES.maxRoutes.value + RULES.routesPerLot.value * (st?.lots ?? 0) + (g.s.meta.challenges?.includes('noSplitters') ? RULES.routesPerLot.value : 0);
+  return RULES.maxRoutes.value + RULES.routesPerLot.value * (st?.lots ?? 0) + (g.s.meta.challenges?.includes('noSplitters') ? RULES.routesPerLot.value : 0) + trules(g).routes;
 }
 
 // ------------------------------------------------------------------ opening
@@ -291,6 +300,8 @@ export function routeRefusal(g: Game, id: HighFloorId, fx: number, fy: number, t
   if (!da?.outs[item]) return `${hname(g, a)} makes no ${itemName(item).toLowerCase()}`;
   if (!b) return 'A route ends at a module, the Dock, the Hopper or the Bay';
   if (b === a) return 'A route goes somewhere else';
+  const far = routeRule(g, id, routeDist(a, b));
+  if (far) return far;
   if (!takes(g, id, b, item)) return b.kind === 'module' ? `${hname(g, b)} takes no ${itemName(item).toLowerCase()}` : b.kind === 'fbay' ? 'No Megaproject here wants that' : `The ${hname(g, b)} refuses ${itemName(item).toLowerCase()}`;
   if (st.routes.some((r) => r.from === a.id && r.to === b.id && r.item === item)) return 'That route is flown already: add a skiff to it';
   if (st.routes.length >= maxRoutes(g, id)) return `${maxRoutes(g, id)} routes is the most this floor holds now: a lot adds 20, or fold a group into one tile`;
@@ -326,7 +337,7 @@ export function setSkiffs(g: Game, id: HighFloorId, rid: number, delta: number):
   if (!st || !r) return no('No such route');
   const f = HIGH[id];
   if (delta > 0) {
-    if (r.skiffs >= f.maxSkiffs) return no(`${f.maxSkiffs} skiffs is the most a route takes`);
+    if (r.skiffs >= maxSkiffs(g, id)) return no(`${maxSkiffs(g, id)} skiffs is the most a route takes now`);
     if (g.s.coin.lt(f.skiffCost)) return no(`A skiff costs ${Num.of(f.skiffCost).format()} coin`);
     g.s.coin = g.s.coin.sub(f.skiffCost);
     r.skiffs++;
@@ -357,12 +368,14 @@ export function unroute(g: Game, id: HighFloorId, rid: number): ActResult {
 export function lotPrice(g: Game, id: HighFloorId): Num | null {
   const st = g.s[id], f = HIGH[id];
   if (!st || st.lots >= f.lots) return null;
-  return Num.of(f.lotBase * (st.lots + 1));
+  return Num.of(Math.round(f.lotBase * (st.lots + 1) * lotFactor(g, id)));
 }
 
 export function buyLot(g: Game, id: HighFloorId): ActResult {
   const st = g.s[id];
   if (!st) return no('not open');
+  const frozen = lotRule(g, id);
+  if (frozen) return no(frozen);
   const p = lotPrice(g, id);
   if (!p) return no(`Every lot of the ${HIGH[id].name} is yours`);
   if (g.s.coin.lt(p)) return no(`The next lot costs ${p.format()} coin`);
@@ -600,7 +613,7 @@ function dispatch(g: Game, id: HighFloorId, st: HighFloorState, f: HighFloorDef)
   if (g.s.coin.lt(f.skiffCost * 20)) return;
   let best: SkiffRoute | null = null, bestShare = 0.9;
   for (const r of st.routes) {
-    if (r.skiffs >= f.maxSkiffs) continue;
+    if (r.skiffs >= maxSkiffs(g, id)) continue;
     const want = routeWant(g, id, r);
     if (want <= 1e-9) continue;
     const share = routeCap(g, id, r) / want;
@@ -776,9 +789,9 @@ export function gradeHAudit(g: Game): AuditResult {
   const w = byMade > 1e-6 ? byHandled / byMade : 1;
   // the Last Fold's C is the World's free tiles filled (its Dock, Hopper and Bay are no tiles to fill)
   const tiles = a.last ? lastTiles(g) : a.box.w * a.box.h;
-  const c = Math.min(1, mods.length / tiles / RULES.compactFull.value);
+  const c = Math.min(1, mods.length / tiles / compactFull(g));
   const score = SCORE_WEIGHTS.u * u + SCORE_WEIGHTS.w * w + SCORE_WEIGHTS.c * c;
-  const gr = splusGate(gradeFor(score), score, byMade, a.inside);
+  const gr = strictGrade(g, splusGate(gradeFor(score), score, byMade, a.inside, splusShare(g)));
   const rate = (t: Record<string, number>) => {
     const o: Partial<Record<ItemId, number>> = {};
     for (const [k, v] of Object.entries(t)) if (v > 1e-6) o[k as ItemId] = v / secs;
@@ -851,6 +864,7 @@ export function foldHAudited(g: Game, name: string | null): ActResult {
   g.bump('folds');
   g.bump(id + 'Folds');
   if (res.grade.letter === 'S') g.bump('foldS');
+  g.bump('grade:' + res.grade.letter);
   g.emit({ type: 'fold', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, id: d.grade.letter, value: d.id, d: a.box.w * a.box.h, floor: id });
   if (g.first('firstFold:' + id)) g.emit({ type: 'firstHighFold', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, value: d.id, floor: id });
   return OK;
