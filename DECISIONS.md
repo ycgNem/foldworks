@@ -2026,3 +2026,46 @@ floor, Legacy its second reset's currency, Relocate layer 2; no new customer.
 - **A lesson card per island**, the first time the town stands on it.
 - Open: after a repair the report's mode buttons sit where Repair was (a double click could switch
   the mode); on Pebble the town's south-row houses sit on the rim of A and B.
+
+## Milestone 10: Act V's sim (2026-10-22)
+The third reset layer, its currency and tree, and the fifth floor are the plan's own (PLAN.md
+§"Reset when it pays", the floor list); each entry below names the pillar it serves. Numbers and
+their derivations are DESIGN.md §23; all are model estimates until an Act V bot measures them.
+- **The Last Fold is the fold audit applied to the whole World** (pillar 1, build first): the
+  reset's payout is graded the way every fold is, so the act's last decision is a layout. "Inside"
+  is any module; whatever reaches the World's Dock, Hopper or Bay is its output; compactness is
+  against the floor's free tiles, so a fuller World grades better. The World is locked while it
+  runs; `hauditCancel` frees it.
+- **Kernels** (the third currency) = floor(value / 10) + a grade bonus (S+ 5 ... D 0), value being
+  the filing value of every module at work. A depth-4 module counts the group folded into it, so
+  folding up to Beyond never costs Kernels. About 22 at the first Last Fold (2-3 nodes).
+- **The Kernel tree** (10 nodes, 51 Kernels, flat prices) changes layout rules, never a
+  multiplier (pillar 1): wide belts, every-side modules, a 12x12 Workshop box, the second
+  cookbook, Beyond, the Endless Ledger, a faster Seed, long nights, kept islands, kept Legacy.
+- **Kept and lost** as the contract, plus: the islands visited are lost (each is a first visit
+  again, +5 Legacy), the Night Shift, lifetime stats, the Ledger and the Seed cards are kept. The
+  new universe starts on Home, so its rules are met on plain ground first.
+- **The Seed** (pillar 2, automation): the World folded into one tile, at (4,6) every run after a
+  Last Fold, digging one ore a side every 4 s (half a Miner); rotating it chooses which side gets
+  which ore, a routing puzzle on turn one.
+- **Beyond** (the fifth floor): depth-4 modules only, couriers (1 a trip, 4 tiles/s, 2 s dwell,
+  2.5M), nothing folds there. **Tier 5**: eight goods, one per island each (pillar 5, absurdity).
+- **The Endless Ledger** (pillar 4, respect the player's time): linear, never timed, a fixed turn
+  of eight of the game's own products, 2x the Dock's value, a cosmetic every tenth order, kept
+  through every reset.
+- **No Megaproject #6.** Every candidate reward was an income multiplier, which §4 and the tree's
+  rule forbid; Beyond's Bay position is reserved for a project whose reward is a rule.
+- **Open:** at a fixed factory the Ledger's wait grows linearly, so §16 rule 1 holds only while
+  the factory keeps growing (not measured).
+
+### Flagged as derivative (owner to decide)
+- A third prestige layer with its own tree: Antimatter Dimensions' Reality and Universal
+  Paperclips' final stage. Re-derived: the payout is this game's fold audit on the top floor, and
+  the tree changes layout rules, never a multiplier.
+- Infinite orders: shapez's freeplay and Factorio's infinite research. Re-derived: linear, never
+  timed, the game's own products in a fixed turn, cosmetics every tenth.
+- Wide Belts: Factorio's two-lane belts. Re-derived: one lane, two items a tile, no side-loading.
+- Alternate recipes: Satisfactory's alternates. Re-derived: five, each removing a step or turning
+  a waste into an input, one node.
+- The Seed: a roguelite's carried-over item. Re-derived: the World folded into one tile, its sides
+  a routing puzzle.
