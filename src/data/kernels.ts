@@ -149,7 +149,8 @@ export const KERNEL_GRADE = {
 
 export interface LedgerProduct { item: ItemId; base: number; derivation: string }
 
-/** The products the Ledger wants in turn: order n (from 0) wants (n + 1) x base of LEDGER[n % 8]. */
+/** The products the Ledger wants in turn: order n (from 0) wants (n + 1) x base of the turn's
+ * (n mod its length)-th: these eight, then the late goods the Codex holds (LEDGER_LATE). */
 export const LEDGER: LedgerProduct[] = [
   { item: 'gizmo', base: 300, derivation: '§23 The Endless Ledger: 300 Gizmos, 10-20 min of a Gizmo line (0.25-0.5 a second, §18) at the first order' },
   { item: 'steel', base: 600, derivation: '§23 The Endless Ledger: 600 steel, 10-20 min of a steel module (0.5-1 a second, §18)' },
@@ -159,6 +160,61 @@ export const LEDGER: LedgerProduct[] = [
   { item: 'servo', base: 20, derivation: '§23 The Endless Ledger: 20 servos, 10-20 min of a servo group (0.02-0.03 a second, §21)' },
   { item: 'robotArm', base: 6, derivation: '§23 The Endless Ledger: 6 robot arms, 10-20 min of a Robot Arm group (0.005-0.01 a second, §21)' },
   { item: 'sandwichEngineer', base: 2, derivation: '§23 The Endless Ledger: 2 Engineers, 10-20 min of an Engineer group (0.002-0.003 a second, §21)' },
+];
+
+// (the Ledger's own imports sit here, beside its data: types only)
+import type { WorldId } from './worlds';
+import type { TrophyBonus } from './trophies';
+
+/** A good the Ledger asks for once the Codex holds it (the review of 2026-10-22: its turn was Acts
+ * I-III's only). `island`: where it can be made (its island's research is offered only there, §22,
+ * §23); 'any' is any island but Home (the Replica, every island its own way); null is anywhere. */
+export interface LedgerLate extends LedgerProduct { island: WorldId | 'any' | null }
+
+/** After the eight, in this order, every good of tiers 3-5 the Codex holds and the town can make
+ * where it is now: the turn is a pure function of the Codex and the island (src/sim/systems/ledger.ts
+ * `ledgerTurn`). Each base is 10-20 min of one group of it, as the eight's. */
+export const LEDGER_LATE: LedgerLate[] = [
+  { item: 'processor', base: 60, island: null, derivation: '§23 The Endless Ledger: 60 processors, 10-20 min of a Processors group (0.05-0.1 a second, §21)' },
+  { item: 'clockworkFrog', base: 40, island: null, derivation: '§23 The Endless Ledger: 40 clockwork frogs, 10-20 min of a frog group (0.03-0.06 a second, §21)' },
+  { item: 'umbrella', base: 10, island: null, derivation: '§23 The Endless Ledger: 10 umbrellas, 10-20 min of an Umbrella group (0.008-0.015 a second, §21)' },
+  { item: 'skyglassLens', base: 600, island: 'pebble', derivation: '§23 The Endless Ledger: 600 skyglass lenses, 10-20 min of an island\'s bulk (0.5-1 a second, §22)' },
+  { item: 'horizonLens', base: 60, island: 'pebble', derivation: '§23 The Endless Ledger: 60 horizon lenses, 10-20 min of a Horizon group (0.05-0.1 a second, §22 Megaprojects)' },
+  { item: 'cinderAlloy', base: 600, island: 'cinder', derivation: '§23 The Endless Ledger: 600 cinder alloy, 10-20 min of an island\'s bulk (0.5-1 a second, §22)' },
+  { item: 'sunsetGenerator', base: 2, island: 'cinder', derivation: '§23 The Endless Ledger: 2 Sunset Generators, 10-20 min of a Sunset group (an Engineer each: 0.002-0.003 a second, §22)' },
+  { item: 'frostAlloy', base: 400, island: 'rime', derivation: '§23 The Endless Ledger: 400 frost alloy, 10-20 min of an island\'s bulk from Chem Vats (0.3-0.6 a second, §22)' },
+  { item: 'stormCell', base: 60, island: 'rime', derivation: '§23 The Endless Ledger: 60 storm cells, 10-20 min of a Storm group (0.05-0.1 a second, §22)' },
+  { item: 'pocketWeather', base: 6, island: 'rime', derivation: '§23 The Endless Ledger: 6 Pocket Weathers, 10-20 min of a Weather group (0.005-0.01 a second, §22)' },
+  { item: 'relicGear', base: 400, island: 'oldworks', derivation: '§23 The Endless Ledger: 400 relic gears, 10-20 min of an island\'s bulk from Assemblers (0.3-0.6 a second, §22)' },
+  { item: 'quietEngine', base: 20, island: 'oldworks', derivation: '§23 The Endless Ledger: 20 Quiet Engines, 10-20 min of a tier 5 group (0.02-0.03 a second; tier 5 flows 0.005-0.05, §23)' },
+  { item: 'pocketIsland', base: 8, island: 'oldworks', derivation: '§23 The Endless Ledger: 8 Pocket Islands, 10-20 min of a tier 5 group (0.008-0.012 a second, §23)' },
+  { item: 'mapOfEverywhere', base: 12, island: 'pebble', derivation: '§23 The Endless Ledger: 12 Maps of Everywhere, 10-20 min of a tier 5 group (0.01-0.02 a second, §23)' },
+  { item: 'infiniteStaircase', base: 15, island: 'pebble', derivation: '§23 The Endless Ledger: 15 Infinite Staircases, 10-20 min of a tier 5 group (0.015-0.025 a second, §23)' },
+  { item: 'verySmallSun', base: 2, island: 'cinder', derivation: '§23 The Endless Ledger: 2 Very Small Suns, 10-20 min of a Sun group (a Sunset Generator each: 0.002-0.003 a second, §23)' },
+  { item: 'bottledTuesday', base: 6, island: 'rime', derivation: '§23 The Endless Ledger: 6 Bottled Tuesdays, 10-20 min of a tier 5 group (0.005-0.01 a second, §23)' },
+  { item: 'everlastingSandwich', base: 4, island: 'rime', derivation: '§23 The Endless Ledger: 4 Everlasting Sandwiches, 10-20 min of a tier 5 group (an Engineer each: 0.004-0.006 a second, §23)' },
+  { item: 'foldedUniverse', base: 1, island: 'any', derivation: '§23 The Endless Ledger: 1 Folded Universe Replica, about 17 min of a Replica group (0.001 a second: its inputs are tier 5 goods, §23)' },
+];
+
+/** What every tenth order pays besides its cosmetic (the review of 2026-10-22: after three skins the
+ * Ledger paid only numbered ribbons): a lore page of Unit 7\'s (src/data/codex.ts, opened by the
+ * order) and a small rule of Acts IV-V\'s own kinds (src/data/trophies.ts `TROPHY_CAPS`, summed with
+ * the shelf\'s and capped with it), in turn, to the 120th order; after it the ribbons go on. */
+export interface LedgerReward { at: number; page?: string; rule?: TrophyBonus; derivation: string }
+
+export const LEDGER_REWARDS: LedgerReward[] = [
+  { at: 10, page: 'ledger1', derivation: '§23 The Endless Ledger: the tenth order, a lore page (Unit 7 reads the ledger, §24 The Codex)' },
+  { at: 20, rule: { k: 'barge', add: 0.25 }, derivation: '§23 The Endless Ledger: the 20th, barges a quarter tile a second faster (§24 Acts IV-V\'s own, capped with the shelf\'s)' },
+  { at: 30, page: 'ledger2', derivation: '§23 The Endless Ledger: the 30th, a lore page (§24)' },
+  { at: 40, rule: { k: 'courier', sub: 0.2 }, derivation: '§23 The Endless Ledger: the 40th, couriers 0.2 s quicker at the ends (§24)' },
+  { at: 50, page: 'ledger3', derivation: '§23 The Endless Ledger: the 50th, a lore page (§24)' },
+  { at: 60, rule: { k: 'lot', off: 0.05 }, derivation: '§23 The Endless Ledger: the 60th, World and Beyond lots 5% cheaper (§24)' },
+  { at: 70, page: 'ledger4', derivation: '§23 The Endless Ledger: the 70th, a lore page (§24)' },
+  { at: 80, rule: { k: 'ledger', off: 0.05 }, derivation: '§23 The Endless Ledger: the 80th, its orders want 5% less (§24)' },
+  { at: 90, page: 'ledger5', derivation: '§23 The Endless Ledger: the 90th, a lore page (§24)' },
+  { at: 100, rule: { k: 'barge', add: 0.25 }, derivation: '§23 The Endless Ledger: the 100th, barges a quarter tile a second faster (§24)' },
+  { at: 110, page: 'ledger6', derivation: '§23 The Endless Ledger: the 110th, a lore page (§24)' },
+  { at: 120, rule: { k: 'courier', sub: 0.2 }, derivation: '§23 The Endless Ledger: the 120th, couriers 0.2 s quicker at the ends (§24); after it, the ribbons alone' },
 ];
 
 /** What an order pays, as a share of its items' Dock value (they are taken instead of sold). */

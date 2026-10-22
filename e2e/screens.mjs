@@ -1215,7 +1215,9 @@ export const ACT5 = ['lastFoldWorld', 'lastFoldAudit', 'lastFoldCard', 'lastFold
  * Workshop): the long tail's data laid over it, then one of the long tail's screens. State: shelf |
  * shelfHidden | shelfBonuses | shelfWardrobe | codexTier | codexLore | codexEnding | ending |
  * endingTyping | challengeList | challengeShut | challengeSlip | reorgNext | boards | boardNight |
- * skinPicker | skinned | skinnedDistrict | skinnedWorld | photo | trophyToast */
+ * skinPicker | skinned | skinnedDistrict | skinnedWorld | photo | trophyToast; after the review of
+ * 2026-10-22: shelfCapped | trophyCapped (a capped sticker) | ledgerLate (a tier 3-5 order) |
+ * ledgerFolio (the 30th order: a cosmetic and a lore page) | codexLedger (the Ledger's first folio) */
 export async function tailSetup(state) {
   const a = window.__app;
   const g = a.game;
@@ -1309,12 +1311,39 @@ export async function tailSetup(state) {
     }
     case 'photo': a.panel = null; a.selected = null; L.photo(true); break;
     case 'trophyToast': a.panel = null; a.selected = null; a.trophyPops = [{ id: 'tenThousandTeeth', t: 0.3 }]; break;
+    // the review of 2026-10-22: a sticker whose kind is at its cap says so, on the shelf and its ribbon
+    case 'shelfCapped':
+    case 'trophyCapped': {
+      for (const id of ['skyLanes', 'fleetAdmiral', 'upUpAway', 'armada']) if (!g.s.flags.includes('trophy:' + id)) g.s.flags.push('trophy:' + id);
+      if (!g.s.flags.includes('trophy:dispatcher')) g.s.flags.push('trophy:dispatcher');
+      if (state === 'shelfCapped') L.shelf('heights', 'dispatcher');
+      else { a.panel = null; a.selected = null; a.trophyPops = [{ id: 'dispatcher', t: 0.3 }]; }
+      break;
+    }
+    // the Ledger's turn with tier 3-5 goods (on Pebble Isle), an island good open, the next tenth's rule
+    case 'ledgerLate':
+    case 'ledgerFolio':
+    case 'codexLedger': {
+      const { turnNow } = await import('/src/sim/systems/ledger.ts');
+      const { LEDGER } = await import('/src/data/kernels.ts');
+      m.world = 'pebble';
+      g.s.codex = [...new Set([...g.s.codex, ...CODEX_ITEMS[3], 'skyglassLens', 'horizonLens', 'mapOfEverywhere', 'infiniteStaircase', 'foldedUniverse', 'pocketWeather'])];
+      const turn = turnNow(g);
+      let n = state === 'ledgerFolio' ? 29 : 11;
+      if (state === 'ledgerLate') while (turn[n % turn.length].item === LEDGER[n % LEDGER.length].item || n % turn.length < LEDGER.length) n++;
+      const it = turn[n % turn.length].item;
+      m.ledger = { n, progress: state === 'ledgerLate' ? { [it]: N.of(Math.floor((n + 1) * turn[n % turn.length].base * 0.4)) } : {}, item: it };
+      m.cosmetics = [...new Set([...m.cosmetics, 'mortarboard', 'contraband', 'trenchcoat', 'specimen', 'arcLight'])];
+      if (state === 'codexLedger') L.codex('lore', 'ledger1');
+      else a.panel = 'ledger';
+      break;
+    }
   }
   // the watchers see the Challenges won and the cosmetics granted as news: let them, then clear it
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   a.hud.celebs = [];
   a.toasts = [];
-  if (state !== 'trophyToast') a.trophyPops = [];
+  if (state !== 'trophyToast' && state !== 'trophyCapped') a.trophyPops = [];
   return null;
 }
 
@@ -1489,6 +1518,7 @@ export const TAIL = {
   shelf: 'ledger', shelfHidden: 'ledger', shelfBonuses: 'ledger', shelfWardrobe: 'ledger', codexTier: 'ledger', codexLore: 'ledger', codexEnding: 'ledger',
   ending: 'ledger', endingTyping: 'ledger', challengeList: 'ledger', challengeShut: 'ledger', challengeSlip: 'act2power', reorgNext: 'ledger', boards: 'ledger',
   boardNight: 'ledger', skinPicker: 'act2power', skinned: 'act2power', skinnedDistrict: 'district', skinnedWorld: 'world', photo: 'act2power', trophyToast: 'act2power',
+  shelfCapped: 'ledger', trophyCapped: 'act2power', ledgerLate: 'ledger', ledgerFolio: 'ledger', codexLedger: 'ledger',
 };
 for (const [s, base] of Object.entries(TAIL)) STATES[s] = { base, post: tailSetup, arg: s };
 

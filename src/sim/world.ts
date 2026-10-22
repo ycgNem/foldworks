@@ -471,6 +471,9 @@ export interface SeedCard {
 export interface LedgerState {
   n: number;
   progress: Partial<Record<ItemId, Num>>;
+  /** the open order's product, fixed when it opens (the turn grows with the Codex, DESIGN.md §23);
+   * absent on an older save and before the first tick: the turn's product for order n */
+  item?: ItemId;
 }
 
 /** What survives a Reorganize, beside the four kept fields that already lived in the run's state

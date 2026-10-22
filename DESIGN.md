@@ -2016,8 +2016,32 @@ base 10-20 min of one module of it). **Linear** (no curve: CLAUDE.md), **never t
 special orders' 2.1x, §18: it takes what would have sold, so one value back and one more), and **every
 tenth order a cosmetic**: the skins `gilded` (Miners), `candy` (Presses), `starlit` (Assemblers), then
 numbered ribbons (`ribbon4`, `ribbon5`...), so there is always a next one (`meta.cosmetics`). Its count
-and progress are kept through every reset. The order's products are Acts I-III's, made on every island,
-so it never waits on a Relocate.
+and progress are kept through every reset.
+
+**The turn takes the late goods** (the review of 2026-10-22: "it asks only for Act I-III goods; order 24
+pays 8.64M at 117M/min, about 4 s of income"). After the eight comes every good of `LEDGER_LATE` the
+Codex holds **and the town can make where it is**: processors, clockwork frogs and umbrellas anywhere;
+an island's tier 4 and tier 5 goods only on that island (its research is offered only there, §22); the
+Replica on any island but Home. So the turn is a pure function of the Codex and the island
+(`ledgerTurn`), deterministic, and the Ledger never waits on a Relocate. Each late good's base is 10-20
+min of one group of it, as the eight's (skyglass lenses and cinder alloy 600, frost alloy and relic gears
+400, processors, horizon lenses and storm cells 60, clockwork frogs 40, Quiet Engines 20, Staircases 15,
+Maps 12, umbrellas 10, Pocket Islands 8, Pocket Weathers and Bottled Tuesdays 6, Everlasting Sandwiches
+4, Sunset Generators and Very Small Suns 2, the Replica 1). The open order's product is **fixed when it
+opens** (`meta.ledger.item`, written by the sim in `runLedger`, never by a screen), so a good logged
+mid-order never changes it; after a Relocate to where it can't be made, the order becomes the eight's
+product for its number. A late order pays what its goods are worth: order 30 on Pebble Isle wants 342
+Maps of Everywhere and pays 47.8M; a Replica at order 32 pays 223M (a minute or two of an Act V floor,
+against the eight's seconds).
+
+**Every tenth order pays more than a cosmetic**, to the 120th (`LEDGER_REWARDS`): orders 10, 30, 50, 70,
+90 and 110 open a **lore page** (the Ledger's six folios, `CODEX_PAGES` group `ledger`, in Unit 7's voice:
+it reads the Committee's ledger over a shoulder, finds the warehouse, finds Unit 6's first order), and
+orders 20, 40, 60, 80, 100 and 120 pay a **rule** of Acts IV-V's own kinds (§24): barges +0.25 tiles/s
+(20, 100), couriers 0.2 s quicker at the ends (40, 120), World and Beyond lots 5% cheaper (60), Ledger
+orders 5% less (80). The rules sum with the shelf's under the same caps. After the 120th the ribbons go
+on alone. Still linear (an order wants (n + 1) x its base, less the `ledger` share, rounded up) and never
+timed.
 
 ### Offline and saves
 Beyond runs in offline replay through the same `tick`; its Dock and Bay are tallied apart (`bdock`,
@@ -2089,24 +2113,46 @@ and audits, Challenges, every Scenario board, skins, reputation, lifetime coin a
 Trophies are kept through every reset (their `trophy:<id>` flags), so their bonuses are too; they are
 checked once a second at the end of the tick (`checkTrophies`), offline replay included.
 
-**Trophy bonuses.** Every trophy carries one small bonus about what earned it (`bonus`), one of twelve
-kinds, summed over the trophies that give it and **capped** (`TROPHY_CAPS`), so a full shelf is a set
-of small rules and never a reward that grows with the count:
+**Trophy bonuses.** Every trophy carries one small bonus about what earned it (`bonus`), one of sixteen
+kinds, summed over the trophies that give it (and the Ledger's rules, §23) and **capped** (`TROPHY_CAPS`),
+so a full shelf is a set of small rules and never a reward that grows with the count. The table is as
+re-balanced after the review of 2026-10-22 (the uncapped sums had run to 3x their caps: routes 120 against
+40, skiffs 13 against 4, the Drawer 21 against 6; Act IV-V trophies paid start coin or a kind already
+full); the last column is every trophy's and Ledger rule's sum against the cap, **never above 1.5x**
+(`tests/longtail.test.ts` checks it):
 
 | kind | what it does | one trophy | the cap | derivation |
 |---|---|---|---|---|
 | `speed` | Workshop machines crafting that product run faster | +5% | +10% a product | a long delivery is 3-7 h of one line (each trophy says which); a twentieth of a line is one machine in twenty, folded into the module with the rest of the audit |
 | `free` | the first n of a Workshop building on the map are free; a free one refunds nothing (removed or folded) | 1-4 machines, 10-20 belts | none | one machine's price, a few minutes of the act's income: the Miner 40, the Slag Heap 25 (the first slag jam's own cure: "Slag Happens"), the Chem Vat 12,000; never in a Scenario |
-| `skiffs` | every route takes more skiffs | +1 | +4 (12 -> 16) | a route trophy's (§21: twelve skiffs carry a far feeder) |
-| `routes` | every high floor holds more routes | +5 or +10 | +40 | a third of the 120 (§21) |
-| `drawer` | the Patent Drawer holds more designs | +1 or +2 | +6 (8 -> 14) | under A Deeper Drawer's 4 plus the Legacy's (§19, §22): which lines to keep stays a choice |
-| `sparkLife` | Sparks stay longer | +2 or +3 s | +10 s (20 -> 30) | §6's 20 s, for a player who catches them |
-| `heap` | Slag Heaps hold more | +50 or +100 | +200 | 400 is about 53 min of one smelter (§4): +50 is 7 min |
-| `startCoin` | every run after a reset starts with more coin (a head start: `granted`) | 10-10,000 | none | each about the act's first purchase when it is earned (the Bellows' 15 ... a new universe's first lines' 10,000) |
-| `cool` | Overdrive cools sooner | 2-3 s | 10 s (30 -> 20) | still twice its 10 s run (§18) |
-| `repair` | the Old Works' ruins repair cheaper | 10-15% | 30% | off §22's quarter |
-| `chute` | the Chute holds more of each item | +5 or +10 | +40 (20 -> 60) | Specimen Jars' level (§21) |
+| `skiffs` | every route takes more skiffs | +1 | +4 (12 -> 16) | a route trophy's (§21: twelve skiffs carry a far feeder); Act III's five: 5 (1.25x) |
+| `routes` | every high floor holds more routes | +5 or +10 | +40 | a third of the 120 (§21); Act III's eight: 45 (1.13x) |
+| `drawer` | the Patent Drawer holds more designs | +1 | +6 (8 -> 14) | under A Deeper Drawer's 4 plus the Legacy's (§19, §22): which lines to keep stays a choice; eight trophies: 8 (1.33x) |
+| `sparkLife` | Sparks stay longer | +2 or +3 s | +10 s (20 -> 30) | §6's 20 s, for a player who catches them; six: 14 s (1.4x) |
+| `heap` | Slag Heaps hold more | +50 | +200 | 400 is about 53 min of one smelter (§4): +50 is 7 min; five: 250 (1.25x) |
+| `startCoin` | every run after a reset starts with more coin (a head start: `granted`) | 10-5,000 | 20,000 | each about the act's first purchase when it is earned (the Bellows' 15 ... the Patent tree's 5,000); the cap an Act II-III run's first heavy machines (a Mixer, a Refinery, a Smelter Mk2: 19,000, §18); 27 trophies, Acts I-III's only: 25,065 (1.25x; was 68,465 uncapped) |
+| `cool` | Overdrive cools sooner | 2-3 s | 10 s (30 -> 20) | still twice its 10 s run (§18); five: 12 s (1.2x) |
+| `repair` | the Old Works' ruins repair cheaper | 10% | 30% | off §22's quarter; four: 40% (1.33x) |
+| `chute` | the Chute holds more of each item | +5 or +10 | +40 (20 -> 60) | Specimen Jars' level (§21); seven: 40 (1x) |
+| `barge` | the World's barges fly faster | +0.25 tiles/s | +1 (3 -> 4) | the Lighthouse's Lens Room's step again (§22), so a World with both flies at 5; three trophies and two Ledger rules: 1.25 (1.25x) |
+| `courier` | Beyond's couriers load and unload quicker | 0.2 s | 1 s (2 -> 1) | the District's skiffs' 1 s (§21): beside its consumer a courier moves 0.4 a second, at the cap 0.67, which is where Beyond's tier 4 bulk stands (§23); five trophies and two Ledger rules: 1.4 s (1.4x) |
+| `lot` | the World's and Beyond's lots cost less | 5% | 40% | 10M and 100M x n stay linear (§22-23), Zoning Freeze's 20% for the District (§24) twice; ten trophies and a Ledger rule: 55% (1.38x) |
+| `ledger` | every Endless Ledger order wants less | 5% | 35% | an order still grows by two thirds of its base (§23); nine trophies and a Ledger rule: 50% (1.43x) |
 | `cosmetic` | a skin | one | none | the firsts with no rule worth giving (Warm Hands: the Bellows ends cranking within a minute) |
+
+**Acts IV-V's trophies pay Acts IV-V's rules** (the review of 2026-10-22: Act V's trophies paid start
+coin, the Last Fold, Perfect Fold and Full Shelf 10,000 each, or a kind long full, the Kernel tree +10
+routes, the Ledger's 100th and 500th a skiff, and the ribbon said "yours for good"). Each pays one of the
+four new kinds above about the thing that earned it (the Lighthouse, four Relocates and all fifteen
+Challenges the barges; the World, the Sky Anchor, Relocate, Legacy, the Standing Committee and the
+Codex's tier 4 the high lots; Beyond, the Last Fold, Perfect Fold, the Kernel tree and the Codex's tier 5
+the couriers; the Ledger's four, the Kernels' two, Third Time, Collection Complete and Full Shelf the
+Ledger), or the good's own craft (a tier 4 good's first and its long delivery are its 10%; each tier 5
+first is +5% on that impossible invention), the Old Works' repairs, a free machine where it is wanted (a
+Generator on Rime, whose power plant warms a line, §22) or a skin. Never start coin, never an Acts I-III
+kind. **A bonus already at its cap says so**: `bonusCapped` (the other trophies earned and the Ledger's
+rules paid already reach the cap) puts a lock on the sticker, "its bonus, capped" and "capped: the shelf
+already gives the most" on the sticker in hand, and the same words on the ribbon when it is earned.
 
 *Derivation:* PLAN.md asks for "a small, specific bonus" per trophy; DECISIONS.md forbids a pooled
 multiplier. Each bonus is a rule the player already knows (§4 prices, §6 Sparks, §18 Overdrive, §19
@@ -2148,6 +2194,7 @@ the Gazette's "UNIT 7 REPORTS"), each opened by a first the sim already keeps th
 | the District, the World, Beyond | the first module placed there (`districtPlaced`, `worldPlaced`, `beyondPlaced`) |
 | Home | the first Relocate (a place is only seen once it is left) |
 | Pebble Isle, Cinder Isle, Rime, the Old Works | a visit (the `visit:<island>` counter, which a Last Fold keeps where `meta.visited` is not) |
+| the Ledger, Folios I-VI | Endless Ledger orders 10, 30, 50, 70, 90 and 110 (`meta.ledger.n`, kept for good; §23). The Codex's lore list shows the open folios and the next one only |
 | **Unit 7: Collection Complete** | the first Last Fold |
 
 **Unit 7's ending** closes the Codex: the World folded into one tile is the last specimen, the

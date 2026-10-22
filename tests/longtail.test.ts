@@ -11,12 +11,16 @@ import { RESEARCH_IDS } from '../src/data/research';
 import { RULES } from '../src/data/rules';
 import { HIGH } from '../src/data/floors';
 import { ITEMS } from '../src/data/items';
-import { TROPHIES, TROPHY, TROPHY_CAPS, trophyFace, bonusText } from '../src/data/trophies';
+import { TROPHIES, TROPHY, TROPHY_CAPS, trophyFace, bonusText, pluralName, type TrophyBonus } from '../src/data/trophies';
+import { KERNELS, LEDGER, LEDGER_LATE, LEDGER_REWARDS, type KernelId } from '../src/data/kernels';
+import { fillOrder } from '../src/sim/systems/docks';
+import { runOrders } from '../src/sim/systems/orders';
+import { currentLedger, ledgerOrder, ledgerTurn, orderNow, nextCosmetic } from '../src/sim/systems/ledger';
 import { CODEX_ITEMS, CODEX_PAGES, CODEX_TOTAL, ITEM_TIER } from '../src/data/codex';
 import { COSMETICS, cosmeticDef, skinSprite } from '../src/data/cosmetics';
 import { CHALLENGES, CHALLENGE_IDS, type ChallengeId } from '../src/data/challenges';
 import { SCENARIOS, SCENARIO_IDS } from '../src/data/scenarios';
-import { trules, craftSpeed, freeBuild, codexCompletion, codexPages, grantCosmetics, ownedCosmetics, skinFor, boardRecord, mergeBoard, boardsOnFile } from '../src/sim/longtail';
+import { trules, craftSpeed, freeBuild, codexCompletion, codexPages, grantCosmetics, ownedCosmetics, skinFor, boardRecord, mergeBoard, boardsOnFile, bonusCapped, bonusSize, bonusCap } from '../src/sim/longtail';
 import { prules } from '../src/sim/patents';
 import { checkTrophies, trophyValue } from '../src/sim/systems/stats';
 import { maxRoutes, maxSkiffs, skiffStats, lotPrice, routeRefusal } from '../src/sim/systems/high';
@@ -638,5 +642,190 @@ describe('the long tail in saves (DESIGN.md §24)', () => {
     expect(fingerprint(h)).toBe(fingerprint(g));
     void replay;
     void isMachine;
+  });
+});
+
+// ================================================================== the review's fixes (2026-10-22)
+
+/** The trophies of Acts IV-V: the islands, Relocate and Legacy, the World, Beyond, the Last Fold,
+ * the Kernels, the Ledger, tier 4-5 goods and the shelf's last stickers. */
+const LATE_TROPHIES = [
+  'lookingGlass', 'forgeAhead', 'chillOut', 'handMeDowns', 'bottledLightning', 'pocketRain', 'sunsetStrip',
+  'whichTuesday', 'youAreHere', 'pocketIsle', 'hush', 'stillFresh', 'upAndUp', 'codexIV', 'codexV', 'codexComplete',
+  'movingDay', 'islandHopper', 'grandTour', 'legacy50', 'legacyNodes5', 'tidyRuins', 'restorer', 'worldly', 'crowdedWorld',
+  'smallWorld', 'lighthouseKeeper', 'anchorsAweigh', 'beyondFirst', 'beyondBusy', 'lastFold', 'secondUniverse', 'kernelNodes5',
+  'kernelTree', 'kernels50', 'ledger10', 'ledger50', 'ledger100', 'ledger500', 'allChallenges', 'rubberStamp', 'smallSun',
+  'recursion', 'perfectFold', 'thirdTime', 'fullShelf', 'unit6',
+  'clearSkies', 'hotMetal', 'coldSteel', 'oldNewTricks', 'brainstorm', 'dyedInTheWool', 'farSighted', 'weatherPermitting', 'goldenHour',
+];
+/** Acts IV-V's own kinds, and the others a late trophy may pay (never start coin, never Acts I-III's
+ * capped kinds). */
+const LATE_KINDS = new Set<TrophyBonus['k']>(['barge', 'courier', 'lot', 'ledger', 'repair', 'cosmetic', 'free']);
+
+function ledgerOn(g: Game) {
+  const id: KernelId = 'endlessLedger';
+  g.s.meta.kernels = N(KERNELS[id].cost);
+  must(g, { k: 'kernel', id });
+}
+
+describe('the long tail\'s rewards, after the review (DESIGN.md §23-24)', () => {
+  it('every capped kind\'s uncapped sum, trophies and the Ledger\'s rules, is at most 1.5x its cap', () => {
+    const sums = new Map<string, { sum: number; cap: number }>();
+    const all: TrophyBonus[] = [...TROPHIES.map((t) => t.bonus), ...LEDGER_REWARDS.flatMap((r) => (r.rule ? [r.rule] : []))];
+    for (const b of all) {
+      const cap = bonusCap(b);
+      if (cap === null) continue;
+      const key = b.k === 'speed' ? 'speed:' + b.item : b.k;
+      const e = sums.get(key) ?? { sum: 0, cap };
+      e.sum += bonusSize(b);
+      sums.set(key, e);
+    }
+    for (const k of ['skiffs', 'routes', 'drawer', 'sparkLife', 'heap', 'startCoin', 'cool', 'repair', 'chute', 'barge', 'courier', 'lot', 'ledger']) expect(sums.has(k), k).toBe(true);
+    for (const [k, { sum, cap }] of sums) expect(sum, `${k}: ${sum} against ${cap}`).toBeLessThanOrEqual(cap * 1.5 + 1e-9);
+  });
+
+  it('an Act IV-V trophy pays an Act IV-V rule, a late good\'s craft or a skin, never start coin', () => {
+    for (const id of LATE_TROPHIES) {
+      const b = TROPHY[id]?.bonus;
+      expect(b, id).toBeTruthy();
+      const ok = LATE_KINDS.has(b.k) || (b.k === 'speed' && ITEM_TIER[b.item] >= 4);
+      expect(ok, `${id} pays ${b.k}`).toBe(true);
+    }
+    // and the start coin is capped now too
+    const g = new Game(1);
+    for (const t of TROPHIES) g.s.flags.push('trophy:' + t.id);
+    expect(trules(g).startCoin).toBe(TROPHY_CAPS.startCoin);
+  });
+
+  it('a trophy whose kind is at its cap says so (the sticker, the ribbon)', () => {
+    const g = new Game(1);
+    const skiffers = TROPHIES.filter((t) => t.bonus.k === 'skiffs');
+    expect(skiffers.length).toBeGreaterThan(TROPHY_CAPS.skiffs);
+    const last = skiffers[skiffers.length - 1];
+    expect(bonusCapped(g, last)).toBe(false);
+    for (const t of skiffers.slice(0, TROPHY_CAPS.skiffs)) earn(g, t.id);
+    expect(bonusCapped(g, last)).toBe(true);
+    // one of the four that count is not "capped" (without it the sum is under the cap)
+    expect(bonusCapped(g, skiffers[0])).toBe(false);
+    // the Ledger's rules count against the same cap
+    const h = new Game(1);
+    const barges = TROPHIES.filter((t) => t.bonus.k === 'barge');
+    for (const t of barges) earn(h, t.id);
+    h.s.meta.ledger = { n: 0, progress: {} };
+    expect(bonusCapped(h, barges[0])).toBe(false);
+    h.s.meta.ledger.n = 100;
+    expect(trules(h).barge).toBe(TROPHY_CAPS.barge);
+    expect(bonusCapped(h, barges[0])).toBe(true);
+    // free buildings and skins never are
+    expect(bonusCapped(g, TROPHY.handsFree)).toBe(false);
+    expect(bonusCapped(g, TROPHY.warmHands)).toBe(false);
+  });
+
+  it('names a building\'s plural right ("Presss" no more)', () => {
+    expect(pluralName('Press')).toBe('Presses');
+    expect(pluralName('Slag Heap')).toBe('Slag Heaps');
+    expect(pluralName('Smelter Mk2')).toBe('Smelters Mk2');
+    expect(pluralName('Buffer Crate')).toBe('Buffer Crates');
+    expect(bonusText({ k: 'free', kind: 'press', n: 2 })).toContain('Presses');
+    for (const t of TROPHIES) expect(bonusText(t.bonus), t.id).not.toMatch(/sss|Mk2s/);
+  });
+
+  it('applies the new kinds where the sim reads them: barges, couriers, lots, the Ledger', () => {
+    const g = sandbox();
+    const w0 = skiffStats(g, 'world'), b0 = skiffStats(g, 'beyond'), d0 = skiffStats(g, 'district');
+    earn(g, 'lighthouseKeeper', 'beyondFirst', 'worldly', 'ledger10');
+    expect(skiffStats(g, 'world').speed).toBeCloseTo(w0.speed + 0.25);
+    expect(skiffStats(g, 'beyond').dwell).toBeCloseTo(b0.dwell - 0.2);
+    expect(skiffStats(g, 'district')).toEqual(d0);
+    ledgerOn(g);
+    expect(currentLedger(g).want).toBe(Math.ceil(LEDGER[0].base * 0.95));
+    expect(orderNow(g, 9).want).toBe(Math.ceil(10 * LEDGER[1].base * 0.95));
+  });
+
+  it('the World\'s and Beyond\'s lots cost the shelf\'s share less; the District\'s do not', () => {
+    const g = sandbox();
+    g.step(1);
+    const w0 = lotPrice(g, 'world')?.toNumber();
+    const d0 = lotPrice(g, 'district')?.toNumber();
+    earn(g, 'worldly', 'crowdedWorld');
+    if (w0 !== undefined) expect(lotPrice(g, 'world')!.toNumber()).toBe(Math.round(w0 * 0.9));
+    if (d0 !== undefined) expect(lotPrice(g, 'district')!.toNumber()).toBe(d0);
+    expect(w0 !== undefined || d0 !== undefined).toBe(true);
+  });
+
+  it('the Ledger\'s turn takes tier 3-5 goods the Codex holds, where the town can make them', () => {
+    const late = LEDGER_LATE.map((p) => p.item);
+    const eight = LEDGER.map((p) => p.item);
+    expect(ledgerTurn([], 'home').map((p) => p.item)).toEqual(eight);
+    const codex = ['processor', 'skyglassLens', 'bottledTuesday', 'foldedUniverse'] as const;
+    expect(ledgerTurn(codex, 'home').map((p) => p.item)).toEqual([...eight, 'processor']);
+    expect(ledgerTurn(codex, 'pebble').map((p) => p.item)).toEqual([...eight, 'processor', 'skyglassLens', 'foldedUniverse']);
+    expect(ledgerTurn(codex, 'rime').map((p) => p.item)).toEqual([...eight, 'processor', 'bottledTuesday', 'foldedUniverse']);
+    for (const p of LEDGER_LATE) expect(ITEM_TIER[p.item], p.item).toBeGreaterThanOrEqual(3);
+    expect(late.some((i) => ITEM_TIER[i] === 4) && late.some((i) => ITEM_TIER[i] === 5)).toBe(true);
+    // a tier 5 order: linear, pays twice its Dock value
+    const turn = ledgerTurn(['bottledTuesday'], 'rime');
+    const o = ledgerOrder(8, turn);
+    expect(o.item).toBe('bottledTuesday');
+    expect(o.want).toBe(9 * LEDGER_LATE.find((p) => p.item === 'bottledTuesday')!.base);
+    expect(o.pays).toBe(o.want * ITEMS.bottledTuesday.value * 2);
+  });
+
+  it('fixes the open order\'s product when it opens; a good logged mid-order never changes it; a Relocate falls back', () => {
+    const g = sandbox();
+    ledgerOn(g);
+    g.s.meta.ledger = { n: 8, progress: {} };
+    g.s.codex = [];
+    runOrders(g);
+    expect(currentLedger(g).item).toBe('gizmo');
+    expect(g.s.meta.ledger.item).toBe('gizmo');
+    // the Codex logs a processor mid-order: order 8 stays the Gizmos
+    g.s.codex.push('processor');
+    runOrders(g);
+    expect(currentLedger(g).item).toBe('gizmo');
+    fillOrder(g, 'gizmo', N(currentLedger(g).want));
+    runOrders(g);
+    expect(g.s.meta.ledger.n).toBe(9);
+    // the turn is nine long now: order 9 (9 mod 9 = 0) is the Gizmos; order 17 the processor
+    expect(currentLedger(g).item).toBe('gizmo');
+    g.s.meta.ledger = { n: 17, progress: {} };
+    runOrders(g);
+    expect(currentLedger(g).item).toBe('processor');
+    // an island good on its island, then a Relocate away: the eight's product for its number
+    g.s.meta.world = 'pebble';
+    g.s.codex.push('skyglassLens');
+    g.s.meta.ledger = { n: 9, progress: {} };
+    runOrders(g);
+    expect(currentLedger(g).item).toBe('skyglassLens');
+    g.s.meta.world = 'cinder';
+    runOrders(g);
+    expect(currentLedger(g).item).toBe(LEDGER[9 % LEDGER.length].item);
+    expect(g.s.meta.ledger.item).toBe(LEDGER[9 % LEDGER.length].item);
+  });
+
+  it('every tenth order pays a lore page or a rule as well as its cosmetic, to the 120th', () => {
+    expect(LEDGER_REWARDS.map((r) => r.at)).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]);
+    for (const r of LEDGER_REWARDS) {
+      expect(!!r.page !== !!r.rule, String(r.at)).toBe(true);
+      if (r.page) expect(CODEX_PAGES.find((p) => p.id === r.page)?.open, r.page).toEqual({ k: 'ledger', n: r.at });
+      expect(ledgerOrder(r.at - 1).reward).toBe(r);
+      expect(ledgerOrder(r.at - 1).cosmetic).toBeTruthy();
+    }
+    expect(ledgerOrder(130 - 1).reward).toBeNull();
+    const g = sandbox();
+    ledgerOn(g);
+    const pages = () => codexPages(g).filter((p) => p.group === 'ledger').map((p) => p.id);
+    expect(pages()).toEqual([]);
+    g.s.meta.ledger = { n: 9, progress: {} };
+    const o = currentLedger(g);
+    expect(o.reward?.page).toBe('ledger1');
+    fillOrder(g, o.item, N(o.want));
+    runOrders(g);
+    expect(pages()).toEqual(['ledger1']);
+    expect(trules(g).barge).toBe(0);
+    g.s.meta.ledger = { n: 20, progress: {} };
+    expect(trules(g).barge).toBe(0.25);
+    expect(nextCosmetic(g).order.reward?.page).toBe('ledger2');
+    for (const p of CODEX_PAGES) if (p.group === 'ledger') for (const l of p.lines) expect(l).toBe(l.toUpperCase());
   });
 });

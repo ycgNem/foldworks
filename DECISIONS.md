@@ -2501,3 +2501,55 @@ items are the bot's reach, not the model's).
   the District at 10:01, Robotics at 12:03, each Act III stretch's worst wait 10.4-10.7 min (the
   full-floor reset), a District of 130 groups at 0.93 ms a tick. Open: every §22 target; the
   islands' layouts; 80 h of play (about 50 minutes of wall time).
+
+### Fixes after the review: the long tail's rewards (2026-10-22)
+
+Built in a worktree (about 2.5 h), from "Late trophies pay into capped kinds", "The Ledger" and two of
+the smaller items above. DESIGN.md §23 (the Endless Ledger) and §24 (Trophy bonuses, the Codex) carry
+the numbers; `tests/longtail.test.ts` ("the long tail's rewards, after the review") checks them.
+
+- **Every kind's uncapped sum is at most 1.5x its cap** (trophies and the Ledger's rules together,
+  checked by a test): skiffs 5 against 4 (was 13), routes 45 against 40 (was 120), the Drawer 8
+  against 6 (was 21), Sparks 14 s against 10 (was 16), heaps 250 against 200 (was 350), the Chute 40
+  against 40 (was 60), Overdrive 12 s against 10, repairs 40% against 30% (Restorer 15% -> 10%). Done
+  by moving Acts IV-V's trophies off Acts I-III's kinds and trimming a few (Transmuted and Spade Work
+  50 heap, not 100; Full House and Shelf Life coin, Tea Break coin, Puzzle Box a free Assembler Mk2).
+- **Start coin is capped too: 20,000** (an Act II-III run's first heavy machines: Mixer, Refinery and
+  Smelter Mk2 are 19,000, §18). No Act IV-V trophy pays it any more; the 27 that do are Acts I-III's
+  and sum to 25,065 (was 30 trophies and 68,465). The pace tests' runs earn far under it.
+- **Four new kinds, Acts IV-V's own**, each a rule about a late floor: `barge` (the World's barges
+  +0.25 tiles/s, cap +1: the Lens Room's step again), `courier` (Beyond's couriers 0.2 s quicker at
+  the ends, cap 1 s: the District's skiffs' dwell), `lot` (the World's and Beyond's lots 5% cheaper,
+  cap 40%: still linear) and `ledger` (Ledger orders want 5% less, cap 35%: an order still grows by
+  two thirds of its base). Read where the sim already reads their neighbours (`skiffStats` and
+  `lotPrice` in high.ts, `orderNow` in ledger.ts). An Act IV-V trophy pays one of them, its own good's
+  craft (tier 4: the first and the long delivery are the product's 10%; tier 5: +5% each), the Old
+  Works' repairs, a machine free or a skin; never start coin, never an Acts I-III kind (a test lists
+  the late trophies). Chill Out keeps the islands agent's free Generator (the Heater is gone).
+- **A capped bonus says so**: a lock on the sticker, "its bonus, capped" and "capped: the shelf
+  already gives the most" on the sticker in hand, and the ribbon says it instead of "+": `bonusCapped`
+  counts the other trophies earned and the Ledger's rules paid.
+- **The Ledger's turn takes tier 3-5 goods** once the Codex holds them, and only where the town can
+  make them (an island's goods on its island, the Replica on any island but Home): a pure function of
+  the Codex and the island, so deterministic, and it never waits on a Relocate. The open order's
+  product is fixed when it opens (`meta.ledger.item`, optional, written only by `runLedger`; an older
+  save without it takes the turn's product on its first tick; no `SAVE_VERSION` bump); a Relocate to
+  where it can't be made turns it into the eight's product for its number. Bases are 10-20 min of a
+  group, as before. A late order is worth something: order 30 on Pebble wants 342 Maps and pays 47.8M.
+- **Every tenth order to the 120th also pays a lore page or a rule** (`LEDGER_REWARDS`): six folios of
+  Unit 7 reading the Committee's ledger (orders 10, 30 ... 110; a new `ledger` group of Codex pages,
+  opened by `meta.ledger.n`), and six rules of the new kinds (barges at 20 and 100, couriers at 40 and
+  120, lots at 60, the Ledger at 80), summed with the shelf's under the same caps. After the 120th the
+  ribbons go on alone (decided: a finite list of rewards over an endless count is the point of a
+  ribbon; a 121st rule would be a curve in disguise). The page shows the next reward under the next
+  cosmetic, marks them in the list ("+ a page", "+ a rule"), and the turn's length on a chip.
+- **Text slips**: the Ledger page's shelf draws every cosmetic by its own slots' sheets (the
+  Mortarboard, Contraband, Trench Coat and Specimen Jar have art; they were ribbons labelled in
+  capitals past a 60 px ribbon) and a ribbon is as wide as its label; "Presss" was `name + 's'`
+  (`pluralName`: Presses, Slag Heaps, Smelters Mk2). Also fixed on the way: the "+n more" line slid
+  under the Wardrobe key at 1024x640 once rows held sprites; the count beside the order's meter.
+- **Derivative check**: none of the four kinds resembles a shipped game's mechanic more than the
+  shelf's existing ones (DESIGN.md §24's flags stand: each a capped rule about what earned it).
+- **Open**: the Ledger's rule list ends at the 120th order (by design, above); whether the four new
+  kinds are felt is unmeasured (the Act IV bot doesn't reach the World yet, so no pace test plays
+  them); the Codex's lore list hides shut folios past the next one to keep the ending on the page.
