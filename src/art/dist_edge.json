@@ -1,0 +1,1 @@
+{"frame": [16, 16], "frames": 28, "anchor": [0, 0], "fps": 0, "names": ["m0", "m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13", "m14", "m15", "in_nw", "in_ne", "in_sw", "in_se", "cut_nw", "cut_ne", "cut_sw", "cut_se", "seam_deck", "seam_tread", "seam_n", "seam_s"]}
