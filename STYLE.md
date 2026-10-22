@@ -301,7 +301,8 @@ burst where the creases cross), ledger (a leather ledger with a gold infinity).
   pillow-lava domes cracked by glowing seams over a magma pool, rime crystal chunky teal ice blocks
   out of a snow mound, relic a great brass gear upright and half sunk beside a broken column.
 - **Island pieces**: the Heater a finned cast-iron radiator glowing between its fins (lamp ramp
-  +1/0/-1/0), on the skid; the vent a basalt crater with a glowing throat and steam, scorched
+  +1/0/-1/0), on the skid (unused since the Acts IV-V review dropped the Heater: Rime is warmed by
+  the power plant, whose reach is drawn as the Heater's was); the vent a basalt crater with a glowing throat and steam, scorched
   ground to its tile's edge; rubble piles on a dirt mound (slabs, bricks, a girder, pipes);
   `ruin_overlay` and `frost_overlay` are composited **source-atop** over a machine's own frame
   (grime, cracks, rust runs, moss and ivy; a ragged snow cap, icicles, snow on the skid, frost

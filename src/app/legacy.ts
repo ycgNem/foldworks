@@ -16,6 +16,7 @@ import { itemIcon, sheet, hasArt, spriteName } from '../render/sprites';
 import { Num } from '../engine/num';
 import { hasLegacy, legacyRefusal, lrules } from '../sim/legacy';
 import { previewPatents } from '../sim/reorganize';
+import { HIGH_IDS } from '../sim/systems/high';
 import { button, uiIcon, chip, chipWidth, rule, stamp, UICON, type UIconName } from './chrome';
 import { menuTemplate, type IconName } from './widgets';
 import { layoutRich, drawLayout, drawRich, richWidth } from '../ui/rich';
@@ -352,7 +353,7 @@ function planList(app: App, x: number, y: number, w: number, end: number): numbe
   const g = app.game;
   const max = lrules(g).plans;
   const plans = g.s.meta.plans ?? [];
-  ui.small(`DISTRICT LAYOUTS KEPT ${plans.length}/${max}`, x, y, T.inkSoft);
+  ui.small(`TOWN LAYOUTS KEPT ${plans.length}/${max}`, x, y, T.inkSoft);
   y += 9;
   for (const p of plans) {
     if (y + 14 > end - 18) break;
@@ -364,11 +365,13 @@ function planList(app: App, x: number, y: number, w: number, end: number): numbe
     if (button(ui, 'forgetPlan_' + p.id, x + w - fw, y, fw, 12, 'Forget', { tip: `{bad:forget} ${p.name}` })) app.act({ k: 'forgetPlan', id: p.id });
     y += 14;
   }
-  const mods = g.s.district?.ents.filter((e) => e.kind === 'module').length ?? 0;
+  // every high floor that stands: the District, the World, Beyond (the Town Plan places them all)
+  const mods = HIGH_IDS.reduce((n, f) => n + (g.s[f]?.ents.filter((e) => e.kind === 'module').length ?? 0), 0);
+  const high = g.s.world ? 'the District and the World' : 'the District';
   const room = plans.length < max;
   if (y + 16 <= end) {
-    const lab = '{u:district} Keep the District';
-    if (button(ui, 'keepPlan', x, y, Math.min(w, richWidth(lab) + 14), 15, lab, { disabled: !room || !mods, gold: room && mods > 0, tip: !mods ? '{soft:no groups stand on the District}' : !room ? `{soft:the Town Plan keeps ${max}: forget one first}` : [{ text: '{big:Keep this layout}' }, { text: `${mods} groups and their routes, by name` }] })) {
+    const lab = g.s.world ? '{u:district} Keep the floors' : '{u:district} Keep the District';
+    if (button(ui, 'keepPlan', x, y, Math.min(w, richWidth(lab) + 14), 15, lab, { disabled: !room || !mods, gold: room && mods > 0, tip: !mods ? '{soft:no groups stand on the District}' : !room ? `{soft:the Town Plan keeps ${max}: forget one first}` : [{ text: '{big:Keep this layout}' }, { text: `${mods} modules on ${g.s.beyond ? 'every high floor' : high} and their routes, by name` }] })) {
       const name = window.prompt('Name this District layout:', `District plan ${g.s.meta.nextPlan ?? 1}`);
       if (name !== null) app.act({ k: 'keepPlan', name });
     }

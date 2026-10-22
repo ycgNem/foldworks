@@ -109,12 +109,12 @@ export const WORLDS: Record<WorldId, WorldDef> = {
   },
   rime: {
     id: 'rime', name: 'Rime', title: 'Cold enough to fold the air',
-    rule: 'a powered machine runs at {bad:half} speed · unless a Heater is within 2 · or 2 working machines touch it',
+    rule: 'a powered machine runs at {bad:half} speed · unless a working Boiler, Engine or Generator is within 2 · or 2 working machines touch it',
     flavor: 'The frogs wear scarves. The machines want scarves.',
     exotic: 'rimeCrystal', goods: ['frostAlloy', 'stormCell', 'pocketWeather'],
     patches: [{ item: 'rimeCrystal', x: 11, y: 13, w: 2, h: 2, derivation: '§22 Rime: rime crystal in chunk D' }],
     cold: 0.5,
-    derivation: '§22 Rime: a powered machine runs at half speed when cold; warm is a lit Heater within 2 tiles (a Pole\'s reach, §18) or two working machines touching it, so a good Rime line packs its machines together or heats them, and a line laid out for full speed runs at half its ratios',
+    derivation: '§22 Rime: a powered machine runs at half speed when cold; warm is a working Boiler, Steam Engine or Generator within 2 tiles (a Pole\'s reach, §18) or two working machines touching it, so a good Rime line packs its machines together round its own plant (the plant inside the fold box), and a line laid out for full speed elsewhere runs at half its ratios',
   },
   oldworks: {
     id: 'oldworks', name: 'the Old Works', title: 'Somebody was here first',

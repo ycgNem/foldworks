@@ -33,7 +33,7 @@ import { HIGH } from '../data/floors';
 import { highW } from '../sim/systems/high';
 import { drawPip, shapeOf, stateShape, type PipShape } from './pips';
 import { drawIsleGround, drawOverlaid, drawHeatReach, workshopLand } from './isleground';
-import { isSky } from '../sim/systems/islands';
+import { isSky, plantReach } from '../sim/systems/islands';
 import { SEED_ORES, seedSide } from '../sim/systems/seed';
 
 /** The Seed's notches: each raw ore's colour (its icon's) */
@@ -522,7 +522,7 @@ export class Renderer {
     this.sparks(g);
     this.snapFold(g);
     this.overlays(g, ov);
-    drawHeatReach(ctx, g, this.time, ov, RULES.heaterReach.value);
+    drawHeatReach(ctx, g, this.time, ov, plantReach(g));
     this.effects(dt);
     // a fizz when a grid starts browning out
     const brown = g.grids.some((gr) => gr.demand > 0 && gr.sat < 1);
@@ -865,15 +865,6 @@ export class Renderer {
         }
         this.frontArrow(e);
         if (f >= 1) this.pip(x, y, C.pipRed, true);
-        return;
-      }
-      case 'heater': {
-        // Rime's Heater (DESIGN.md §22): its flame while it warms, a pip (green warming, yellow
-        // out of coal, grey with nothing cold in reach)
-        const s = sheet('heater');
-        drawRot(ctx, s, e.state === 'work' ? frameAt(s, this.time + e.id * 0.13) : 0, x, y, 0);
-        if (e.state === 'work') this.smoke(e, false, 0.9);
-        this.pip(x, y, e.state === 'work' ? C.pipGreen : e.state === 'starved' ? C.pipYellow : C.pipGrey, false);
         return;
       }
       case 'seed': {

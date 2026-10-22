@@ -27,7 +27,8 @@ import { buyPatent, openPatents, patentRefusal } from '../patents';
 import { lrules } from '../legacy';
 import { unfoldKept, unfoldKeptRefusal } from '../drawer';
 import { cancelAudit, startAudit } from './audits';
-import { addRoute, hentAt, hplace, hplaceRefusal, routeRefusal, setSkiffs } from './high';
+import { addRoute, hentAt, hplace, hplaceRefusal, routeRefusal, setSkiffs, HIGH_IDS } from './high';
+import type { HighFloorId } from '../../data/floors';
 import { previewPatents, reorganize, reorganizeRefusal } from '../reorganize';
 
 export function runAutomation(g: Game) {
@@ -114,29 +115,34 @@ function foldRegraded(g: Game) {
   foldAudited(g, k?.name ?? null, a.id);
 }
 
-/** The Town Plan: each planned District tile empty is filled with a spare copy of the best graded
- * design of its product and depth; each planned route between two filled tiles is flown, its
- * skiffs bought up to the plan's. */
+/** The Town Plan: on every high floor that stands (the District, the World, Beyond), each planned
+ * tile empty is filled with a spare copy of the best graded design of its product and depth; each
+ * planned route between two filled tiles is flown, its skiffs (or barges) bought up to the plan's. A
+ * plan's tile or route with no floor is the District's (plans kept before the World counted). */
 function townPlan(g: Game) {
-  const st = g.s.district;
-  if (!st) return;
-  for (const p of g.s.meta.plans ?? []) {
-    for (const tile of p.tiles) {
-      if (hentAt(g, 'district', tile.x, tile.y)) continue;
-      const cands = g.s.designs
-        .filter((d) => d.spare >= 1 && (d.depth ?? 1) === tile.depth && mainItem(d) === tile.item)
-        .sort((a, b) => b.grade.mult - a.grade.mult || a.id - b.id);
-      for (const d of cands) if (!hplaceRefusal(g, 'district', d.id, tile.x, tile.y)) { if (hplace(g, 'district', d.id, tile.x, tile.y).ok) g.bump('planPlaced'); break; }
-    }
-    for (const r of p.routes) {
-      const a = hentAt(g, 'district', r.fx, r.fy), b = hentAt(g, 'district', r.tx, r.ty);
-      if (!a || !b || a.kind !== 'module') continue;
-      let route = st.routes.find((q) => q.from === a.id && q.to === b.id && q.item === r.item);
-      if (!route) {
-        if (routeRefusal(g, 'district', r.fx, r.fy, r.tx, r.ty, r.item) || !addRoute(g, 'district', r.fx, r.fy, r.tx, r.ty, r.item).ok) continue;
-        route = st.routes[st.routes.length - 1];
+  for (const floor of HIGH_IDS) {
+    const st = g.s[floor];
+    if (!st) continue;
+    const on = (f: HighFloorId | undefined) => (f ?? 'district') === floor;
+    for (const p of g.s.meta.plans ?? []) {
+      for (const tile of p.tiles) {
+        if (!on(tile.floor) || hentAt(g, floor, tile.x, tile.y)) continue;
+        const cands = g.s.designs
+          .filter((d) => d.spare >= 1 && (d.depth ?? 1) === tile.depth && mainItem(d) === tile.item)
+          .sort((a, b) => b.grade.mult - a.grade.mult || a.id - b.id);
+        for (const d of cands) if (!hplaceRefusal(g, floor, d.id, tile.x, tile.y)) { if (hplace(g, floor, d.id, tile.x, tile.y).ok) g.bump('planPlaced'); break; }
       }
-      while (route.skiffs < r.skiffs && setSkiffs(g, 'district', route.id, 1).ok) { /* bought one */ }
+      for (const r of p.routes) {
+        if (!on(r.floor)) continue;
+        const a = hentAt(g, floor, r.fx, r.fy), b = hentAt(g, floor, r.tx, r.ty);
+        if (!a || !b || a.kind !== 'module') continue;
+        let route = st.routes.find((q) => q.from === a.id && q.to === b.id && q.item === r.item);
+        if (!route) {
+          if (routeRefusal(g, floor, r.fx, r.fy, r.tx, r.ty, r.item) || !addRoute(g, floor, r.fx, r.fy, r.tx, r.ty, r.item).ok) continue;
+          route = st.routes[st.routes.length - 1];
+        }
+        while (route.skiffs < r.skiffs && setSkiffs(g, floor, route.id, 1).ok) { /* bought one */ }
+      }
     }
   }
 }

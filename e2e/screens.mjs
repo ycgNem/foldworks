@@ -626,7 +626,9 @@ export async function worldSetup(state) {
   };
   m.legacy = N.of(state === 'legacy' || state === 'legacyHabits' ? 23 : 6);
   m.legacyEarned = N.of(58);
-  m.legacyNodes = ['patentPurse', 'oldHabits', 'patentClerk', 'standingCommittee', 'skiffGuild', ...(state === 'legacyHabits' ? ['secondNature'] : [])];
+  m.legacyNodes = ['patentPurse', 'oldHabits', 'patentClerk', 'standingCommittee', 'skiffGuild', ...(state === 'legacyHabits' ? ['secondNature'] : []), ...(state === 'legacyPlan' ? ['regrader', 'townPlan'] : [])];
+  // the Town Plan with a layout of both floors kept (its District tiles and its World tiles)
+  if (state === 'legacyPlan') m.plans = [{ id: 1, name: 'Gearbox town', tiles: [{ x: 2, y: 2, item: 'gearbox', depth: 2 }, { x: 3, y: 2, item: 'robotArm', depth: 3, floor: 'world' }], routes: [{ fx: 2, fy: 2, tx: 3, ty: 2, item: 'gearbox', skiffs: 2, floor: 'world' }] }];
   m.standing = state === 'legacy' ? 24 : null;
   m.nodes = ['bellows', 'starterLine', 'notebooks', 'copperDeeds', 'surveyCharter', 'quickAudit', 'moreAuditors', 'draughtsman', 'drawerSpace', 'dispatcher', 'zoningCharter', 'longSkiffs'];
   m.habits = ['quickAudit', 'draughtsman', 'dispatcher'];
@@ -711,17 +713,17 @@ export async function worldSetup(state) {
     a.panel = 'relocate';
     if (state === 'relocateTravel') R.travelDebug(a, 'pebble', 'rime', 21, 1.6);
   }
-  if (state === 'legacy' || state === 'legacyHabits') {
-    (await mod('/src/app/legacy.ts')).pinLegacy(state === 'legacy' ? 'standingCommittee' : 'oldHabits');
+  if (state === 'legacy' || state === 'legacyHabits' || state === 'legacyPlan') {
+    (await mod('/src/app/legacy.ts')).pinLegacy(state === 'legacy' ? 'standingCommittee' : state === 'legacyPlan' ? 'townPlan' : 'oldHabits');
     a.panel = 'legacy';
   }
   if (state === 'research4') { (await mod('/src/app/screens.ts')).setTreePage(a, 4); a.panel = 'research'; }
   if (state === 'megaLighthouse') { (await mod('/src/app/act2screens.ts')).setMegaTab('lighthouse'); a.panel = 'mega'; a.gradeAt = a.ui.time - 30; }
   // a card's own key hovered (its tip shows what it does), else the mouse rests at the centre
-  return state === 'relocate' ? { hoverId: 'relocateGo' } : state === 'legacy' ? { hoverId: 'standPlus1' } : state === 'legacyHabits' ? { hoverId: 'habit_draughtsman' } : state === 'research4' ? { hoverId: 'node:frostWorks' } : null;
+  return state === 'relocate' ? { hoverId: 'relocateGo' } : state === 'legacy' ? { hoverId: 'standPlus1' } : state === 'legacyHabits' ? { hoverId: 'habit_draughtsman' } : state === 'legacyPlan' ? { hoverId: 'keepPlan' } : state === 'research4' ? { hoverId: 'node:frostWorks' } : null;
 }
 
-export const WORLD = ['world', 'worldRoute', 'worldPinned', 'worldHover', 'relocate', 'relocateTravel', 'legacy', 'legacyHabits', 'research4', 'megaLighthouse', 'lessonWorld'];
+export const WORLD = ['world', 'worldRoute', 'worldPinned', 'worldHover', 'relocate', 'relocateTravel', 'legacy', 'legacyHabits', 'legacyPlan', 'research4', 'megaLighthouse', 'lessonWorld'];
 
 // ---------------------------------------------------------------- Act III (Milestone 7: the player-facing pieces)
 /** Runs in the page (Act III's pieces on the Workshop, the Factory and the pages, DESIGN.md §21):
@@ -891,10 +893,11 @@ export const ACT3_M5 = {
 
 /** Act IV's islands (DESIGN.md §22), each a fresh run's Workshop on its island with everything
  * researched: Pebble Isle's half land (a skyglass Miner and a Kiln cutting lenses, pinned), Cinder
- * Isle's vents (a vented Kiln pinned; a belt refused beside a vent), Rime (a Heater warming a
- * cluster, a lone Kiln cold and pinned; the Heater hovered), the Old Works (rubble, the ruined
- * lines, a ruined Smelter Mk2 pinned with its Repair button; rubble hovered), a lesson card and the
- * Heater on the wheel. */
+ * Isle's vents (a vented Kiln pinned; a belt refused beside a vent), Rime (three Kilns warmed by a
+ * Boiler and its Steam Engine, a lone Kiln out of the plant's reach cold and pinned; the Engine
+ * hovered, its warmth's reach drawn), the Old Works (rubble, the ruined lines, a ruined Smelter Mk2
+ * pinned with its Repair button; rubble hovered; rubble cleared by a drag, its running total at the
+ * cursor), a lesson card and the power plant on the wheel. */
 export async function isleSetup(state) {
   const a = window.__app;
   const mod = async (p) => { for (const c of ['/src/app/hud.ts', '/src/app/screens.ts', '/src/app/app.ts', '/src/render/renderer.ts']) { const m = (await (await fetch(c)).text()).match(new RegExp(`["'](${p.replace(/\./g, '\\.')}\\?[^"']*)["']`)); if (m) return import(m[1]); } return import(p); };
@@ -927,7 +930,7 @@ export async function isleSetup(state) {
   g.rebuild();
   const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
   const place = (kind, x, y, rot = 0, recipe = null) => { act({ k: 'place', kind, x, y, rot }); if (recipe) act({ k: 'recipe', x, y, recipe }); return g.entAt(x, y); };
-  let pin = null, hover = null;
+  let pin = null, hover = null, drag = null;
   if (world === 'pebble') {
     // two Miners on the skyglass in chunk B, a Kiln cutting lenses (glass by hand), a Pole and a
     // Generator to run it
@@ -952,22 +955,37 @@ export async function isleSetup(state) {
     pin = k1;
     if (state === 'isleCinderBelt') { pin = null; a.setMode({ k: 'build', kind: 'belt' }); hover = [5, 5]; a.refuse(g.canPlace('belt', 5, 5)); }
   } else if (world === 'rime') {
-    // two Generators and a Pole in chunk B; three Kilns side by side with a Heater under them
-    // (warm), and a fourth on its own (cold: half speed, frost on it)
-    place('generator', 14, 3, 0);
-    place('generator', 15, 3, 0);
-    place('pole', 13, 4, 0);
-    const ks = [place('kiln', 10, 6, 0, 'fireGlass'), place('kiln', 11, 6, 0, 'fireGlass'), place('kiln', 12, 6, 0, 'fireGlass')];
-    const h = place('heater', 11, 7, 0);
-    const lone = place('kiln', 15, 6, 0, 'fireGlass');
-    const feed = () => { for (const k of [...ks, lone]) { k.inBuf.sand = 8; k.out = 0; } h.inBuf.coal = 4; g.entAt(14, 3).inBuf.coal = 8; g.entAt(15, 3).inBuf.coal = 8; };
+    // a Boiler and its Steam Engine in chunk B with three Kilns round them, none touching another
+    // (warm from the plant, Thermals' 3 tiles), and a fourth out of its reach on a second Pole
+    // (cold: half speed, frost on it)
+    place('boiler', 12, 5, 0);
+    place('steamEngine', 13, 5, 0);
+    place('pole', 14, 6, 0);
+    place('pole', 10, 6, 0);
+    const ks = [place('kiln', 11, 4, 0, 'fireGlass'), place('kiln', 11, 6, 0, 'fireGlass'), place('kiln', 14, 4, 0, 'fireGlass')];
+    const lone = place('kiln', 8, 7, 0, 'fireGlass');
+    const feed = () => { for (const k of [...ks, lone]) { k.inBuf.sand = 8; k.out = 0; } g.entAt(12, 5).inBuf.coal = 8; };
     feed(); a.step(20 * 3); feed(); a.step(20); feed(); a.step(2);
     pin = lone;
-    if (state === 'isleRimeHeater') { pin = null; hover = [11, 7]; }
+    if (state === 'isleRimePlant') { pin = null; hover = [13, 5]; }
   } else {
     // the Old Works as a run finds it: rubble, the two ruined lines (C and B), the loose ruins; the
     // ruined Smelter Mk2 in chunk A pinned with its Repair button
     pin = g.entAt(1, 5);
+    if (state === 'isleOldworksDrag') {
+      // the row of chunk A with the most rubble and nothing standing on it: dragged along from its
+      // first rubble tile, the mouse still down at the shot (the Clearing tag at the cursor)
+      pin = null;
+      g.s.coin = N.of(60);
+      let best = null;
+      for (let y = 0; y < 8; y++) {
+        const xs = [];
+        for (let x = 0; x < 8; x++) if (g.s.rubble.includes(y * g.W + x)) xs.push(x);
+        if (!xs.length || [...Array(8).keys()].some((x) => x >= xs[0] && g.entAt(x, y))) continue;
+        if (!best || xs.length > best.xs.length) best = { y, xs };
+      }
+      drag = [[best.xs[0], best.y], [7, best.y]];
+    }
     if (state === 'isleOldworksRubble') {
       pin = null;
       const i = g.s.rubble.find((t) => g.owned(t % g.W, Math.floor(t / g.W)) && t % g.W >= 1 && t % g.W <= 5 && Math.floor(t / g.W) >= 5);
@@ -991,11 +1009,14 @@ export async function isleSetup(state) {
   a.lookAt(look[0], look[1]);
   a.selected = pin ? pin.id : null;
   if (state === 'isleCinderLesson') { a.selected = null; a.onboarding.lessons.show(a, 'isleCinder'); }
-  if (state === 'isleRimeWheel') { a.selected = null; a.openWheelAt(); return { hoverIds: ['wheel_heavy', 'wheel_item_heater'] }; }
+  if (state === 'isleRimeLesson') { a.selected = null; a.onboarding.lessons.show(a, 'isleRime'); }
+  if (state === 'isleOldworksLesson') { a.selected = null; a.onboarding.lessons.show(a, 'isleOldworks'); }
+  if (state === 'isleRimeWheel') { a.selected = null; a.openWheelAt(); return { hoverIds: ['wheel_power', 'wheel_item_boiler'] }; }
+  if (drag) { a.lookAt(4, 4); return { drag }; }
   return hover ? { hover } : null;
 }
 
-export const ISLES = ['islePebble', 'isleCinder', 'isleCinderBelt', 'isleCinderLesson', 'isleRime', 'isleRimeHeater', 'isleOldworks', 'isleOldworksRubble', 'isleRimeWheel'];
+export const ISLES = ['islePebble', 'isleCinder', 'isleCinderBelt', 'isleCinderLesson', 'isleRime', 'isleRimePlant', 'isleOldworks', 'isleOldworksRubble', 'isleOldworksDrag', 'isleRimeWheel', 'isleRimeLesson', 'isleOldworksLesson'];
 
 // ---------------------------------------------------------------- Act V (Milestone 10's screens)
 /** Runs in the page (Act V, DESIGN.md §23). A late universe: every Act IV research done, the
@@ -1089,7 +1110,7 @@ export async function act5Setup(state) {
   g.s.earned = N.of(8.8e11);
   g.s.land = ['A', 'B', 'E'];
   g.s.upgrades.push('bellows');
-  const beyondOn = state.startsWith('beyond') || state === 'lessonBeyond' || state === 'lastFoldWorld' || state === 'research5' || state === 'kernels' || state.startsWith('ledger');
+  const beyondOn = state.startsWith('beyond') || state === 'lessonBeyond' || state === 'lastFoldWorld' || state === 'worldFoldTip' || state === 'research5' || state === 'kernels' || state.startsWith('ledger');
   g.s.research.done = [...RESEARCH_LIST.filter((d) => (d.act ?? 1) <= 4).map((d) => d.id), 'lastFold'];
   g.s.research.selected = state === 'research5' ? 'weatherBottling' : null;
   if (state === 'research5') g.s.research.progress = { weatherBottling: { pocketWeather: N.of(2), stormCell: N.of(64) } };
@@ -1205,10 +1226,10 @@ export async function act5Setup(state) {
   if (state === 'kernels') { (await mod('/src/app/kernels.ts')).pinKernel('wideBelts'); a.panel = 'kernels'; }
   if (state === 'research5') { (await mod('/src/app/screens.ts')).setTreePage(a, 5); a.panel = 'research'; }
   if (state.startsWith('ledger')) a.panel = 'ledger';
-  return state === 'beyondHover' ? { hover: [9, 4] } : state === 'lastFoldCard' ? { hoverId: 'lastFoldGo' } : state === 'kernels' ? { hoverId: 'kernel_beyond' } : state === 'research5' ? { hoverId: 'node:weatherBottling' } : state === 'lastFoldWorld' ? { hoverId: 'dLastFold' } : null;
+  return state === 'beyondHover' ? { hover: [9, 4] } : state === 'lastFoldCard' ? { hoverId: 'lastFoldGo' } : state === 'kernels' ? { hoverId: 'kernel_beyond' } : state === 'research5' ? { hoverId: 'node:weatherBottling' } : state === 'lastFoldWorld' ? { hoverId: 'dLastFold' } : state === 'worldFoldTip' ? { hoverId: 'dFold', top: true } : null;
 }
 
-export const ACT5 = ['lastFoldWorld', 'lastFoldAudit', 'lastFoldCard', 'lastFoldCardRest', 'lastFoldKeep', 'lastFoldSeq', 'lastFoldLand', 'kernels', 'research5', 'beyond', 'beyondPinned', 'beyondHover', 'beyondRoute', 'lessonBeyond', 'lessonLastFold', 'seed', 'seedPinned', 'seedHover', 'lessonSeed', 'ledger', 'ledgerClosed'];
+export const ACT5 = ['lastFoldWorld', 'worldFoldTip', 'lastFoldAudit', 'lastFoldCard', 'lastFoldCardRest', 'lastFoldKeep', 'lastFoldSeq', 'lastFoldLand', 'kernels', 'research5', 'beyond', 'beyondPinned', 'beyondHover', 'beyondRoute', 'lessonBeyond', 'lessonLastFold', 'seed', 'seedPinned', 'seedHover', 'lessonSeed', 'ledger', 'ledgerClosed'];
 
 // ---------------------------------------------------------------- Milestone 11's screens
 /** Runs in the page, after a base state (`ledger`: a late game; `act2power`: a busy Act II
@@ -1541,7 +1562,8 @@ async function main() {
       } else if (r?.hoverId) {
         // a HUD element by its button id (drawn last frame), or the coin counter
         await frames(page, 2);
-        const p = await page.evaluate((id) => { const a = window.__app; const q = a.ui.ids.get(id); return q ? a.uiToCss(q.x + q.w / 2, q.y + q.h / 2) : null; }, r.hoverId);
+        // `top`: the cursor near the button's top edge, where a tag hung at the cursor would cover it
+        const p = await page.evaluate(([id, top]) => { const a = window.__app; const q = a.ui.ids.get(id); return q ? a.uiToCss(q.x + q.w / 2, q.y + (top ? 3 : q.h / 2)) : null; }, [r.hoverId, !!r.top]);
         if (p) await page.mouse.move(p.x, p.y);
       } else if (r?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), r.hover); await page.mouse.move(p.x, p.y); await page.waitForTimeout(HOVER_WAIT); }
       else await page.mouse.move(Math.floor(w / 2), Math.floor(h / 2) + 40);

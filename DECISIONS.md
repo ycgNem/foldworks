@@ -2010,7 +2010,8 @@ floor, Legacy its second reset's currency, Relocate layer 2; no new customer.
 - **Islands**: Pebble (chunks C, D, F are sky; Miners 1.5x), Cinder (12 vents: a machine beside one
   needs no power, a burner beside one no fuel; no logistics beside one), Rime (powered machines
   half speed unless a lit Heater is within 2 tiles or two working machines touch; the Heater 3,000,
-  1 coal per 10 s, research Thermals), the Old Works (rubble on about half the free tiles, cleared
+  1 coal per 10 s, research Thermals; *superseded: the Heater is gone and the power plant warms,
+  "Fixes after the review: the islands and the chores" below*), the Old Works (rubble on about half the free tiles, cleared
   for 5 + chunk price / 64 a tile; 14 ruins, 8 of them in two whole lines, repaired for a quarter
   of their price; a ruin can't be folded). Each island's research is offered only on it.
 - **The World takes depth 3 only**; its own folds (depth 4) need research `lastFold` (Act V).
@@ -2032,7 +2033,9 @@ floor, Legacy its second reset's currency, Relocate layer 2; no new customer.
   (an auto-reset) are Antimatter Dimensions' Eternity upgrades and autobuyers, re-derived each from
   a real Act I-III chore with flat prices; islands with rules are Factorio Space Age's planets (here
   each rule changes which layout folds best, and there is no travel or logistics between islands);
-  rubble clearing is the land-clearing tycoon convention.
+  rubble clearing is the land-clearing tycoon convention. *Missed here: Rime's Heater was Space
+  Age's Aquilo (heating towers that burn fuel and warm a radius); found by the Acts IV-V review and
+  re-derived below.*
 
 ### Act IV's islands on the Workshop (the screen)
 - **Each island's look is a sheet set** (`isle_<world>_*`), falling back to Home's sheet by sheet;
@@ -2501,3 +2504,64 @@ items are the bot's reach, not the model's).
   the District at 10:01, Robotics at 12:03, each Act III stretch's worst wait 10.4-10.7 min (the
   full-floor reset), a District of 130 groups at 0.93 ms a tick. Open: every §22 target; the
   islands' layouts; 80 h of play (about 50 minutes of wall time).
+
+### Fixes after the review: the islands and the chores (2026-10-22)
+
+Built in a worktree, time-boxed (about 3 h). DESIGN.md §22 has the rules and numbers. Nothing on
+the ask-before list changed (no tile, palette, tick, currency, floor, reset layer or milestone).
+- **Rime re-derived, the Heater dropped** (flagged as Space Age's Aquilo: freezing unless heated by
+  a fuel-burning building with a radius). Warmth is now **company or the plant's waste heat**: two
+  working machines touching (Warm Hands: one), or a **working Boiler, Steam Engine or Generator
+  within 2 tiles** (`RULES.plantReach`, a Pole's reach). No building exists only to heat, and heat
+  costs nothing a line does not already pay: the lesson is "fold the plant into the line" (the
+  plant inside the fold box, beside its machines, not off on a Pole), a rule about this game's fold
+  box rather than a heating network to fuel. "Working" is the plant's own state this tick (fuelled,
+  and its grid has demand), so a plant that runs dry stops warming. A Pole carries power, not heat.
+  The Heater is gone from the build menu, data, sim, reports and renderer; its sprite stays unused
+  in `src/art/` (STYLE.md notes it).
+- **Thermals' new purpose**: the plant's warmth reaches **3 tiles** (a 7x7, `RULES.thermalsReach`),
+  was 2; still 500 coal and 150 steel on Rime, still after Steam Power, so the research page keeps
+  its layout. Chosen over dropping the node: the island keeps a research step of its own that
+  changes the layout (a plant in a line's middle then warms three machines either side).
+- **Chill Out's trophy** gave one Heater free; it gives one Generator free now (2,600, the plant
+  that warms a Rime line). A one-line change in `src/data/trophies.ts`, where another agent is
+  reworking the Act IV-V trophies: theirs wins at merge.
+- **Reports and the screen**: a cold machine's cause reads "cold: 0.5x · a working power building
+  within 2 warms it / or two working neighbours touching it"; a warm one names the building in
+  reach or its neighbours; a plant building's pinned report on Rime says what it warms; placing,
+  hovering or pinning a Boiler, Engine or Generator on Rime draws its warmth's reach (the Heater's
+  overlay, re-pointed). Frost is still the sim's `cold` flag. The Rime lesson card and the island
+  slip's tip say the new rule.
+- **Rubble stays cleared** (146 tiles, 80,632 coin laid again every run; an auto-Reorganize
+  stranded the Regrader). The island keeps the record: `meta.cleared` (tile indices per island,
+  stamped with the universe). A Reorganize, or a Relocate away and back, lays only what was never
+  cleared; a new universe (a Last Fold) or an island never cleared has it all again. Kept per
+  island rather than per world (since the last Relocate) because the rubble is the island's, as
+  its records are; a universe resets it because a Last Fold resets the islands seen. Repairs with
+  Salvage Crews and Rubble Rousers' neighbours count as cleared. Not in a Scenario.
+- **Drag to clear**: a press on rubble clears it, and dragging on clears every tile of rubble the
+  cursor passes (each tile on the way, so a quick sweep leaves no gap), each one a `clear` command
+  at its price, until the coin runs out (the refusal says the price). A tag at the cursor counts the
+  tiles and the coin and prices the tile under it (`clearDragTip`). No new tool or button: clearing
+  was already the click on rubble; the drag is the same action held.
+- **The Town Plan covers every high floor**: a kept layout records the District's, the World's and
+  Beyond's modules and routes, each tagged with its floor (absent: the District, so plans kept
+  before load as they were), and the plan's automation places them on every floor that stands. The
+  change stayed inside `townPlan` in `automation.ts` (the Committee's code there is another
+  agent's) and `keepPlan` in `src/sim/legacy.ts` (it has to record the floors); the Legacy page's
+  key reads "Keep the floors" once the World stands.
+- **UI slips**: the island slip shows on the Workshop only (its rule is the Workshop's; the Factory
+  and the high floors play by none). A module's route rows on a high floor's pinned report give the
+  rate at the right edge, always whole, and the other module's name in the room left; the report
+  widens up to 32 px past its cap so the name reads whole, and where that would sit on the module
+  it stays narrow and the name ends in '..' (the row's tag has it whole). The high floors' strip
+  keys (and its module slots) hang their tags under the strip (`tipAt` on the chrome button), never
+  over the key itself or its neighbours.
+- **Saves**: `SAVE_VERSION` 12. The migration lifts every Heater and refunds 3,000 for each (none
+  for a free one), drops Heaters from the designs, the Drawer and the logged commands, and records
+  the rubble already cleared on the Old Works as the island's record. The determinism fingerprint
+  now covers the island, the rubble lying, the record, the cold machines and the Town Plan's
+  layouts.
+- **Not done / open**: the bots still lay Home's lines on Rime (the Act IV bot is another agent's);
+  a Rime line with its plant inside the fold box is not yet measured by a pace test. `longtail.test.ts`
+  pinned `SAVE_VERSION` to 11; it now reads "at least 11".

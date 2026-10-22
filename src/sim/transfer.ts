@@ -72,8 +72,7 @@ export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
     case 'merger':
       return enterSide !== to.rot && to.store.length === 0 && mergerTurn(g, to, enterSide);
     case 'boiler':
-    case 'generator':
-    case 'heater': {
+    case 'generator': {
       if (to.ruined) return false;
       // fuel, from any side but a boiler's front (its Steam Engine is there)
       if (to.kind === 'boiler' && enterSide === to.rot) return false;

@@ -150,8 +150,10 @@ interface DRep {
   /** rows only the pinned report shows */
   more: string[];
   verbs?: string;
-  /** a module's routes, buttons in the pinned report (each opens its card) */
+  /** a module's routes, buttons in the pinned report (each opens its card), and the width their rows
+   *  want (each the other module's name and its rate in full) */
   routes?: SkiffRoute[];
+  routeW?: number;
   /** a module: the pinned report's Stop / Start keys (the pause command, DESIGN.md §22) */
   pause?: FEnt;
 }
@@ -326,10 +328,30 @@ function entRep(app: App, e: FEnt): DRep {
   const mine = st.routes.filter((r) => r.from === e.id || r.to === e.id);
   if (!mine.length) more.push('{warn:no routes} · the Route tool joins it');
   const odReady = odOn && !od && !cool;
+  const routeW = Math.max(0, ...mine.map((q) => { const t = routeRowText(g, q, e.id); return richWidth(t.lead + t.name) + richWidth(t.tail) + 14; }));
   return {
-    title: d.name, item: mainItem(d), rows, more, routes: mine, pause: e,
+    title: d.name, item: mainItem(d), rows, more, routes: mine, routeW, pause: e,
     verbs: `{k:LMB} ${odReady ? `overdrive ${RULES.overdriveMult.value}x ${RULES.overdriveSeconds.value}s` : 'pin'}  {k:X} remove`,
   };
+}
+
+/** A route's row in a module's pinned report: which way it flies, its item, the module at its other
+ *  end (`self` is the reported module), and its rate (warn ink when the route is short). */
+function routeRowText(g: Game, q: SkiffRoute, self: number | null): { lead: string; name: string; tail: string } {
+  const e = routeEnds(g, q, ID);
+  const out = e?.a.id === self;
+  const other = e ? (out ? e.b : e.a) : null;
+  const tail = routeShort(g, q, ID) ? `{warn:${rate(q.flow)}/${rate(routeWant(g, ID, q))}}` : `${rate(q.flow)}/s`;
+  return { lead: `${out ? '→' : '←'} ${icon(q.item)} `, name: other ? nameOf(g, other) : '?', tail };
+}
+
+/** A name cut to fit `room` pixels after `lead`, with '..' where it was cut (the rate after it is
+ *  always shown whole: the Acts IV-V review found a name and its rate cut off together). */
+function fitName(lead: string, name: string, room: number): string {
+  if (richWidth(lead + name) <= room) return name;
+  let n = name;
+  while (n.length > 1 && richWidth(lead + n.trimEnd() + '..') > room) n = n.slice(0, -1);
+  return n.trimEnd() + '..';
 }
 
 /** The report for a route under the mouse. */
@@ -359,8 +381,10 @@ function layRep(rep: DRep, full: boolean, maxCw: number, brief: boolean, close: 
   }
   const verbsS = brief ? rep.verbs?.split('  ').find((v) => v.startsWith('{k:LMB}')) : rep.verbs;
   const titleW = (brief ? richWidth(rep.title) : bigWidth(bigSafe(rep.title))) + (rep.item || rep.uicon ? 12 : 0) + (close ? 16 : 0);
-  const natural = Math.max(...rows.map((s) => richWidth(s)), verbsS ? richWidth(verbsS) : 0, full && rep.routes?.length ? 150 : 0);
-  const cw = Math.min(maxCw, Math.max(brief ? 64 : 120, titleW, natural));
+  const natural = Math.max(...rows.map((s) => richWidth(s)), verbsS ? richWidth(verbsS) : 0, full && rep.routes?.length ? Math.max(150, rep.routeW ?? 0) : 0);
+  // the route rows may widen the tag a little past its cap, so a module's name reads whole
+  const cap = full && rep.routes?.length ? Math.max(maxCw, Math.min(rep.routeW ?? 0, maxCw + 32)) : maxCw;
+  const cw = Math.min(cap, Math.max(brief ? 64 : 120, titleW, natural));
   const titleH = brief ? LINE_H : BIG_LINE_H;
   let laid = rows.map((s) => { const L = layoutRich(s, cw); const c = s.includes('{chip:'); return { lay: L, h: Math.max(L.h, c ? CHIP_H : 0) + 1, chip: c }; });
   let routes = full ? rep.routes ?? [] : [];
@@ -414,15 +438,13 @@ function drawRep(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: num
     rule(ui, r.x, yy + 2, L.cw);
     yy += 6;
     for (const q of rep.routes) {
-      const e = routeEnds(g, q, ID);
-      const out = e?.a.id === DS.sel;
-      const other = e ? (out ? e.b : e.a) : null;
-      const short = routeShort(g, q, ID);
-      const s = `${out ? '→' : '←'} ${icon(q.item)} ${other ? nameOf(g, other) : '?'} ${short ? `{warn:${rate(q.flow)}/${rate(routeWant(g, ID, q))}}` : `${rate(q.flow)}/s`}`;
-      if (button(ui, 'dRouteRow:' + q.id, r.x, yy, L.cw, ROUTE_ROW - 1, '', { active: DS.route === q.id, tip: [{ text: `{big:${Word()} route}` }, { text: routeReadout(g, q) }, { text: '{k:LMB} its card' }] })) { DS.route = q.id; }
-      ui.clip(r.x + 2, yy, L.cw - 4, ROUTE_ROW);
-      drawRich(ui, s, r.x + 3, yy + 2, Infinity, T.ink);
-      ui.unclip();
+      const t = routeRowText(g, q, DS.sel);
+      if (button(ui, 'dRouteRow:' + q.id, r.x, yy, L.cw, ROUTE_ROW - 1, '', { active: DS.route === q.id, tip: [{ text: `{big:${Word()} route}` }, { text: `${t.lead}${t.name}` }, { text: routeReadout(g, q) }, { text: '{k:LMB} its card' }] })) { DS.route = q.id; }
+      // the rate at the right edge, whole; the name before it cut to the room left
+      const tw = richWidth(t.tail);
+      const room = L.cw - 6 - tw - 6;
+      drawRich(ui, t.lead + fitName(t.lead, t.name, room), r.x + 3, yy + 2, Infinity, T.ink);
+      drawRich(ui, t.tail, r.x + L.cw - 3 - tw, yy + 2, Infinity, T.ink);
       yy += ROUTE_ROW;
     }
   }
@@ -597,8 +619,11 @@ function toolStrip(app: App, L: Layout) {
   ui.ctx.fillRect(R.x + R.w - 9, 0, 1, R.y);
   let x = R.x + 5;
   const y = R.y + 5;
+  // a strip key's tag hangs under the strip, never over the key or its neighbours (the Acts IV-V
+  // review: the Fold key's tag covered it at 1280x720)
+  const under = (bx: number, bw: number) => ({ avoid: [{ x: bx, y: R.y, w: bw, h: R.h }, R] });
   for (const t of tools(app)) {
-    if (button(ui, t.id, x, y, t.w, 20, t.label, { icon: t.icon, active: t.on, tip: t.tip })) t.go();
+    if (button(ui, t.id, x, y, t.w, 20, t.label, { icon: t.icon, active: t.on, tip: t.tip, tipAt: under(x, t.w) })) t.go();
     x += t.w + 3;
   }
   // the route count: how many more the floor holds (a refusal at the cap says why: the sim)
@@ -647,7 +672,7 @@ function toolStrip(app: App, L: Layout) {
       ...(Object.keys(d.ins).length ? [{ text: `in ${(Object.entries(d.ins) as [ItemId, number][]).map(([k, v]) => `${icon(k)} ${rate(v ?? 0)}/s`).join(' ')}` }] : []),
       { text: `${d.spare} spare · {k:LMB} take one` },
     ];
-    if (button(ui, 'dGroup:' + d.id, x, y, SLOT, 20, '', { active: holding, tip })) app.pickModule(d.id);
+    if (button(ui, 'dGroup:' + d.id, x, y, SLOT, 20, '', { active: holding, tip, tipAt: under(x, SLOT) })) app.pickModule(d.id);
     const mn = hart(ID, 'module');
     const s = hasArt(mn) ? sheet(mn) : sheet('module');
     ui.ctx.drawImage(s.frames[0], x + 2, y + 1);
@@ -834,10 +859,17 @@ function pinnedPlace(app: App, L: Layout): { laid: Laid; x: number; y: number; w
   const rep = entRep(app, e);
   const near = worldRect(app, e.x, e.y, e.w, e.h);
   const top = L.slips.y + 18, bot = L.notebook.y - 6;
-  const laid = layRep(rep, true, L.wide ? 206 : 198, false, true, bot - top);
+  // the route rows' full names widen it; when that would sit on the thing, the narrow tag (names cut
+  // with '..') on the right first, the left (over the HUD's column) last
+  const lay = (full: boolean) => layRep(full ? rep : { ...rep, routeW: 0 }, true, L.wide ? 206 : 198, false, true, bot - top);
+  let laid = lay(true);
   let x = ui.w - 6 - laid.w;
+  if (near.x + near.w > x - 8) {
+    laid = lay(false);
+    x = ui.w - 6 - laid.w;
+    if (near.x + near.w > x - 8) x = Math.max(6, near.x - 12 - laid.w);
+  }
   const y = Math.max(top, Math.min(bot - laid.h, near.y - 10));
-  if (near.x + near.w > x - 8) x = Math.max(6, near.x - 12 - laid.w);
   return { laid, x, y, w: laid.w, h: laid.h };
 }
 

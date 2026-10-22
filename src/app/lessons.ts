@@ -90,12 +90,12 @@ export const LESSONS: Record<LessonId, LessonDef> = {
     lines: ['beside a vent: {good:no power, no fuel}', 'no belt beside one · feed face to face'],
   },
   isleRime: {
-    title: 'Rime', art: 'heater', pip: 'work',
-    lines: ['powered machines run at {bad:half} speed', 'warm: a Heater within 2, or 2 working neighbours'],
+    title: 'Rime', art: 'generator', pip: 'work',
+    lines: ['powered machines: {bad:half} speed', 'warm: a running plant within 2', 'or 2 working machines touching'],
   },
   isleOldworks: {
     title: 'The Old Works', art: 'rubble', frame: 5,
-    lines: ['{k:LMB} rubble: Clear it for coin', 'ruins repair for {good:a quarter} · pin one, Repair'],
+    lines: ['{k:LMB} drag over rubble: Clear it', 'cleared stays cleared here', 'ruins repair for {good:a quarter} · pin one'],
   },
   // Act IV (DESIGN.md §22): the first Relocate and the first World route
   relocate: {

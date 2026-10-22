@@ -9,7 +9,8 @@
 //   its ruined machines (`ruin_overlay` cracks and moss composited source-atop over the machine's
 //   own frame on a scratch canvas, as its sidecar says; s0-s3 for a 1x1, b0-b1 for a 2x2).
 // - Rime: a powered machine running cold (the sim's `cold`, set when it is not warm) wears
-//   `frost_overlay` the same way.
+//   `frost_overlay` the same way; a power plant building placed, hovered or pinned shows the reach
+//   of its warmth (`drawHeatReach`).
 // Presentation only: reads the Game, never writes it.
 import { CHUNKS, patchOpen } from '../data/land';
 import { C, rgba } from '../data/palette';
@@ -101,17 +102,21 @@ function drawVents(ctx: CanvasRenderingContext2D, g: Game, time: number, vents: 
   }
 }
 
-// ------------------------------------------------------------------ a Heater's warmth
+// ------------------------------------------------------------------ the power plant's warmth
 
-/** A Heater's reach while it is placed, hovered or pinned (Rime): its 5x5 in a warm tint, the powered
- * machines in it framed (as a Pole's reach is shown, renderer.ts). */
+const PLANT = new Set(['boiler', 'steamEngine', 'generator']);
+
+/** Rime: a power plant building's warmth while it is placed, hovered or pinned: its 5x5 (7x7 with
+ * Thermals) in a warm tint, the powered machines in it framed (as a Pole's reach is shown,
+ * renderer.ts). Nothing on an island that is not cold. */
 export function drawHeatReach(ctx: CanvasRenderingContext2D, g: Game, time: number, ov: { hover: { x: number; y: number } | null; build: string | null; selected: number | null; remove: boolean }, reach: number) {
+  if (!islandDef(g).cold) return;
   let at: { x: number; y: number } | null = null;
-  if (ov.build === 'heater' && ov.hover) at = ov.hover;
+  if (ov.build && PLANT.has(ov.build) && ov.hover) at = ov.hover;
   else {
     const sel = ov.selected ? g.byId.get(ov.selected) : null;
     const hov = ov.hover && !ov.build && !ov.remove ? g.entAt(ov.hover.x, ov.hover.y) : null;
-    for (const e of [hov, sel]) if (e?.kind === 'heater') { at = { x: e.x, y: e.y }; break; }
+    for (const e of [hov, sel]) if (e && PLANT.has(e.kind)) { at = { x: e.x, y: e.y }; break; }
   }
   if (!at) return;
   const x0 = Math.max(0, at.x - reach), y0 = Math.max(0, at.y - reach), x1 = Math.min(g.W - 1, at.x + reach), y1 = Math.min(g.H - 1, at.y + reach);

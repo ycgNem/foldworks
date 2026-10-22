@@ -60,6 +60,7 @@ import { uiScaleFor } from './settings';
 import { lessonEvents, lessonDebug } from './lessons';
 import { isleEvents } from './islands';
 import { isSky, rubbleAt } from '../sim/systems/islands';
+import { rubblePrice } from '../data/worlds';
 import { whereStuck, findStuck } from './stuck';
 import { setUiScale } from './access';
 // Milestone 9 (DESIGN.md §22): the Relocate card and the Legacy tree register their pages
@@ -150,6 +151,9 @@ export class App {
   foldDrag: { x0: number; y0: number; x1: number; y1: number } | null = null;
   /** the Factory floor entity whose report is pinned */
   fselected: number | null = null;
+  /** the Old Works (DESIGN.md §22): rubble being cleared by a drag, the tile it is on, the tiles
+   * cleared and the coin they took, and whether it stopped for want of coin */
+  clearDrag: { x: number; y: number; n: number; spent: number; stop: boolean } | null = null;
   /** the grade card's name field while it is open */
   nameDraft: string | null = null;
   /** when the grade card opened (its stamp animation runs from here) */
@@ -312,6 +316,7 @@ export class App {
     DS.pick = null;
     this.drag = null;
     this.foldDrag = null;
+    this.clearDrag = null;
     if (first && !quiet) this.audio.sfx('open');
     if (f === 'factory' && !this.game.flag('factorySeen')) {
       this.game.first('factorySeen');
@@ -934,6 +939,7 @@ export class App {
     DS.pick = null;
     this.drag = null;
     this.foldDrag = null;
+    this.clearDrag = null;
     this.audio.sfx('click');
   }
 
@@ -1109,6 +1115,7 @@ export class App {
     if (this.high) return districtInput(this, t, overUI, pt, this.renderer.screenToWorld(sx, sy));
     if (this.mode.k === 'fold') return this.foldInput(t, overUI, pt);
     if (this.mode.k === 'build' && this.mode.kind === 'belt') return this.beltDrag(t, overUI, pt);
+    if (this.mode.k === 'idle' && this.rubbleDrag(t, overUI, pt)) return;
     if (!inp.mouse.pressed[0] || overUI) return;
     if (!g.inb(t.x, t.y)) {
       this.selected = null;
@@ -1129,8 +1136,6 @@ export class App {
       if (ch && !isSky(g, ch.id)) this.act({ k: 'land', id: ch.id });
       return;
     }
-    // the Old Works: a click on rubble clears it (its hover tag says the price)
-    if (rubbleAt(g, t.x, t.y)) { this.act({ k: 'clear', x: t.x, y: t.y }); return; }
     const e = g.entAt(t.x, t.y);
     const r = g.act({ k: 'click', x: t.x, y: t.y });
     if (r.ok) return;
@@ -1143,6 +1148,40 @@ export class App {
     // empty paving: the Workbench Wheel opens where you clicked (a click on a plot to build on it
     // is what a new player tries first; not before the Bellows, while every click feeds the ore)
     else if (r.why === 'nothing to click' && !g.oreAt(t.x, t.y) && g.has('bellows')) openWheel(this, this.ui.mx, this.ui.my);
+  }
+
+  /** The Old Works (DESIGN.md §22): a press on rubble clears it, and dragging on clears each tile of
+   * rubble the cursor passes (every tile on the way, so a quick sweep leaves no gaps), each for its
+   * price, until the coin runs out (the refusal says the price). The hover tag says the running
+   * total (islands.ts). True while it has the mouse. */
+  private rubbleDrag(t: { x: number; y: number }, overUI: boolean, pt: { x: number; y: number }): boolean {
+    const g = this.game;
+    const inp = this.input;
+    if (inp.mouse.pressed[0] && !overUI && g.inb(pt.x, pt.y) && g.owned(pt.x, pt.y) && rubbleAt(g, pt.x, pt.y)) {
+      this.clearDrag = { x: pt.x, y: pt.y, n: 0, spent: 0, stop: false };
+      this.clearTile(pt.x, pt.y);
+      return true;
+    }
+    const d = this.clearDrag;
+    if (!d) return false;
+    if (!inp.mouse.down[0]) { this.clearDrag = null; return true; }
+    const tx = Math.max(0, Math.min(g.W - 1, t.x)), ty = Math.max(0, Math.min(g.H - 1, t.y));
+    for (let n = 0; n < 64 && (d.x !== tx || d.y !== ty) && !d.stop; n++) {
+      // one tile at a time along the longer way first, as a line is drawn
+      if (Math.abs(tx - d.x) >= Math.abs(ty - d.y)) d.x += Math.sign(tx - d.x);
+      else d.y += Math.sign(ty - d.y);
+      this.clearTile(d.x, d.y);
+    }
+    return true;
+  }
+
+  private clearTile(x: number, y: number) {
+    const g = this.game;
+    const d = this.clearDrag;
+    if (!d || d.stop || !rubbleAt(g, x, y) || !g.owned(x, y)) return;
+    const p = rubblePrice(x, y);
+    if (this.act({ k: 'clear', x, y }).ok) { d.n++; d.spent += p; }
+    else if (g.s.coin.lt(p)) d.stop = true;
   }
 
   /** A click on the town: a building with a page opens it. */

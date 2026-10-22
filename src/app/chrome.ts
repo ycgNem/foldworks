@@ -9,7 +9,7 @@ import { C, rgba } from '../data/palette';
 import { ICON, smallWidth, textWidth, drawText, bigWidth } from '../ui/font';
 import { sheet, hasArt, itemIcon, frameNamed, type SpriteSheet } from '../render/sprites';
 import { ITEM_IDS } from '../data/items';
-import type { UI, TipLine, Rect } from '../ui/ui';
+import type { UI, TipLine, Rect, TipPlace } from '../ui/ui';
 import { T, onPaper, accentRole, roleInk, roleFill, type Role } from '../ui/theme';
 import {
   nineRaw, paperRaw, ribbonBand, art, tagRaw, tagHole, holeToward, bubbleRaw, ribbonRaw, ribbonFor, RIBBON, signRaw, bookRaw, keycapRaw, keycapWidth,
@@ -285,7 +285,7 @@ function fallbackIcon(name: UIconName): HTMLCanvasElement {
 /** A button with an optional icon; returns true when clicked. A paper button with an ink line
  * that presses down 1 px; `gold` is brass with ink text (the call to buy or to do), `active` the
  * lit green of a tool or tab that is on. The label may carry markup. */
-export function button(ui: UI, id: string, x: number, y: number, w: number, h: number, label: string, opts: { icon?: UIconName; disabled?: boolean; active?: boolean; gold?: boolean; tip?: TipLine[] | string; key?: string; pulse?: boolean; big?: boolean } = {}): boolean {
+export function button(ui: UI, id: string, x: number, y: number, w: number, h: number, label: string, opts: { icon?: UIconName; disabled?: boolean; active?: boolean; gold?: boolean; tip?: TipLine[] | string; tipAt?: TipPlace; key?: string; pulse?: boolean; big?: boolean } = {}): boolean {
   ui.mark(id, x, y, w, h);
   x = Math.round(x); y = Math.round(y);
   const hov = ui.hover(x, y, w, h) && !opts.disabled;
@@ -313,7 +313,8 @@ export function button(ui: UI, id: string, x: number, y: number, w: number, h: n
   if (opts.key) ui.small(opts.key, x + w - 3, y + h - 9 + dy, T.inkSoft, { align: 'right' });
   if (hov) {
     ui.hoverId = id;
-    if (opts.tip) ui.tip(typeof opts.tip === 'string' ? [{ text: opts.tip }] : opts.tip);
+    // `tipAt`: where the tag may not sit (a button in a strip: off the strip, never over itself)
+    if (opts.tip) ui.tip(typeof opts.tip === 'string' ? [{ text: opts.tip }] : opts.tip, 180, opts.tipAt ?? null);
   }
   if (hov && ui.clicked) {
     ui.eat();

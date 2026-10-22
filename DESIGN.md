@@ -1624,8 +1624,8 @@ was folded.
 | Home | none | none | none |
 | Pebble Isle | chunks C, D, F are **sky** (not land, not for sale); Miners dig **1.5x** | skyglass (9, 5), chunk B | skyglass lens, horizon lens |
 | Cinder Isle | **12 vents**: a machine beside one needs **no power**, a Generator or Boiler beside one burns **no fuel**; no belt, splitter, merger or crate stands **beside** one | cinderite (4, 13), chunk C | cinder alloy, sunset dye, Portable Sunset Generator |
-| Rime | a powered machine runs at **half speed** unless a **lit Heater within 2** tiles or **2 working machines touch** it | rime crystal (11, 13), chunk D | frost alloy, storm cell, Pocket Weather |
-| the Old Works | **rubble** on about half the free land, cleared tile by tile; **ruined machines**, repaired for **a quarter** of their price, two of them whole lines | relic (14, 1), chunk B | relic gear |
+| Rime | a powered machine runs at **half speed** unless a **working Boiler, Steam Engine or Generator within 2** tiles (3 with Thermals) or **2 working machines touch** it | rime crystal (11, 13), chunk D | frost alloy, storm cell, Pocket Weather |
+| the Old Works | **rubble** on about half the free land, cleared tile by tile (and **stays cleared** on the island); **ruined machines**, repaired for **a quarter** of their price, two of them whole lines | relic (14, 1), chunk B | relic gear |
 
 Why each rule changes what a good fold looks like (the record each island keeps,
 `meta.worldRecords`, is beaten by a layout that would not work elsewhere):
@@ -1639,17 +1639,30 @@ Why each rule changes what a good fold looks like (the record each island keeps,
   in its box (C high, no Generator's coal as an input). Twelve vents, two a chunk, none beside the
   start layout's belts. The rule is "beside": the four tiles on the faces of a footprint, so a
   2x2 machine has eight tiles that can touch a vent.
-- **Rime.** Powered machines want company: two working machines touching (or a Heater, 3,000
-  coin, a Kiln's price, research Thermals) keep a machine at full speed, so a line laid out for
-  full speed elsewhere runs at half its ratios and a good Rime fold packs its machines together.
-  A Heater warms everything within 2 tiles (a 5x5, a Pole's reach, §18) and burns a coal every
-  10 s while a powered machine in reach is crafting (a fifth of a Generator's 3 s: heat, not
-  power). Warmth is read from the last tick's states (`runIslands`, before the machines run), so a
-  cluster starting cold warms itself within a second.
+- **Rime.** Powered machines want company: two working machines touching, or the factory's own
+  **power plant**: a working Boiler, Steam Engine or Generator warms every powered machine within
+  **2 tiles** (a 5x5, a Pole's reach, §18; `RULES.plantReach`), **3** once Thermals is researched (a
+  7x7, `RULES.thermalsReach`). A line laid out for full speed elsewhere runs at half its ratios, so
+  a good Rime fold packs its machines together **round its own plant**: the plant goes inside the
+  fold box, beside the machines it feeds, instead of off in a corner on a Pole (which carries power,
+  not heat). The plant warms only while it works (it has fuel and its grid has demand), so a cold
+  line's first craft is slow and its plant warms it from then on. No building exists only to heat:
+  heat is the plant's waste, and it costs nothing a line did not already pay for. The plant's
+  warmth is read from this tick's power (power runs before the islands' stage) and the machines'
+  from the last tick's states (`runIslands`, before the machines run), so a cluster starting cold
+  warms itself within a second. (Until the Acts IV-V review a Heater, 3,000 coin, burning coal,
+  warmed a 5x5: Factorio Space Age's Aquilo heating towers again. Dropped, DECISIONS.md.)
 - **the Old Works.** Rubble on about half the free tiles (a fixed hash of the tile, never on a
   deposit, the start layout or a ruin), cleared for 5 + the chunk's price / 64 a tile (A 5, B
   and C 21, D 193, E 943, F 1,880: half again a chunk's price to clear it all, as the chunk's
-  price per tile). Fourteen ruined machines: eight in two whole lines (iron plates in C, copper
+  price per tile). A tile cleared **stays clear** on the island: the island keeps the record
+  (`meta.cleared`, per island, for the universe), so a Reorganize, or a Relocate away and back,
+  lays only the rubble never cleared; a new universe (a Last Fold) lays it all again, and an island
+  never cleared has it all. So the 80,632 coin of the island's rubble is paid once a universe, not
+  once a run (the review: 146 tiles at every run's start, and an auto-Reorganize stranded the
+  Regrader's designs behind it). Clearing is a press on rubble or a **drag** across it: every tile of
+  rubble the cursor passes clears, each for its price, until the coin runs out; the tag at the
+  cursor counts the tiles and the coin and prices the tile under it. Fourteen ruined machines: eight in two whole lines (iron plates in C, copper
   wire in B, their belts and heaps whole) and six loose, some of them Act II's (a Smelter Mk2, an
   Assembler Mk2). A repair costs `ceil(price x 0.25)` and needs **no research** for the machine (it keeps its
   recipe), so the island's first hour can fold lines the others have not reached; a big ruin still
@@ -1685,7 +1698,7 @@ arms, 150 sensors, 60 processors after District Folds: 20-30 min of the District
 District Folds) opens the World floor. Each island has its chain, paid in its exotic (600 of it,
 about 13 min of one Pebble Miner, 20 of a Home one): Skyglass Cutting and Horizon Optics on
 Pebble; Cinder Smelting, Sunset Dyes and Sunset Engineering on Cinder; Thermals (500 coal, 150
-steel, with Act II's first powered machines, so a Rime run is never cold for want of research),
+steel, with Act II's first powered machines: the plant's warmth reaches 3 tiles, was 2),
 Frost Works, Storm Cells and Pocket Weather on Rime; Relic Study on the Old Works. The Lighthouse,
 the Sky Anchor and **Relocation** (3 Sandwich Engineers and 20 umbrellas: the end of Act III's
 chain) open with Charting on any island.
@@ -1783,7 +1796,7 @@ of about 0 at 30-40 h).
 | the Patent Clerk | 6 | - | buys open Patent nodes in the tree's order as Patents allow, every 5 s |
 | the Standing Committee | 10 | the Clerk | Reorganizes by itself when the preview reaches the number set (`{ k: 'standing', at }`; never in a Challenge, waits for audits) |
 | the Regrader | 9 | - | kept designs unfold, audit and fold by themselves at a run's start (the 10 s refold check when the layout suits the island) |
-| the Town Plan | 9 | the Regrader | keep 2 District layouts (`keepPlan`, `forgetPlan`); each run places them again from spare copies of the best design of each tile's product and depth, routes and skiffs paid |
+| the Town Plan | 9 | the Regrader | keep 2 town layouts (`keepPlan`, `forgetPlan`): the District and every high floor standing (the World, Beyond), each tile and route by floor; each run places them again from spare copies of the best design of each tile's product and depth, routes and skiffs (or barges) paid, on every high floor that stands |
 | Contract Runners | 7 | - | every order on offer fills from every Dock at once |
 | the Skiff Guild | 5 | - | a route starts with a second skiff or barge, free, that stays with it |
 | A Longer Drawer | 4 | - | the Patent Drawer holds 4 more |
@@ -1813,7 +1826,11 @@ Island rules and the World floor run in offline replay through the same `tick`; 
 part uses the replay's measured rates (rules included), with the World's Dock and Bay tallied apart
 (`wdock`, `wbay`) and Megaprojects #4 and #5 filled through `megaStageOf`. `SAVE_VERSION` 9: an
 older save is on Home with no Legacy, no node, Home the only island visited, this world begun at
-the save's first run.
+the save's first run. `SAVE_VERSION` 12 (the islands and the chores, after the review): every
+Heater standing is lifted and refunded its 3,000 (none for a free one), Heaters leave the designs,
+the Drawer and the command log, and the rubble already cleared on the Old Works is the island's
+record (`meta.cleared`). The determinism fingerprint covers the island, the rubble, the record,
+the cold machines and the Town Plan's layouts.
 
 ### Pacing targets (§16)
 - **Relocate first at 40-45 h**, when the World floor stands and Relocation is researched.
@@ -1822,8 +1839,9 @@ the save's first run.
   kept and the tree takes the chores (the Purse and the Archive skip Act I, the Clerk spends, the
   Regrader refolds, the Town Plan rebuilds the District, the Committee resets).
 - **The island rules hold to 80 h:** every rule has a softener in the tree, but none removes its
-  rule (Pebble keeps C and D as sky, Cinder's belts still melt, Rime's lone machine still wants a
-  Heater, the Old Works' rubble stays); a run on a fifth visit still plays differently from Home.
+  rule (Pebble keeps C and D as sky, Cinder's belts still melt, Rime's lone machine still wants its
+  plant beside it, the Old Works' ruins still want repairing and its rubble is paid once a
+  universe); a run on a fifth visit still plays differently from Home.
 - **Measured below** (the Act IV bot): the campaign does not reach the World yet.
 ### Pacing (measured, the Act IV bot)
 Measured by the campaign bot with the Act IV policy (`src/sim/bot4.ts` over `src/sim/bot3.ts`,
@@ -1863,6 +1881,11 @@ lines; Pebble's sky chunks, Cinder's vents and the Old Works' ruins will refuse 
 - **Islands with one rule each** resemble Factorio: Space Age's planets. Re-derived from the fold:
   each rule changes which layout folds best (ratio, power, adjacency, land), the record is per
   island and per floor, and there is no travel, no logistics between islands, no new science.
+- **Rime's Heater was Space Age's Aquilo** (machines freeze unless heated; heating towers burn
+  fuel and warm a radius), missed by the first flags and found by the Acts IV-V review. Re-derived:
+  no heating building; warmth is company (two working machines touching) and the waste heat of the
+  plant the line already runs on, so Rime's lesson is "fold the plant into the line", a layout
+  rule of this game's fold box, not a heating network to fuel and lay out.
 - **Megaprojects in any order across islands** are this game's own Megaprojects (§18, §21) spread
   over islands; the reward table is rules, not output.
 - **Rubble cleared tile by tile** resembles any land-clearing tycoon; it is priced from the chunk

@@ -5,16 +5,17 @@
 //  - Cinder Isle: vent tiles. A machine with a vent beside it needs no power and a Generator or
 //    Boiler beside one burns no fuel (`g.vented`, read by power.ts); no belt, splitter, merger or
 //    crate is laid beside one (Heat Shields lets the last three stand there).
-//  - Rime: a powered machine runs at half speed (`coldFactor`, read by machines.ts) unless a lit
-//    Heater is within 2 tiles or two working machines touch it (Warm Hands: one).
+//  - Rime: a powered machine runs at half speed (`coldFactor`, read by machines.ts) unless a working
+//    Boiler, Steam Engine or Generator is within 2 tiles (3 with Thermals) or two working machines
+//    touch it (Warm Hands: one).
 //  - the Old Works: rubble on about half the free land, cleared tile by tile (`clear`), and ruined
-//    machines, repaired for a quarter of their price (`repair`); two ruins are whole lines.
-// `runIslands` is part of the machines stage (before the machines run): the Heaters burn and Rime's
-// warmth is worked out from the last tick's states. The ground (rubble, ruins) is laid at a run's
-// start by `setupIsland`. Pure: no DOM, timers or clocks.
+//    machines, repaired for a quarter of their price (`repair`); two ruins are whole lines. A tile
+//    cleared stays clear on that island for the universe (`meta.cleared`).
+// `runIslands` is part of the machines stage (before the machines run): Rime's warmth is worked out
+// from the plant's states this tick and the machines' last tick. The ground (rubble, ruins) is laid
+// at a run's start by `setupIsland`. Pure: no DOM, timers or clocks.
 import type { Game, ActResult } from '../Game';
 import { OK, no } from '../Game';
-import { TICK_RATE } from '../../engine/time';
 import { Num } from '../../engine/num';
 import { BUILD, isMachine, type BuildKind, type EntKind } from '../../data/machines';
 import { CHUNKS, PATCHES, type PatchDef } from '../../data/land';
@@ -24,7 +25,6 @@ import type { Ent } from '../world';
 import { lrules } from '../legacy';
 import { buildPrice } from './challenges';
 import { trules } from '../longtail';
-import { note } from './stats';
 
 /** The island the town is on. */
 export const worldOf = (g: Game): WorldId => g.s.meta.world ?? 'home';
@@ -96,11 +96,33 @@ export function islandCaches(g: Game) {
   if (d.vents?.length) for (const e of g.s.ents) if (!e.ruined && besideVent(g, e)) g.vented.add(e.id);
 }
 
-/** Lay the island's ground at a run's start: the Old Works' rubble and ruins. */
+/** The rubble this island has had cleared in this universe (the record a run's start reads). */
+export function clearedHere(g: Game): number[] {
+  const c = g.s.meta.cleared;
+  if (!c || c.universe !== (g.s.meta.lastFolds ?? 0)) return [];
+  return c.tiles[worldOf(g)] ?? [];
+}
+
+/** Note tiles cleared on this island for good (this universe): later runs here find them clear. */
+function noteCleared(g: Game, tiles: Iterable<number>) {
+  if (g.s.scenario) return;
+  const m = g.s.meta;
+  const u = m.lastFolds ?? 0;
+  if (!m.cleared || m.cleared.universe !== u) m.cleared = { universe: u, tiles: {} };
+  const w = worldOf(g);
+  const set = new Set(m.cleared.tiles[w] ?? []);
+  for (const i of tiles) set.add(i);
+  m.cleared.tiles[w] = [...set].sort((a, b) => a - b);
+}
+
+/** Lay the island's ground at a run's start: the Old Works' rubble (but what was cleared here this
+ * universe) and ruins. */
 export function setupIsland(g: Game) {
   const d = islandDef(g);
-  if (d.rubble) g.s.rubble = [...OLD_RUBBLE];
-  else delete g.s.rubble;
+  if (d.rubble) {
+    const gone = new Set(clearedHere(g));
+    g.s.rubble = OLD_RUBBLE.filter((i) => !gone.has(i));
+  } else delete g.s.rubble;
   for (const r of d.ruins ?? []) {
     if (g.entAt(r.x, r.y)) continue;
     const e = g.addPart(r.kind, r.x, r.y, r.rot);
@@ -130,7 +152,9 @@ export function repair(g: Game, x: number, y: number): ActResult {
   if (softened(g, 'oldworks') && g.s.rubble) {
     const near = new Set<number>();
     for (let yy = e.y - 1; yy <= e.y + e.h; yy++) for (let xx = e.x - 1; xx <= e.x + e.w; xx++) if (g.inb(xx, yy)) near.add(yy * g.W + xx);
+    const had = new Set(g.s.rubble);
     g.s.rubble = g.s.rubble.filter((i) => !near.has(i));
+    noteCleared(g, [...near].filter((i) => had.has(i)));
   }
   g.layoutDirty = true;
   g.bump('repairs');
@@ -149,14 +173,17 @@ export function clearRubble(g: Game, x: number, y: number): ActResult {
   const gone = new Set<number>([y * g.W + x]);
   if ((g.s.orders.rep.committee ?? 0) >= 7)
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) if (g.inb(x + dx, y + dy) && g.owned(x + dx, y + dy)) gone.add((y + dy) * g.W + x + dx);
+  const had = new Set(g.s.rubble ?? []);
+  for (const i of [...gone]) if (!had.has(i)) gone.delete(i);
   g.s.rubble = (g.s.rubble ?? []).filter((i) => !gone.has(i));
+  noteCleared(g, gone);
   g.layoutDirty = true;
   g.bump('rubbleCleared', gone.size);
   g.emit({ type: 'clear', x, y, value: p, d: gone.size });
   return OK;
 }
 
-// ------------------------------------------------------------------ Rime, and the Heaters
+// ------------------------------------------------------------------ Rime, and the power plant's warmth
 
 /** A powered machine's speed factor from the cold (Rime: half when cold, else 1). */
 export const coldFactor = (m: Ent) => (m.cold ? RULES.rimeCold.value : 1);
@@ -170,13 +197,21 @@ const cheb = (a: { x: number; y: number; w: number; h: number }, x: number, y: n
   return Math.max(dx, dy);
 };
 
-/** A Heater has heat to give: a coal burning or one in its box. */
-export const heaterLit = (h: Ent) => h.prog > 0 || (h.inBuf.coal ?? 0) > 0;
+/** The power plant's buildings that give off heat while they work: Boilers, Steam Engines and
+ * Generators (a Pole carries power, not heat). */
+export const isPlant = (e: Ent) => e.kind === 'boiler' || e.kind === 'steamEngine' || e.kind === 'generator';
 
-/** Is something that makes heat working: a machine or a power producer, not ruined or stopped. */
-const warmBody = (e: Ent) => !e.ruined && !e.paused && e.state === 'work' && (isMachine(e.kind) || e.kind === 'steamEngine' || e.kind === 'generator');
+/** A plant building working this tick (power.ts runs before the islands' stage, so this is now). */
+export const plantWarm = (e: Ent) => isPlant(e) && !e.ruined && e.state === 'work';
 
-/** Working machines touching this footprint (the tiles just outside its faces). */
+/** How far a working plant building's warmth reaches on Rime: 2 tiles (a Pole's reach), 3 with the
+ * research Thermals. */
+export const plantReach = (g: Game) => (g.done('thermals') ? RULES.thermalsReach.value : RULES.plantReach.value);
+
+/** Is something that makes heat working: a machine or a power plant building, not ruined or stopped. */
+const warmBody = (e: Ent) => !e.ruined && !e.paused && e.state === 'work' && (isMachine(e.kind) || isPlant(e));
+
+/** Working machines (or plant buildings) touching this footprint (the tiles just outside its faces). */
 export function workingNeighbours(g: Game, m: Ent): number {
   const seen = new Set<number>();
   const look = (x: number, y: number) => {
@@ -188,47 +223,34 @@ export function workingNeighbours(g: Game, m: Ent): number {
   return seen.size;
 }
 
-/** Is this powered machine warm on Rime: a lit Heater within reach, or enough working neighbours? */
+/** The working plant building nearest this machine within the plant's reach, or null. */
+export function warmPlant(g: Game, m: Ent): Ent | null {
+  const reach = plantReach(g);
+  let best: Ent | null = null, bd = Infinity;
+  for (const p of g.power) {
+    if (!plantWarm(p)) continue;
+    const d = cheb(m, p.x, p.y);
+    if (d <= reach && d < bd) { best = p; bd = d; }
+  }
+  return best;
+}
+
+/** Is this powered machine warm on Rime: a working plant building within reach, or enough working
+ * neighbours? */
 export function isWarm(g: Game, m: Ent): boolean {
-  const reach = RULES.heaterReach.value;
-  for (const h of g.heaters) if (heaterLit(h) && cheb(m, h.x, h.y) <= reach) return true;
+  if (warmPlant(g, m)) return true;
   const need = softened(g, 'rime') ? 1 : RULES.rimeTouch.value;
   return workingNeighbours(g, m) >= need;
 }
 
-/** The machines stage, before the machines run: Rime's warmth from the last tick's states, and the
- * Heaters burning (one coal every 10 s while a powered machine in reach is crafting). */
+/** The machines stage, before the machines run: Rime's warmth from this tick's plant (power.ts ran
+ * first) and the last tick's machine states. */
 export function runIslands(g: Game) {
-  const rime = !!islandDef(g).cold;
-  if (rime) {
-    const cold: Ent[] = [];
-    for (const m of g.machines) {
-      if (!powered(m) || m.ruined) { if (m.cold) delete m.cold; continue; }
-      if (isWarm(g, m)) { if (m.cold) delete m.cold; } else cold.push(m);
-    }
-    for (const m of cold) m.cold = true;
+  if (!islandDef(g).cold) return;
+  const cold: Ent[] = [];
+  for (const m of g.machines) {
+    if (!powered(m) || m.ruined) { if (m.cold) delete m.cold; continue; }
+    if (isWarm(g, m)) { if (m.cold) delete m.cold; } else cold.push(m);
   }
-  if (!g.heaters.length) return;
-  const reach = RULES.heaterReach.value;
-  for (const h of g.heaters) {
-    const wants = rime && g.machines.some((m) => powered(m) && m.active && !m.paused && cheb(m, h.x, h.y) <= reach);
-    if (wants && h.prog <= 0 && (h.inBuf.coal ?? 0) > 0) {
-      h.inBuf.coal--;
-      h.prog += (BUILD.heater.fuel?.seconds ?? 10) * TICK_RATE;
-      h.crafts++;
-    }
-    if (wants && h.prog > 0) {
-      h.prog = Math.max(0, h.prog - 1);
-      h.wkAcc = (h.wkAcc ?? 0) + 1;
-      h.state = 'work';
-      h.why = null;
-    } else if (!heaterLit(h)) {
-      h.state = 'starved';
-      h.why = 'coal';
-    } else {
-      h.state = 'idle';
-      h.why = null;
-    }
-    note(h);
-  }
+  for (const m of cold) m.cold = true;
 }

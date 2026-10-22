@@ -305,7 +305,7 @@ export function importDesign(g: Game, code: string): ActResult {
 // ------------------------------------------------------------------ share strings (FWD1)
 
 /** Building kinds by code (append only: old strings must keep decoding). */
-const KINDS: BuildKind[] = ['belt', 'miner', 'smelter', 'press', 'assembler', 'heap', 'splitter', 'merger', 'crate', 'boiler', 'steamEngine', 'generator', 'pole', 'kiln', 'mixer', 'refinery', 'smelterMk2', 'pressMk2', 'assemblerMk2', 'heater'];
+const KINDS: BuildKind[] = ['belt', 'miner', 'smelter', 'press', 'assembler', 'heap', 'splitter', 'merger', 'crate', 'boiler', 'steamEngine', 'generator', 'pole', 'kiln', 'mixer', 'refinery', 'smelterMk2', 'pressMk2', 'assemblerMk2'];
 /** Recipes by code, 1-based (0 = none; append only). */
 const RECIPES_BY_CODE = ['smeltIron', 'smeltCopper', 'pressPlate', 'drawWire', 'pressBrick', 'cutGear', 'gizmo', 'smeltSteel', 'fireGlass', 'recycledGlass', 'crushGravel', 'mixConcrete', 'refinePlastic', 'etchCircuit', 'packKit', 'buildMotor', 'forgeDrillBit'];
 const VERSION = 1;

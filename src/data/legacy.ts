@@ -125,9 +125,9 @@ export const LEGACY: Record<LegacyId, LegacyDef> = {
   townPlan: L({
     id: 'townPlan', name: 'The Town Plan', branch: 'auto', cost: 9, requires: ['regrader'], pos: [1, 1],
     effect: { k: 'townPlan', plans: 2 },
-    text: '{u:district} keep {good:2} District layouts · each run places them again, routes and skiffs, as copies of their groups exist',
+    text: '{u:district} keep {good:2} town layouts (the District, the World, Beyond) · each run places them again, routes paid, as copies exist',
     flavor: 'Drawn on a napkin in the first world. Still the best plan anyone has.',
-    derivation: '§22 The Legacy tree: pillar 2, Act III\'s chore (placing groups and flying their routes) becomes the town\'s; a plan names each tile\'s product and its routes, and fills a tile with a spare copy of a design making that product (the best graded), paying the skiffs, so a world\'s District rebuilds itself as its groups are folded',
+    derivation: '§22 The Legacy tree: pillar 2, Act III\'s chore (placing groups and flying their routes) becomes the town\'s; a plan names each tile\'s product and its routes, and fills a tile with a spare copy of a design making that product (the best graded), paying the skiffs, so a world\'s District rebuilds itself as its groups are folded; it keeps and places every high floor that stands (the World\'s and Beyond\'s modules and routes too: the Acts IV-V review)',
   }),
   contractRunners: L({
     id: 'contractRunners', name: 'Contract Runners', branch: 'auto', cost: 7, requires: [], pos: [0, 2],
@@ -177,7 +177,7 @@ export const LEGACY: Record<LegacyId, LegacyDef> = {
     effect: { k: 'soften', world: 'rime' },
     text: '{u:power} on Rime one working machine touching is warmth enough, was 2',
     flavor: 'Knitted by Bramble. Each one slightly the wrong size.',
-    derivation: '§22 The Legacy tree: a pair of machines facing each other keeps both warm, so a straight line runs warm and only a lone machine wants a Heater',
+    derivation: '§22 The Legacy tree: a pair of machines facing each other keeps both warm, so a straight line runs warm and only a lone machine wants the plant beside it',
   }),
   salvageCrews: L({
     id: 'salvageCrews', name: 'Salvage Crews', branch: 'soften', cost: 4, requires: [], pos: [3, 0],

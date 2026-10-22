@@ -29,7 +29,7 @@ import { rail, diegetic, type Cameo } from './rail';
 import { newspaper } from './gazette';
 import { floorTags } from './floortags';
 import { pinnedReport, hoverEnt, worldTip, zones, pinTop, bigSafe } from './tags';
-import { isleTileKey, isleTileTip, isleFrame } from './islands';
+import { isleTileKey, isleTileTip, isleFrame, clearDragTip } from './islands';
 import { drawWheel } from './wheel';
 import { nextGoal } from './goals';
 import { getHoverTags } from './settings';
@@ -533,6 +533,8 @@ function hoverKeyOf(app: App): string | null {
 function hoverReport(app: App) {
   const ui = app.ui;
   const hs = app.hud;
+  // rubble cleared by a drag (the Old Works): its running total, at once
+  if (!app.high && app.floor === 'workshop' && clearDragTip(app)) return;
   const mode = getHoverTags();
   const key = app.mode.k === 'idle' && !ui.tooltip && mode !== 'off' ? hoverKeyOf(app) : null;
   if (key !== hs.hoverKey) { hs.hoverKey = key; hs.hoverSince = ui.time; }

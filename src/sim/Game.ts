@@ -228,8 +228,6 @@ export class Game {
   vents = new Uint8Array(WORKSHOP.w * WORKSHOP.h);
   rubbleMask = new Uint8Array(WORKSHOP.w * WORKSHOP.h);
   vented = new Set<number>();
-  /** Rime's Heaters */
-  heaters: Ent[] = [];
   /** the Seed (DESIGN.md §23), once a Last Fold has planted it */
   seeds: Ent[] = [];
 
@@ -398,7 +396,6 @@ export class Game {
     this.machines = [];
     this.logistics = [];
     this.power = [];
-    this.heaters = [];
     this.seeds = [];
     const belts: Ent[] = [];
     for (const e of this.s.ents) {
@@ -409,7 +406,6 @@ export class Game {
       else if (isMachine(e.kind)) this.machines.push(e);
       else if (e.kind === 'splitter' || e.kind === 'merger' || e.kind === 'crate' || e.kind === 'heap' || e.kind === 'chuteMouth') this.logistics.push(e);
       else if (isPower(e.kind)) this.power.push(e);
-      else if (e.kind === 'heater') this.heaters.push(e);
       else if (e.kind === 'seed') this.seeds.push(e);
     }
     islandCaches(this);

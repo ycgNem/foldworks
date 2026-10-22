@@ -26,7 +26,7 @@ import { nominal, feeders, entName, endsAtSink, outLinks, lineOf } from '../sim/
 import { shares } from '../sim/systems/stats';
 import { powerFactor, poleReach, drawKw } from '../sim/systems/power';
 import { modeSpeed, baseSpeed, veinBoost, byEvery } from '../sim/systems/machines';
-import { islandDef, islandMiners, isWarm, heaterLit, repairPrice, softened, workingNeighbours, coldFactor } from '../sim/systems/islands';
+import { islandDef, islandMiners, isWarm, warmPlant, plantReach, isPlant, repairPrice, softened, workingNeighbours, coldFactor } from '../sim/systems/islands';
 import { SEED_ORES, seedSide } from '../sim/systems/seed';
 import { krules } from '../sim/kernels';
 import { fname, feedsDock, mainItem, chuteCap, BYPRODUCTS } from '../sim/systems/modules';
@@ -161,14 +161,16 @@ function isleRows(app: App, e: Ent): { cause: Row[]; more: Row[] } {
   const out = { cause: [] as Row[], more: [] as Row[] };
   if (g.vented.has(e.id)) out.cause.push(rich(isPower(e.kind) ? '{good:vented}: burns no fuel · a vent beside it' : '{good:vented}: no power, no fuel'));
   if (d.cold && powered(e.kind) && !e.ruined && !g.vented.has(e.id)) {
-    const reach = RULES.heaterReach.value;
+    const reach = plantReach(g);
     const need = softened(g, 'rime') ? 1 : RULES.rimeTouch.value;
     const two = need === 1 ? 'one working neighbour' : `${need === 2 ? 'two' : need} working neighbours`;
-    if (e.cold || !isWarm(g, e)) out.cause.push(rich(`{warn:cold: ${RULES.rimeCold.value}x} · a Heater within ${reach} tiles or ${two}`));
-    else {
-      const heater = g.heaters.some((h) => heaterLit(h) && Math.max(Math.max(h.x - (e.x + e.w - 1), e.x - h.x, 0), Math.max(h.y - (e.y + e.h - 1), e.y - h.y, 0)) <= reach);
+    if (e.cold || !isWarm(g, e)) {
+      out.cause.push(rich(`{warn:cold: ${RULES.rimeCold.value}x} · a working power building within ${reach} warms it`));
+      out.cause.push(rich(`{soft:or ${two} touching it}`));
+    } else {
+      const p = warmPlant(g, e);
       const n = workingNeighbours(g, e);
-      out.more.push(rich(`{good:warm} · ${heater ? 'a lit Heater in reach' : `${n} working neighbour${n === 1 ? '' : 's'}`}`));
+      out.more.push(rich(`{good:warm} · ${p ? `the ${BUILD[p.kind].name} in reach` : `${n} working neighbour${n === 1 ? '' : 's'}`}`));
     }
   }
   return out;
@@ -212,24 +214,6 @@ function seedReport(app: App, e: Ent): Report {
   more.push(rich(`${pm(60 / secs)}/min of each · ${secs <= 2 ? 'a Miner\'s pace' : 'half a Miner'}`));
   more.push(rich('{soft:the World folded into one tile · it stays, and never folds}'));
   return { title: 'The Seed', uicon: 'kernel', rows, more, turn: e, verbs: '{k:R} turn  {k:LMB} pin' };
-}
-
-/** A Heater (Rime, DESIGN.md §22): whether it warms, its coal, what is in its reach. */
-function heaterReport(app: App, e: Ent): Report {
-  const g = app.game;
-  const rows: Row[] = [];
-  const more: Row[] = [];
-  const reach = RULES.heaterReach.value;
-  const near = g.machines.filter((m) => powered(m.kind) && !m.ruined && Math.max(Math.max(e.x - (m.x + m.w - 1), m.x - e.x, 0), Math.max(e.y - (m.y + m.h - 1), m.y - e.y, 0)) <= reach);
-  const coal = e.inBuf.coal ?? 0;
-  if (!islandDef(g).cold) rows.push(rich('{chip:soft:STANDBY} nothing is cold here: Heaters warm on Rime'));
-  else if (e.state === 'work') rows.push(rich(`{chip:good:WARMING} ${near.length} machine${near.length === 1 ? '' : 's'} within ${reach}`));
-  else if (!heaterLit(e)) rows.push(rich('{chip:warn:NO COAL} belt {i:coal} into it'));
-  else rows.push(rich(`{chip:soft:STANDBY} ${near.length ? 'nothing in reach is running' : `no powered machine within ${reach}`}`));
-  rows.push(rich(`fuel ${coal > 0 || e.prog > 0 ? coal : `{warn:${coal}}`} {i:coal} waiting${e.prog > 0 ? ` · ${(e.prog / TICK_RATE).toFixed(1)}s burning` : ''}`));
-  more.push(rich(`1 {i:coal} per ${BUILD.heater.fuel?.seconds ?? 10}s while a machine in reach runs`));
-  more.push(rich(`reach ${reach} tiles · ${reach * 2 + 1}x${reach * 2 + 1} · warms every powered machine in it`));
-  return { title: 'Heater', item: 'coal', rows, more, verbs: '{k:LMB} pin  {k:X} remove' };
 }
 
 /** A Workshop machine's report. */
@@ -540,6 +524,11 @@ function powerReport(app: App, e: Ent): Report {
   if (BUILD[e.kind].power) more.unshift(rich(`{soft:up to} {power:${BUILD[e.kind].power} kW}`));
   else if (sub) more.unshift(rich(`{soft:${sub}}`));
   if (g.vented.has(e.id)) rows.splice(1, 0, rich('{good:vented}: burns no fuel · a vent beside it'));
+  // Rime (DESIGN.md §22): a working plant building warms the powered machines round it
+  if (islandDef(g).cold && isPlant(e)) {
+    const r = plantReach(g);
+    more.push(rich(e.state === 'work' ? `{good:warms} powered machines within ${r} · ${r * 2 + 1}x${r * 2 + 1}` : `{warn:cold} · it warms what is within ${r} while it works`));
+  }
   return { title: entName(g, e), uicon: 'power', rows, more, verbs: '{k:LMB} pin  {k:R} turn  {k:X} remove' };
 }
 
@@ -954,7 +943,6 @@ export function entReport(app: App, e: Ent): Report | null {
 function entReport0(app: App, e: Ent): Report | null {
   if (e.kind === 'seed') return seedReport(app, e);
   if (e.kind === 'chuteMouth') return chuteMouthReport(app, e);
-  if (e.kind === 'heater') return heaterReport(app, e);
   if (isPower(e.kind)) return powerReport(app, e);
   if (isMachine(e.kind)) return machineReport(app, e);
   return null;

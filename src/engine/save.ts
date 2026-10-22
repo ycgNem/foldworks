@@ -10,9 +10,11 @@
 // `FW1.`; both still load. The packing is below the versions: it changes no payload and needs no
 // migration.
 import { deflateRaw, inflateRaw } from './deflate';
+import { Num } from './num';
+import { OLD_RUBBLE } from '../data/worlds';
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 11;
+export const SAVE_VERSION = 12;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -162,6 +164,35 @@ export const MIGRATIONS: Record<number, Migration> = {
     m.boards ??= {};
     m.cosmetics ??= [];
     return { ...d, snap: JSON.stringify(st), v: 11 };
+  },
+  // v12 (the islands and the chores, after the Acts IV-V review, DESIGN.md §22): Rime's Heater is
+  // gone (the power plant warms instead). Each Heater standing is lifted and its price refunded
+  // (3,000, its last price; none for a free one), Heaters leave the designs and the Drawer's kept
+  // layouts, and a logged Heater placement leaves the log. The rubble cleared this run on the Old
+  // Works is the island's record of what stays clear (`meta.cleared`).
+  11: (d) => {
+    if (typeof d.snap !== 'string') return { ...d, v: 12 };
+    const st = JSON.parse(d.snap);
+    const HEATER = 3000;
+    const isHeater = (e: { kind?: string }) => e?.kind === 'heater';
+    let refund = 0;
+    if (Array.isArray(st.ents)) {
+      for (const e of st.ents) if (isHeater(e) && !e.free) refund += HEATER;
+      st.ents = st.ents.filter((e: { kind?: string }) => !isHeater(e));
+    }
+    if (refund > 0 && typeof st.coin === 'string' && st.coin.startsWith('N:')) st.coin = Num.parse(st.coin.slice(2)).add(refund).toJSON();
+    for (const ds of [st.designs, st.meta?.drawer]) {
+      if (!Array.isArray(ds)) continue;
+      for (const q of ds) if (Array.isArray(q?.parts)) q.parts = q.parts.filter((p: { kind?: string }) => !isHeater(p));
+    }
+    const m = (st.meta ??= {});
+    if (m.world === 'oldworks' && Array.isArray(st.rubble) && !st.scenario) {
+      const left = new Set<number>(st.rubble);
+      const gone = OLD_RUBBLE.filter((i) => !left.has(i));
+      if (gone.length) m.cleared = { universe: m.lastFolds ?? 0, tiles: { oldworks: gone } };
+    }
+    const log = Array.isArray(d.log) ? d.log.filter((l: { c?: { k?: string; kind?: string } }) => !(l?.c?.k === 'place' && l.c.kind === 'heater')) : d.log;
+    return { ...d, snap: JSON.stringify(st), log, v: 12 };
   },
 };
 

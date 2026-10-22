@@ -599,7 +599,7 @@ describe('cosmetics and the skin picker (DESIGN.md §24)', () => {
 
 describe('the long tail in saves (DESIGN.md §24)', () => {
   it('a v10 save migrates to v11: no skin, no board', () => {
-    expect(SAVE_VERSION).toBe(11);
+    expect(SAVE_VERSION).toBeGreaterThanOrEqual(11);
     const g = new Game(3);
     g.step(100);
     const p = savePayload(g, 0) as unknown as { v: number; snap: string };
@@ -607,7 +607,7 @@ describe('the long tail in saves (DESIGN.md §24)', () => {
     delete st.meta.skins;
     delete st.meta.boards;
     const m = migrate({ ...p, v: 10, snap: JSON.stringify(st) }) as unknown as { v: number; snap: string };
-    expect(m.v).toBe(11);
+    expect(m.v).toBe(SAVE_VERSION);
     const meta = JSON.parse(m.snap).meta;
     expect(meta.skins).toEqual({});
     expect(meta.boards).toEqual({});

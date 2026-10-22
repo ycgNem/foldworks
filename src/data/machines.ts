@@ -9,9 +9,7 @@ export type BuildKind = 'belt' | 'miner' | 'smelter' | 'press' | 'assembler' | '
   // Act II (DESIGN.md §18)
   | 'boiler' | 'steamEngine' | 'generator' | 'pole' | 'kiln' | 'mixer' | 'refinery' | 'smelterMk2' | 'pressMk2' | 'assemblerMk2'
   // Act III (DESIGN.md §21)
-  | 'chemVat' | 'greenhouse' | 'chuteMouth'
-  // Act IV (DESIGN.md §22): Rime's Heater
-  | 'heater';
+  | 'chemVat' | 'greenhouse' | 'chuteMouth';
 export type FixedKind = 'furnace' | 'dock' | 'hopper'
   // Act V (DESIGN.md §23): the Seed, the World folded into one tile, in every Workshop after a Last Fold
   | 'seed';
@@ -74,8 +72,6 @@ export const BUILD: Record<EntKind, BuildDef> = {
   chemVat: { kind: 'chemVat', name: 'Chem Vat', cost: 12000, w: 1, h: 1, unlock: 'chemistry', machine: 'chemVat', kw: 100, act2: true, blurb: '2 {i:oil} + {i:sand} → {i:solvent}  30/min · {i:sludge} 1 per 2, out the sides · {power:100 kW}', derivation: '§21 Machines: the Chem Vat, 100 kW; 12,000 coin, priced against the Act III factory (the Refinery\'s 9,000 against Act II\'s, a little dearer: it makes four recipes)' },
   greenhouse: { kind: 'greenhouse', name: 'Greenhouse', cost: 25000, w: 2, h: 2, unlock: 'hydroponics', machine: 'greenhouse', kw: 150, act2: true, blurb: '2×2 · {i:fertilizer} → 3 {i:produce}  30/min · {power:150 kW}', derivation: '§21 Machines: the Greenhouse, 2x2, 150 kW (a Mk2 smelter\'s draw); 25,000 coin, about an Assembler Mk2' },
   chuteMouth: { kind: 'chuteMouth', name: 'Chute Mouth', cost: 400, w: 1, h: 1, unlock: 'chutes', act2: true, blurb: 'drops what the Factory Chute takes · set it to an item · 120/min out the front', derivation: '§21 The Chute: a belt\'s speed out of its front (§4); 400 coin, a token: the Chute is a routing piece, not a machine' },
-  // Act IV (DESIGN.md §22 Rime)
-  heater: { kind: 'heater', name: 'Heater', cost: 3000, w: 1, h: 1, unlock: 'thermals', fuel: { items: ['coal'], seconds: 10 }, act2: true, blurb: 'burns {i:coal} · 1 per 10 s while a powered machine in reach runs · warms every powered machine within 2 tiles', derivation: '§22 Rime: a Heater warms what is within 2 tiles (a 5x5, a Pole\'s reach, §18) and burns a coal every 10 s while it warms anything (a fifth of a Generator\'s 3 s: heat, not power); 3,000 coin, a Kiln\'s price, so a cold line is fixed for the price of one of its machines' },
 };
 
 /** The build bar, in slot order (keys 1-9). */
@@ -85,7 +81,7 @@ export const BUILD_BAR: BuildKind[] = ['belt', 'miner', 'smelter', 'press', 'ass
 export const STORE_TABS: { id: 'build' | 'power' | 'heavy'; name: string; kinds: BuildKind[] }[] = [
   { id: 'build', name: 'Build', kinds: BUILD_BAR },
   { id: 'power', name: 'Power', kinds: ['boiler', 'steamEngine', 'generator', 'pole'] },
-  { id: 'heavy', name: 'Heavy', kinds: ['kiln', 'mixer', 'refinery', 'smelterMk2', 'pressMk2', 'assemblerMk2', 'chemVat', 'greenhouse', 'chuteMouth', 'heater'] },
+  { id: 'heavy', name: 'Heavy', kinds: ['kiln', 'mixer', 'refinery', 'smelterMk2', 'pressMk2', 'assemblerMk2', 'chemVat', 'greenhouse', 'chuteMouth'] },
 ];
 
 export function isMachine(k: EntKind): boolean {

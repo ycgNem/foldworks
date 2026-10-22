@@ -176,34 +176,44 @@ describe('the islands (DESIGN.md §22)', () => {
     expect(at(g, 9, 4).crafts).toBe(0); // never took a coal
   });
 
-  it('Rime: a powered machine alone runs at half speed; a lit Heater or two working neighbours warm it', () => {
-    // a Kiln fed by hand, powered by a stocked Generator, for 60 s
-    const run = (setup: (g: Game) => void) => {
+  it('Rime: a powered machine alone runs at half speed; a working plant within reach or two working neighbours warm it', () => {
+    // a Kiln fed by hand at (9, 6), powered by a stocked Generator `gx, gy` through two Poles, for 60 s
+    const run = (gx: number, gy: number, setup: (g: Game) => void = () => {}, thermals = false) => {
       const g = sandbox('rime');
-      must(g, { k: 'place', kind: 'generator', x: 9, y: 4, rot: 0 });
-      must(g, { k: 'place', kind: 'pole', x: 10, y: 5, rot: 0 });
+      if (!thermals) g.s.research.done = g.s.research.done.filter((r) => r !== 'thermals');
+      must(g, { k: 'place', kind: 'generator', x: gx, y: gy, rot: 0 });
+      must(g, { k: 'place', kind: 'pole', x: gx + 1, y: gy + 1, rot: 0 });
+      must(g, { k: 'place', kind: 'pole', x: 10, y: 7, rot: 0 });
       must(g, { k: 'place', kind: 'kiln', x: 9, y: 6, rot: 0 });
       must(g, { k: 'place', kind: 'crate', x: 10, y: 6, rot: 0 });
       setup(g);
       const kilns = g.s.ents.filter((e) => e.kind === 'kiln');
       for (const k of kilns) k.recipe = 'fireGlass';
       for (let t = 0; t < 60 * TICK_RATE; t++) {
-        at(g, 9, 4).inBuf.coal = 2;
+        at(g, gx, gy).inBuf.coal = 2;
         for (const k of kilns) k.inBuf.sand = 4;
-        const h = g.s.ents.find((e) => e.kind === 'heater');
-        if (h) h.inBuf.coal = 2;
         g.tick();
       }
       return { g, crafts: at(g, 9, 6).crafts };
     };
-    const cold = run(() => {});
+    // the plant 5 tiles off: out of reach, the Kiln cold
+    const cold = run(9, 1);
+    expect(at(cold.g, 9, 1).state).toBe('work');
     expect(at(cold.g, 9, 6).cold).toBe(true);
-    const heated = run((g) => must(g, { k: 'place', kind: 'heater', x: 8, y: 4, rot: 0 }));
-    expect(at(heated.g, 9, 6).cold).toBeFalsy();
-    expect(heated.crafts / cold.crafts).toBeCloseTo(2, 0);
-    expect(at(heated.g, 8, 4).crafts).toBeGreaterThan(3); // the heater burned coal
-    // two working Kilns touching it, each emptying into its own crate
-    const packed = run((g) => {
+    // the plant 2 tiles off (a Pole's reach): warm, twice the crafts
+    const warm = run(9, 4);
+    expect(at(warm.g, 9, 6).cold).toBeFalsy();
+    expect(warm.crafts / cold.crafts).toBeCloseTo(2, 0);
+    // 3 tiles off: cold, until Thermals spreads the plant's warmth to 3
+    expect(at(run(9, 3).g, 9, 6).cold).toBe(true);
+    expect(at(run(9, 3, undefined, true).g, 9, 6).cold).toBeFalsy();
+    // a plant with no coal is no warmer than none
+    const out = sandbox('rime');
+    must(out, { k: 'place', kind: 'generator', x: 9, y: 4, rot: 0 });
+    must(out, { k: 'place', kind: 'kiln', x: 9, y: 6, rot: 0 });
+    expect(isWarm(out, at(out, 9, 6))).toBe(false);
+    // two working Kilns touching it, each emptying into its own crate, the plant out of reach
+    const packed = run(9, 1, (g) => {
       must(g, { k: 'place', kind: 'kiln', x: 8, y: 6, rot: 2 });
       must(g, { k: 'place', kind: 'crate', x: 7, y: 6, rot: 2 });
       must(g, { k: 'place', kind: 'kiln', x: 9, y: 7, rot: 1 });
@@ -212,6 +222,8 @@ describe('the islands (DESIGN.md §22)', () => {
     expect(at(packed.g, 9, 6).cold).toBeFalsy();
     expect(at(packed.g, 8, 6).cold).toBe(true); // one neighbour is not enough
     expect(packed.crafts / cold.crafts).toBeGreaterThan(1.7);
+    // there is no Heater to build any more
+    expect('heater' in BUILD).toBe(false);
     // at Home no machine is ever cold
     const h = sandbox('home');
     must(h, { k: 'place', kind: 'kiln', x: 9, y: 6, rot: 0 });
@@ -241,6 +253,30 @@ describe('the islands (DESIGN.md §22)', () => {
     const h = new Game(1);
     h.s.coin = N(1e6);
     expect(h.act({ k: 'place', kind: 'smelterMk2', x: 9, y: 9, rot: 0 }).ok).toBe(false);
+  });
+
+  it('the Old Works: a cleared tile stays clear through a Reorganize and a Relocate back; a new universe lays it again', () => {
+    const g = isle('oldworks');
+    g.s.coin = N(1e4);
+    const cleared = OLD_RUBBLE.filter((q) => q % 24 < 8 && Math.floor(q / 24) < 8 && !g.entAt(q % 24, Math.floor(q / 24))).slice(0, 3);
+    for (const i of cleared) must(g, { k: 'clear', x: i % 24, y: Math.floor(i / 24) });
+    expect(g.s.meta.cleared!.tiles.oldworks).toEqual([...cleared].sort((a, b) => a - b));
+    // a Reorganize ends in a fresh run here (startRun)
+    startRun(g);
+    expect(g.s.rubble!.length).toBe(OLD_RUBBLE.length - cleared.length);
+    for (const i of cleared) expect(g.s.rubble).not.toContain(i);
+    // to Pebble and back: still clear (the island's record, this universe)
+    g.s.meta.world = 'pebble';
+    startRun(g);
+    expect(g.s.rubble).toBeUndefined();
+    g.s.meta.world = 'oldworks';
+    startRun(g);
+    for (const i of cleared) expect(g.s.rubble).not.toContain(i);
+    // a new universe (a Last Fold taken): the island is laid again whole
+    g.s.meta.lastFolds = 1;
+    startRun(g);
+    expect(g.s.rubble!.length).toBe(OLD_RUBBLE.length - 1 + (OLD_RUBBLE.includes(RULES.seedY.value * 24 + RULES.seedX.value) ? 0 : 1));
+    for (const i of cleared) expect(g.s.rubble).toContain(i);
   });
 
   it('the Old Works: the ruined iron line runs once repaired, with no research (a fold Home has not reached yet)', () => {
@@ -617,6 +653,35 @@ describe('the Legacy tree (DESIGN.md §22): every node', () => {
     expect(g.s.district!.routes[0].skiffs).toBe(2);
   });
 
+  it('the Town Plan keeps and places the World layout too, barges and all (every high floor)', () => {
+    const g = ready('regrader', 'townPlan');
+    const a = design(g, { depth: 3, outs: { steel: 1 } });
+    const b = design(g, { depth: 3, ins: { steel: 1 }, outs: { gearbox: 0.1 } });
+    const c = design(g, { depth: 2, outs: { gear: 1 } });
+    must(g, { k: 'hplace', floor: 'world', design: a.id, x: 3, y: 3 });
+    must(g, { k: 'hplace', floor: 'world', design: b.id, x: 4, y: 3 });
+    must(g, { k: 'route', floor: 'world', fx: 3, fy: 3, tx: 4, ty: 3, item: 'steel' });
+    must(g, { k: 'skiff', floor: 'world', id: g.s.world!.routes[0].id, n: 1 });
+    must(g, { k: 'hplace', floor: 'district', design: c.id, x: 2, y: 2 });
+    must(g, { k: 'keepPlan', name: 'Both floors' });
+    const plan = g.s.meta.plans![0];
+    expect(plan.tiles.filter((t) => t.floor === 'world').length).toBe(2);
+    expect(plan.tiles.filter((t) => !t.floor).length).toBe(1);
+    expect(plan.routes[0].floor).toBe('world');
+    must(g, { k: 'reorganize' });
+    grant(g);
+    design(g, { depth: 3, outs: { steel: 1 } });
+    design(g, { depth: 3, ins: { steel: 1 }, outs: { gearbox: 0.1 } });
+    design(g, { depth: 2, outs: { gear: 1 } });
+    g.step(RULES.legacyEvery.value * TICK_RATE + 2);
+    expect(hentAt(g, 'world', 3, 3)?.kind).toBe('module');
+    expect(hentAt(g, 'world', 4, 3)?.kind).toBe('module');
+    expect(hentAt(g, 'district', 2, 2)?.kind).toBe('module');
+    expect(hentAt(g, 'district', 3, 3)).toBeFalsy(); // a World tile is not placed on the District
+    expect(g.s.world!.routes.length).toBe(1);
+    expect(g.s.world!.routes[0].skiffs).toBe(2);
+  });
+
   it('Contract Runners: every offered order fills from every Dock at once', () => {
     const g = ready('contractRunners');
     const offered = offeredOrders(g);
@@ -777,6 +842,34 @@ describe('Act IV away and in saves (DESIGN.md §12, §22)', () => {
     expect(h.s.meta.legacy!.toNumber()).toBe(0);
   });
 
+  it('a v11 save migrates to v12: Heaters lifted and refunded, out of the designs and the log; the clearing on the Old Works kept', () => {
+    expect(SAVE_VERSION).toBeGreaterThanOrEqual(12);
+    const g = sandbox('oldworks');
+    const i = g.s.rubble![0];
+    must(g, { k: 'clear', x: i % 24, y: Math.floor(i / 24) });
+    g.step(20);
+    const p = savePayload(g, 0) as unknown as { v: number; snap: string; log: unknown[] };
+    const st = JSON.parse(p.snap);
+    // as a v11 save had it: a Heater standing (one bought, one free), one in a design, no record
+    st.ents.push({ ...st.ents[0], id: 9001, kind: 'heater', x: 10, y: 6, inBuf: { coal: 2 } });
+    st.ents.push({ ...st.ents[0], id: 9002, kind: 'heater', x: 11, y: 6, inBuf: {}, free: true });
+    st.designs = [{ id: 1, name: 'Warm', box: { x: 0, y: 0, w: 2, h: 1 }, parts: [{ kind: 'kiln', dx: 0, dy: 0, rot: 0, recipe: 'fireGlass' }, { kind: 'heater', dx: 1, dy: 0, rot: 0, recipe: null }], ins: {}, outs: { glass: 0.5 }, grade: { letter: 'B', score: 0.7, u: 1, w: 1, c: 1, mult: 1 }, bill: 6000, stamped: 0, spare: 1, depth: 1 }];
+    delete st.meta.cleared;
+    const coin = g.s.coin.toNumber();
+    const old = { ...p, v: 11, snap: JSON.stringify(st), log: [{ t: g.s.tick, c: { k: 'place', kind: 'heater', x: 12, y: 6, rot: 0 } }] };
+    const m = migrate(old) as unknown as { v: number; snap: string; log: unknown[] };
+    expect(m.v).toBe(SAVE_VERSION);
+    expect(m.log).toEqual([]);
+    const h = restore(m as never);
+    expect(h.s.ents.some((e) => (e.kind as string) === 'heater')).toBe(false);
+    expect(h.s.coin.toNumber()).toBe(coin + 3000);
+    expect(h.s.designs[0].parts.map((q) => q.kind)).toEqual(['kiln']);
+    expect(h.s.meta.cleared!.tiles.oldworks).toContain(i);
+    h.step(100);
+    startRun(h);
+    expect(h.s.rubble).not.toContain(i);
+  });
+
   it('a save on an island restores exactly and keeps running in step', () => {
     const g = sandbox('cinder');
     sandLine(g);
@@ -788,7 +881,7 @@ describe('Act IV away and in saves (DESIGN.md §12, §22)', () => {
     expect(fingerprint(h)).toBe(fingerprint(g));
   });
 
-  it('seed + command log replays a Relocate, a Legacy node and a repair to the same state', () => {
+  it('seed + command log replays a Relocate, a Legacy node, a repair and a clearing to the same state', () => {
     const g = sandbox('home', 13, true);
     must(g, { k: 'place', kind: 'miner', x: 21, y: 5, rot: 0 });
     g.step(300);
@@ -796,11 +889,14 @@ describe('Act IV away and in saves (DESIGN.md §12, §22)', () => {
     g.step(100);
     must(g, { k: 'legacy', id: 'salvageCrews' });
     must(g, { k: 'repair', x: 1, y: 5 });
+    const r = g.s.rubble!.find((q) => q % 24 < 8 && Math.floor(q / 24) < 8)!;
+    must(g, { k: 'clear', x: r % 24, y: Math.floor(r / 24) });
     for (let i = 0; i < 20; i++) { g.act({ k: 'click', x: 3, y: 3 }); g.step(3); }
     g.step(400);
     const h = sandbox('home', 13, true);
     replayInto(h, g.history!.filter((l) => l.t >= 1), g.s.tick);
     expect(fingerprint(h)).toBe(fingerprint(g));
     expect(h.s.meta.world).toBe('oldworks');
+    expect(h.s.meta.cleared).toEqual(g.s.meta.cleared);
   });
 });

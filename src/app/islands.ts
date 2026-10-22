@@ -1,9 +1,11 @@
 // The islands in the HUD (DESIGN.md §22, Act IV): what the town is told about the island's rule,
 // always and in few words (pillar 3: a rule you can't read is a rule you can't fold for).
 // - A slip under the Purse naming the island and its rule in a few words (`Rime · machines need
-//   warmth`), its tip the whole rule and a line of flavour (registerCounter, as the Challenge's).
+//   warmth`), its tip the whole rule and a line of flavour (registerCounter, as the Challenge's), on
+//   the Workshop only, where the rule is.
 // - Short hover tags for the island's ground: rubble (`{k:LMB} Clear · {coin}`: a click on it clears
-//   it, the command `clear`), a vent (what it does beside it), the sky (Pebble Isle's lost half).
+//   it, the command `clear`, and a drag clears every tile it passes, its running total at the cursor:
+//   `clearDragTip`), a vent (what it does beside it), the sky (Pebble Isle's lost half).
 // - The Old Works: a toast for a repair, and a banner the first time each of its two whole ruined
 //   lines runs again (every machine repaired and each has made something this run).
 // The machines' own island rows (cold or warm, vented) and the Repair button are in the reports
@@ -64,7 +66,9 @@ function isleSlip(app: App, x: number, y: number, room: number): number {
   return w;
 }
 
-registerCounter({ id: 'island', show: (app) => worldOf(app.game) !== 'home' && !app.game.s.scenario, draw: (app, x, y, room) => isleSlip(app, x, y, room) });
+// the rule is the Workshop's: the slip shows there only (the Factory and the high floors play by no
+// island's rule, the Acts IV-V review)
+registerCounter({ id: 'island', show: (app) => worldOf(app.game) !== 'home' && !app.game.s.scenario && app.floor === 'workshop', draw: (app, x, y, room) => isleSlip(app, x, y, room) });
 
 // ------------------------------------------------------------------ the ground's hover tags
 
@@ -91,7 +95,7 @@ export function isleTileTip(app: App, x: number, y: number, at: TipPlace): boole
   if (rubbleAt(g, x, y)) {
     const p = rubblePrice(x, y);
     const afford = g.s.coin.gte(p);
-    ui.tip([{ text: '{big:Rubble}' }, { text: `{k:LMB} Clear · {coin:${p.toLocaleString('en-US')}}` }, { text: afford ? '{soft:then build on it}' : '{bad:not enough coin yet}' }], 170, at);
+    ui.tip([{ text: '{big:Rubble}' }, { text: `{k:LMB} Clear · {coin:${p.toLocaleString('en-US')}}` }, { text: afford ? '{soft:drag to clear a path · it stays clear}' : '{bad:not enough coin yet}' }], 180, at);
     return true;
   }
   if (ventAt(g, x, y)) {
@@ -99,6 +103,25 @@ export function isleTileTip(app: App, x: number, y: number, at: TipPlace): boole
     return true;
   }
   return false;
+}
+
+/** While rubble is cleared by a drag (app.ts `clearDrag`): the tiles cleared and the coin they
+ * took, and the price of the tile under the cursor (or why it stopped), at once and at the cursor.
+ * True if it drew. */
+export function clearDragTip(app: App): boolean {
+  const d = app.clearDrag;
+  if (!d) return false;
+  const g = app.game;
+  const h = app.hud.hoverTile;
+  const next = h && g.owned(h.x, h.y) && rubbleAt(g, h.x, h.y) ? rubblePrice(h.x, h.y) : null;
+  const lines = [
+    { text: '{big:Clearing}' },
+    { text: `${d.n} tile${d.n === 1 ? '' : 's'} · {coin:${d.spent.toLocaleString('en-US')}}` },
+    { text: d.stop ? '{bad:out of coin}' : next !== null ? `this one {coin:${next.toLocaleString('en-US')}}` : '{soft:drag over rubble · let go to stop}' },
+  ];
+  app.ui.tipAlpha = 1;
+  app.ui.tip(lines, 170);
+  return true;
 }
 
 // ------------------------------------------------------------------ the Old Works' events

@@ -402,8 +402,9 @@ export interface KeptDesign {
 export interface TownPlan {
   id: number;
   name: string;
-  tiles: { x: number; y: number; item: ItemId; depth: number }[];
-  routes: { fx: number; fy: number; tx: number; ty: number; item: ItemId; skiffs: number }[];
+  /** each tile and route on its high floor (absent on older plans: the District) */
+  tiles: { x: number; y: number; item: ItemId; depth: number; floor?: HighFloorId }[];
+  routes: { fx: number; fy: number; tx: number; ty: number; item: ItemId; skiffs: number; floor?: HighFloorId }[];
 }
 
 /** The floors whose best design counts for Legacy (DESIGN.md §22). */
@@ -525,6 +526,10 @@ export interface MetaState {
   keptRoom?: { annex?: number; district?: number; world?: number };
   /** Field Notes (Unit 7's rep 5): `island:item` keys the Codex has paid on each island */
   fieldNotes?: string[];
+  /** the rubble cleared on each island (tile indices), kept through every Reorganize and Relocate in
+   * this universe (`universe` = the Last Folds taken when it was written: a new universe, or an
+   * island never cleared, lays it all again); absent on older saves (nothing cleared yet) */
+  cleared?: { universe: number; tiles: Partial<Record<WorldId, number[]>> };
   // ---- the Last Fold, layer 3 (DESIGN.md §23); absent on older saves (nothing folded yet)
   /** Kernels unspent, and ever earned; the Kernel tree's nodes bought */
   kernels?: Num;

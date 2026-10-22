@@ -11,6 +11,7 @@ import type { WorldId } from '../data/worlds';
 import type { State, TownPlan } from './world';
 import { applyHeadStarts } from './reorganize';
 import { mainItem } from './systems/modules';
+import { HIGH_IDS } from './systems/high';
 
 export interface LegacyRules {
   /** Patents each new island starts with */
@@ -121,29 +122,33 @@ export function setStanding(g: Game, at: number | null): ActResult {
 
 // ------------------------------------------------------------------ the Town Plan
 
-/** Keep the District as it stands as a plan: each module tile named by its product, and its routes. */
+/** Keep the high floors as they stand as a plan (the District, and the World and Beyond once they
+ * stand): each module tile named by its product, and its routes, by floor. */
 export function keepPlan(g: Game, name?: string): ActResult {
   const max = lrules(g).plans;
   if (!max) return no('Buy the Town Plan (a Legacy node) first');
-  const st = g.s.district;
-  if (!st) return no('The District is not open');
+  if (!g.s.district) return no('The District is not open');
   const m = g.s.meta;
   const plans = (m.plans ??= []);
   if (plans.length >= max) return no(`The Town Plan keeps ${max}: forget one first`);
-  const byId = new Map(st.ents.map((e) => [e.id, e]));
   const tiles: TownPlan['tiles'] = [];
-  for (const e of st.ents) {
-    if (e.kind !== 'module') continue;
-    const d = g.design(e.design);
-    const item = d ? mainItem(d) : null;
-    if (d && item) tiles.push({ x: e.x, y: e.y, item, depth: d.depth ?? 1 });
+  const routes: TownPlan['routes'] = [];
+  for (const floor of HIGH_IDS) {
+    const st = g.s[floor];
+    if (!st) continue;
+    const byId = new Map(st.ents.map((e) => [e.id, e]));
+    for (const e of st.ents) {
+      if (e.kind !== 'module') continue;
+      const d = g.design(e.design);
+      const item = d ? mainItem(d) : null;
+      if (d && item) tiles.push({ x: e.x, y: e.y, item, depth: d.depth ?? 1, ...(floor === 'district' ? {} : { floor }) });
+    }
+    for (const r of st.routes) {
+      const a = byId.get(r.from), b = byId.get(r.to);
+      if (a && b) routes.push({ fx: a.x, fy: a.y, tx: b.x, ty: b.y, item: r.item, skiffs: r.skiffs, ...(floor === 'district' ? {} : { floor }) });
+    }
   }
   if (!tiles.length) return no('No groups stand on the District to plan');
-  const routes: TownPlan['routes'] = [];
-  for (const r of st.routes) {
-    const a = byId.get(r.from), b = byId.get(r.to);
-    if (a && b) routes.push({ fx: a.x, fy: a.y, tx: b.x, ty: b.y, item: r.item, skiffs: r.skiffs });
-  }
   const id = (m.nextPlan ??= 1);
   m.nextPlan = id + 1;
   plans.push({ id, name: (name ?? '').trim().slice(0, 28) || `District plan ${id}`, tiles, routes });

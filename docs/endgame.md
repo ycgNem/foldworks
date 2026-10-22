@@ -32,8 +32,8 @@ order, and the second gate is reviewed before Act IV is built.
   **World**, takes depth-3 modules. **Relocate** (layer 2) flies the town to another island on
   the horizon: Patents, the tree and the record on file reset, **Legacy** is banked, and the new
   island's Workshop has its own rule (Pebble Isle: half the land; Cinder Isle: vents that heat
-  machines and melt belts beside them; Rime: machines need warmth from a Heater or their
-  neighbours; the Old Works: rubble and ruined machines to repair, some of them whole lines).
+  machines and melt belts beside them; Rime: machines need warmth from the power plant or their
+  neighbours (a Heater until the Acts IV-V review); the Old Works: rubble and ruined machines to repair, some of them whole lines).
   Each island has one exotic deposit and its own tier 4 product. Legacy automates layer 1
   (auto-reorganize, the regrader, contract runners). Megaprojects #4 and #5 want every island's
   product, so all four are visited.
@@ -213,8 +213,8 @@ the first gate).
 - **Islands** (`src/data/worlds.ts`, a world id in the state): **Home** (no rule), **Pebble Isle**
   (chunks C, D, F are sky: half the land; deposits richer), **Cinder Isle** (vent tiles: a
   machine beside one needs no power and burns no fuel; belts can't be laid beside one), **Rime**
-  (a powered machine runs at half speed unless a Heater is within 2 tiles or 2 working machines
-  touch it), **the Old Works** (rubble on half the land, cleared for coin; ruined machines
+  (a powered machine runs at half speed unless a working Boiler, Steam Engine or Generator is within
+  2 tiles or 2 working machines touch it; it was a Heater until the Acts IV-V review), **the Old Works** (rubble on half the land, cleared for coin; ruined machines
   repaired for a quarter of their price; two ruins are whole lines). Each has one exotic deposit:
   skyglass, cinderite, rime crystal, relics.
 - **Tier 4** (~12): Skyglass Lens, Cinder Alloy, Frost Alloy, Relic Gear, Storm Cell, Sunset Dye,
@@ -234,9 +234,10 @@ Ids every agent shares. Numbers are first passes; the sim agent sets them with d
   - `cinder` (Cinder Isle): **vent** tiles (fixed per island); a machine with a vent beside it (4
     sides) needs no power and burns no fuel; no belt can be laid on a tile beside a vent. Exotic:
     **cinderite**.
-  - `rime` (Rime): a powered machine runs at half speed unless a **Heater** (a new 1x1 Workshop
-    building, kind `heater`, burns coal; research *Thermals*) is within 2 tiles, or two working
-    machines touch it. Exotic: **rime crystal** (`rimeCrystal`).
+  - `rime` (Rime): a powered machine runs at half speed unless a working **Boiler, Steam Engine or
+    Generator** is within 2 tiles (3 with research *Thermals*), or two working machines touch it.
+    (Built first with a **Heater**, a 1x1 coal burner, kind `heater`; dropped after the Acts IV-V
+    review as Space Age's Aquilo: DECISIONS.md.) Exotic: **rime crystal** (`rimeCrystal`).
   - `oldworks` (the Old Works): **rubble** on half the land (cleared tile by tile for coin, command
     `clear`); **ruined machines** (an Ent flag `ruined`) repaired for a quarter of their price
     (command `repair`); two ruins are whole lines. Exotic: **relics** (`relic`).
