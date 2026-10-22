@@ -1853,3 +1853,28 @@ Act III bot's research retune was merged. Fixed in d9b33dc (sim and data) and tw
 
 The gate is marked **passed with conditions** in ROADMAP.md once the District UI and the Act III
 bot's re-measure land: the owner's play from the 15 h checkpoint is owed, as at the first gate.
+
+## Milestone 12: sound and juice (2026-10-22, built alongside Act IV)
+
+Built in a worktree while Act IV's sim and art were (it touches only the audio code, the settings
+and small hooks). Nothing on the ask-before list changed.
+- **Every sound is procedural** (the jsfxr bank stays empty): procedural sounds stay in one key (C
+  major; the coin and Codex chimes moved up to C6 for it) and take pitch and volume per call, and
+  jsfxr renders a sound the first time it plays (a hitch).
+- **The ambience is one voice per machine family**, louder by the square root of how many work on
+  screen, panned to their average position (within +-0.7), at most three families at once, ducked
+  to 30% under a panel, silent on the title, in a hidden tab and in an offline run. Belts, trunks,
+  modules (a low pulse) and skiffs (District) have their own.
+- **The fold's sound belongs to the app**, timed to the fold animation (a crease, four flaps, two
+  notes sliding into one: the line becoming one tile); the renderer's whoosh and flash stamp went.
+  Audit chimes climb the pentatonic with the grade (D two low notes to S+ six from C5 and a bell).
+- **`audio.resetSound(1 | 2 | 3)`** is the contract for the three reset layers: each the one before
+  and more (a boom for Relocate, a long swell for the Last Fold).
+- **Buses**: master, effects, ambience, interface (no music), sliders in Options, saved with the
+  M-key mute in `foldworks_settings`. **Reduced motion** is saved too, and now also thins the
+  confetti, drops the full-screen flashes, fades ribbons in place and stops the pip ripple.
+- **A pip that changes colour after holding one 1.5 s ripples once** in its new colour (0.4 s): the
+  hold keeps a machine flickering between working and waiting from rippling all the time (§17).
+- Mixing levels are untested by ear (nothing can be heard here): the owner's listen is owed.
+- **e2e**: `e2e/launch.mjs` uses `BASE` (default the dev server on 5210, which serves the main
+  checkout); an agent in a worktree starts its own Vite on a free port and sets `BASE`.
