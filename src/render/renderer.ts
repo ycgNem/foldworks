@@ -30,6 +30,7 @@ import { Platform } from './factory';
 import { DistrictPlatform, drawDistrict, type DistrictOverlay } from './district';
 import { HIGH } from '../data/floors';
 import { highW } from '../sim/systems/high';
+import { drawPip, shapeOf, stateShape, type PipShape } from './pips';
 
 /** seconds the paving takes to spread over a bought chunk */
 const PAVE_S = 0.7;
@@ -860,7 +861,7 @@ export class Renderer {
               this.bolt(x + 1, y + 1, C.pipYellow);
             }
           }
-          this.pip(x + W - TILE, y, col, blocked);
+          this.pip(x + W - TILE, y, col, blocked, col === C.pipGrey && !e.paused ? 'idle' : stateShape(e));
         }
       }
     }
@@ -883,8 +884,9 @@ export class Renderer {
         else if (gr.producers.length) col = C.pipGreen;
         else col = C.pipBlue;
       }
-      // the Pole's pip sits low-right: its crossarm fills the top
-      this.pip(x, y + 11, col, false);
+      // the Pole's pip sits low-right: its crossarm fills the top (Milestone 13: its shape sits
+      // a row higher than before, so its outline stays on the tile)
+      this.pip(x, y + 9, col, false);
       return;
     }
     const working = e.state === 'work';
@@ -972,7 +974,7 @@ export class Renderer {
   }
 
   /** the status pip, the top-right 4x4 of the tile at (x, y) (DESIGN.md §4, §17); blocked pips blink */
-  private pip(x: number, y: number, col: string, blink: boolean) {
+  private pip(x: number, y: number, col: string, blink: boolean, shape: PipShape = shapeOf(col)) {
     const ctx = this.ctx;
     // Milestone 12: a pip that changes colour after holding one for 1.5 s ripples out once in its
     // new colour (0.4 s); a machine flickering between working and waiting each craft does not
@@ -982,14 +984,9 @@ export class Renderer {
       this.pipCol.set(key, { col, since: this.time });
     }
     const age = this.time - (this.pipAt.get(key) ?? -9);
-    if (age < 0.4) { const r = 1 + Math.round(age * 7); ctx.strokeStyle = rgba(col, 1 - age / 0.4); ctx.lineWidth = 1; ctx.strokeRect(x + 11 - r + 0.5, y - r + 0.5, 4 + r * 2, 4 + r * 2); }
-    if (blink && Math.floor(this.time * 3) % 2) col = C.rust;
-    ctx.fillStyle = C.ink;
-    ctx.fillRect(x + 11, y, 5, 5);
-    ctx.fillStyle = col;
-    ctx.fillRect(x + 12, y + 1, 3, 3);
-    ctx.fillStyle = rgba(C.bone, 0.6);
-    ctx.fillRect(x + 12, y + 1, 1, 1);
+    if (age < 0.4) { const r = 1 + Math.round(age * 7); ctx.strokeStyle = rgba(col, 1 - age / 0.4); ctx.lineWidth = 1; ctx.strokeRect(x + 10 - r + 0.5, y + 1 - r + 0.5, 4 + r * 2, 4 + r * 2); }
+    // Milestone 13: a shape as well as a colour (src/render/pips.ts)
+    drawPip(ctx, x, y, col, blink, this.time, shape);
   }
 
   private frontArrow(e: Ent) {

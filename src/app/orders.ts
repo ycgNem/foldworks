@@ -25,6 +25,7 @@ import { T } from '../ui/theme';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
 import { committeeFallback } from './reorganize';
+import { itemEta, orderEta } from './rates';
 import { bookArea, castPortrait, bubbleHeight, heading, ROW_H, tick } from './ledger';
 
 // Milestone 5: the Committee is the fourth customer (met through src/sim/reorganize.ts customerMet)
@@ -175,6 +176,8 @@ function orderSlip(app: App, d: OrderDef, x: number, y: number, w: number, h: nu
   if (active && hx + chipWidth('ACTIVE') < bx - 30) { hx += chip(ui, hx, y + 4, 'ACTIVE', { role: 'good', solid: true }) + 4; }
   const pc = `${Math.floor(f * 100)}%`;
   ui.text(pc, bx - 5, y + 6, f >= 1 ? T.good : T.inkSoft, { align: 'right' });
+  const eta = f < 1 ? orderEta(app, d.id) : null; // Milestone 13: how long, at what arrives now
+  if (eta) ui.hint(bx - 5 - textWidth(pc), y + 5, textWidth(pc), 10, [{ text: `{u:clock} ${eta}` }, { text: '{soft:at what is delivered now}' }], 170);
   if (button(ui, 'ord:' + d.id, bx, y + 3, bw, 15, active ? 'Set aside' : 'Accept', { gold: !active, active, pulse: !active && !o.active, tip: active ? [{ text: '{u:pause} stop filling it · progress is kept' }] : [{ text: d.pitch }, { text: '{u:orders} what reaches a Dock fills it first, then sells', color: T.inkSoft }] })) app.act({ k: 'order', id: active ? null : d.id });
   // the wants (icon, count, meter) and the pay chips, flowing
   const fl = flow(app, d, w - 12);
@@ -187,7 +190,7 @@ function orderSlip(app: App, d: OrderDef, x: number, y: number, w: number, h: nu
       ui.ctx.drawImage(itemIcon(pz.item!), px, py + 1);
       ui.text(`${fmt(have)}/${fmt(n)}`, px + 11, py, have >= n ? T.good : T.ink);
       meter(ui, px + 11, py + 10, pz.w - 11, 4, have / n, { role: have >= n ? 'good' : 'warn', glint: false });
-      ui.hint(px, py - 1, pz.w, 16, `{i:${pz.item}} ${ITEMS[pz.item!].name} · ${fmt(have)} of ${fmt(n)} delivered`, 170);
+      ui.hint(px, py - 1, pz.w, 16, [{ text: `{i:${pz.item}} ${ITEMS[pz.item!].name} · ${fmt(have)} of ${fmt(n)} delivered` }, { text: itemEta(app, pz.item!, n - have) }], 170); // Milestone 13: its rate
     } else {
       const cc = pz.c!;
       chip(ui, px, py + 1, cc.text, { role: cc.role, icon: cc.icon });

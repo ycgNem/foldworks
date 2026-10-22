@@ -865,6 +865,23 @@ STATES.act2toasts = {
 // round: the name, what it does, the one cause worth fixing, the rate; the rest pinned by a click),
 // beside the kiln and clear of the build bar
 STATES.act2hover = { base: 'act2power', post: () => { const a = window.__app; a.selected = null; return { hover: [21, 1] }; } };
+// Milestone 13 (onboarding, UX and accessibility): a lesson card (on the Workshop, and on the
+// District under its tool strip), the stuck-finder's answer on each floor, the Keys page moving a
+// key and after it moved, and the largest UI scale the window takes (the HUD and Options)
+STATES.lessonCard = { base: 'act2power', post: () => { const a = window.__app; a.selected = null; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.lessons.show(a, 'brownout'); } };
+STATES.lessonStart = { base: 'start', post: () => { const a = window.__app; a.selected = null; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.lessons.show(a, 'starved'); } };
+STATES.lessonDistrict = { base: 'district', post: () => { const a = window.__app; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.lessons.show(a, 'shortRoute'); } };
+STATES.stuckAnswer = { base: 'act2power', post: () => { const a = window.__app; a.selected = null; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.whereStuck(); } };
+STATES.stuckFactory = { base: 'factory2', post: () => { const a = window.__app; a.toasts = []; a.onboarding.whereStuck(); } };
+// (every lot bought: the District's pinned report does not keep off the lot's Buy button, a District
+// UI matter noted for its owner, and a module pinned at the floor's east edge sits on it)
+STATES.stuckDistrict = { base: 'district', post: () => { const a = window.__app; a.toasts = []; for (let i = 0; i < 3; i++) a.act({ k: 'hlot', floor: 'district' }); a.game.events.drain(); a.toasts = []; a.fitCamera(true); a.onboarding.whereStuck(); } };
+STATES.keysRebind = { base: 'act2power', post: () => { const a = window.__app; a.panel = 'keys'; a.onboarding.keys.capture(a, 'KeyF'); } };
+STATES.keysMoved = { base: 'act2power', post: () => { const a = window.__app; a.panel = 'keys'; a.onboarding.keys.capture(a, 'KeyF'); a.onboarding.keys.press(a, 'KeyV'); } };
+STATES.keysMovedHud = { base: 'act2power', post: () => { const a = window.__app; a.selected = null; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.keys.capture(a, 'KeyR'); a.panel = 'keys'; a.onboarding.keys.press(a, 'KeyK'); a.panel = null; a.selected = a.game.entAt(21, 1).id; } };
+STATES.uiScaleMax = { base: 'act2power', post: () => { window.__app.onboarding.setUiScale(99); } };
+STATES.uiScaleOptions = { base: 'act2power', post: () => { const a = window.__app; a.onboarding.setUiScale(99); a.panel = 'options'; } };
+STATES.uiScaleSmall = { base: 'act2power', post: () => { window.__app.onboarding.setUiScale(1); } };
 for (const s of ACT2) STATES[s] = s;
 for (const s of WORKSHOP) STATES[s] = { ws: s };
 for (const s of M5) STATES[s] = { m5: s };
@@ -889,6 +906,9 @@ async function main() {
       if (only.length && !only.includes(state)) continue;
       const name = `${w}x${h}-${state}`;
       const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.d ? await page.evaluate(districtSetup, f.d) : f.a3 ? await page.evaluate(act3Setup, f.a3) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post)) : await page.evaluate(f));
+      // Milestone 13: lesson cards held off (a state asks for its own), the keys and the UI scale
+      // as they came (the states that change them come last in a size's run, or put them back here)
+      await page.evaluate(() => { const o = window.__app.onboarding; o.lessons.hold(true); o.keys.reset(window.__app); let st = {}; try { st = JSON.parse(localStorage.getItem('foldworks_settings') || '{}'); } catch {} if (st.uiScale) o.setUiScale(0); });
       const r = await run(fn);
       // the goal card slides in when its goal changes: a state set from scratch shows it at rest
       await page.evaluate(() => { window.__app.hud.goalKey = null; });

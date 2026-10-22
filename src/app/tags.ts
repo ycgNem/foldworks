@@ -191,12 +191,13 @@ function machineReport(app: App, e: Ent): Report {
   else if (odOn && cool > 0) rows.push(rich(`{chip:soft:COOLING ${Math.ceil(cool / TICK_RATE)}s}`));
   // ---- the recipe, the rate now, a bar against its rate when busy
   if (nom.outs.length) {
-    const busy = nom.outs[0].perMin;
+    // Milestone 13: at its recipe and its mode (Tuning's speeds), and what it makes now
+    const busy = nom.outs[0].perMin * (powered(e.kind) ? modeSpeed(e) : 1);
     const now = busy * sh.work * pf;
     const ins = nom.ins.map((i) => icon(i.item)).join(' ');
     const outs = nom.outs.map((o) => icon(o.item)).join(' ');
-    rows.push(rich(`${ins ? ins + ' → ' : ''}${outs}  ${pm(now)}/min`));
-    rows.push({ t: 'bar', frac: busy > 0 ? now / busy : 0, role: now >= busy * 0.9 ? 'good' : 'warn', note: `of ${pm(busy)}/min` });
+    rows.push(rich(`${ins ? ins + ' → ' : ''}${outs}  ${pm(now)}/min${Math.abs(now - busy) > 0.05 ? ` {soft:of ${pm(busy)}}` : ''}`));
+    rows.push({ t: 'bar', frac: busy > 0 ? now / busy : 0, role: now >= busy * 0.9 ? 'good' : 'warn' });
     if (nom.outs.length > 1) more.push(rich(`out ${nom.outs.map((o) => `${icon(o.item)} ${pm(o.perMin)}/min`).join('  ')}`));
   }
   // ---- feeders

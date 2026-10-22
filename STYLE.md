@@ -57,7 +57,11 @@ Rules:
 - Every pixel snaps to the palette (`scripts/lib/pixel.mjs`; `common.export` checks). No
   semi-transparent pixels in sprites; fades are done by code.
 - Pips differ by lightness as well as hue (yellow > green > blue > red > grey in OKLab L), and
-  code adds shape: blocked pips blink.
+  by shape (Milestone 13, `src/render/pips.ts`): a 5x5 shape of the pip colour in a 1 px ink
+  outline at the tile's top-right (x+10, y+1): working a round dot, starved a funnel pointing
+  down, blocked a square (it blinks), stopped two bars, no power a bolt, idle a ring (grey pips
+  drawn in `hull2` so the ring reads). Status chips in reports carry the same shape; the Keys page
+  has the legend.
 
 ## Sizes and grid
 
