@@ -2379,3 +2379,43 @@ UI drawing, the save layer's storage and encoding, e2e, CI and docs only (no `sr
 - **H reads "Photo mode"** on the Keys page (it was "HUD on/off" with no handler; photo mode took it).
 - **The high floors' tick**: route groups, skiff numbers and the Dock cached (DESIGN.md §25): the
   full late game's tick 1.52 -> 0.90 ms, the same fingerprint after 2,000 ticks.
+
+## The Acts IV-V review (idle-critic, 2026-10-22)
+Verdicts: **Act IV conditional** (the islands change Workshop layouts and read well; the climb the
+40-80 h schedule rests on is unmeasured and the one run is behind the model at 40 h); **Act V fail
+until its economy is fixed** (the Last Fold as a whole-World audit is the endgame's best idea, but
+Kernels reward stamping copies and the reset strips layer 2's automation and starves Legacy);
+**the long tail a checklist past 40 h** (bonuses cap out by Act III; Act IV-V trophies pay start
+coin; the Ledger pays ribbons). What is decided for each finding (fixes by four agents, each
+writing its own entry below):
+- **Blocking 1, the Standing Committee reorganizes during an offline replay** (runs 5 -> 6, the
+  District emptied, the report "coin -21.3M"): fixed; the Committee never fires while away and the
+  return card says when it would have.
+- **Blocking 2, the Last Fold takes Act IV's automation away** and Legacy dries up in universe 2
+  (its Megaproject stages are kept, so a Relocate pays ~14): the Automation branch is kept through
+  every Last Fold for good (pillar 2: what was automated stays automated); Kept Legacy keeps head
+  starts and softeners; a universe's Megaproject stages standing count once, at its first Relocate.
+- **Blocking 3, Act IV's pacing is unmeasured**: the Act IV bot (being written) reports the island
+  climb per island, each floor's best design value, and the Patent preview at 30-40 h.
+- **Kernels count copies** (100 minimal chains = 100 Kernels): each (product, depth)'s best value,
+  plus a quarter for each further copy. **Legacy counts the District's best twice**: the World's
+  term is its distinct designs at work. **Universe 2's 30 h replay to Beyond**: the Seed carries
+  Acts I-II's research into each new universe. **The Last Fold's "raises it"** reads the audit's
+  own advice.
+- **The offline report can't see the high floors**: rows for a starved high-floor module and a
+  short route. **The offline replay costs 24-38 s** (0.05 ms a tick was assumed): a deterministic
+  compute budget (by the number of things that tick) shortens the replayed window.
+- **Rubble comes back every run**: cleared tiles are kept per world, and rubble clears by drag.
+  **The Town Plan covers only the District**: it covers every high floor.
+- **Rime is Space Age's Aquilo** (freezing unless heated, a heating building with a radius; missed
+  by the first flags): re-derived, the Heater dropped; warmth comes from two working neighbours and
+  from the factory's own power plant (Boilers, Steam Engines, Generators) within 2 tiles.
+- **Late trophies pay into capped kinds**: Act IV-V trophies give an Act IV-V rule or a cosmetic,
+  and a capped bonus says so on its sticker. **The Ledger**: it turns through tier 3-5 goods too,
+  and every tenth order pays a lore page or a rule as well as its cosmetic.
+- Smaller: the island slip hides on the high floors (its rule is the Workshop's); "Presss"; a cut
+  module name on Beyond's report; tooltips over their own buttons; the Ledger's ribbon labels.
+- **Kept open**: the Kernel tree has nothing to buy after about the third Last Fold (the Ledger is
+  the endless part); Cinder and the Old Works resemble Vulcanus and Fulgora only loosely (rules
+  differ: vents forbid belts; ruins repair); the owner rules on the Factorio debt as one set
+  (chemistry, wide belts, the planets frame).
