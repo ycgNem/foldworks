@@ -489,11 +489,17 @@ export function applyHeadStarts(g: Game, ids: readonly PatentId[] = g.s.meta.nod
   // Charting in a world whose World floor has stood
   const lr = lrules(g);
   if (lr.archive) for (const r of RESEARCH_IDS) if ((RESEARCH[r].act ?? 1) === 1) add(r);
+  // the Seed (DESIGN.md §23, the prestige review): every run of a universe after the first knows
+  // Acts I-II's research (the Town Archive's Act I and the Factory's sixteen nodes after it)
+  if (seedKnows(g)) for (const r of RESEARCH_IDS) if ((RESEARCH[r].act ?? 1) <= RULES.seedActs.value) add(r);
   if (lr.charts && s.meta.here?.opened) add('charting');
   // in the tree's order, so the research screen and the bots read them as researched in turn
   s.research.done = RESEARCH_IDS.filter((r) => research.has(r));
   g.layoutDirty = true;
 }
+
+/** The Seed's head start holds: a universe after the first, outside a Scenario (DESIGN.md §23). */
+export const seedKnows = (g: Game) => (g.s.meta.lastFolds ?? 0) >= 1 && !g.s.scenario;
 
 /** The run's length so far, in seconds. */
 export function runSeconds(g: Game): number {

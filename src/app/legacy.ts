@@ -252,7 +252,7 @@ function nodePage(app: App, id: LegacyId, r: Rect, live: boolean) {
   y += TL.h + 3;
   // owned: its controls; else its price and what it needs
   if (own && live) y = controls(app, id, r.x, y, r.w, foot - 2);
-  else if (own) y += drawRich(ui, '{good:in effect} · for good, through every move', r.x, y, r.w, T.ink) + 3;
+  else if (own) y += drawRich(ui, d.branch === 'auto' ? '{good:in effect} · for good, through every move and every Last Fold' : '{good:in effect} · for good, through every move', r.x, y, r.w, T.ink) + 3;
   else {
     const have = g.s.meta.legacy ?? Num.ZERO;
     const cw = chip(ui, r.x, y, `${d.cost} Legacy`, { role: have.gte(d.cost) ? 'coin' : 'soft', solid: have.gte(d.cost) });
@@ -269,7 +269,9 @@ function nodePage(app: App, id: LegacyId, r: Rect, live: boolean) {
   if (y + FL.h + 4 <= foot - 2) drawLayout(ui, FL, r.x, foot - 3 - FL.h, T.inkSoft);
   const why = own ? null : legacyRefusal(g, id);
   const lab = own ? `${ICON.check} Yours for good` : `Buy · ${d.cost} Legacy`;
-  if (button(ui, 'legacyBuy', r.x, foot, r.w, 18, lab, { disabled: own || !!why, gold: !own && !why, tip: own ? '{u:legacy} it lasts through every Relocate' : why ?? '{u:legacy} bought for good · it lasts through every Relocate' })) buy(app, id);
+  // the Automation branch is kept through every Last Fold too (DESIGN.md §23, the prestige review)
+  const lasts = d.branch === 'auto' ? 'it lasts through every Relocate and every Last Fold' : 'it lasts through every Relocate';
+  if (button(ui, 'legacyBuy', r.x, foot, r.w, 18, lab, { disabled: own || !!why, gold: !own && !why, tip: own ? `{u:legacy} ${lasts}` : why ?? `{u:legacy} bought for good · ${lasts}` })) buy(app, id);
 }
 
 /** An owned node's controls on the right page. Returns the y under them. */

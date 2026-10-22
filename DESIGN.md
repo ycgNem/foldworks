@@ -1739,7 +1739,7 @@ island other than this one, with no audit running, when the preview is at least 
 
 - **Kept:** Legacy and the Legacy tree; every Megaproject's stages and progress; reputation; the
   Codex and Field Notes; the Patent Drawer; trophies, lifetime statistics, Challenges won; the
-  worlds' records.
+  worlds' records. (A Last Fold keeps the tree's Automation branch for good too, §23.)
 - **Lost:** everything a Reorganize loses (§19), and the **Patents** (unspent and the tree: Old
   Habits keeps the nodes chosen), the **record on file** (every product files again on the new
   island), and the room the Sky Anchor kept through Reorganizes (until its last stage).
@@ -1748,24 +1748,51 @@ island other than this one, with no audit running, when the preview is at least 
 
     Legacy = floor( (sum over the Workshop, Factory, District and World of
                      the best value folded there this world) / 4
-                    + 3 x Megaproject stages done this world
+                    + 3 x Megaproject stages counted
                     + 5 for an island not visited before )
 
+    World's term = (sum over the distinct designs at work on the World, by product and
+                    depth, of each one's best value) / 4          (RULES.legacyWorldDesigns)
+
+    stages counted = the stages done this world
+                   + at the first Relocate of a universe from an island, the stages that
+                     stood on it when the universe began                    (meta.inherited)
+
 A floor's best value is its best design's steps x grade x rate tier, as filing (§19): the
-Workshop's best depth-1 fold, the Factory's best nested fold, the District's best fold of groups,
-and the World's best module **put to work** there (60 s straight at half speed or better: placing
-it is not enough). "This world" is since the last Relocate: its bests are kept through its
-Reorganizes (`meta.here`), so Legacy is the whole world's, not the last run's. No coin, no root of
-a currency, no log: it counts the best of what was folded on each floor, what was built, and where
-the town has been.
+Workshop's best depth-1 fold, the Factory's best nested fold, the District's best fold of groups.
+The World's is not its best module (that was the District's best counted again, the Acts IV-V
+review): it is the **summed value of the distinct designs put to work** there (60 s straight at
+half speed or better: placing one is not enough), each product and depth once at its best, **over
+4**. A copy adds nothing to Legacy (copies are what the Last Fold's Kernels count, at a quarter,
+§23). "This world" is since the last Relocate: its bests are kept through its Reorganizes
+(`meta.here`), so Legacy is the whole world's, not the last run's. No coin, no root of a currency,
+no log: it counts the best of what was folded on each floor, what was built, and where the town has
+been.
+
+**Stages count once a universe.** A Megaproject is kept through every reset, the Last Fold too, so
+in universe 2 every stage already stands and none is "done this world": a Relocate there paid only
+its folds and the island, about 14 (the review). The Last Fold hands the next universe the stages
+standing, by the island whose Relocate banks them (`stagesStanding`: the Great Drill's, the City's
+and the Transmuter's are Home's, where every universe begins; each stage of #4 and #5 its own
+island's), and the first Relocate from each island in that universe counts its share, then forgets
+it. So universe 2's Relocates pay what universe 1's did, island by island: 21 for Home's seven at
+the first, 6 for an island's two at its first visit, nothing twice.
 
 The numbers: a world built to its World floor holds about 30-40 of value (four floors at 7-10:
-steps x grade x tier) and so **8-10 Legacy from its folds**. The first Relocate (from Home, about
-40-45 h) adds the Home world's seven stages (the Great Drill's three, the City's and the
-Transmuter's two each: 21) and 5 for a new island: **about 35**, a third of the tree. A first
-visit to each island: folds 8-12, two stages (one of each project) 6, the new island 5: **about
-20**. A revisit: **8-18**. The tree is 103 Legacy, so it is bought out after the four islands
-(35 + 3 x 20 = 95) and a revisit, about 75-80 h. Divisor, stage and island weights: `RULES.legacy*`.
+steps x grade x tier) and so **8-10 Legacy from its folds**. The World's 7-10 is its kinds: a
+well-built World runs **4-5 kinds** of District group (an Engineer group, a Robot Arm group, the
+island's two or three tier 4 goods, the Lamp or the Chain) at 7-10 each, 30-45, over 4 is 7.5-11;
+one kind alone is 2. The first Relocate (from Home, about 40-45 h, the World just open with 2-3
+kinds: its term 4-6) banks folds 7-9, the Home world's seven stages (the Great Drill's three, the
+City's and the Transmuter's two each: 21) and 5 for a new island: **about 33-35**, a third of the
+tree. A first visit to each island: folds 8-12, two stages (one of each project) 6, the new island
+5: **about 20**. A revisit: **8-18**. The tree is 103 Legacy, so it is bought out after the four
+islands (35 + 3 x 20 = 95) and a revisit, about 75-80 h. **Each later universe's first Relocate is
+the same 33-35** (Home's seven stages inherited, the islands unvisited again; with Kept Islands its
+folds count the records from the first run), and its island visits the same 20; but a universe
+after the first owns the Automation branch already (56 of the 103), so its Legacy buys the 47 of
+head starts and softeners and has room to spare. Divisor, stage, World and island weights:
+`RULES.legacy*`.
 
 ### The Legacy tree
 Seventeen nodes in three branches, **flat prices** with prerequisites (no geometric curve, no
@@ -1794,7 +1821,12 @@ of about 0 at 30-40 h).
 | Salvage Crews | 4 | - | on the Old Works ruins repair for nothing and clear the rubble around them |
 
 The automation runs in the automation stage (right after the input commands), every 5 s (10 s
-for the Committee), never as a logged command, so a replay does the same.
+for the Committee), never as a logged command, so a replay does the same. **The Automation branch
+(the eight nodes from the Clerk to the Group Drawer) is kept through every Last Fold for good**
+(pillar 2: what was automated stays automated; the Acts IV-V review found the Clerk, the Committee,
+the Regrader, the Town Plan and the Runners all back to manual in universe 2), with the Committee's
+number and the Town Plan's layouts. The head starts and the softeners go, but those Kept Legacy
+keeps (§23), and the Town Archive, which the Seed keeps (it knows Acts I-II's research).
 
 ### Orders and reputation, Act IV
 Eight orders, two a customer, each wanting one island's goods at about **2.1x** their Dock value
@@ -1899,27 +1931,57 @@ next goal forever. The plan and the contract ids: `docs/endgame.md` (Milestone 1
 
       Kernels = floor( value / 10 ) + the grade bonus (S+ 5, S 4, A 3, B 2, C 1, D 0)
 
-  `value` sums the value (steps folded x grade x rate tier, as filing, §19) of **every module at
-  work**: on the World each module the audit found at half speed or better; on Beyond each module run
-  60 s straight at half speed or better (`legacyRunSeconds`, §22). A depth-4 module counts the World
-  group folded into it (`lastFoldValue`: the sum of its parts), so folding a group up to Beyond never
-  loses Kernels. Before the audit the preview counts modules by their 60 s and no grade.
+      value = sum over each kind (product and depth) at work of
+                its best module's value + 1/4 x each further copy's value   (RULES.kernelCopyShare)
+
+  A module's value is steps folded x grade x rate tier, as filing (§19); it is **at work** on the World
+  when the audit found it at half speed or better, on Beyond when it has run 60 s straight at half
+  speed or better (`legacyRunSeconds`, §22). A depth-4 module counts the World group folded into it
+  (`lastFoldValue`: the sum of its parts), so folding a group up to Beyond never loses Kernels. Before
+  the audit the preview counts modules by their 60 s and no grade. **A copy counts a quarter** (the
+  Acts IV-V review: summing every module made 100 minimal Engineer chains 100 Kernels, twice the
+  51-Kernel tree): a stamp still pays (growth by stamps, PLAN.md), but a new kind of group pays four
+  times a copy of one already there, so the World is filled with different lines, not one line a
+  hundred times. 100 copies of an Engineer chain (10) are now 10 + 99 x 2.5 = 257, **25 Kernels**,
+  half the tree. (The critic's other rule, value x min(1, scale / tierStep), was not taken: it
+  discounts small lines, not copies, and the rate tier already pays scale.)
 - **The numbers.** A depth-3 group is worth 6-9 (a Robot Arm group fed steel: 4 steps + 1 for its
   depth x S 1.25 = 6.25; a whole Engineer chain, 7 + 1 at S, 10: §22's "7-10"). A World of 25 groups at
-  about 8 is 200 of value, **20 Kernels**, and a B adds 2: **about 22 at the first Last Fold**, enough
-  for two or three nodes (the tree's 2-8 each; 51 in all). The bonus is one Kernel a letter: a grade,
-  not a multiplier, so a bigger World always counts for more than a better-graded small one, and filling
-  the World (C) is what raises the grade. No coin, no root, no log of a currency: §15's sketch ("log10 of
-  the World's output value") is replaced, as Patents and Legacy count folds, never coin.
+  about 8 runs about **7 kinds** (the Engineer, Arm, Servo and Sensor groups, the last island's two
+  tier 4 goods, the Lamp or the Chain): 7 x 8 = 56 in full and 18 copies x 2 = 36, **92 of value, 9
+  Kernels**, and a B adds 2: **about 11 at the first Last Fold** (was 22 under the old sum: that
+  number no longer holds). It buys **two nodes**: the Ledger and Beyond (10), so the first universe's
+  reward is the fifth floor and a next goal forever; Wide Belts waits for the second. The 51-Kernel tree
+  lasts to about the fourth Last Fold, which eases the review's kept-open item (nothing to buy after
+  the third). The bonus is one Kernel a letter: a grade, not a multiplier, so a bigger World always
+  counts for more than a better-graded small one, and filling the World (C) is what raises the grade.
+  No coin, no root, no log of a currency: §15's sketch ("log10 of the World's output value") is
+  replaced, as Patents and Legacy count folds, never coin.
+- **What raises it** on the card is the audit's own advice, weakest part first (`advice[0]`: "21 of
+  190 tiles are modules", "Robot Arm II ran 40% (starved of steel)"), not "run the World better"
+  (the review: it said so with C at 11%); then each idle module (a copy at a quarter) and a new kind of
+  group (about +0.8).
 - **Kept:** Kernels and the Kernel tree; every Megaproject (so the next universe's Last Fold research
-  is open as soon as Charting is); reputation, the Codex and Field Notes, trophies, the counters and
+  is open as soon as Charting is), and its stages standing count for Legacy once more, at the first
+  Relocate from their island (§22); reputation, the Codex and Field Notes, trophies, the counters and
   lifetime statistics, the run history; the Patent Drawer; Challenges won; the Night Shift; the Endless
-  Ledger and its cosmetics. With **Kept Islands** the worlds' records, with **Kept Legacy** up to four
-  chosen Legacy nodes (`{ k: 'keepLegacy', id }`).
-- **Lost:** everything a Relocate loses (§22: every floor, coin, items, land, research, designs,
-  claims, Patents and the Patent tree, the record on file, the room the Sky Anchor kept), plus **Legacy**
-  (unspent and the tree; the Standing Committee's number and the Town Plan's layouts go with their
-  nodes), **the worlds' records** and **the islands visited** (each is new again: +5 Legacy each, §22).
+  Ledger and its cosmetics; **the Legacy tree's Automation branch** for good, with the Committee's
+  number and the Town Plan's layouts (§22, the review); **Acts I-II's research** in every run (the
+  Seed's head start, below), and so the Town Archive. With **Kept Islands** the worlds' records, with
+  **Kept Legacy** up to four chosen head starts or softeners (`{ k: 'keepLegacy', id }`; an Automation
+  node or the Archive is refused: kept already).
+- **Lost:** everything a Relocate loses (§22: every floor, coin, items, land, Act III's research on,
+  designs, claims, Patents and the Patent tree, the record on file, the room the Sky Anchor kept), plus
+  **Legacy** (unspent, and the head starts and softeners not kept), **the worlds' records** and **the
+  islands visited** (each is new again: +5 Legacy each, §22).
+- **The Seed's head start** (`RULES.seedActs`, `applyHeadStarts`): every run of a universe after the
+  first knows **Acts I-II's 26 research nodes** (the Archive's ten and the Factory's sixteen, to the
+  Great Drill's). The review: universe 2 replayed Acts I-II's research on every island with every
+  Megaproject done, so its Acts II-III had no spine and Beyond opened at about 105-115 h. Act III's
+  chemistry and the District are still researched in every run, so a run still climbs; what goes is
+  the first 4-5 h of research a first universe needed, which the Purse's ten Patents only half bought
+  back. The model (not measured: no Act V bot): an island's climb to its World 1-2 h shorter, the second
+  universe's World at about 20-30 h, not 25-35.
 - **The new universe starts on Home** (decided): the Seed is planted where the town began, on the
   island with no rule, so the new base rules are met on plain ground first; and every island is a first
   visit again. The Seed's card (`meta.seeds`: universe, grade, value, Kernels, modules, the top product,
@@ -1949,11 +2011,12 @@ rule the universe is built under; none is "+X% everything" (PLAN.md). Read throu
 | Seedling | 3 | - | the Seed digs every **2 s** a side (a Miner's pace) |
 | Long Nights | 3 | - | the offline ceiling **0.85** (was 0.75, §20) and **+0.1** toward it: a closed game still pays less than open idle (§16 rule 4) |
 | Kept Islands | 4 | - | the worlds' records survive a Last Fold, and an island's record stands as a floor's best of a world begun there (its Legacy counts from the first visit, about 8-10 a world, §22) |
-| Kept Legacy | 6 | Kept Islands | keep **4** Legacy nodes you choose through a Last Fold (as Old Habits keeps four Patent nodes through a Relocate) |
+| Kept Legacy | 6 | Kept Islands | keep **4** head starts or softeners you choose through a Last Fold (as Old Habits keeps four Patent nodes through a Relocate); the Automation branch is kept anyway, the Archive by the Seed |
 
-The first Last Fold's ~22 buys, for instance, the Ledger, Beyond, Wide Belts and Seedling (21); the
-second (about 110-120 h, a universe rebuilt with its Megaprojects, reputation, Drawer and Codex kept)
-another 25-30, and the tree is bought out at the third.
+The first Last Fold's ~11 buys the Ledger and Beyond (10); the second (about 105-110 h, a universe
+rebuilt with its Megaprojects, reputation, Drawer, Codex, Automation and Acts I-II's research kept,
+and Beyond's depth-4 modules counting their parts) about 15-20, Wide Belts and two more; the tree is
+bought out at about the fourth.
 
 ### The Second Cookbook
 Learned with the Kernel and the research of the product (`alt` on the recipe; `recipeKnown`). Each is
@@ -2031,8 +2094,8 @@ whole-World audit, a Last Fold and Kernel nodes from the command log.
 - **The Last Fold available at about 80 h**: the Lighthouse and the Sky Anchor done on the fourth
   island (75-80 h, §22), then its research (1-1.5 h).
 - **The first Kernel spend at about 85-100 h**: the fold is worth 0.1 Kernel a unit of value standing,
-  so a player fills the World (each group about +0.8, the grade +1 a letter) before folding; the spend
-  follows the fold at once.
+  so a player fills the World (each new kind of group about +0.8, a copy +0.2, the grade +1 a letter)
+  before folding; the spend follows the fold at once.
 - **A next goal forever**: the Ledger's open order (10-20 min of one line at first), a cosmetic every
   tenth, tier 5 research on each island, Beyond's lots, and the tree's next node. **Open:** at a fixed
   factory the Ledger's wait grows linearly (order n wants n + 1 bases); it stays inside §16 rule 1's hour
@@ -2040,8 +2103,9 @@ whole-World audit, a Last Fold and Kernel nodes from the command log.
   bot yet; these are the model's numbers.
 - **Resets get faster (rule 3)**: a universe keeps its Megaprojects (the Great Drill's +50% and deep
   seams, the Factory's ninth row, every Lighthouse and Anchor rule), reputation, the Codex and the
-  Drawer, and the Kernels bend the rules in its favour; the second universe's climb to its World is the
-  model's 25-35 h against the first's 80.
+  Drawer, the Legacy tree's Automation and Acts I-II's research (the Seed), and the Kernels bend the
+  rules in its favour; the second universe's climb to its World is the model's 20-30 h against the
+  first's 80 (not measured).
 
 ### Not built (decided)
 - **No Megaproject #6** at Beyond's Bay. A sixth project would need a reward that is a rule and a reason

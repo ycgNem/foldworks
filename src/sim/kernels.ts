@@ -97,16 +97,20 @@ export function openKernels(g: Game): KernelId[] {
   return KERNEL_IDS.filter((id) => !hasKernel(g, id) && KERNELS[id].requires.every((q) => hasKernel(g, q)));
 }
 
-/** Kept Legacy: keep a Legacy node through the next Last Fold (again: no longer). */
+/** Kept Legacy: keep a head start or a softener through the next Last Fold (again: no longer). */
 export function setKeptLegacy(g: Game, id: LegacyId): ActResult {
   const slots = krules(g).legacySlots;
   if (!slots) return no('Buy Kept Legacy (a Kernel node) first');
   if (!LEGACY[id]) return no('No such Legacy node');
   if (!g.s.meta.legacyNodes?.includes(id)) return no('Keep a node you own');
+  // the Automation branch is kept through every Last Fold for good, and the Seed knows what the
+  // Archive knew: Kept Legacy is for head starts and softeners (DESIGN.md §23, the prestige review)
+  if (LEGACY[id].branch === 'auto') return no(`${LEGACY[id].name} is Automation: kept through every Last Fold already`);
+  if (id === 'townArchive') return no('The Seed knows Acts I-II\'s research: the Town Archive is kept already');
   const k = (g.s.meta.keptLegacy ??= []);
   const i = k.indexOf(id);
   if (i >= 0) { k.splice(i, 1); return OK; }
-  if (k.length >= slots) return no(`Kept Legacy keeps ${slots}: let one go first`);
+  if (k.filter((n) => LEGACY[n]?.branch !== 'auto' && n !== 'townArchive').length >= slots) return no(`Kept Legacy keeps ${slots}: let one go first`);
   k.push(id);
   return OK;
 }

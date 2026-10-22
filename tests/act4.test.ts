@@ -466,9 +466,9 @@ describe('Relocate (DESIGN.md §22)', () => {
     p = previewLegacy(g, 'pebble');
     expect(p.floors.world!.item).toBe('robotArm');
     g.s.meta.here!.stages = 2;
-    // the District's best is the better of its two folds; the one at work on the World counts there too
+    // the District's best is the better of its two folds; the World counts its distinct designs at work / RULES.legacyWorldDesigns
     const vw = designValue(wd)!.value;
-    const sum = vals[0] + vals[1] + Math.max(vals[2], vw) + vw;
+    const sum = vals[0] + vals[1] + Math.max(vals[2], vw) + vw / RULES.legacyWorldDesigns.value;
     p = previewLegacy(g, 'pebble');
     expect(p.value).toBeCloseTo(sum, 6);
     expect(p.now).toBe(Math.floor(sum / 4 + 3 * 2 + 5 + 1e-9));

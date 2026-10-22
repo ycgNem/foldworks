@@ -410,7 +410,12 @@ export interface TownPlan {
 export type LegacyFloor = 'workshop' | 'factory' | 'district' | 'world';
 
 /** A floor's best design this world, or an island's record: its value on the Patent Office's scale. */
-export interface FloorBest { value: number; item: ItemId; grade: string; steps: number; tier: number }
+export interface FloorBest {
+  value: number; item: ItemId; grade: string; steps: number; tier: number;
+  /** the World's term only (DESIGN.md §22, the prestige review): the distinct designs at work it
+   * counts and their summed value (`value` is that sum / RULES.legacyWorldDesigns); absent elsewhere */
+  designs?: number; sum?: number;
+}
 
 /** This world: what has happened since the last Relocate (kept through every Reorganize). */
 export interface WorldRun {
@@ -535,6 +540,10 @@ export interface MetaState {
   seeds?: SeedCard[];
   /** Kept Legacy: the Legacy nodes kept through the next Last Fold */
   keptLegacy?: LegacyId[];
+  /** Megaproject stages that stood when this universe began, by the island whose Relocate banks
+   * them (DESIGN.md §22 Legacy, the prestige review): each counts once a universe, at the first
+   * Relocate from its island, then is deleted; absent: none (the first universe, older saves) */
+  inherited?: Partial<Record<WorldId, number>>;
   /** the Endless Ledger, and the cosmetics it has paid (machine skin ids), kept through every reset */
   ledger?: LedgerState;
   cosmetics?: string[];

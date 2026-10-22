@@ -66,7 +66,7 @@ export const KERNELS: Record<KernelId, KernelDef> = {
     effect: { k: 'wideBelts', per: 2 },
     text: '{u:flow} a belt tile carries {good:2} items, half a tile apart · 240/min a belt',
     flavor: 'Twice the belt. Same frogs.',
-    derivation: '§23 The Kernel tree: a belt\'s 120/min (§4) was the Workshop\'s first ratio; at 240 a Miner line feeds a Mk2 (§18) from one belt and a fold box holds half the belt it did, so every Workshop layout is drawn again; 8 Kernels, a third of the first Last Fold (§23 Kernels), the dearest of the rules',
+    derivation: '§23 The Kernel tree: a belt\'s 120/min (§4) was the Workshop\'s first ratio; at 240 a Miner line feeds a Mk2 (§18) from one belt and a fold box holds half the belt it did, so every Workshop layout is drawn again; 8 Kernels, about two-thirds of the first Last Fold\'s 11 (§23 Kernels), the dearest of the rules: bought at the second',
   }),
   everySide: K({
     id: 'everySide', name: 'Every Side a Port', branch: 'rules', cost: 6, requires: [], pos: [1, 0],
@@ -95,7 +95,7 @@ export const KERNELS: Record<KernelId, KernelDef> = {
     effect: { k: 'beyond' },
     text: '{u:beyond} the fifth floor · World groups fold up to it (research {research:The Last Fold}) · tier 5 research',
     flavor: 'Above the World there is a little more sky. Somebody has to build on it.',
-    derivation: '§23 Beyond: the fifth floor (§15: the fifth floor the Kernel tree names), depth-4 modules folded on the World, couriers, its own Dock and Hopper, and the tier 5 research on each island; 8 Kernels, with Wide Belts the dearest node, a third of the first Last Fold',
+    derivation: '§23 Beyond: the fifth floor (§15: the fifth floor the Kernel tree names), depth-4 modules folded on the World, couriers, its own Dock and Hopper, and the tier 5 research on each island; 8 Kernels, with Wide Belts the dearest node: with the Ledger the first Last Fold\'s 11 (§23 Kernels), so the fifth floor is the first universe\'s reward',
   }),
   endlessLedger: K({
     id: 'endlessLedger', name: 'The Endless Ledger', branch: 'reach', cost: 2, requires: [], pos: [1, 0],
@@ -129,9 +129,9 @@ export const KERNELS: Record<KernelId, KernelDef> = {
   keptLegacy: K({
     id: 'keptLegacy', name: 'Kept Legacy', branch: 'kept', cost: 6, requires: ['keptIslands'], pos: [2, 0],
     effect: { k: 'keptLegacy', slots: 4 },
-    text: '{u:legacy} keep {good:4} Legacy nodes you choose through a Last Fold',
-    flavor: 'Some habits survive the end of the world. Mostly the Committee.',
-    derivation: '§23 The Kernel tree: four of the 17 Legacy nodes (§22), as Old Habits keeps four Patent nodes through a Relocate: the automation a player misses most (the Clerk, the Committee, the Regrader, the Town Plan) or a head start, chosen on the Last Fold card',
+    text: '{u:legacy} keep {good:4} head starts or softeners you choose through a Last Fold · Automation is kept anyway',
+    flavor: 'Some habits survive the end of the world. Mostly the Purse.',
+    derivation: '§23 The Kernel tree: four of the nine head starts and softeners (§22; the Automation branch is kept through every Last Fold for good and the Seed knows what the Town Archive knew, the prestige review), as Old Habits keeps four Patent nodes through a Relocate: the Purse, Old Habits or Second Nature, Standing Charts or the softener of the island the next universe goes to first, chosen on the Last Fold card',
   }),
 };
 
