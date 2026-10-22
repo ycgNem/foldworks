@@ -23,7 +23,7 @@ export const opposite = (d: Dir): Dir => ((d + 2) % 4) as Dir;
 export const cw = (d: Dir): Dir => ((d + 1) % 4) as Dir;
 export const ccw = (d: Dir): Dir => ((d + 3) % 4) as Dir;
 
-export type Floor = 'workshop' | 'factory' | 'district' | 'world';
+export type Floor = 'workshop' | 'factory' | 'district' | 'world' | 'beyond';
 /** The floors of modules (rate functions): the Factory and the high floors above it. */
 export type ModFloor = Exclude<Floor, 'workshop'>;
 
@@ -126,6 +126,9 @@ export interface Ent {
    * progress along the tile (it moves up into `item` when that one leaves) */
   item2?: string | null;
   p2?: number;
+  // ---- Milestone 11 (DESIGN.md §24); absent elsewhere
+  /** placed free by a trophy's bonus (the first n of a kind): it refunds nothing */
+  free?: boolean;
 }
 
 /** A box on the Workshop, in tiles. */
@@ -535,6 +538,26 @@ export interface MetaState {
   /** the Endless Ledger, and the cosmetics it has paid (machine skin ids), kept through every reset */
   ledger?: LedgerState;
   cosmetics?: string[];
+  // ---- the long tail (DESIGN.md §24, Milestone 11); absent on older saves
+  /** the skin chosen for each kind of building (a cosmetic id from meta.cosmetics) */
+  skins?: Record<string, string>;
+  /** the efficiency boards: each Scenario board's personal bests, kept through every reset */
+  boards?: Record<string, BoardRecord>;
+}
+
+/** A Scenario board's personal bests (DESIGN.md §24 The efficiency boards): each the best of its
+ * own over every fold of the board's product, so the four may come from four designs. Rates are a
+ * minute, grade applied. */
+export interface BoardRecord {
+  /** the board's own score (its measure, §21), and the grade of the fold that made it */
+  score: number;
+  grade: string;
+  /** the product a minute per tile of the fold box */
+  perTile: number;
+  /** the product a minute per kW its machines draw (0: no powered fold yet) */
+  perKw: number;
+  /** the share of its byproducts not used or carried out (0 = none wasted; 1 when none folded) */
+  waste: number;
 }
 
 export function newMeta(): MetaState {
@@ -543,6 +566,7 @@ export function newMeta(): MetaState {
     lifetime: { earned: Num.ZERO, delivered: {}, folds: 0 }, history: [], peakPerMin: 0, perMinRing: [],
     world: 'home', legacy: Num.ZERO, legacyEarned: Num.ZERO, legacyNodes: [], visited: ['home'], worldRecords: {}, here: newWorldRun(0), relocations: 0,
     kernels: Num.ZERO, kernelsEarned: Num.ZERO, kernelNodes: [], lastFolds: 0, seeds: [], keptLegacy: [], ledger: { n: 0, progress: {} }, cosmetics: [],
+    skins: {}, boards: {},
   };
 }
 

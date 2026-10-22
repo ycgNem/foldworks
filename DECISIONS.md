@@ -1874,6 +1874,8 @@ Act III bot's research retune was merged. Fixed in d9b33dc (sim and data) and tw
 
 The gate is marked **passed with conditions** in ROADMAP.md once the District UI and the Act III
 bot's re-measure land: the owner's play from the 15 h checkpoint is owed, as at the first gate.
+**Marked 2026-10-22**, after the re-measure ran again on the merged build (Acts IV-V's sim and
+screens in; `tests/pace-act3.test.ts` 7/7, the same timeline): see ROADMAP.md for what stays open.
 
 ## Milestone 12: sound and juice (2026-10-22, built alongside Act IV)
 
@@ -2113,6 +2115,310 @@ their derivations are DESIGN.md §23; all are model estimates until an Act V bot
   covered by §22's flags; nothing new.
 - Open: Cinder's chip shrinks to "C" on the Lighthouse page at 1024; the World ground uses the
   District frame where no `world_*` sprite exists; the Relocate foot row is hidden at 1024 by Fly.
+
+### Act V's screens (Beyond, the Last Fold, Kernels, the Seed, the Ledger)
+- **Beyond reuses the District's renderer and tools** over `g.s.beyond` (the `beyond_*` platform
+  art, couriers instead of skiffs, depth-4 modules only). Nothing folds there: F on Beyond says so.
+  **Its sky is night** (a baked ink-to-violet gradient, slow-parallax stars, a rare shooting star):
+  the floor above the World reads as further up at a glance. The lift key is a four-point star,
+  left of the World's globe; the wing widens to 41 px.
+- **The World's tool strip gains a labelled "Last Fold" key** (the owner: core actions get a
+  button); its tip gives the sim's refusal while it can't run. Once Beyond is owned the World also
+  gets a Fold tool, for depth 4 only.
+- **The audit runs on a slip under the strip** (the window, the countdown, the grade so far and
+  its U/W/C meters, the Kernel count, "The card" and "Cancel"), not a centre card: the World stays
+  in view and workable while it is graded. The floor shows a lighter box with a sweeping beam.
+- **The grade card is a two-page spread**: the bank (the stamped grade, value ÷ 10, the grade
+  bonus, the total and what would raise it) beside what is kept and lost, struck through in the
+  sim's own words; the right page is the Seed it plants and the World's modules counted, plus the
+  Kept Legacy picker when that node is owned. "Keep the World" cancels; "Fold the World" takes two
+  clicks (the first arms it), like Relocate's Fly.
+- **The sequence** is a full-screen strip (`lastfold.json`) over a starfield: the World folds into
+  the Seed, a flash on the third reset sound, then the new universe's Home with "+N KERNELS"
+  stamped in the sky; Skip/Onward, then the Kernel tree opens. Nothing on the HUD draws over it.
+- **The Kernel tree is its own page** in three bands (Rules, Further, Kept), each node with a flat
+  price tag; research page 5 links to it through a "Kernel node" disc so the act's research and
+  its tree read as one road.
+- **The Seed shows its sides at 1x**: an arrowhead in each ore's ink on each edge, blinking red on
+  a side holding an ore it can't hand on; hovered or pinned, each side's ore icon on a chip past
+  the edge. Its report has a labelled "Turn it" key beside R.
+- **The Ledger page shows, never chooses**: the order under way, the next ten in turn, the next
+  cosmetic and how many orders off, and the shelf of skins with previews. No skin picker yet: the
+  sim applies no skin, and a picker for nothing would be a lie.
+- **The District strip compacts at narrow widths** (drop the MODULES caption, then routes as
+  n/max) instead of running under the lift.
+- Small fixes: the Lighthouse page's island chips demote the widest first (Cinder no longer
+  shrinks to "C"); Relocate's foot row picks the longest wording that fits left of Fly; a ruin's
+  mode keys ignore clicks for 0.4 s after Repair (a double click no longer switches its mode).
+- Derivative check: nothing new beyond §23's flags (third layer, infinite orders, wide belts, the
+  Seed). The starfield sky and a stamped "+N" are this game's own moments reused.
+
+## Milestone 11: the long tail's sim (2026-10-22)
+Built autonomously (the owner: "decide everything, don't ask"), sim, data, tests and docs; the
+screens are another agent's. No new currency, floor, reset layer or tree; no price curve (lots stay
+linear, a Challenge's reward is a share off one price). Numbers and derivations: DESIGN.md §24.
+- **Every trophy has a bonus, one of twelve kinds, and every kind is capped** (`TROPHY_CAPS`):
+  `speed` (a product's craft +5%, at most +10%), `free` (the first n of a Workshop building free),
+  `skiffs`, `routes`, `drawer`, `sparkLife`, `heap`, `startCoin`, `cool`, `repair`, `chute`,
+  `cosmetic`. The bonus names what earned it (100 bars of iron: smelting iron; the first route: a
+  skiff more a route; the first slag jam: a free Slag Heap, the owner's own example). The caps are
+  the decision that keeps the shelf from becoming a multiplier on its own size; each cap sits under
+  what one tree node gives (pillar 1: growth comes from layouts, not the trophy count).
+- **A free building is marked** (`Ent.free`) and refunds nothing when lifted or folded; the first n
+  are counted among the free ones standing, so lifting one frees its place again. Never in a
+  Scenario (a board's coin is its rule). `buildPrice` stays the list price (refunds, repairs).
+- **Trophies sum over every run**: the long deliveries count `meta.lifetime.delivered` plus this
+  run (a reset never takes a trophy's progress); a first of tier 5 counts every run too.
+- **No craft speed or Overdrive cooling in the first run** (measured, `pace-reorganize`): the first
+  cut gave the slice's delivery trophies +5% crafts and counted the Act I long deliveries at 10,000
+  gears and 5,000 Gizmos; the campaign bot earned them all in run 1, its peak rose 9% and seed 1000's
+  run 2 passed it at 0:59 against a limit of 0:42 (rule 3). The slice's delivery trophies now give a
+  machine free, the Act I long deliveries count 50,000-100,000, Floor It, Spade Work and Slag Magnet
+  count ten times further, and Bar Hopping gives a Smelter, not heap room (heap room in the first
+  hour moved `tests/idle.test.ts`'s offline jam past its hour: the first heap's 400 is §12's lesson).
+- **Hidden trophies (18)** show as "???" (`trophyFace`) with no icon until earned; the shelf's count
+  still includes them.
+- **`startCoin` is a head start** (it counts as `granted`), paid at every run's start after a reset
+  (`startRun`), never the first run, so the slice pace tests are untouched by it.
+- **The Codex counts `s.codex`** (Unit 7's collection, which starts at Unit 7's rep 1), not every
+  delivery: it is the robot's codex (PLAN.md). 56 items, 9/10/16/13/8 by tier; slag, kits and project
+  parts are never in it (the Dock pays nothing for them).
+- **Lore pages are Unit 7's**: every page in its capitals and third person, as the orders and the
+  Gazette already write it; one a tier, a floor and an island, opened by firsts kept through every
+  reset. Home's page opens with the first Relocate (a place is seen once it is left). Island pages
+  read a new `visit:<island>` counter, since a Last Fold forgets `meta.visited`.
+- **Unit 7's ending** opens with the first Last Fold: the World folded is the last specimen, the
+  collection complete, and Unit 7 opens a new empty drawer. It reuses its rep-3 thanks line ("UNIT 7
+  IS OFTEN PLEASED. THIS IS MORE.") as its last words (pillar 5).
+- **Ten Challenges** (Acts II-IV): Clean Hands, Old Faithful, Hand-Made, The Strict Inspector, Belt
+  Budget (II); Headwinds, Short Haul, Zoning Freeze (III); Rough Seas, Light Fleet (IV). Goals are
+  this run's: deliveries, an order, a fold graded A after the drop, modules standing at once, a
+  counter raised from the run's start (`challengeBase` now holds whichever count the goal reads).
+  Acts III and IV's are offered only once that floor has stood in some run (`needs`), so a run-2
+  player is not offered a Challenge they cannot finish. The Strict Inspector lowers every fold a
+  letter (Workshop, nested, District, World and the Last Fold's audit alike: it is the run's rule).
+- **Every Challenge won also pays a skin**; rewards stay rules (no multiplier on income).
+- **Five Scenario boards**: Pocket Workshop, Slag Mountain, The Antique Shop, Night Market, Thin
+  Vein. Three are Challenges as boards (Small Boxes, Clean Hands, Old Faithful), scored instead of
+  won; Night Market adds a `perKw` measure (kW drawn by the box's machines in Normal mode).
+- **The efficiency boards live in `meta.boards`** (the task asked for meta, kept through every
+  reset): a Scenario game notes its own once a second; the town takes them with `{ k: 'boards' }`
+  (checked and merged field by field, only a better value kept), so they are in the town's save and
+  replay. Each best is the best of its own (four may come from four designs). The app's older
+  `foldworks_scenario_best` store is the UI's to retire or keep.
+- **Cosmetics are one list** (`src/data/cosmetics.ts`): the Ledger's three and its ribbons (its ids
+  kept as they were, `gilded`..., so saves need nothing), eight from reputation (rep 3 and 5), fifteen
+  from Challenges, fifteen from trophies. A decoration is a skin of the Dock or Hopper. Skins dress
+  kinds (`slots`), plus `module`, `skiff`, `barge` and `courier`. Ids stay plain (`gilded`); the
+  sprite is `skin_<id>_<kind>` (`skinSprite`), as kernels.ts already promised.
+- **The skin command is logged and replayed** like any command (`meta.skins[kind]`) but no system
+  reads it; a test runs a game with and without a skin to the same coin and rng.
+- **Saves**: `SAVE_VERSION` 11; the fingerprint now covers the trophy flags, cosmetics, skins,
+  boards, free buildings and the Challenges.
+- **Tests updated, with the reason**: `tests/reorganize.test.ts`'s exact run-start coin and Drawer
+  slots now add the trophies the sandbox earns on its way (`trules`); `tests/act5.test.ts` follows
+  the save chain to v11.
+- **Open**: no bot plays the new Challenges, so their goal times (15-60 min of the act's lines) are
+  the model's; the screens and the skin art are not built.
+
+### Flagged as derivative (owner to decide)
+- **Achievements with bonuses** resemble Antimatter Dimensions' achievement rewards and Cookie
+  Clicker's milk (kittens scaling with the achievement count). Re-derived: each bonus is a small rule
+  about the thing that earned it (that product's craft, that floor's routes, that machine free), and
+  each kind is capped, so nothing grows with the number of trophies. Drop option: make every bonus a
+  `cosmetic` (the data allows it; the sim reads the rest through `trules` only).
+- **Challenges** resemble Antimatter Dimensions' Challenges (flagged at §21). Re-derived as the first
+  five: factory goals done this run, rule rewards, no multiplier; three are also Scenario boards.
+- **Efficiency boards** resemble Zachtronics' histograms (cost, cycles, area). Re-derived: the three
+  numbers are the fold audit's own terms (per tile is C, waste is W, per kW is §18's power), local
+  only, no distribution of other players. Drop option: keep the board's single score (§21).
+- **Hidden achievements shown as "???"** are a convention of nearly every achievement list (Steam's
+  hidden achievements); kept as genre furniture, with names and conditions this game's own.
+
+### Milestone 11's screens (2026-10-22)
+Built autonomously (the owner: "decide everything, don't ask"), app and UI code, the skin lookup and
+the photo export in `src/render/`, the e2e states and shots; no sim or data change.
+- **The Trophy Shelf is an index and a page** (`src/app/shelf.ts`): 205 stickers do not fit one
+  grid, so the left page has an index down its edge (Act I, Act II, Act III, Hauls, Firsts, Resets,
+  Heights, Feats, Hidden, each with its count; the groups are the data file's own blocks, cut at an
+  anchor trophy each, so a trophy added inside a block lands in its group), then **Bonuses** and the
+  **Wardrobe**. A group's stickers in a grid (a hidden one a dashed "?" until earned), the closest
+  still to earn under them; a click holds a sticker on the right page, which gives its condition,
+  its progress and **its bonus** ("its bonus, yours for good" once earned; "???" while hidden).
+- **Bonuses** lists every kind the shelf can give, summed (`trules`), each with a meter against its
+  cap (`TROPHY_CAPS`) and the cap printed beside it; the products sped up and the buildings made
+  free as chips under them. The cap is on the page because it is the design's promise (pillar 1:
+  the shelf is a set of small rules, never a multiplier on its own size).
+- **A trophy's ribbon says its bonus** on a slip under it (the newest one only, so two trophies at
+  once never stack two slips).
+- **The Codex has the same index**: Tiers I-V with their counts, then the Lore. A tier pins its
+  specimens (fewer and larger than the old page of every item); the right page has the completion
+  overall and a meter a tier. The Lore lists the 16 pages in four groups, open ones in ink, shut ones
+  pencilled with a lock; the right page reads the open one in Unit 7's capitals or says what opens it.
+- **Unit 7's ending is its own moment** (`src/app/ending.ts`): the first time the floor is back with
+  nothing open after the first Last Fold (the sequence and the Kernel tree first), the night sky
+  fills the screen: Unit 7 and the World it logged pinned on a mount, "Collection Complete", its five
+  lines typed out, then LOGGED stamped over the mount; Skip, then Onward or Read in the Codex. The
+  Codex's ending page keeps "The ending, again". A save loaded with the page already open does not
+  replay it (the watcher only counts the page opening in the game it is watching).
+- **The Challenges page** (`src/app/challenges.ts`): fifteen keys on the Reorganize card's strip
+  would take three rows of the contract, so the strip keeps "Ordinary run", the Challenge picked
+  and "Challenges (n open)", and the page lists all fifteen by act (won, under way, open, or shut
+  with a lock), each with its rule and goal in a few words; the right page has the rule, goal,
+  reward (and the skin it pays), what it needs (ticked or crossed), the run's progress when it is
+  under way, and "Take it next run" (back to the contract) or Give up. A Challenge whose floor has
+  never stood is listed, not offered. The slip under the Purse shows the goal's count ("1,000 STEEL
+  412/1,000") and opens the page on a click. `SHORT` (the slip's words) lives on the page now, with
+  real entries for all fifteen.
+- **Scenarios: a list and a board** (`src/app/scenarios.ts`): eight boards, each a row (its land
+  in miniature, its twist and unit, its best and grade); the board picked on the right page with its
+  pitch, its chips and its **efficiency board**: the best score big, then per tile, per kW and waste
+  in three cells (each the best of its own fold, as the sim keeps them). "Back to your town" hands
+  the board's bests to the town with `{ k: 'boards' }`. The app's older store
+  (`foldworks_scenario_best`) is read once into the town's boards (a record that only knew its score
+  gets per tile on a per-tile board, per kW on a per-kW one, and waste 1, shown as a dash) and
+  removed. Inside a board the record to beat is the town's (taken when the board was opened).
+- **Skins** (`src/render/skins.ts`): the rule the art was drawn to (docs/endgame.md "Milestone 11
+  skins as built"): wherever the renderer draws base sheet X for a skinned kind it draws
+  `skin_<id>_X` when that sheet exists, same frame, facing, anchor and position, else X: Workshop
+  buildings (the default branch, the heap, the Seed, the Dock and its lily form, the Hopper), belts
+  and belt turns, Factory modules (`skin_<id>_module`), high-floor modules (`skin_<id>_dist_module`,
+  `_world_module`, `_beyond_module`, via `hart`), skiffs, barges and couriers, and the building
+  ghost. Pips, glows and overlays draw on top as before. Six lines in `renderer.ts`, two in
+  `factory.ts`, four in `district.ts`.
+- **Wearing a skin**: a building's pinned report gets a labelled "Skin: <name>" key once a skin for
+  its kind is owned; it opens Plain and the skins owned for it as keys inside the report (no
+  floating menu: the report is already the place for a building's settings). A Factory module's
+  report has the same for `module`. The **Wardrobe** (on the shelf) shows every kind a skin dresses
+  as a key (dimmed while none is owned), the worn ones as chips, and for the kind picked its preview,
+  the keys to wear one and the skins still to earn with where each comes from. The Ledger's shelf
+  gets a "Wear them: the Wardrobe" key (the Act V note "no picker yet" is retired).
+- **Free buildings**: the wheel's slot reads FREE and its chip "free, a trophy" while `freeBuild`
+  says the next one is free; the price shown is `buildPrice` (a Challenge's discount included).
+- **Photo mode** (`src/app/photo.ts`, `src/render/photo.ts`): a labelled "Photo" key beside Stuck?
+  and the HUD key (H, "HUD on/off", which had no handler) hide the HUD; a strip along the foot snaps
+  the **whole floor** (its island or platform and the town, not the view) at 1x or 2x into an
+  offscreen canvas, downloaded as `foldworks-<floor>-<date>-<time>.png`, with a white flash and a
+  "Saved" note. The renderer draws the photo as it draws a frame (its context, size, view and
+  camera pointed at the canvas for one draw, then put back), so nothing in the Renderer changed for
+  it. On a high floor the key hides while the audit slip covers its place (H still works).
+- **Pages register safely**: two pages drawn from `screens.ts`'s switch (challenges, ending) and
+  the long tail's frame hooks added from `app.ts` (`tailframe.ts`), because a page module evaluated
+  while `screens.ts` is still loading cannot call `registerScreen` under Vitest's loader; the
+  registry itself is a hoisted `var`, so the browser never minded.
+- Derivative check: an index of achievement groups and a cosmetics wardrobe are genre furniture
+  (most achievement lists and skin menus), built from this game's notebook kit; photo mode is a
+  convention of many builders (no layout taken from one). Nothing new beyond the sim's flags above.
+
+## Milestone 14: performance, save size and release (2026-10-22)
+
+Built in a worktree off `m9-worlds` while Milestone 11's sim and data were built elsewhere: render,
+UI drawing, the save layer's storage and encoding, e2e, CI and docs only (no `src/sim/` or
+`src/data/` change, `SAVE_VERSION` untouched). DESIGN.md "Performance (measured, Milestone 14)" and
+§20 "Save size".
+
+- **The frame was the HUD, not the floor.** `e2e/perf.mjs` now builds every floor at its worst
+  (the dense 16x16 Workshop, the widest Factory, every lot and up to 200 modules with as many routes
+  as allowed on the District, World and Beyond) and times the frame and the tick with the real GPU
+  and with SwiftShader. Before: 14 ms a frame on the Workshop and 23-25 ms on the high floors
+  (22-29 fps with the GPU, 2-3 fps in software); the floor's own drawing was under 2 ms of the
+  Workshop's 14. 6,300 canvas calls a frame: 9-slice panels tiled in 4 px pieces (3,100), status
+  pips drawn a pixel at a time (1,400 on the Workshop, 5,000 on a full floor), text a glyph at a
+  time (500), and 30,000 one-pixel fillRects of flight lines on a floor of 200 routes.
+- **Bake what repeats, change no pixel** (`src/ui/bake.ts`): a 9-slice at a size, a string in a face
+  and colour, and a pip shape in a colour are painted once by the same code onto a small canvas and
+  drawn with one drawImage. A key is baked on its second asking (a card sliding open never fills
+  the cache) and the cache keeps the most recently used within a pixel budget (4 M px of panels,
+  0.6 M px of text per face). The flight lines of a high floor are one floor-sized layer per march
+  offset (six), repainted only when a route, its state or the selection changes
+  (`src/render/district.ts` `drawRouteLines`), painted on the CPU (`willReadFrequently`). The
+  reset previews the HUD asked two or three times a frame (`previewPatents`, `relocateNow`, walking
+  every module) are answered once a tick (`src/app/pertick.ts`). After: 2.4 ms on the Workshop,
+  4.0 ms on the Factory, 4.8-5.1 ms on the high floors with the GPU (92-193 fps headless).
+- Rejected: Path2D for the flight lines (one fill a route): faster on the GPU, slower in
+  SwiftShader (path rasterizing), and the baked layer beats it in both. Culling the floors to the
+  view: the worst case is the whole floor in view (fit-to-screen), which culling cannot help, and
+  the floors already skip sprites outside the view where it matters (skiffs, modules).
+- **Sim hotspots are reported, not fixed** (Milestone 11 owns `src/sim/` now): a tick with every
+  floor full is 0.86-0.96 ms (budget 4 ms, so it passes), 80% of it `runFloor` in
+  `src/sim/systems/high.ts`. Proposed (in DESIGN.md's section): build the route groups once per
+  layout change instead of a Map with string keys every tick; compute `skiffStats` once per floor
+  per tick and cache each route's capacity by `hversion`; key the waste chute's "has a route" test
+  by number, not `m.id + ':' + item`; find the Dock once per layout change.
+- **Saves are packed below the versions** (`src/engine/deflate.ts`, `src/engine/save.ts`): a slot
+  holds `FWZ1.` + base64url(raw DEFLATE of the JSON) + `.` + the FNV checksum, and the export string
+  is `FW2.` the same way. A slot that starts `{` (written before) and an `FW1.` string still load, a
+  cut or damaged packed slot is "cut short or garbled" as a cut JSON one was, and the backups and
+  recovery are unchanged. No migration and no `SAVE_VERSION` bump: the payload is the same object.
+  The codec is synchronous (saves are written on `beforeunload`, so CompressionStream's promise is
+  too late) and dependency-free: LZ77 over 32 KB with the fixed Huffman codes, about a third bigger
+  than zlib's best and 5-15x smaller than the JSON; its decoder reads any raw DEFLATE (tested both
+  ways against Node's zlib). The 40 h checkpoint: 168 KB of JSON (229 KB as an FW1 string) to
+  31 KB; every floor full: 485 KB to 33 KB, packed in 9-11 ms.
+- **No atlas packing**: the production build inlines every sheet under Vite's 4 KB limit, so a cold
+  load is 6 requests and 0.66 MB over the wire (1.5 MB of script), 0.8 s to the title from a local
+  preview. The dev server's ~1,050 requests are a dev-only cost.
+- **CI**: `ci.yml` runs the typecheck, the tests without the pace tests and the build on every push
+  and pull request; `deploy.yml` runs the same gate then publishes to GitHub Pages on a push to
+  `main` (it ran the whole `npm test`, pace tests included, before); `pace.yml` runs the pace tests
+  nightly and on demand and keeps the bot's checkpoints as an artifact. ROADMAP's "the pace sim on
+  every push to main" became nightly: the pace tests take far longer than a deploy should wait,
+  and a pacing regression is a design conversation, not a reason to hold a build back.
+- **No itch.io page and no desktop build**: the owner said no itch.io page, and a desktop build
+  (Electron, as in Pegwork) was only "if wanted"; the game is a static web page published to
+  GitHub Pages. `Package for web.bat` stays for zipping `dist/` for any static host.
+- Derivative check: nothing player-facing changed (the same pixels, faster), so nothing to flag.
+
+### After Milestones 11 and 14 merged (2026-10-22)
+- **A crowded high floor draws a carrier over a building as a pulse** (more than 48 routes; the
+  short hop's 4x4 pulse), and as a sprite over the open deck. Why: Milestone 14's 213-module World
+  read as a brown haze of see-through barges over every module (DESIGN.md §17, readability over
+  detail). The full World's frame went 5.1 -> 4.2 ms with it.
+- **The shelf's "almost there" rows** give the goal the row's width and put the meter under it
+  (beside a meter the goal was cut mid-word).
+- **H reads "Photo mode"** on the Keys page (it was "HUD on/off" with no handler; photo mode took it).
+- **The high floors' tick**: route groups, skiff numbers and the Dock cached (DESIGN.md §25): the
+  full late game's tick 1.52 -> 0.90 ms, the same fingerprint after 2,000 ticks.
+
+## The Acts IV-V review (idle-critic, 2026-10-22)
+Verdicts: **Act IV conditional** (the islands change Workshop layouts and read well; the climb the
+40-80 h schedule rests on is unmeasured and the one run is behind the model at 40 h); **Act V fail
+until its economy is fixed** (the Last Fold as a whole-World audit is the endgame's best idea, but
+Kernels reward stamping copies and the reset strips layer 2's automation and starves Legacy);
+**the long tail a checklist past 40 h** (bonuses cap out by Act III; Act IV-V trophies pay start
+coin; the Ledger pays ribbons). What is decided for each finding (fixes by four agents, each
+writing its own entry below):
+- **Blocking 1, the Standing Committee reorganizes during an offline replay** (runs 5 -> 6, the
+  District emptied, the report "coin -21.3M"): fixed; the Committee never fires while away and the
+  return card says when it would have.
+- **Blocking 2, the Last Fold takes Act IV's automation away** and Legacy dries up in universe 2
+  (its Megaproject stages are kept, so a Relocate pays ~14): the Automation branch is kept through
+  every Last Fold for good (pillar 2: what was automated stays automated); Kept Legacy keeps head
+  starts and softeners; a universe's Megaproject stages standing count once, at its first Relocate.
+- **Blocking 3, Act IV's pacing is unmeasured**: the Act IV bot (being written) reports the island
+  climb per island, each floor's best design value, and the Patent preview at 30-40 h.
+- **Kernels count copies** (100 minimal chains = 100 Kernels): each (product, depth)'s best value,
+  plus a quarter for each further copy. **Legacy counts the District's best twice**: the World's
+  term is its distinct designs at work. **Universe 2's 30 h replay to Beyond**: the Seed carries
+  Acts I-II's research into each new universe. **The Last Fold's "raises it"** reads the audit's
+  own advice.
+- **The offline report can't see the high floors**: rows for a starved high-floor module and a
+  short route. **The offline replay costs 24-38 s** (0.05 ms a tick was assumed): a deterministic
+  compute budget (by the number of things that tick) shortens the replayed window.
+- **Rubble comes back every run**: cleared tiles are kept per world, and rubble clears by drag.
+  **The Town Plan covers only the District**: it covers every high floor.
+- **Rime is Space Age's Aquilo** (freezing unless heated, a heating building with a radius; missed
+  by the first flags): re-derived, the Heater dropped; warmth comes from two working neighbours and
+  from the factory's own power plant (Boilers, Steam Engines, Generators) within 2 tiles.
+- **Late trophies pay into capped kinds**: Act IV-V trophies give an Act IV-V rule or a cosmetic,
+  and a capped bonus says so on its sticker. **The Ledger**: it turns through tier 3-5 goods too,
+  and every tenth order pays a lore page or a rule as well as its cosmetic.
+- Smaller: the island slip hides on the high floors (its rule is the Workshop's); "Presss"; a cut
+  module name on Beyond's report; tooltips over their own buttons; the Ledger's ribbon labels.
+- **Kept open**: the Kernel tree has nothing to buy after about the third Last Fold (the Ledger is
+  the endless part); Cinder and the Old Works resemble Vulcanus and Fulgora only loosely (rules
+  differ: vents forbid belts; ruins repair); the owner rules on the Factorio debt as one set
+  (chemistry, wide belts, the planets frame).
 
 ## The Act III bot's chemistry and the Act IV bot (2026-10-22)
 

@@ -25,6 +25,7 @@ import { drawText, textWidth } from '../ui/font';
 import { paperRaw } from '../ui/paper';
 import { onPaper } from '../ui/theme';
 import { sheet, itemIcon, hasArt, drawSprite } from './sprites';
+import { skinName } from './skins'; // Milestone 11: a chosen skin's sheet
 import { mainOutput } from './factory';
 import { TILE } from './ground';
 import { drawPip, type PipShape } from './pips'; // Milestone 13: pips with shapes
@@ -51,15 +52,17 @@ export interface DistrictOverlay {
   floor?: HighFloorId;
 }
 
-/** A high floor's sheet: the World's `world_*` art is frame-compatible with the District's `dist_*`
- *  (docs/endgame.md, Act IV art as built), so the World draws with its own where it has it. */
+/** A high floor's sheet: the World's `world_*` and Beyond's `beyond_*` art are frame-compatible with
+ *  the District's `dist_*` (docs/endgame.md, Act IV and Act V art as built), so each high floor
+ *  draws with its own where it has it. */
 export function hart(f: HighFloorId, name: string): string {
-  const w = 'world_' + name;
-  return f === 'world' && hasArt(w) ? w : 'dist_' + name;
+  const w = f + '_' + name;
+  return f !== 'district' && hasArt(w) ? w : 'dist_' + name;
 }
 
-/** What flies a high floor's routes: skiffs on the District, barges on the World (DESIGN.md §22). */
-export const carrier = (f: HighFloorId) => (f === 'world' ? 'barge' : 'skiff');
+/** What flies a high floor's routes: skiffs on the District, barges on the World (DESIGN.md §22),
+ *  couriers on Beyond (§23). */
+export const carrier = (f: HighFloorId) => (f === 'beyond' ? 'courier' : f === 'world' ? 'barge' : 'skiff');
 
 /** The deck round the build floor, in tiles: the plaza north (two rows of 32 px plates), a walk
  *  `w` west, `e` east (the next lot for sale stands there), `s` south; the plaza a `wing` wider. */
@@ -179,8 +182,8 @@ export class DistrictPlatform {
     ctx.fillRect(-this.ox + fw * TILE, -this.oy - 1, 1, fh * TILE + 2);
     this.c = c;
     const span = BX1 - BX0 - 2;
-    // the World's rotors are broader (64 px): one about every six tiles
-    const n = Math.max(2, Math.round(span / (F === 'world' ? 6 : 5)));
+    // the World's rotors and Beyond's star pods are broader (64 px): one about every six tiles
+    const n = Math.max(2, Math.round(span / (F !== 'district' ? 6 : 5)));
     this.rotors = [];
     for (let i = 0; i < n; i++) this.rotors.push({ x: Math.round((BX0 + 1 + ((i + 0.5) * span) / n) * TILE), y: (Y1 + 2) * TILE - 3 });
     const rows = fh >= 6 ? [2, fh - 2] : [Math.floor(fh / 2)];
@@ -274,6 +277,53 @@ function arrowHead(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: nu
   }
 }
 
+interface RouteLine { ax: number; ay: number; bx: number; by: number; col: string; bold: boolean }
+
+/** The flight lines, baked (Milestone 14, DESIGN.md "Performance (measured)"): drawn a pixel at a
+ *  time they were 30,000 fillRects a frame on a floor of 200 routes (2 fps in software rendering).
+ *  The lines only change when a route, its state or the selection does, and they march through six
+ *  offsets, so each offset's whole layer is painted once onto a floor-sized canvas by the same code
+ *  and drawn with one drawImage until the routes change. Painting a layer then drawing it is the
+ *  same as painting the floor (source-over composes the same either way). Few routes, or a canvas
+ *  too big to keep: drawn directly as before. */
+const LAYERS = new Map<HighFloorId, { sig: string; x0: number; y0: number; c: (HTMLCanvasElement | null)[] }>();
+const LAYER_PAD = 6;
+function drawRouteLines(ctx: CanvasRenderingContext2D, F: HighFloorId, fw: number, fh: number, lines: RouteLine[], time: number, vis: (x: number, y: number, w: number, h: number) => boolean) {
+  const off = Math.floor(time * 10) % 6;
+  const direct = () => {
+    for (const l of lines) {
+      if (!vis(Math.min(l.ax, l.bx), Math.min(l.ay, l.by), Math.abs(l.bx - l.ax) + 1, Math.abs(l.by - l.ay) + 1)) continue;
+      flightLine(ctx, l.ax, l.ay, l.bx, l.by, l.col, time, l.bold, l.bold ? 1 : 0.75);
+      arrowHead(ctx, l.ax, l.ay, l.bx, l.by, l.bold ? l.col : C.steel4);
+    }
+  };
+  if (lines.length < 12 || typeof document === 'undefined') { direct(); return; }
+  let sig = `${fw}x${fh}`;
+  for (const l of lines) sig += `|${l.ax},${l.ay},${l.bx},${l.by},${l.col},${l.bold ? 1 : 0}`;
+  let L = LAYERS.get(F);
+  if (!L || L.sig !== sig) {
+    L = { sig, x0: -LAYER_PAD, y0: -LAYER_PAD, c: [null, null, null, null, null, null] };
+    LAYERS.set(F, L);
+  }
+  let c = L.c[off];
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = fw * TILE + 2 * LAYER_PAD;
+    c.height = fh * TILE + 2 * LAYER_PAD;
+    // painted on the CPU (thousands of 1 px rects), drawn on the GPU once a change
+    const bc = c.getContext('2d', { willReadFrequently: true });
+    if (!bc) { direct(); return; }
+    bc.translate(LAYER_PAD, LAYER_PAD);
+    // the march's phase is the layer's: time is picked so floor(time * 10) % 6 is this offset
+    for (const l of lines) {
+      flightLine(bc, l.ax, l.ay, l.bx, l.by, l.col, off / 10 + 0.01, l.bold, l.bold ? 1 : 0.75);
+      arrowHead(bc, l.ax, l.ay, l.bx, l.by, l.bold ? l.col : C.steel4);
+    }
+    L.c[off] = c;
+  }
+  ctx.drawImage(c, L.x0, L.y0);
+}
+
 // ---------------------------------------------------------------- the floor
 
 /** The Bay's frame: empty, stage1, stage2 by the open stage's progress; run1/run2 once every
@@ -315,19 +365,19 @@ export function drawDistrict(ctx: CanvasRenderingContext2D, g: Game, time: numbe
   const bayRes = (Object.values(MEGAS) as { floor: string; opens: string }[]).some((m) => m.floor === F && g.done(m.opens as never));
   if (bayRes && !st.ents.some((e) => e.kind === 'fbay')) bayMarks(ctx, time, F);
   // flight lines under everything that stands up
+  const lines: RouteLine[] = [];
   for (const r of st.routes) {
     const e = routeEnds(g, r, F);
     if (!e) continue;
-    if (!vis(Math.min(e.ax, e.bx), Math.min(e.ay, e.by), Math.abs(e.bx - e.ax) + 1, Math.abs(e.by - e.ay) + 1)) continue;
     const sel = r.id === ov.selRoute, hov = r.id === ov.hoverRoute;
     const short = routeShort(g, r, F);
     // short of skiffs: warning orange, bold (the bottleneck); selected gold; under the mouse bone;
     // the rest a quiet pencil line in ink
     const bold = sel || short || hov;
     const col = sel ? C.lamp2 : short ? C.lamp1 : hov ? C.bone : C.ink1;
-    flightLine(ctx, e.ax, e.ay, e.bx, e.by, col, time, bold, bold ? 1 : 0.75);
-    arrowHead(ctx, e.ax, e.ay, e.bx, e.by, bold ? col : C.steel4);
+    lines.push({ ax: e.ax, ay: e.ay, bx: e.bx, by: e.by, col, bold });
   }
+  drawRouteLines(ctx, F, fw, fh, lines, time, vis);
   // the buildings
   for (const e of st.ents) {
     const x = e.x * TILE, y = e.y * TILE;
@@ -364,7 +414,7 @@ export function drawDistrict(ctx: CanvasRenderingContext2D, g: Game, time: numbe
 /** A District module: its building (lit and working while it runs), its main output in the window. */
 function drawModule(ctx: CanvasRenderingContext2D, g: Game, e: FEnt, x: number, y: number, time: number, f: HighFloorId) {
   const out = mainOutput(g, e.design);
-  const mn = hart(f, 'module');
+  const mn = skinName(g, 'module', hart(f, 'module'));
   if (hasArt(mn)) {
     const s = sheet(mn);
     const f = e.state === 'work' ? 1 + ((Math.floor(time * (s.fps || 6)) + e.id) % Math.max(1, s.frames.length - 1)) : 0;
@@ -378,6 +428,8 @@ function drawModule(ctx: CanvasRenderingContext2D, g: Game, e: FEnt, x: number, 
 
 /** Routes this short (tiles, centre to centre) show a pulse on the line, not skiff sprites. */
 const SHORT_HOP = 2;
+/** More routes than this on a floor and a carrier over a building draws as a pulse. */
+const CROWDED_ROUTES = 48;
 
 /** The skiffs: each route's skiffs spaced along its round trip (2 x distance / speed + dwell),
  *  half the dwell at each end; outbound with a crate of the item while the route carries; over a
@@ -385,9 +437,16 @@ const SHORT_HOP = 2;
 function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: number, y: number, w: number, h: number) => boolean, F: HighFloorId) {
   const st = g.s[F]!;
   const kind = carrier(F);
-  const s = sheet(kind);
+  const skinN = skinName(g, kind, kind);
+  const skin = skinN !== kind;
+  const s = sheet(skinN);
   const k = skiffStats(g, F);
   const dwell = k.dwell;
+  const shadow = rgba(C.ink, 0.25);
+  // a crowded floor: a carrier over a building is a pulse, not a see-through sprite (a full World's
+  // hundreds of them over its modules read as a brown haze: Milestone 14's 213-module screenshot;
+  // DESIGN.md §17, readability over detail); over the open deck it stays a sprite
+  const crowded = st.routes.length > CROWDED_ROUTES;
   for (const r of st.routes) {
     const e = routeEnds(g, r, F);
     if (!e) continue;
@@ -425,16 +484,25 @@ function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: n
       const left = out ? e.bx < e.ax : e.ax < e.bx;
       // over a building it goes see-through, so the module under it still reads
       const over = hentAt(g, F, Math.floor(px / TILE), Math.floor((py + lift) / TILE));
+      if (over && crowded) {
+        if (!busy) continue;
+        ctx.fillStyle = C.ink;
+        ctx.fillRect(px - 2, py + lift - 4, 4, 4);
+        ctx.fillStyle = C.lamp2;
+        ctx.fillRect(px - 1, py + lift - 3, 2, 2);
+        continue;
+      }
       ctx.globalAlpha = over ? 0.45 : 1;
       // its shadow on the deck
-      ctx.fillStyle = rgba(C.ink, 0.25);
+      ctx.fillStyle = shadow;
       ctx.fillRect(px - 4, py + lift + 1, 8, 1);
       const frame = Math.floor(time * (s.fps || 16)) + i;
-      if (hasArt(kind)) drawSprite(ctx, s, frame, px, py, left);
+      if (skin || hasArt(kind)) drawSprite(ctx, s, frame, px, py, left);
       else { ctx.fillStyle = C.ink; ctx.fillRect(px - 6, py - 4, 12, 5); ctx.fillStyle = C.brass1; ctx.fillRect(px - 5, py - 3, 10, 3); }
       // loaded on the outbound leg (and loading at the source): the item rides on the deck (a
       // barge's hold sits a little higher: it is 12 px tall to the skiff's 10)
-      if (out && busy) ctx.drawImage(itemIcon(r.item), px - 4, py - (kind === 'barge' ? 14 : 12));
+      // (a courier carries it in the pouch under its wings, the item standing in for the pouch)
+      if (out && busy) ctx.drawImage(itemIcon(r.item), px - 4, py - (kind === 'barge' ? 14 : kind === 'courier' ? 7 : 12));
       ctx.globalAlpha = 1;
     }
   }
@@ -535,7 +603,19 @@ function hauditBox(ctx: CanvasRenderingContext2D, g: Game, time: number, fl: Hig
   if (!a || a.floor !== fl) return;
   const b = a.box;
   const col = a.result ? C.gold : C.teal1;
-  antsBox(ctx, b.x, b.y, b.w, b.h, col, rgba(col, 0.1), time);
+  antsBox(ctx, b.x, b.y, b.w, b.h, col, rgba(col, a.last ? 0.06 : 0.1), time);
+  // the Last Fold's audit (DESIGN.md §23) boxes the whole floor: the Inspector's beam sweeps across
+  // it, west to east, every three seconds while it measures
+  if (a.last && !a.result) {
+    const W = b.w * TILE, H = b.h * TILE;
+    const sx = b.x * TILE + Math.floor(((time / 3) % 1) * W);
+    for (let i = 0; i < 10; i++) {
+      ctx.fillStyle = rgba(C.teal1, 0.22 * (1 - i / 10));
+      ctx.fillRect(sx - i * 2, b.y * TILE, 2, H);
+    }
+    ctx.fillStyle = rgba(C.bone, 0.5);
+    ctx.fillRect(sx, b.y * TILE, 1, H);
+  }
   const warm = prules(g).auditWarmup * TICK_RATE;
   const total = warm + prules(g).auditWindow * TICK_RATE;
   const f = Math.min(1, a.t / total);

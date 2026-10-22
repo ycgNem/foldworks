@@ -14,8 +14,13 @@
 //
 // Act IV (DESIGN.md §22): the World floor is the same UI over `g.s.world`: barges instead of
 // skiffs, depth-3 modules (the District's folds) on its strip, its own Dock, Hopper, lots and Bay
-// (the Lighthouse and the Sky Anchor), no Fold tool (a fold up there is the Last Fold, Act V). Both
-// floors' pinned reports carry a labelled Stop / Start for the module and its route group.
+// (the Lighthouse and the Sky Anchor). Both floors' pinned reports carry a labelled Stop / Start for
+// the module and its route group.
+//
+// Act V (DESIGN.md §23): Beyond is the same UI again over `g.s.beyond` (couriers, depth-4 modules,
+// nothing folds there). The World gains two keys once The Last Fold is researched: Last Fold (the
+// whole-World audit, its progress over the whole floor, then the card: src/app/lastfold.ts) and,
+// once Beyond stands, Fold (a World group up to depth 4).
 import { C } from '../data/palette';
 import { HIGH, type HighFloorId } from '../data/floors';
 import { ITEMS, itemName, type ItemId } from '../data/items';
@@ -34,7 +39,9 @@ import { worldOf } from '../sim/systems/islands';
 import { BYPRODUCTS, defaultName, mainItem } from '../sim/systems/modules';
 import { bigWidth, smallWidth, LINE_H, BIG_LINE_H, ICON } from '../ui/font';
 import { layoutRich, drawLayout, richWidth, drawRich, CHIP_H, type RichLayout } from '../ui/rich';
-import { T, type Role } from '../ui/theme';
+import { T, roleInk, type Role } from '../ui/theme';
+import { previewKernels, lastFoldAuditRefusal } from '../sim/lastfold';
+import { KERNEL_GRADE } from '../data/kernels';
 import { sheet, itemIcon, hasArt } from '../render/sprites';
 import { mainOutput } from '../render/factory';
 import { routeAtWorld, routeEnds, routeShort, routeItems, districtMegaFrac, hart, carrier } from '../render/district';
@@ -46,15 +53,16 @@ import type { Layout } from './layout';
 import type { App } from './app';
 import type { Rect, TipLine } from '../ui/ui';
 
-/** The high floor on screen: the District, or the World (one UI for both, DESIGN.md §22). Set by
- *  every entry point from the app's floor (`at`). */
+/** The high floor on screen: the District, the World or Beyond (one UI for all three, DESIGN.md
+ *  §22-23). Set by every entry point from the app's floor (`at`). */
 let ID: HighFloorId = 'district';
 /** The high floor the app shows, or null on the Workshop and the Factory. */
-export const highOf = (app: App): HighFloorId | null => (app.floor === 'district' || app.floor === 'world' ? app.floor : null);
+export const highOf = (app: App): HighFloorId | null => (app.floor === 'district' || app.floor === 'world' || app.floor === 'beyond' ? app.floor : null);
 function at(app: App) { ID = highOf(app) ?? 'district'; }
-/** what flies the routes here, in words: skiffs on the District, barges on the World */
+/** what flies the routes here, in words: skiffs on the District, barges on the World, couriers
+ *  Beyond */
 const word = () => carrier(ID);
-const Word = () => (ID === 'world' ? 'Barge' : 'Skiff');
+const Word = () => (ID === 'beyond' ? 'Courier' : ID === 'world' ? 'Barge' : 'Skiff');
 const words = (n: number) => `${n} ${word()}${n === 1 ? '' : 's'}`;
 
 /** The high floors' UI state: the Route tool's source and its item list, the pinned thing, the
@@ -100,7 +108,8 @@ export function rate(n: number): string {
   if (n >= 100) return n.toFixed(0);
   if (n >= 10) return n.toFixed(1).replace(/\.0$/, '');
   if (n >= 1) return n.toFixed(1);
-  return n <= 0 ? '0' : n.toFixed(2);
+  // tier 5 flows up on Beyond run at 0.002-0.05 a second: three places, so they never read 0.00
+  return n <= 0 ? '0' : n >= 0.01 ? n.toFixed(2) : n.toFixed(3);
 }
 const MINUS = '-'; // the bitmap font has no U+2212 minus sign
 const coinK = (n: number) => Num.of(n).format();
@@ -472,10 +481,19 @@ export function districtHover(app: App, o: { brief: boolean; alpha: number }) {
 
 /** The tool strip's rect (the floor's tags keep off it). */
 function stripRect(app: App, L: Layout): Rect {
-  // between the Purse and the lift's wings (topbar.ts liftWingW: the District's and the World's)
+  // between the Purse and the lift's wings (topbar.ts liftWingW: the District's, the World's, Beyond's)
   const x0 = L.purse.x + L.purse.w + 10, x1 = L.lift.x - liftWingW(app) - 8;
-  const w = Math.min(x1 - x0, stripNatural(app));
+  STRIP.level = stripLevel(app, x1 - x0);
+  const w = Math.min(x1 - x0, stripNatural(app, STRIP.level));
   return { x: Math.round(x0 + (x1 - x0 - w) / 2), y: 4, w, h: 30 };
+}
+
+/** How tight the strip is this frame: 0 every word; 1 without the MODULES caption; 2 the route count
+ *  as bare numbers too (Act V's World at 1024 has four labelled tools). The tools keep their labels. */
+const STRIP = { level: 0 };
+function stripLevel(app: App, room: number): number {
+  for (let l = 0; l < 2; l++) if (stripNatural(app, l) <= room) return l;
+  return 2;
 }
 
 /** The slip under the strip saying what the tool in hand does (the Route tool, a group). */
@@ -498,6 +516,8 @@ export function districtZones(app: App, L: Layout): Rect[] {
   if (!f || !app.game.s[f]) return [];
   at(app);
   const out = [stripRect(app, L)];
+  const ls = lastSlipRect(app, L);
+  if (ls) out.push(ls);
   const lot = lotRect(app, L);
   if (lot) out.push(lot);
   const h = hintOf(app, L);
@@ -514,7 +534,21 @@ function tools(app: App): Tool[] {
     mk('dRoute', 'Route', 'flow', app.mode.k === 'route', [{ text: '{big:Route}' }, { text: '{k:LMB} a module, then where it goes' }, { text: `a ${word()} {coin:${coinK(skiffCost())}} · refunded when lifted` }], () => app.setMode(app.mode.k === 'route' ? { k: 'idle' } : { k: 'route' })),
     mk('dRemove', 'Remove', 'remove', app.mode.k === 'remove', [{ text: '{big:Remove}' }, { text: '{k:LMB} a module back to the inventory' }, { text: `its routes go with it · ${word()}s refunded` }], () => app.setMode(app.mode.k === 'remove' ? { k: 'idle' } : { k: 'remove' })),
   ];
-  // the World takes no fold of its own: a fold up there is the Last Fold (Act V, DESIGN.md §22)
+  // the World folds a group up to Beyond once The Last Fold is researched and Beyond stands
+  // (depth 4, DESIGN.md §23); nothing folds on Beyond
+  if (ID === 'world' && g.done('lastFold') && g.s.beyond) out.push(mk('dFold', 'Fold', 'fold', app.mode.k === 'fold', [{ text: '{big:World fold}' }, { text: '{k:LMB} drag a box over a joined group' }, { text: `up to ${HIGH.world.foldMax}×${HIGH.world.foldMax} · depth 4 · for {u:beyond} Beyond · {k:F}` }], () => app.toggleFold()));
+  // the Last Fold (Act V): audit the whole World, then its card
+  if (ID === 'world' && g.done('lastFold')) {
+    const ha = g.s.haudit;
+    const why = ha?.last ? null : lastFoldAuditRefusal(g);
+    const tip: TipLine[] = ha?.last
+      ? [{ text: '{big:The Last Fold}' }, { text: ha.result ? `graded ${ha.result.grade.letter} · {k:LMB} its card` : 'the whole World is being audited' }]
+      : [{ text: '{big:The Last Fold}' }, { text: 'audit every module on the World at once' }, { text: why ? `{bad:${why}}` : `{k:LMB} start · its card says what it banks, keeps and loses` }];
+    out.push(mk('dLastFold', 'Last Fold', 'lastFold', app.panel === 'lastfold' || !!ha?.last, tip, () => {
+      if (ha?.last) { if (ha.result) { app.panel = 'lastfold'; app.gradeAt = app.ui.time; app.hud.stamped = false; } return; }
+      app.act({ k: 'lastFoldAudit' });
+    }));
+  }
   if (ID === 'district' && g.done('districtFolds' as never)) out.push(mk('dFold', 'Fold', 'fold', app.mode.k === 'fold', [{ text: '{big:District fold}' }, { text: '{k:LMB} drag a box over a joined group' }, { text: `up to ${Math.max(HIGH.district.foldMax, prules(g).highFoldMax)}×${Math.max(HIGH.district.foldMax, prules(g).highFoldMax)} · depth 3 · {k:F}` }], () => app.toggleFold()));
   return out;
 }
@@ -522,8 +556,10 @@ function tools(app: App): Tool[] {
 /** Designs with spare copies the District takes: depth-2 groups and its own depth-3 folds (DESIGN.md
  *  §21), the groups first. */
 function groups(app: App) {
-  // the World takes depth 3 only: the District's folds (DESIGN.md §22)
+  // the World takes depth 3 only: the District's folds (DESIGN.md §22); Beyond depth 4, the World's
+  // folds (§23)
   if (ID === 'world') return app.game.s.designs.filter((d) => d.depth === 3 && d.spare > 0);
+  if (ID === 'beyond') return app.game.s.designs.filter((d) => d.depth === 4 && d.spare > 0);
   const ds = app.game.s.designs.filter((d) => (d.depth === 2 || d.depth === 3) && d.spare > 0);
   return [...ds.filter((d) => d.depth === 2), ...ds.filter((d) => d.depth === 3)];
 }
@@ -531,22 +567,23 @@ function groups(app: App) {
 const SLOT = 21;
 
 /** The route count on the strip (DESIGN.md §21: `routes 96/140`), warn ink within 10 of the cap. */
-function routesLabel(app: App): string {
+function routesLabel(app: App, short = false): string {
   const g = app.game;
   const n = g.s[ID]?.routes.length ?? 0, max = maxRoutes(g, ID);
-  return n >= max - 10 ? `{warn:routes ${n}/${max}}` : `routes ${n}/${max}`;
+  const s = short ? `${n}/${max}` : `routes ${n}/${max}`;
+  return n >= max - 10 ? `{warn:${s}}` : s;
 }
 
 /** The strip's words when no group is in hand: what goes up here and where it comes from. */
-const NONE = () => (ID === 'world' ? '{soft:no spare District folds}' : '{soft:no spare groups}');
-const groupsCap = () => (ID === 'world' ? 'MODULES' : 'GROUPS');
+const NONE = () => (ID === 'beyond' ? '{soft:no spare World folds}' : ID === 'world' ? '{soft:no spare District folds}' : '{soft:no spare groups}');
+const groupsCap = () => (ID === 'district' ? 'GROUPS' : 'MODULES');
 
-function stripNatural(app: App): number {
+function stripNatural(app: App, level = 0): number {
   const ts = tools(app);
   const tw = ts.reduce((s, t) => s + t.w + 3, 0);
   const gs = groups(app);
-  const slots = gs.length ? 6 + smallWidth(groupsCap()) + 4 + gs.length * (SLOT + 2) : 6 + richWidth(NONE());
-  return 12 + tw + 4 + richWidth(routesLabel(app)) + 6 + slots;
+  const slots = gs.length ? 6 + (level >= 1 ? 0 : smallWidth(groupsCap()) + 4) + gs.length * (SLOT + 2) : 6 + richWidth(NONE());
+  return 12 + tw + 4 + richWidth(routesLabel(app, level >= 2)) + 6 + slots;
 }
 
 /** The tool strip at the top centre: the tools, then the groups in hand (a page at a time). */
@@ -565,7 +602,7 @@ function toolStrip(app: App, L: Layout) {
     x += t.w + 3;
   }
   // the route count: how many more the floor holds (a refusal at the cap says why: the sim)
-  const rl = routesLabel(app), rw = richWidth(rl);
+  const rl = routesLabel(app, STRIP.level >= 2), rw = richWidth(rl);
   const g = app.game;
   const nR = g.s[ID]?.routes.length ?? 0, maxR = maxRoutes(g, ID);
   drawRich(ui, rl, x + 2, y + 5, Infinity, T.inkSoft);
@@ -581,13 +618,17 @@ function toolStrip(app: App, L: Layout) {
   const gs = groups(app);
   if (!gs.length) {
     drawRich(ui, NONE(), x, y + 5, Infinity, T.inkSoft);
-    ui.hint(x, y, R.x + R.w - x, 20, ID === 'world'
+    ui.hint(x, y, R.x + R.w - x, 20, ID === 'beyond'
+      ? [{ text: '{big:Modules}' }, { text: 'depth-4 modules go up here: the World\'s folds' }, { text: 'fold a group on the {u:world} World · stamp copies on the Modules page' }]
+      : ID === 'world'
       ? [{ text: '{big:Modules}' }, { text: 'depth-3 modules go up here: the District\'s folds' }, { text: 'fold a group of groups on the {u:district} District · stamp copies on the Modules page' }]
       : [{ text: '{big:Groups}' }, { text: 'depth-2 groups and depth-3 folds go up here' }, { text: 'fold a group on the {u:factory} Factory · stamp copies on the Modules page' }], 210);
     return;
   }
-  ui.small(groupsCap(), x, y + 7, T.inkSoft);
-  x += smallWidth(groupsCap()) + 4;
+  if (STRIP.level < 1) {
+    ui.small(groupsCap(), x, y + 7, T.inkSoft);
+    x += smallWidth(groupsCap()) + 4;
+  }
   const room = Math.max(1, Math.floor((R.x + R.w - 4 - x) / (SLOT + 2)));
   const pages = Math.max(1, Math.ceil(gs.length / room));
   const per = pages > 1 ? Math.max(1, room - 1) : room;
@@ -802,10 +843,11 @@ function pinnedPlace(app: App, L: Layout): { laid: Laid; x: number; y: number; w
 
 /** The District fold's audit: the Inspector's clipboard on a string beside the box (the countdown,
  *  the projected grade, U/W/C as meters), a cross to stop it; once graded, Fold it opens the card. */
-function auditClip(app: App) {
+function auditClip(app: App, L: Layout) {
   const g = app.game;
   const a = g.s.haudit;
   if (!a || a.floor !== ID) return;
+  if (a.last) return lastAuditSlip(app, L);
   const ui = app.ui;
   const b = worldRect(app, a.box.x, a.box.y, a.box.w, a.box.h);
   const W = 104, H = 62;
@@ -852,6 +894,65 @@ function auditClip(app: App) {
   ], 220);
 }
 
+/** Where the Last Fold's audit slip hangs: under the tool strip (and under the tool's hint slip),
+ *  centred on the strip, or null when no whole-World audit runs on this floor. */
+function lastSlipRect(app: App, L: Layout): Rect | null {
+  const a = app.game.s.haudit;
+  if (!a?.last || a.floor !== ID) return null;
+  const R = stripRect(app, L);
+  const w = Math.min(app.ui.w - 16, Math.max(R.w, 236));
+  const h = hintOf(app, L);
+  return { x: Math.round(Math.max(8, Math.min(app.ui.w - w - 8, R.x + R.w / 2 - w / 2))), y: R.y + R.h + 3 + (h ? h.r.h + 3 : 0), w, h: 44 };
+}
+
+/** The Last Fold's audit over the whole World (DESIGN.md §23): a long clipboard under the strip
+ *  with the countdown, the window's progress as a bar, the projected grade and U, W, C, the Kernels
+ *  it would bank now, and a labelled Cancel; once graded, "The Last Fold" opens the card. */
+function lastAuditSlip(app: App, L: Layout) {
+  const R0 = lastSlipRect(app, L);
+  const a = app.game.s.haudit;
+  if (!R0 || !a) return;
+  const ui = app.ui;
+  const g = app.game;
+  const R = clipboard(ui, R0.x, R0.y, R0.w, R0.h);
+  const warm = prules(g).auditWarmup * TICK_RATE;
+  const total = warm + prules(g).auditWindow * TICK_RATE;
+  const left = Math.max(0, Math.ceil((total - a.t) / TICK_RATE));
+  const res = a.result ?? (a.t > warm + TICK_RATE ? gradeHAudit(g) : null);
+  const k = previewKernels(g);
+  const bonus = res ? KERNEL_GRADE.bonus[res.grade.letter] ?? 0 : 0;
+  const kn = Math.floor(k.valueTerm + bonus + 1e-9);
+  // the left: the title and the time, then the window's bar
+  const title = a.result ? 'THE WORLD IS GRADED' : a.t < warm ? 'THE LAST FOLD - WARM-UP' : 'THE LAST FOLD - AUDITING';
+  ui.small(title, R.x, R.y + 1, a.result ? T.good : T.inkSoft);
+  const bw = Math.max(60, R.w - 140);
+  meter(ui, R.x, R.y + 11, bw, 5, Math.min(1, a.t / total), { role: a.result ? 'good' : 'research', glint: false });
+  const cs = a.result ? `${a.ids.length} modules` : `{u:clock} ${left} s · ${a.ids.length} modules`;
+  drawRich(ui, cs, R.x, R.y + 18, bw, T.ink);
+  // the right: the grade so far, U W C, the Kernels
+  const gx = R.x + bw + 8;
+  ui.big(res ? res.grade.letter : '?', gx + 8, R.y + 2, res ? GRADE_INK_D(res.grade.letter) : T.inkSoft, { align: 'center' });
+  const parts: [string, number][] = res ? [['U', res.grade.u], ['W', res.grade.w], ['C', res.grade.c]] : [['U', 0], ['W', 0], ['C', 0]];
+  parts.forEach(([l, v], i) => {
+    ui.small(l, gx + 19, R.y + 1 + i * 7, T.inkSoft);
+    meter(ui, gx + 25, R.y + 1 + i * 7, 26, 5, v, { role: meterRole(v), glint: false });
+  });
+  const ks = `{u:kernel} ${kn}`;
+  drawRich(ui, ks, gx + 56, R.y + 1, Infinity, T.coin);
+  ui.hint(gx, R.y, R.x + R.w - gx, 20, [
+    { text: `{big:${a.result ? 'Graded' : 'Projected'} ${res ? res.grade.letter : '?'}}` },
+    { text: `{u:kernel} ${kn} Kernels: value ${Math.round(k.value)} ÷ ${RULES.kernelPerValue.value} + ${bonus} for the grade` },
+    ...(res ? [{ text: `U busy ${Math.round(res.grade.u * 100)}% · W waste ${Math.round(res.grade.w * 100)}% · C the floor filled ${Math.round(res.grade.c * 100)}%` }] : [{ text: '{soft:the grade shows after the warm-up}' }]),
+  ], 240);
+  const by = R.y + R.h - 14;
+  if (a.result) {
+    if (button(ui, 'lastFoldOpen', R.x + R.w - 74, by, 74, 13, 'The card', { gold: true, pulse: true, tip: [{ text: `{big:Graded ${a.result.grade.letter}}` }, { text: '{k:LMB} what the Last Fold banks, keeps and loses' }] })) { app.panel = 'lastfold'; app.gradeAt = ui.time; app.hud.stamped = false; }
+  } else if (button(ui, 'lastFoldCancel', R.x + R.w - 50, by, 50, 13, 'Cancel', { tip: [{ text: '{big:Stop the audit}' }, { text: 'the World keeps running · nothing is lost' }] })) app.act({ k: 'hauditCancel' });
+}
+
+/** A grade's ink on paper (fold.ts GRADE_INK, by role here to keep the import list short). */
+const GRADE_INK_D = (l: string) => roleInk(gradeRole(l));
+
 /** Everything the District puts on the HUD (no page open): the tool strip, the lot's button, the
  *  audit's clipboard, the route card, the item list, the pinned report. */
 export function districtHud(app: App, L: Layout) {
@@ -860,7 +961,7 @@ export function districtHud(app: App, L: Layout) {
   sync(app);
   toolStrip(app, L);
   lotButton(app, L);
-  auditClip(app);
+  auditClip(app, L);
   pinned(app, L);
   // the item list asks a question: the route card waits while it is up
   if (DS.pick) itemPicker(app);
@@ -964,10 +1065,13 @@ export function hgradeCard(app: App, L: Layout) {
   const inner = (g.s[a.floor]?.routes ?? []).filter((r) => a.ids.includes(r.from) && a.ids.includes(r.to));
   const skiffs = inner.reduce((s, r) => s + r.skiffs, 0);
   const scaled = Object.fromEntries(Object.entries(res.outs).map(([k, v]) => [k, (v ?? 0) * res.grade.mult])) as Partial<Record<ItemId, number>>;
+  // the whole World's audit is the Last Fold's: its own card (src/app/lastfold.ts)
+  if (a.last) { app.panel = 'lastfold'; return; }
+  const W4 = a.floor === 'world';
   drawGrade(app, L, {
     res,
     box: a.box,
-    title: 'District fold',
+    title: W4 ? 'World fold' : 'District fold',
     kind: `GROUP ${a.box.w}X${a.box.h}`,
     parts: mods.map((m) => ({
       id: m.id,
@@ -981,13 +1085,13 @@ export function hgradeCard(app: App, L: Layout) {
       name: hname(g, m),
       busy: res.busy[m.id] ?? 0,
     })),
-    defaultName: defaultName(scaled) + ' III',
+    defaultName: defaultName(scaled) + (W4 ? ' IV' : ' III'),
     fold: (name) => app.act({ k: 'hfold', name }).ok,
     cancel: () => app.act({ k: 'hauditCancel' }),
     foldRows: [
-      `{u:fold} ${mods.length} groups · ${res.boxTiles} tiles → 1 tile`,
-      `rates ×${res.grade.mult.toFixed(2)} · depth 3 · stands here or on the World`,
-      `${skiffs} skiff${skiffs === 1 ? '' : 's'} inside refunded {coin:${coinK(skiffs * skiffCost())}}`,
+      `{u:fold} ${mods.length} ${W4 ? 'modules' : 'groups'} · ${res.boxTiles} tiles → 1 tile`,
+      W4 ? `rates ×${res.grade.mult.toFixed(2)} · depth 4 · stands on {u:beyond} Beyond` : `rates ×${res.grade.mult.toFixed(2)} · depth 3 · stands here or on the World`,
+      `${skiffs} ${word()}${skiffs === 1 ? '' : 's'} inside refunded {coin:${coinK(skiffs * skiffCost())}}`,
       `copies {coin:${coinK(bill)}} ×1 · ×1.5 · ×2 · …`,
     ],
     bill,

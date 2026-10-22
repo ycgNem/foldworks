@@ -19,6 +19,7 @@ import { paperRaw } from '../ui/paper';
 import { onPaper } from '../ui/theme';
 import { TICK_RATE } from '../engine/time';
 import { sheet, drawRot, frameAt, itemIcon, hasArt } from './sprites';
+import { skinned } from './skins'; // Milestone 11: a chosen skin's sheet
 import { TILE } from './ground';
 import { drawPip, type PipShape } from './pips';
 import { art, artSig, canvas, hh, named } from './skyart';
@@ -305,7 +306,7 @@ export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number
     const d = g.design(e.design);
     const deep = d?.depth === 2;
     if (deep) doubleFrame(ctx, x, y, time, e.state === 'work');
-    const s = sheet('module');
+    const s = skinned(g, 'module', 'module');
     drawRot(ctx, s, 0, x, y, 0);
     const out = mainOutput(g, e.design);
     // the well shows what it makes; it bobs a pixel while running

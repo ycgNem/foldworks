@@ -2,6 +2,100 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
+## Start here (2026-10-22, overnight run): every milestone built on `m9-worlds`
+
+Milestones 7-14 are built on the branch `m9-worlds` (not yet merged into `main`, nothing pushed):
+Act III, the second gate (passed with conditions), Act IV (islands, the World, Relocate, Legacy),
+Act V (the Last Fold, Kernels, the Seed, Beyond, tier 5, the Endless Ledger), the long tail (205
+trophies, the Codex and Unit 7's ending, 15 Challenges, 8 scenarios, 41 skins, photo mode), sound,
+onboarding, and performance/saves/release (60+ fps on every full floor, 31 KB saves, CI, the
+README). Each piece's own status section follows below; DECISIONS.md has every decision.
+
+### Owed to the owner
+- **Play from the 15 h checkpoint** (`e2e/out/checkpoints/seed1000-15h.txt`): the second gate's
+  condition, as at the first.
+- **Listen**: the mix and ambience (Milestone 12) were never heard by anyone.
+- **Decide the derivative flags** in DECISIONS.md (each "Flagged as derivative (owner to decide)"
+  list): the tier 3 chemistry (Factorio), the Legacy automation (Antimatter Dimensions), islands
+  with rules (Space Age), the third layer and its tree (AD's Reality), infinite orders (shapez),
+  wide belts (Factorio), alternate recipes (Satisfactory), trophy bonuses (AD, Cookie Clicker),
+  efficiency boards (Zachtronics).
+- **To publish**: merge `m9-worlds` into `main`, push, and set the repository's Pages source to
+  "GitHub Actions" (`.github/workflows/deploy.yml`). No itch.io page and no desktop build.
+
+### Measured vs estimated
+- Measured by bots: Acts I-III to 40 h (seed 1000; DESIGN.md §21 Pacing), performance (§25), save
+  size (§20).
+- Estimated only: Act IV's and Act V's pacing (§22, §23) until the Act IV bot (being written) and
+  an Act V bot measure them; the new Challenges' goal times (§24).
+
+## Status (2026-10-22, late night): Milestone 11's screens, built
+
+Built in a worktree off `m9-worlds` (the skin art merged in), app, UI and e2e code, the skin lookup
+and the photo export in `src/render/` (`skins.ts`, `photo.ts`, and a dozen lines where the
+renderer picks a building's, belt's, module's or carrier's sheet). DECISIONS.md "Milestone 11's
+screens". **The Trophy Shelf** (`src/app/shelf.ts`): an index of nine groups with counts, the
+group's stickers ("?" for hidden), the closest still to earn, the sticker in hand with its bonus,
+**Bonuses** (every kind summed against its cap) and the **Wardrobe** (every kind a skin dresses,
+wear one, what is still to earn); a trophy's ribbon says its bonus. **The Codex**
+(`src/app/codexbook.ts`): Tiers I-V and the Lore (16 pages, open ones readable, shut ones with
+their hint); **Unit 7's ending** has its own night-sky moment after the first Last Fold
+(`src/app/ending.ts`). **Challenges** (`src/app/challenges.ts`): all fifteen by act with rule, goal,
+reward, needs and progress, opened from the Reorganize card's strip and the Challenge slip (which
+shows the goal's count); `SHORT` has real entries. **Scenarios**: eight boards, each board's
+efficiency board (score, per tile, per kW, waste), the bests handed to the town with `boards` on the
+way back, the older localStorage store retired into them. **Skins** drawn wherever the base sheet is
+(Workshop buildings, belts, the Seed, the Dock and Hopper, modules on every floor, skiffs, barges,
+couriers), worn from a building's report ("Skin: ..." key) or the Wardrobe. **Photo mode**: a
+"Photo" key and H hide the HUD; Snap 1x/2x downloads a PNG of the whole floor. The wheel shows FREE
+for a trophy's free building. Checks: `tsc` clean; Vitest (non-pace) 1241 passed; `npm run screens`
+clean at three sizes with 21 new states (`TAIL` in `e2e/screens.mjs`, `tailSetup`); the shots'
+long-tail section (20-27b) looked at; `node e2e/tailshots.mjs [w h] [state...]` shoots the long
+tail's states alone. **Open:** no bot plays a Challenge or a Scenario board, so the boards' numbers
+on screen are set by the e2e states; the ending's typing speed and Bonuses' order are first cuts.
+
+## Status (2026-10-22, late night): Milestone 14's performance, save size and release
+
+Built in a worktree off `m9-worlds` while Milestone 11's sim and data were built elsewhere: no
+`src/sim/`, `src/data/` or `SAVE_VERSION` change. DESIGN.md "Performance (measured, Milestone 14)"
+and §20 "Save size"; DECISIONS.md "Milestone 14".
+
+### What exists
+- **`npm run perf`** builds each floor at its worst (the dense 16x16 Workshop; the widest Factory,
+  118 modules and 32 trunk tiles; every lot and 168 / 213 / 172 modules on the District, World and
+  Beyond with 160-180 routes) and times the frame, the rAF rate and the tick, with `GPU=hw` or
+  SwiftShader; `-- load` times a cold load. JSON in `e2e/out/perf/<gpu>.json`, a PNG per floor.
+- **The frame, 4-6x cheaper with the same pixels**: baked 9-slices, strings and pips
+  (`src/ui/bake.ts`), the high floors' flight lines as one baked layer per march offset
+  (`src/render/district.ts`), the HUD's reset previews once a tick (`src/app/pertick.ts`). With the
+  GPU: Workshop 13.8 → 2.4 ms a frame, Factory 15.3 → 4.0, District 25.3 → 5.0, World 23.1 → 5.1,
+  Beyond 23.7 → 4.8 (see DESIGN.md for SwiftShader and the tick).
+- **Packed saves**: slots `FWZ1.` and export strings `FW2.` (raw DEFLATE, `src/engine/deflate.ts`),
+  old slots and FW1 strings still load; a late save is 25-33 KB (was 168-485 KB of JSON).
+  `tests/savesize.test.ts` (the codec against Node's zlib, a full late game under 200 KB that
+  round-trips), `e2e/saves.mjs` (packed slots, an old plain slot continuing, the size in the page).
+- **Production build**: `npm run build` passes; a cold load of the preview is 6 requests, 0.66 MB
+  transferred, 0.8 s to the title; `npm run smoke` passes against it. No atlas needed.
+- **CI**: `.github/workflows/ci.yml` (typecheck, fast tests, build on every push and PR),
+  `deploy.yml` (the same gate, then GitHub Pages on a push to `main`), `pace.yml` (the pace tests
+  nightly and on demand, the checkpoints kept as an artifact). Nothing pushed.
+- **README.md** rewritten for the whole game: the five acts, the three resets, controls, running
+  it, the scripts, tests and e2e tools, the docs map, credits.
+
+### Stubbed / not done
+- Sim hotspots reported, not fixed (Milestone 11 owns `src/sim/`): `runFloor` in
+  `src/sim/systems/high.ts` is 80% of a 0.9 ms tick with every floor full (DESIGN.md's
+  Performance section has the proposed fixes). Under the 4 ms budget either way.
+- Measured on a Ryzen 9 7945HX laptop under heavy load from other agents, not a mid laptop: the
+  numbers carry a 2-3x margin for one. SwiftShader (no GPU at all) still drops the high floors to
+  18-19 fps at 1920x1080: a machine without GPU canvas is outside the target.
+- No itch.io page, no desktop build (the owner: no itch.io; DECISIONS.md "Milestone 14").
+- GitHub Pages is live only once `main` is pushed and Pages' source is set to GitHub Actions.
+
+### Next
+Merge into `m9-worlds`; fix the sim hotspots after Milestone 11 lands; the pace sim to 100 h with
+the Act IV and V bots.
+
 ## Status (2026-10-22, late night): the Act III bot's chemistry, the Act IV bot
 
 Built in a worktree off `m9-worlds`, time-boxed. DECISIONS.md "The Act III bot's chemistry and
@@ -56,18 +150,60 @@ Act V's sim", "Milestone 12".
   `systems/ledger.ts`; tests/act5.test.ts). SAVE_VERSION 10.
 - **Sound (Milestone 12)**: the mix, ambience per floor, reset stings, sound options.
 - Act IV and Act V art (`pixel-art/act4`, `pixel-art/act5`), 0 PixelLab generations.
+- **Act V's screens (Milestone 10's UI)**: Beyond on the lift (a four-point star key) with its
+  night sky, `beyond_*` platform, couriers, depth-4 modules, lots, tool strip, reports and floor
+  tags; the Last Fold (research page 5, the World's labelled "Last Fold" key, the audit slip under
+  the tool strip, the grade card with the bank, kept and lost and the Kept Legacy picker, the
+  two-click "Fold the World", the full-screen sequence with the third reset sound, the landing on
+  the new universe); the Kernel tree page (Rules, Further, Kept); the Seed on the Workshop (side
+  arrows in each ore's ink, ore chips on hover, a report with the labelled Turn button); the
+  Endless Ledger page (the order, next in turn, the cosmetic shelf with skin previews); wide belts
+  drawing their second item; tier-5 icons; lesson cards for the first Last Fold card, Beyond and
+  the Seed; Act V states in `npm run screens` and shots 14-19 in `npm run shots`
+  (`src/app/lastfold.ts`, `kernels.ts`, `endless.ts`).
 
 ### Stubbed / not done
-- The World floor's screen, Relocate's card and the Legacy tree (being built); Act V's screens
-  (the Last Fold card and sequence, the Kernel tree, Beyond, the Seed, the Ledger) after them.
+- (Milestone 11's screens since: skins are worn from a report or the Wardrobe.) Beyond's
+  Bay position stays empty (no Megaproject #6). Beyond's lots, tool strip and route cards are
+  the District's widgets over `g.s.beyond`.
 - No Act IV or Act V bot: Act IV and V pacing are model estimates (DESIGN.md §22, §23). The Act
   III bot is being re-measured under the gate's new numbers.
 - The owner's own play from the 15 h checkpoint (the second gate's condition).
 
 ### Next
-Merge the World UI and the Act III re-measure; mark the second gate passed with conditions; build
-Act V's screens and the Act IV bot; Milestone 11's long tail (its sim and data being built);
+Merge the World UI, Act V's screens and the Act III re-measure; mark the second gate passed with
+conditions; build the Act IV and Act V bots; Milestone 11's long tail (its sim and data being built);
 Milestone 14 (pace to 100 h, perf, saves, README, GitHub Pages; no itch.io, no desktop build).
+
+## Status (2026-10-22, night): Milestone 11's skin art drawn
+
+`pixel-art/m11-skins/` (`python build.py`, 0 PixelLab generations) draws every cosmetic's sheets:
+69 `src/art/skin_<id>_<base>` drop-in replacements (belts with their turn sheet, modules one per
+floor, the Dock and Hopper decorations), the looks and `out/contact_skins.png`. The kind to base
+sheet mapping the renderer lookup needs is in docs/endgame.md, "Milestone 11 skins as built".
+**Open:** the renderer's lookup and the picker (another agent); a look at them in the game's own
+screenshots once wired.
+
+## Status (2026-10-22, late): Milestone 11, the long tail's sim and data, built
+
+Built in a worktree off `m9-worlds`, sim, data, tests and docs only (the screens are another
+agent's). DESIGN.md §24, DECISIONS.md "Milestone 11: the long tail's sim". **205 trophies** (18
+hidden, "???" until earned), each with a small bonus of one of twelve capped kinds (`trules` in
+`src/sim/longtail.ts`: a product's craft +5%, the first n of a building free, skiffs and routes,
+Drawer slots, Spark life, heap room, start coin, Overdrive cooling, repairs, Chute room, a skin);
+**the Codex**'s completion by tier and **16 lore pages** in Unit 7's voice, the last its ending at the
+first Last Fold; **15 Challenges** (ten new across Acts II-IV, each wired through `ruled`/`won` and
+the rule helpers at the foot of `systems/challenges.ts`); **8 Scenarios** (five new) and the
+**efficiency boards** (bests per tile, per kW and waste, in `meta.boards`, handed to the town by the
+`boards` command); **41 cosmetics** plus the Ledger's ribbons in one list, granted from reputation,
+Challenges and trophies, worn with `{ k: 'skin', kind, id }`. `SAVE_VERSION` 11. Tests:
+`tests/longtail.test.ts` (38) and the long tail's cross-references in `tests/data.test.ts`; the
+slice pace tests and `pace-reorganize` pass (slice end 30:00 mean; run 2 passes run 1's peak at 0:16
+on both seeds, after the first cut's run-1 craft speeds were moved later: DECISIONS.md). **Open:** the screens (the shelf with bonuses and
+"???", the Codex pages, the Challenge list's new ten and their `needs`, the boards' three bests, the
+skin picker) and the `skin_<id>_<kind>` art; the slip placeholders in `src/app/act3.ts` `SHORT` were
+added for the typecheck. No Act III-IV bot plays a Challenge yet, so the new goals' times are the
+model's.
 
 ## Status (2026-10-22, later): Milestone 13, onboarding, UX and accessibility, built
 

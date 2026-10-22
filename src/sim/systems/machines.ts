@@ -18,6 +18,7 @@ import { powerFactor } from './power';
 import { isAudited } from './audits';
 import { note } from './stats';
 import { coldFactor } from './islands';
+import { craftSpeed } from '../longtail';
 
 const OK: ActResult = { ok: true };
 
@@ -99,7 +100,8 @@ export function runMachines(g: Game) {
       if (!hand) {
         const pf = powerFactor(g, m);
         // Rime (DESIGN.md §22): a cold powered machine runs at half speed
-        const sp = baseSpeed(g, m) * veinBoost(g, m) * pf * coldFactor(m);
+        // the Trophy Shelf's delivery trophies and Clean Hands speed one product's craft (§24)
+        const sp = baseSpeed(g, m) * veinBoost(g, m) * pf * coldFactor(m) * craftSpeed(g, r.outputs[0].item);
         if (sp > 0) {
           m.prog += sp;
           progressed = true;

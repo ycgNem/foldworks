@@ -35,6 +35,9 @@ import type { App } from './app';
 import type { Dir } from '../sim/world';
 // Act III (DESIGN.md §21): the Chute Mouths' look, the Factory Chute in hand, the watchers
 import { act3Frame, holdChute, holdingChute } from './act3';
+import { tailFrame } from './tailframe';
+import { freeBuild } from '../sim/longtail';
+import { buildPrice } from '../sim/systems/challenges';
 import { chuteCap } from '../sim/systems/modules';
 
 // ---------------------------------------------------------------- geometry
@@ -190,6 +193,7 @@ export function wheelFrameStart(app: App): void {
   else if (m.k === 'fmodule') W.hubF = { k: 'module', id: m.design };
   bookkeeping(app);
   act3Frame(app);
+  tailFrame(app); // Milestone 11: Unit 7's ending queued, the older Scenario store retired, photo mode
   if (!W.open) return;
   if (app.panel || app.screen !== 'play' || app.offlineJob) { closeWheel(app); return; }
   W.mx = ui.mx;
@@ -316,8 +320,13 @@ function storeItems(app: App, tabId: 'build' | 'power' | 'heavy'): Item[] {
   return kinds.map((kind, i): Item => {
     const d = BUILD[kind];
     const unlocked = g.unlocked(kind);
-    const free = kind === 'crate' && g.s.freeCrates > 0;
-    const afford = free || g.s.coin.gte(d.cost);
+    // Milestone 11: a trophy's "the first n free" (freeBuild), and the price as the sim charges it
+    // (a Challenge's reward can take a share off: buildPrice)
+    const tfree = freeBuild(g, kind);
+    const crateFree = kind === 'crate' && g.s.freeCrates > 0;
+    const free = crateFree || tfree;
+    const cost = buildPrice(g, kind);
+    const afford = free || g.s.coin.gte(cost);
     const owned = g.s.ents.filter((e) => e.kind === kind).length;
     const s = sheet(spriteName(kind));
     const working = g.s.ents.some((e) => e.kind === kind && e.state === 'work');
@@ -329,7 +338,7 @@ function storeItems(app: App, tabId: 'build' | 'power' | 'heavy'): Item[] {
       for (const r of d.blurb.split(' · ')) rows.push(r);
       if (d.kw) rows.push(`{u:power} a Pole within ${poleReach(g)} tiles`);
       if (d.w > 1) rows.push(`${d.w}×${d.h} · placed by its top-left tile`);
-      chips.push(free ? { text: `free ×${g.s.freeCrates}`, o: { role: 'good' } } : { text: Num.of(d.cost).format() + ' each', o: { role: afford ? 'coin' : 'bad', icon: 'coin' } });
+      chips.push(tfree ? { text: 'free · a trophy', o: { role: 'good', icon: 'trophies' } } : crateFree ? { text: `free ×${g.s.freeCrates}`, o: { role: 'good' } } : { text: Num.of(cost).format() + ' each', o: { role: afford ? 'coin' : 'bad', icon: 'coin' } });
       // Milestone 13: its rate at its first recipe known (or a power building's kW)
       const rate = kindRate(g, kind);
       if (rate) chips.push({ text: `${plain(rate.perMin, rate.perMin < 10 ? 1 : 0)}/min`, o: { role: 'ink', item: rate.item } });
@@ -344,7 +353,7 @@ function storeItems(app: App, tabId: 'build' | 'power' | 'heavy'): Item[] {
       id: 'wheel_item_' + kind,
       name: unlocked ? d.name : '???',
       draw,
-      price: unlocked ? (free ? 'FREE' : short(d.cost)) : null,
+      price: unlocked ? (free ? 'FREE' : short(cost)) : null,
       priceRole: afford ? 'coin' : 'soft',
       afford: unlocked && afford,
       locked: !unlocked,

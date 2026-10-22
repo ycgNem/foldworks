@@ -27,7 +27,8 @@ import type { Layout } from './layout';
 import type { App } from './app';
 
 export type LessonId = 'starved' | 'slag' | 'fold' | 'factory' | 'trunk' | 'brownout' | 'reorganize' | 'route' | 'shortRoute'
-  | 'relocate' | 'worldRoute' | 'islePebble' | 'isleCinder' | 'isleRime' | 'isleOldworks';
+  | 'relocate' | 'worldRoute' | 'islePebble' | 'isleCinder' | 'isleRime' | 'isleOldworks'
+  | 'lastFold' | 'beyond' | 'seed';
 
 interface LessonDef {
   title: string;
@@ -105,6 +106,19 @@ export const LESSONS: Record<LessonId, LessonDef> = {
     title: 'Barge routes', art: 'barge',
     lines: ['a barge carries two a trip', 'bulk sits beside its user', 'finished goods fly anywhere'],
   },
+  // Act V (DESIGN.md §23): the whole World's audit, the first visit to Beyond, the Seed
+  lastFold: {
+    title: 'The Last Fold', icon: 'lastFold',
+    lines: ['the whole World, graded', '{u:kernel} Kernels: value ÷ 10 + grade', 'fuller and busier banks more'],
+  },
+  beyond: {
+    title: 'Beyond', art: 'courier',
+    lines: ['World folds go up here: depth 4', 'a courier carries one a trip', 'nothing folds Beyond'],
+  },
+  seed: {
+    title: 'The Seed', art: 'seed',
+    lines: ['four ores, one out of each side', '{k:R} turns which side gets which', 'belt each one where it is needed'],
+  },
 };
 
 const ISLE_LESSON: Record<string, LessonId> = { pebble: 'islePebble', cinder: 'isleCinder', rime: 'isleRime', oldworks: 'isleOldworks' };
@@ -179,9 +193,10 @@ export function lessonEvents(app: App, evs: GameEvent[]) {
     if (e.type === 'firstSlagJam') teach(app, 'slag');
     else if (e.type === 'firstFold' || (e.type === 'fold' && (e.floor ?? 'workshop') === 'workshop')) teach(app, 'fold');
     else if (e.type === 'reorganize') teach(app, 'reorganize');
-    else if (e.type === 'firstRoute' && e.floor !== 'world') teach(app, 'route');
+    else if (e.type === 'firstRoute' && e.floor !== 'world' && e.floor !== 'beyond') teach(app, 'route');
     else if (e.type === 'relocate') teach(app, 'relocate');
     else if (e.type === 'route' && e.floor === 'world') teach(app, 'worldRoute');
+    else if (e.type === 'lastFoldAudit') teach(app, 'lastFold');
   }
 }
 
@@ -198,6 +213,9 @@ function poll(app: App) {
   // Act IV: the island the town is on, seen from its Workshop
   const isle = ISLE_LESSON[worldOf(g)];
   if (isle && app.floor === 'workshop') teach(app, isle);
+  // Act V: the first visit to Beyond, the Seed in a Workshop
+  if (app.floor === 'beyond') teach(app, 'beyond');
+  if (app.floor === 'workshop' && g.seeds.length) teach(app, 'seed');
 }
 
 /** A card may show now: in play, no page, no wheel, no celebration, no offline run. */

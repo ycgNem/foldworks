@@ -12,6 +12,7 @@ import { slip } from './chrome';
 import { customerPortrait } from './orders';
 import { registerCounter, registerMenu } from './topbar';
 import type { App } from './app';
+import { perTick } from './pertick';
 
 /** The first run's preview at which the Reorganize key appears: half the low end of a first reset
  * worth taking (DESIGN.md §16: 12-20 Patents at 4-6 h), so it shows up as the reset starts to
@@ -39,11 +40,12 @@ function perHour(patents: number, ticks: number): string {
  * live on the Patents page and the Reorganize page (the Purse carries coin only). */
 registerCounter({
   id: 'patents',
-  show: (app) => resetMeaningful(app, previewPatents(app.game).now),
+  // asked every frame: once a tick (src/app/pertick.ts)
+  show: (app) => resetMeaningful(app, perTick(app.game, 'previewPatents', () => previewPatents(app.game)).now),
   draw: (app, x, y) => {
     const ui = app.ui;
     const g = app.game;
-    const pv = previewPatents(g).now;
+    const pv = perTick(g, 'previewPatents', () => previewPatents(g)).now;
     const m = g.s.meta;
     const last = m.history[m.history.length - 1];
     const s = `{reset:+${pv}} {u:patents}`;

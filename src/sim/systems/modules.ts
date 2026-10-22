@@ -29,6 +29,8 @@ import { fauditFlow, fauditLock } from './nested';
 import { prules } from '../patents';
 import { hunfold, hunfoldRefusal } from './high';
 import { krules } from '../kernels';
+import { trules } from '../longtail';
+import { firstStampKitFree, stampRule } from './challenges';
 
 const DT = 1 / TICK_RATE;
 
@@ -69,7 +71,8 @@ export function foldAudited(g: Game, name: string | null, id?: number): ActResul
   let bill = 0, refund = 0;
   for (const e of ents) {
     if (inBill(e.kind)) bill += BUILD[e.kind].cost;
-    else refund += BUILD[e.kind].cost;
+    // (a trophy's free one was never bought: it refunds nothing, DESIGN.md §24)
+    else if (!e.free) refund += BUILD[e.kind].cost;
   }
   const mult = res.grade.mult;
   const scale = (t: Partial<Record<ItemId, number>>) => {
@@ -102,6 +105,7 @@ export function foldAudited(g: Game, name: string | null, id?: number): ActResul
   g.s.audits = g.s.audits.filter((q) => q !== a);
   g.bump('folds');
   if (res.grade.letter === 'S') g.bump('foldS');
+  g.bump('grade:' + res.grade.letter);
   g.first('factoryOpen');
   g.emit({ type: 'fold', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, id: d.grade.letter, value: d.id, d: a.box.w * a.box.h });
   if (g.first('firstFold')) g.emit({ type: 'firstFold', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, value: d.id });
@@ -151,12 +155,16 @@ export function subDesigns(g: Game, d: ModuleDesign): ModuleDesign[] | null {
 /** Machine Kits a copy of this design takes (DESIGN.md §18): 1 + floor(bill / 1,500), or none for
  * a design of slice-era machines only. */
 export function kitsFor(g: Game, d: ModuleDesign): number {
-  // the Committee's Pocketed Kits (reputation 3, §19) takes one off, never below none
+  // the Committee's Pocketed Kits (reputation 3, §19) takes one off, never below none; Hand-Made
+  // won (a Challenge, §24) makes a design's first stamp take none
+  if (firstStampKitFree(g, d.stamped)) return 0;
   return holdsAct2(g, d) ? Math.max(0, 1 + Math.floor(d.bill / RULES.kitDivisor.value) - prules(g).kitsOff) : 0;
 }
 
 /** Why the next copy can't be stamped, or null. */
 export function stampRefusal(g: Game, d: ModuleDesign): string | null {
+  const rule = stampRule(g);
+  if (rule) return rule;
   const cost = stampCost(g, d);
   if (g.s.coin.lt(cost)) return `A copy costs ${cost.format()} coin`;
   const kits = kitsFor(g, d);
@@ -461,7 +469,8 @@ export function moduleBoost(g: Game, m: FEnt, d: ModuleDesign, drill: number, au
 
 /** What the Chute's stock holds of each item: 20, or 60 with Unit 7's Specimen Jars (rep 4). */
 export function chuteCap(g: Game): number {
-  return g.s.orders.rep.unit7 >= 4 ? RULES.unit7ChuteStock.value : RULES.chuteStock.value;
+  // and the Trophy Shelf's Chute trophies (DESIGN.md §24)
+  return (g.s.orders.rep.unit7 >= 4 ? RULES.unit7ChuteStock.value : RULES.chuteStock.value) + trules(g).chuteRoom;
 }
 
 /** What a byproduct sells for once the Scrap Transmuter's stage 1 stands (DESIGN.md §21): a share of

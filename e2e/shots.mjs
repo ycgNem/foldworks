@@ -150,6 +150,69 @@ for (const [state, name, note] of [
 }
 // ---------------------------------------------------------------- (end of Act III)
 
+// ---------------------------------------------------------------- Act V (Milestone 10)
+// Set up by screens.mjs's act5Setup: the Last Fold's grade card, the sequence mid-fold, the Kernel
+// tree, Beyond with its courier routes, the Seed on a new universe's Workshop (pinned) and the
+// Endless Ledger.
+for (const [state, name, note] of [
+  ['lastFoldCardRest', '14-last-fold-card', "the Last Fold's grade card: the bank, what is kept and lost, the Seed"],
+  ['lastFoldSeq', '15-last-fold-sequence', 'the Last Fold mid-sequence: the World folding into the Seed'],
+  ['kernels', '16-kernel-tree', 'the Kernel tree: Rules, Further, Kept'],
+  ['beyondRoute', '17-beyond', 'Beyond: depth-4 modules, courier routes, a route clicked'],
+  ['seedPinned', '18-seed', "the Seed on a new universe's Workshop, pinned, wide belts beside it"],
+  ['ledger', '19-endless-ledger', 'the Endless Ledger: the order under way, next in turn, the shelf'],
+]) {
+  const { act5Setup } = await import('./screens.mjs');
+  // lesson cards held off (their own states are in screens.mjs); the mouse off the board
+  await page.evaluate(() => window.__app.onboarding.lessons.hold(true));
+  await page.mouse.move(2, Math.floor(h * 0.3));
+  const f = await page.evaluate(act5Setup, state);
+  await frames(page, 4);
+  if (f?.hover) await hoverTile(page, f.hover[0], f.hover[1]);
+  await shot(name, note);
+}
+await page.evaluate(() => window.__app.onboarding.lessons.hold(false));
+// ---------------------------------------------------------------- (end of Act V)
+
+// ---------------------------------------------------------------- Milestone 11 (the long tail)
+// Set up by screens.mjs's tailSetup over its base state (a late game, or a busy Act II Workshop):
+// the Trophy Shelf, a Codex lore page, Unit 7's ending, the Challenges page, a Scenario board's
+// efficiency board, the skin picker in a Miner's report, skinned machines, photo mode and the PNG
+// it exports (saved from the download).
+{
+  const { runTail } = await import('./screens.mjs');
+  await page.evaluate(() => window.__app.onboarding.lessons.hold(true));
+  for (const [state, name, note] of [
+    ['shelf', '20-trophy-shelf', 'the Trophy Shelf: the index of groups, Act I\'s stickers, the one in hand with its bonus'],
+    ['shelfBonuses', '20b-shelf-bonuses', "the shelf's bonuses summed against their caps"],
+    ['codexLore', '21-codex-lore', "the Codex's Lore: Unit 7's page on the Factory"],
+    ['ending', '22-unit7-ending', "Unit 7's ending, its own moment after the first Last Fold"],
+    ['challengeList', '23-challenges', 'the Challenges page: all fifteen by act, Headwinds picked for the next run'],
+    ['boardNight', '24-scenario-board', "the Scenarios page: Night Market's efficiency board"],
+    ['skinPicker', '25-skin-picker', "a Miner's pinned report with its Skin list open"],
+    ['skinned', '26-skinned-machines', 'skinned Workshop machines: gilded Miner, candy and starlit Mk1 and Mk2, filigree Steam Engine'],
+    ['skinnedDistrict', '26b-skinned-district', 'the District with ghostly modules and paper-crane skiffs'],
+    ['skinnedWorld', '26c-skinned-world', 'the World with blueprint modules and stormproof barges'],
+    ['photo', '27-photo-mode', 'photo mode: the HUD hidden, the snap strip'],
+  ]) {
+    await page.mouse.move(2, Math.floor(h * 0.3));
+    await runTail(page, state);
+    await frames(page, 6);
+    await shot(name, note);
+  }
+  // the photo itself: snapped at 1x, saved from the download
+  const dl = page.waitForEvent('download', { timeout: 30000 }).catch(() => null);
+  await page.evaluate(() => window.__app.longtail.snap(1));
+  const d = await dl;
+  if (d) {
+    await d.saveAs(`${OUT}/27b-photo-export.png`);
+    const info = await page.evaluate(() => window.__lastPhoto);
+    log.push(`- 27b-photo-export: the PNG photo mode exported (${info ? `${info.name}, ${info.w}x${info.h}` : 'saved'})`);
+  } else log.push('- 27b-photo-export: NO DOWNLOAD');
+  await page.evaluate(() => { window.__app.longtail.photo(false); window.__app.onboarding.lessons.hold(false); });
+}
+// ---------------------------------------------------------------- (end of Milestone 11)
+
 fs.writeFileSync(`${OUT}/shots.md`, `# Shots at ${w}x${h}\n\n${log.join('\n')}\n\n${errors.length ? '## Console\n\n' + errors.map((e) => '- ' + e).join('\n') : 'No console errors.'}\n`);
 console.log(log.join('\n'));
 if (errors.length) console.log(errors.join('\n'));

@@ -10,12 +10,12 @@
 import { C, rgba } from '../data/palette';
 import { BUILD } from '../data/machines';
 import { RESEARCH } from '../data/research';
-import { TROPHIES } from '../data/trophies';
+import { TROPHIES, bonusText } from '../data/trophies';
 import { itemName, ITEMS, type ItemId } from '../data/items';
 import { MEGA, MEGAS, type MegaId } from '../data/megaprojects';
 import { TITLE } from '../game-info';
 import { ICON, textWidth, bigWidth, drawText, LINE_H, BIG_H } from '../ui/font';
-import { layoutRich, drawLayout, richWidth } from '../ui/rich';
+import { layoutRich, drawLayout, richWidth, drawRich } from '../ui/rich';
 import { T, onPaper } from '../ui/theme';
 import { bubbleRaw, outlinedText, ribbonRaw, tagRaw, paperRaw, ribbonFor, RIBBON, type RibbonColor } from '../ui/paper';
 import { accentRole } from '../ui/theme';
@@ -35,9 +35,11 @@ import { nextGoal } from './goals';
 import { getHoverTags } from './settings';
 import { calm } from './soundopts';
 import { districtHud, districtHover, districtHoverKey, districtZones } from './district';
+import { lastFoldPlaying } from './lastfold';
 import { lessonFrame, lessonZones } from './lessons';
 import { stuckButton } from './stuck';
 import { keysFrame } from './keys';
+import { photoOn, photoHud, photoButton } from './photo';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
 
@@ -134,7 +136,7 @@ export function newHudState(): HudState {
 }
 
 /** The pages the notebook reopens at (not the grade cards, the offline letter, the slice's end). */
-const NOT_PAGES = new Set(['grade', 'fgrade', 'offline', 'sliceEnd']);
+const NOT_PAGES = new Set(['grade', 'fgrade', 'offline', 'sliceEnd', 'lastfold']);
 
 export function drawHud(app: App, dt: number) {
   const ui = app.ui;
@@ -142,6 +144,9 @@ export function drawHud(app: App, dt: number) {
   app.layout = L;
   app.hud.fieldSeen = false;
   presentation(app);
+  lastFoldPlaying(app); // a Last Fold moment whose page was shut ends here
+  // Milestone 11: photo mode hides the HUD; its strip along the foot is all that is drawn
+  if (photoOn() && !app.panel && app.screen === 'play') { photoHud(app); return; }
   // the floor's tags and the reports keep off the corners
   zones.length = 0;
   zones.push(...cornerZones(app, L, app.hud.purseBottom));
@@ -161,9 +166,10 @@ export function drawHud(app: App, dt: number) {
     districtHud(app, L);
   } else {
     // a page lies open on the desk: the floor goes behind dark wood
-    if (!NOT_PAGES.has(app.panel)) desk(app);
+    if (!NOT_PAGES.has(app.panel) || app.panel === 'lastfold') desk(app);
     drawScreen(app, L);
-    sectionTabs(app, L);
+    // the Last Fold's moment has the whole screen (src/app/lastfold.ts)
+    if (!lastFoldPlaying(app)) sectionTabs(app, L);
   }
   // a text field that is no longer drawn lets go of the keyboard
   if (!app.hud.fieldSeen && app.hud.focus) {
@@ -176,7 +182,7 @@ export function drawHud(app: App, dt: number) {
   lessonFrame(app, L); // Milestone 13: lesson cards on firsts (src/app/lessons.ts)
   keysFrame(app);
   refusal(app, dt);
-  celebrations(app, L, dt);
+  if (app.panel !== 'ending') celebrations(app, L, dt); // Milestone 11: Unit 7's ending has the screen
   drawWheel(app, L);
 }
 
@@ -198,7 +204,16 @@ function corners(app: App, L: Layout, dt: number) {
   const ui = app.ui;
   rail(app, L);
   const pb = purse(app, L, dt);
-  const bb = stuckButton(app, L, pb, bell(app, L, pb)); // Milestone 13: "Stuck?" beside the bell
+  let bb = stuckButton(app, L, pb, bell(app, L, pb)); // Milestone 13: "Stuck?" beside the bell
+  // Milestone 11: "Photo" beside Stuck? (or where it would be)
+  {
+    const sk = ui.ids.get('whereStuck'), bl = ui.ids.get('nextProblem');
+    const px = sk ? sk.x + sk.w + 4 : bl && bb > pb ? bl.x + bl.w + 6 : L.bell.x;
+    const py = sk ? sk.y : pb + 5;
+    // a high floor's audit slip reaches left over that place while it runs: the key (H) still works
+    const slipUp = !!app.high && !!app.game.s.haudit;
+    if (app.screen === 'play' && !app.offlineJob && !slipUp) { photoButton(app, px, py); bb = Math.max(bb, py + 18); }
+  }
   app.hud.purseBottom = counters(app, L, bb);
   lift(app, L, dt);
   notebook(app, L);
@@ -307,8 +322,18 @@ function slips(app: App, L: Layout, dt: number) {
     const s = bigSafe(`Trophy! ${t.name}`);
     const rw = Math.min(ui.w - 40, bigWidth(s) + 40);
     const drop = p.t < 0.25 ? (1 - p.t / 0.25) * -30 : p.t > 3.6 ? (p.t - 3.6) * -90 : Math.round(Math.sin(Math.min(1, (p.t - 0.25) * 4) * Math.PI) * 2);
-    const ry = Math.round(6 + i * 20 + drop);
+    // Milestone 11: the ribbon says the bonus the trophy gives, on a slip under it (the newest only)
+    const newest = i === Math.min(2, app.trophyPops.length) - 1;
+    const bonus = newest ? `{good:+} ${bonusText(t.bonus)}` : '';
+    const bw2 = bonus ? Math.min(ui.w - 40, richWidth(bonus) + 14) : 0;
+    const ry = Math.round(6 + (newest && app.trophyPops.length > 1 ? 34 : i * 20) + drop);
     ui.floating(() => {
+      if (bonus) {
+        const sr = slip(ui, Math.floor(ui.w / 2 - bw2 / 2), ry + 15, bw2, 17);
+        ui.clip(sr.x, sr.y - 2, sr.w, 12);
+        drawRich(ui, bonus, Math.floor(ui.w / 2), sr.y, Infinity, T.ink, { align: 'center' });
+        ui.unclip();
+      }
       ribbon(ui, Math.floor(ui.w / 2 - rw / 2), ry, rw, '', { color: 'gold' });
       uiIcon(ui, 'trophies', Math.floor(ui.w / 2 - rw / 2) + 5, ry + 1, 1);
       ui.big(s, Math.floor(ui.w / 2) + 5, ry + 3, RIBBON.gold.text, { align: 'center' });

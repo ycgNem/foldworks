@@ -65,6 +65,29 @@ import { setUiScale } from './access';
 // Milestone 9 (DESIGN.md §22): the Relocate card and the Legacy tree register their pages
 import './relocate';
 import './legacy';
+// Milestone 10 (DESIGN.md §23): the Last Fold's card and moment, the Kernel tree, the Endless Ledger
+import './lastfold';
+import './kernels';
+import './endless';
+import { openChallenges } from './challenges';
+import { endingWatch } from './ending';
+import { tailHooks } from './tailframe';
+import { photoKeys } from './photo';
+import { retireOldBests } from './scenarios';
+import { lastFoldPlaying } from './lastfold';
+// Milestone 11's frame hooks (src/app/tailframe.ts): photo mode's keys, the older Scenario store
+// retired into the town's boards, Unit 7's ending queued once the Last Fold's moment is over
+tailHooks.push(photoKeys, retireOldBests, (app) => endingWatch(app, lastFoldPlaying(app)));
+import { shelfTab, type ShelfTab } from './shelf';
+import { codexTab, type CodexTab } from './codexbook';
+import { scenarioPick } from './scenarios';
+import { openEnding, endingState } from './endingstate';
+import { setPhoto, snap } from './photo';
+import { pickNextRun } from './reorganize';
+import { openSkinList } from './tags';
+import type { SkinSlot } from '../data/cosmetics';
+import type { ChallengeId } from '../data/challenges';
+import type { ScenarioId } from '../data/scenarios';
 
 export type Mode =
   | { k: 'idle' }
@@ -273,6 +296,10 @@ export class App {
       if (!quiet) this.refuse('opens with {research:Charting}');
       return;
     }
+    if (f === 'beyond' && !this.game.s.beyond) {
+      if (!quiet) this.refuse('opens with {research:The Last Fold} and the {u:kernel} Kernel node Beyond');
+      return;
+    }
     const first = f !== this.floor;
     if (first) this.renderer.fx.clearWorld();
     this.floor = f;
@@ -298,11 +325,15 @@ export class App {
       this.game.first('worldSeen');
       this.fitCamera(true);
     }
+    if (f === 'beyond' && !this.game.flag('beyondSeen')) {
+      this.game.first('beyondSeen');
+      this.fitCamera(true);
+    }
   }
 
-  /** The high floor on screen (the District or the World, DESIGN.md §21-22), or null. */
+  /** The high floor on screen (the District, the World or Beyond, DESIGN.md §21-23), or null. */
   get high(): HighFloorId | null {
-    return this.floor === 'district' || this.floor === 'world' ? this.floor : null;
+    return this.floor === 'district' || this.floor === 'world' || this.floor === 'beyond' ? this.floor : null;
   }
 
   /** The floors open now, bottom up (Tab cycles them; the lift shows them). */
@@ -311,6 +342,7 @@ export class App {
     if (factoryOpen(this.game)) out.push('factory');
     if (this.game.s.district) out.push('district');
     if (this.game.s.world) out.push('world');
+    if (this.game.s.beyond) out.push('beyond');
     return out;
   }
 
@@ -508,7 +540,7 @@ export class App {
           break;
         case 'land':
           a.sfx('land');
-          if (e.floor === 'district' || e.floor === 'world') this.toast(`A ${HIGH[e.floor].name} lot!`, `+${HIGH[e.floor].lotCols} columns × ${HIGH[e.floor].h} · {reset:until Reorganize}`, C.gold, 'factory');
+          if (e.floor === 'district' || e.floor === 'world' || e.floor === 'beyond') this.toast(`A ${HIGH[e.floor].name} lot!`, `+${HIGH[e.floor].lotCols} columns × ${HIGH[e.floor].h} · {reset:until Reorganize}`, C.gold, 'factory');
           else this.toast('Land bought', `${CHUNKS.find((c) => c.id === e.id)?.name ?? 'New land'} · yours to build on`, C.gold);
           break;
         // ---- Act III (DESIGN.md §21): the District
@@ -524,16 +556,27 @@ export class App {
             banner(this, 'THE WORLD!', 'a fourth floor · District folds go up · barges fly them', C.gold);
             this.toast('The World is open', 'depth-3 modules · barge routes · the lift {k:Tab}', C.gold, 'world');
           }
+          if (e.id === 'beyond') {
+            // Act V (DESIGN.md §23): the fifth floor
+            a.sfx('fanfare', 0.8);
+            banner(this, 'BEYOND!', 'the fifth floor · World groups fold up · couriers fly them', C.gold);
+            this.toast('Beyond is open', 'depth-4 modules · courier routes · the lift {k:Tab}', C.gold, 'beyond');
+          }
           break;
         case 'firstHigh':
           if (e.floor === 'district') this.toast('Your first District group!', 'now a route · the Route tool, then where it goes', C.gold, 'module');
           else if (e.floor === 'world') this.toast('Your first World module!', 'now a barge route · the Route tool, then where it goes', C.gold, 'world');
+          else if (e.floor === 'beyond') this.toast('Your first module Beyond!', 'now a courier route · the Route tool, then where it goes', C.gold, 'beyond');
           break;
-        case 'firstRoute': this.toast(e.floor === 'world' ? 'Barges away!' : 'Skiffs away!', `click a route for its card · + ${e.floor === 'world' ? 'barge' : 'skiff'} where it runs short`, C.gold, 'module'); break;
+        case 'firstRoute': {
+          const w = e.floor === 'beyond' ? 'courier' : e.floor === 'world' ? 'barge' : 'skiff';
+          this.toast(e.floor === 'beyond' ? 'Couriers away!' : e.floor === 'world' ? 'Barges away!' : 'Skiffs away!', `click a route for its card · + ${w} where it runs short`, C.gold, 'module');
+          break;
+        }
         case 'route': break; // the renderer rings its two ends
         case 'skiff': a.sfx('click', 0.8, 1.3); break;
         case 'unroute': a.sfx('remove', 0.8); break;
-        case 'firstHighFold': this.toast('A module of groups!', 'depth 3 · for the World floor', C.gold, 'fold'); break;
+        case 'firstHighFold': this.toast(e.floor === 'world' ? 'A module of World groups!' : 'A module of groups!', e.floor === 'world' ? 'depth 4 · for Beyond' : 'depth 3 · for the World floor', C.gold, 'fold'); break;
         // the Milestone 5-6 review round: the Factory annex and the Patent Drawer
         case 'annex': a.sfx('land'); this.toast('Annex block bought', `block ${e.value ?? 1} · +${ANNEX.cols * FACTORY.h} tiles by the Factory Dock · {reset:until Reorganize}`, C.gold, 'factory'); break;
         case 'keep': a.sfx('stamp'); this.toast('Kept in the Drawer', `${e.id ?? 'The design'} · kept through every Reorganize · unfolds whole`, C.violet); break;
@@ -580,10 +623,19 @@ export class App {
           // the player is reading another line's grade card: then its badge waits, glowing
           const reading = this.panel === 'grade' && this.gradeId !== null && this.game.s.audits.some((q) => q.id === this.gradeId && q.result);
           this.audio.sfx('auditTick');
+          // the whole World graded (Act V, DESIGN.md §23): the Last Fold's card
+          if (e.floor === 'world' && this.game.s.haudit?.last) {
+            if (reading) break;
+            this.panel = 'lastfold';
+            this.gradeAt = this.ui.time;
+            this.hud.stamped = false;
+            break;
+          }
           if (e.id === 'S+') this.toast('S+! A flawless line', 'all busy · no waste · no tile spare · {k:F} fold ×1.35', C.gold, 'star');
           if (reading) break;
-          this.panel = e.floor === 'factory' || e.floor === 'district' || e.floor === 'world' ? 'fgrade' : 'grade';
-          if (e.floor !== 'factory' && e.floor !== 'district' && e.floor !== 'world' && e.value !== undefined) this.gradeId = e.value;
+          const up = e.floor === 'factory' || e.floor === 'district' || e.floor === 'world' || e.floor === 'beyond';
+          this.panel = up ? 'fgrade' : 'grade';
+          if (!up && e.value !== undefined) this.gradeId = e.value;
           this.gradeAt = this.ui.time;
           this.nameDraft = null;
           this.hud.stamped = false;
@@ -617,7 +669,7 @@ export class App {
         case 'megaDone': {
           a.sfx('megaStage');
           this.renderer.fx.kick(6);
-          if (e.floor === 'district' || e.floor === 'world') {
+          if (e.floor === 'district' || e.floor === 'world' || e.floor === 'beyond') {
             const m = MEGAS[e.id as MegaId];
             const st = m?.stages.find((q) => q.stage === e.value);
             this.toast(`${st?.name ?? m?.name ?? 'Megaproject'}: done!`, st?.reward ?? '', C.gold, 'mega');
@@ -639,6 +691,7 @@ export class App {
             this.hud.celebs.push({ kind: 'splus', t: 0, x: this.ui.w / 2, y: this.ui.h / 2, id: 'fold' });
             this.toast('Folded at S+!', '×1.35 its rates · one tile · a Gazette special', C.gold, 'star');
           } else if (e.floor === 'district') this.toast('Folded!', 'a module of groups · depth 3 · {k:I} Modules', C.gold, 'module');
+          else if (e.floor === 'world') this.toast('Folded!', 'a module of World groups · depth 4 · for Beyond', C.gold, 'module');
           else this.toast('Folded!', 'one tile, its rates · {k:Tab} the Factory floor · {k:I} Modules', C.gold, 'module');
           break;
         case 'firstFold':
@@ -647,6 +700,18 @@ export class App {
         case 'stamp': a.sfx('stamp'); break;
         case 'unfold': a.sfx('place'); break;
         case 'challengeWon': a.sfx('challengeWon'); break; // Milestone 12 (act3.ts toasts it)
+        // ---- Act V (DESIGN.md §23): the Last Fold, Kernels, the Seed, the Endless Ledger
+        case 'lastFoldAudit': a.sfx('foldStart'); a.sfx('milestone', 0.5, 0.8); this.renderer.fx.kick(2); break;
+        case 'lastFold': break; // src/app/lastfold.ts plays the sequence and resetSound(3)
+        case 'seed': break;
+        case 'kernel': a.sfx('upgrade'); break;
+        case 'ledger': {
+          a.sfx('order');
+          const cos = e.id && !(e.id in ITEMS) ? e.id : null;
+          this.toast(`Ledger order ${e.d ?? ''} filled!`, `{coin:${Num.of(e.value ?? 0).format()}}${cos ? ` · a cosmetic: {good:${cos}}` : ' · the next one opens'}`, C.lime, 'ledger');
+          if (cos) { a.sfx('fanfare', 0.7); banner(this, 'A COSMETIC!', `the Endless Ledger · ${cos}`, C.gold); }
+          break;
+        }
         case 'sliceEnd':
           a.sfx('milestone');
           this.renderer.fx.kick(5);
@@ -807,15 +872,19 @@ export class App {
    * over a group of modules). */
   toggleFold() {
     if (!this.game.done('folding')) return this.refuse('needs {research:Folding}');
-    // a fold on the World is the Last Fold (Act V, DESIGN.md §22): no Fold tool up there
-    if (this.floor === 'world') return this.refuse('a fold up here is the Last Fold · Act V');
-    if (this.floor === 'district') {
+    // nothing folds on Beyond, the top of the world (DESIGN.md §23)
+    if (this.floor === 'beyond') return this.refuse('nothing folds on Beyond · the top of the world');
+    // the World folds a group up to Beyond (depth 4) once The Last Fold is researched and Beyond
+    // stands; before that its only fold is the Last Fold (its own key on the strip)
+    if (this.floor === 'world' && !(this.game.done('lastFold') && this.game.s.beyond)) return this.refuse(this.game.done('lastFold') ? 'a World group folds up to Beyond · open it first ({u:kernel} Beyond)' : 'a fold up here is the Last Fold · Act V');
+    if (this.floor === 'district' || this.floor === 'world') {
       // a District fold (DESIGN.md §21): a box over a group of groups joined by routes
       const ha = this.game.s.haudit;
-      if (!this.game.done('districtFolds')) return this.refuse('needs {research:District Folds}');
+      if (this.floor === 'district' && !this.game.done('districtFolds')) return this.refuse('needs {research:District Folds}');
       if (ha) {
         this.panel = ha.result ? 'fgrade' : null;
         if (ha.result) { this.gradeAt = this.ui.time; this.hud.stamped = false; this.nameDraft = null; }
+        if (ha.last) { this.panel = ha.result ? 'lastfold' : null; return this.refuse(ha.result ? 'take the Last Fold or cancel its audit' : 'the whole World is being audited'); }
         return this.refuse(ha.result ? 'fold or cancel the graded group' : 'one audit at a time up here');
       }
       this.setMode(this.mode.k === 'fold' ? { k: 'idle' } : { k: 'fold' });
@@ -848,7 +917,7 @@ export class App {
     if (d.spare < 1) return this.refuse('no spare copy · {k:SHIFT}{k:LMB} stamp');
     // on the District a group (depth 2) or a District fold (depth 3) goes up here, on the World a
     // District fold (depth 3); anything else down to the Factory
-    if ((this.floor === 'district' && (d.depth === 2 || d.depth === 3)) || (this.floor === 'world' && d.depth === 3)) {
+    if ((this.floor === 'district' && (d.depth === 2 || d.depth === 3)) || (this.floor === 'world' && d.depth === 3) || (this.floor === 'beyond' && d.depth === 4)) {
       this.panel = null;
       this.setMode(this.mode.k === 'hmodule' && this.mode.design === id ? { k: 'idle' } : { k: 'hmodule', design: id });
       return;
@@ -1281,5 +1350,20 @@ export class App {
   /** the District's UI state (src/app/district.ts DS): e2e opens a route card or the item list */
   get districtUI() { return DS; }
   /** Milestone 13, for e2e: lesson cards, the stuck-finder, the UI scale */
+  /** Milestone 11's pages, for the e2e states (window.__app.longtail) */
+  get longtail() {
+    return {
+      shelf: (tab: ShelfTab, focus: string | null = null, slot: SkinSlot | null = null) => { shelfTab(tab, focus, slot); this.panel = 'trophies'; },
+      codex: (tab: CodexTab, page: string | null = null) => { codexTab(tab, page); this.panel = 'codex'; },
+      challenges: (id: ChallengeId | null) => openChallenges(this, id, 'reorganize'),
+      scenario: (id: ScenarioId | null) => { scenarioPick(id); this.panel = 'scenarios'; },
+      ending: (t = 99) => { openEnding(this); endingState.at = this.ui.time - t; },
+      photo: (on: boolean) => setPhoto(this, on),
+      snap: (k: 1 | 2) => snap(this, k),
+      pickNext: (id: ChallengeId | null) => pickNextRun(id),
+      skinList: (slot: SkinSlot | null) => openSkinList(slot),
+    };
+  }
+
   get onboarding() { return { lessons: lessonDebug, keys: keysDebug, whereStuck: () => whereStuck(this), findStuck: () => findStuck(this.game, this.floor), setUiScale: (v: number) => setUiScale(this, v) }; }
 }

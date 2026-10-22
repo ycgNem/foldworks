@@ -1,0 +1,32 @@
+# The fast checks on every push and pull request (Milestone 14): the typecheck, then every Vitest
+# test but the pace tests (the sim, data validation, purity, saves, the deflate codec), then the
+# production build. About a minute. The pace tests run in pace.yml.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      - run: npm run typecheck
+      - run: npx vitest run --exclude "tests/pace-*"
+      - run: npx vite build
