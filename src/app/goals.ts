@@ -61,7 +61,7 @@ import { DX, DY } from '../sim/world';
 // Act III (DESIGN.md §21): the District's goals
 import { HIGH } from '../data/floors';
 import { MEGAS } from '../data/megaprojects';
-import { hent, megaStageOf, routeCap, routeWant } from '../sim/systems/high';
+import { hent, megaStageOf, routeCap, routeWant, maxRoutes, lotPrice } from '../sim/systems/high';
 
 /** Who says a goal: the corner shows their portrait and the bubble's tail points at them. */
 export type Speaker = 'bramble' | 'unit7' | 'voltaire' | 'committee' | 'inspector';
@@ -180,6 +180,9 @@ function researchLine(g: Game, id: ResearchId, target: ResearchId | null): Goal 
 /** The Act II chain (DESIGN.md §18), or null when the act is done. */
 function act2Goal(g: Game): Goal | null {
   const s = g.s;
+  // Act III under way (the District stands this run): Act I-II's teaching steps are learned, and
+  // this run's Workshop builds say nothing about it (the second gate: "Grab a Smelter Mk2" at 30 h)
+  if (s.district) return act3Goal(g) ?? ordersGoal(g) ?? drillGoal(g) ?? researchToward(g, 'floatingCity');
   const count = (k: string) => s.ents.filter((e) => e.kind === k).length;
   const chunkGoal = (id: string): Goal | null => {
     if (s.land.includes(id)) return null;
@@ -199,10 +202,13 @@ function act2Goal(g: Game): Goal | null {
   const r3 = researchToward(g, 'steamPower');
   if (r3) return r3;
   const engines = s.ents.filter((q) => q.kind === 'steamEngine');
-  if (!count('boiler') && !count('generator'))
+  // the power and Mk2 steps teach once: a grid lit or a Mk2 built in any run (lifetime counters,
+  // kept through every reset) means the player knows them
+  const knowsPower = (s.counters.gridsLit ?? 0) > 0;
+  if (!count('boiler') && !count('generator') && !knowsPower)
     return say('voltaire', 'A Boiler, darling, with a Steam Engine at its front.', { chips: [`{i:coal} 1 per ${BUILD.boiler.fuel?.seconds ?? 4} s → {power:${BUILD.steamEngine.power ?? 300} kW}`, '{u:power} Power'], ui: 'build:boiler' });
   const lit = g.grids.some((gr) => gr.supply > 0) || engines.some((q) => q.state === 'work');
-  if (!lit) {
+  if (!lit && !knowsPower) {
     const eng = engines[0];
     return say('voltaire', 'Now light it, darling. Poles, coal, and something hungry for current.', {
       chips: [`a Pole within ${RULES.poleReach.value} tiles`, '{i:coal} into the Boiler', 'a powered machine on the grid'],
@@ -217,7 +223,7 @@ function act2Goal(g: Game): Goal | null {
   if (!delivered(g, 'circuit')) return say('bramble', 'Circuits! The clever stuff. An Assembler can make them.', { chips: ['3 {i:copperWire} + {i:plastic} + {i:glass} → {i:circuit}', `{coin:${ITEMS.circuit.value}} each`] });
   const r6 = researchToward(g, 'heavyMachines');
   if (r6) return r6;
-  if (!count('smelterMk2') && !count('pressMk2') && !count('assemblerMk2'))
+  if (!count('smelterMk2') && !count('pressMk2') && !count('assemblerMk2') && !(s.counters.mk2Built ?? 0))
     return say('voltaire', 'Think bigger, darling. A Mk2 machine, from the Heavy petal.', { chips: [`{u:heavy} 2×2 · ${BUILD.smelterMk2.speed ?? 4}× its Mk1 · {u:power}`], ui: 'build:smelterMk2' });
   const r7 = researchToward(g, 'nestedFolds');
   if (r7) return r7;
@@ -231,34 +237,68 @@ function act2Goal(g: Game): Goal | null {
   if (r8) return r8;
   const bay = s.factory.ents.find((q) => q.kind === 'fbay');
   if (!bay) return say('bramble', "Clear the Bay's corner on the Factory floor! The Drill lands there.", { chips: [`{u:mega} tiles ${FACTORY.bay.x}-${FACTORY.bay.x + 1}, ${FACTORY.bay.y}-${FACTORY.bay.y + 1}`], ui: 'factory' });
-  const st = megaStage(s.mega.stage);
-  if (st) {
-    let have = 0, need = 0;
-    const chips = (Object.entries(st.wants) as [ItemId, number][]).map(([k, n]) => {
-      const got = Math.min(n, s.mega.progress[k]?.toNumber() ?? 0);
-      have += got;
-      need += n;
-      return `{i:${k}} ${fmt(got)}/${fmt(n)}`;
-    });
-    const fed = g.routes.some((r) => r.to === bay);
-    const o = { bar: frac(have, need), chips, ui: 'mega' };
-    if (st.stage > 1) return say('committee', fed ? '"the drill." "feed it." "it\'s hungry. like us."' : '"psst." "the bay." "trunk the bits in. quietly."', o);
-    return say('bramble', fed ? 'Feed the Great Drill! Bits, steel, more bits!' : 'Trunk Drill Bits and steel into the Megaproject Bay!', o);
-  }
+  const drill = drillGoal(g);
+  if (drill) return drill;
   // Act III (DESIGN.md §21): the District, its routes and the Floating City
   const a3 = act3Goal(g);
   if (a3) return a3;
   // the Drill runs: the act's last steps are the customers' orders
+  return ordersGoal(g);
+}
+
+/** The Great Drill's open stage at the Factory Bay, or null when no stage is open or no Bay stands. */
+function drillGoal(g: Game): Goal | null {
+  const s = g.s;
+  const bay = s.factory.ents.find((q) => q.kind === 'fbay');
+  const st = megaStage(s.mega.stage);
+  if (!bay || !st) return null;
+  let have = 0, need = 0;
+  const chips = (Object.entries(st.wants) as [ItemId, number][]).map(([k, n]) => {
+    const got = Math.min(n, s.mega.progress[k]?.toNumber() ?? 0);
+    have += got;
+    need += n;
+    return `{i:${k}} ${fmt(got)}/${fmt(n)}`;
+  });
+  const fed = g.routes.some((r) => r.to === bay);
+  const o = { bar: frac(have, need), chips, ui: 'mega' };
+  if (st.stage > 1) return say('committee', fed ? '"the drill." "feed it." "it\'s hungry. like us."' : '"psst." "the bay." "trunk the bits in. quietly."', o);
+  return say('bramble', fed ? 'Feed the Great Drill! Bits, steel, more bits!' : 'Trunk Drill Bits and steel into the Megaproject Bay!', o);
+}
+
+/** The active order's customer waiting on it, or the first order offered; null when neither. */
+function ordersGoal(g: Game): Goal | null {
+  const s = g.s;
   if (!s.orders.active) {
     const o = offeredOrders(g)[0];
-    if (o) return say(o.customer, `${o.pitch} {k:O}`, { ...orderChips(g, o, false), ui: 'orders' });
-  } else {
-    const d = ORDER[s.orders.active];
-    return say(d.customer, WAITING[d.customer](d.name, d.at === 'factory'), { ...orderChips(g, d, true), ui: 'orders' });
+    return o ? say(o.customer, `${o.pitch} {k:O}`, { ...orderChips(g, o, false), ui: 'orders' }) : null;
   }
-  // nothing on order: the next Act III node on the road to the Floating City
-  if (s.mega.stage >= 3 && s.district) return researchToward(g, 'floatingCity');
-  return null;
+  const d = ORDER[s.orders.active];
+  return say(d.customer, WAITING[d.customer](d.name, d.at === 'factory'), { ...orderChips(g, d, true), ui: 'orders' });
+}
+
+/** The coach on the District floor (the second gate): only this floor's chores. A District fold's
+ *  audit, the District's chain (a group up, routes, the Dock, a route short of skiffs, the Bay), the
+ *  route cap coming close, then an order to fill and the next Act III node. */
+function districtGoal(g: Game): Goal | null {
+  const s = g.s;
+  const st = s.district!;
+  const a = s.haudit;
+  if (a && a.floor === 'district') {
+    if (a.result) return say('inspector', gradedLine(a.result.grade.letter), { chips: ['{u:fold} Fold it! on my clipboard'] });
+    return say('inspector', 'Auditing your group. Watch the projected grade.', { chips: [`{u:fold} ${a.box.w}×${a.box.h}`] });
+  }
+  // the route cap close (the floor's routes are joined by then): before a short route, which a
+  // big floor nearly always has
+  const max = maxRoutes(g, 'district');
+  if (st.routes.length >= max - 10) {
+    const price = lotPrice(g, 'district');
+    return say('inspector', 'Routes nearly at the cap. Fold a group, or buy a lot.', {
+      chips: [`{warn:routes ${st.routes.length}/${max}}`, ...(price ? [`a lot {coin:${price.format()}} +${RULES.routesPerLot.value} routes`] : []), '{u:fold} a fold packs its routes'],
+    });
+  }
+  const a3 = act3Goal(g);
+  if (a3) return a3;
+  return ordersGoal(g) ?? researchToward(g, 'floatingCity') ?? researchToward(g, 'scrapTransmuter');
 }
 
 /** The District's chain (DESIGN.md §21): Zoning, the first group up, the first route, something
@@ -399,8 +439,10 @@ function gradedLine(letter: string): string {
   return `A {big:${letter}}. Fold it, or tidy up and box it again.`;
 }
 
-export function nextGoal(g: Game): Goal | null {
+/** The next goal. `floor` is the floor on screen: on the District only its own chores are said. */
+export function nextGoal(g: Game, floor?: string): Goal | null {
   const s = g.s;
+  if (floor === 'district' && s.district) return districtGoal(g);
   const furnace = g.machines.find((m) => m.kind === 'furnace');
   const hasBellows = g.has('bellows');
   const count = (k: string) => s.ents.filter((e) => e.kind === k).length;

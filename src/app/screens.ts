@@ -366,12 +366,29 @@ export const unlockRows = (id: ResearchId) => RESEARCH[id].unlocks.split(' · ')
 
 const NODE_R = 13;
 
-/** Act III's page is open (HudState.treePage holds the first two pages' choice). */
-const tree = { three: false };
+/** Act III's page is open (HudState.treePage holds the first two pages' choice); `drawn` the UI
+ *  clock at the tree's last frame (a gap is a fresh opening); `pinned` a page set from outside. */
+const tree = { three: false, drawn: -1, pinned: false };
 /** Open the research tree at a page (the e2e states; a goal that names Act III's research). */
 export function setTreePage(app: App, n: 1 | 2 | 3) {
   tree.three = n === 3;
+  tree.pinned = true;
   if (n !== 3) app.hud.treePage = n;
+}
+
+/** Each time the tree opens it opens on the newest act under way (the second gate: Act II's page
+ *  during Act III): Act III's once its nodes are open (the Drill's stage 3) or one is done, else Act
+ *  II's once Folding is done. The tabs pick another page while it stays open. */
+function freshTreePage(app: App, act2: boolean, act3: boolean) {
+  const ui = app.ui;
+  const fresh = Math.abs(ui.time - ui.dt - tree.drawn) > 1e-6 && tree.drawn !== ui.time;
+  tree.drawn = ui.time;
+  if (!fresh) return;
+  if (tree.pinned) { tree.pinned = false; return; }
+  const g = app.game;
+  const three = act3 && ((g.s.mega.stage ?? 0) >= 3 || RESEARCH_LIST.some((d) => d.act === 3 && g.done(d.id)));
+  tree.three = three;
+  if (!three && act2) app.hud.treePage = 2;
 }
 
 function researchTree(app: App, r: Rect) {
@@ -382,6 +399,7 @@ function researchTree(app: App, r: Rect) {
   // says so while it does)
   const act2 = g.done('folding');
   const act3 = act2 && (g.done('greatDrill') || RESEARCH_LIST.some((d) => d.act === 3 && g.done(d.id)));
+  freshTreePage(app, act2, act3);
   const page: 1 | 2 | 3 = !act2 ? 1 : act3 && tree.three ? 3 : app.hud.treePage;
   const ready = (n: number) => page !== n && RESEARCH_LIST.some((d) => (d.act ?? 1) === n && available(g, d.id)) ? '!' : undefined;
   const tabs: MenuTab[] = act2 ? [

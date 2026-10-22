@@ -456,7 +456,11 @@ export async function districtSetup(state) {
     rubber: D('Rubber II', { plastic: 0.5 }, { rubber: 0.8 }, 'C', 0.9),
     sensor: D('Sensors II', { glass: 0.4, circuit: 0.2, rubber: 0.2 }, { sensor: 0.1 }),
   };
-  g.s.designs = Object.values(T);
+  // a District fold (depth 3) with spares: the tool strip lists it after the groups, marked III
+  const deep = D('Gearbox works III', {}, { gearbox: 0.6 }, 'A', 1.1);
+  deep.depth = 3;
+  deep.spare = 2;
+  g.s.designs = [...Object.values(T), deep];
   g.s.nextDesign = nid;
   // the Factory floor has its groups too (they are what goes up)
   a.act({ k: 'fplace', design: T.steel.id, x: 2, y: 1, rot: 0 });
@@ -539,6 +543,11 @@ export async function districtSetup(state) {
   if (state === 'districtRoute') DS.route = find(3, 2, 'gear').id;
   // the group joined to nothing: blocked, and its tag says no route takes its motors
   if (state === 'districtHover') return { hover: [3, 4] };
+  // a starved group pinned: what it needs of each input against what its routes bring, and why
+  if (state === 'districtStarved') {
+    const m = g.s.district.ents.find((e) => e.kind === 'module' && e.state === 'starved' && e.x === 7 && e.y === 6) ?? g.s.district.ents.find((e) => e.kind === 'module' && e.state === 'starved');
+    if (m) DS.sel = m.id;
+  }
   if (state === 'districtPick') {
     a.setMode({ k: 'route' });
     DS.pick = { fx: 4, fy: 6, tx: 10, ty: 1, items: ['plastic', 'oil'] };
@@ -564,7 +573,7 @@ export async function districtSetup(state) {
   return null;
 }
 
-export const DISTRICT = ['district', 'districtRoute', 'districtHover', 'districtPick', 'districtBox', 'districtAudit', 'districtGrade', 'districtOpen'];
+export const DISTRICT = ['district', 'districtRoute', 'districtHover', 'districtStarved', 'districtPick', 'districtBox', 'districtAudit', 'districtGrade', 'districtOpen'];
 
 // ---------------------------------------------------------------- Act III (Milestone 7: the player-facing pieces)
 /** Runs in the page (Act III's pieces on the Workshop, the Factory and the pages, DESIGN.md §21):
@@ -677,7 +686,14 @@ export async function act3Setup(state) {
   if (state === 'act3wheel') { a.openWheelAt(); return { hoverIds: ['wheel_heavy', 'wheel_item_chemVat'] }; }
   if (state === 'act3wheelF') { a.setFloor('factory', true); a.fitCamera(true); a.openWheelAt(); return { hoverIds: ['wheel_trunk', 'wheel_item_fchute'] }; }
   if (state === 'research3' || state === 'research3open') {
-    (await mod('/src/app/screens.ts')).setTreePage(a, 3);
+    // research3open opens the page on its own: the tree opens on the newest act under way (Act III)
+    if (state === 'research3') (await mod('/src/app/screens.ts')).setTreePage(a, 3);
+    else {
+      // the last page looked at was Act II's, and the tree is shut for a frame or two first
+      a.hud.treePage = 2;
+      a.panel = null;
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    }
     if (state === 'research3') {
       g.s.mega = { stage: 2, progress: {} };
       g.s.research.done = early;

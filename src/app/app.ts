@@ -805,8 +805,8 @@ export class App {
     const d = this.game.design(id);
     if (!d) return;
     if (d.spare < 1) return this.refuse('no spare copy · {k:SHIFT}{k:LMB} stamp');
-    // on the District a group (depth 2) goes up here; anything else down to the Factory
-    if (this.floor === 'district' && d.depth === 2) {
+    // on the District a group (depth 2) or a District fold (depth 3) goes up here; anything else down to the Factory
+    if (this.floor === 'district' && (d.depth === 2 || d.depth === 3)) {
       this.panel = null;
       this.setMode(this.mode.k === 'hmodule' && this.mode.design === id ? { k: 'idle' } : { k: 'hmodule', design: id });
       return;

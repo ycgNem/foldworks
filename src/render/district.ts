@@ -354,8 +354,12 @@ function drawModule(ctx: CanvasRenderingContext2D, g: Game, e: FEnt, x: number, 
   }
 }
 
+/** Routes this short (tiles, centre to centre) show a pulse on the line, not skiff sprites. */
+const SHORT_HOP = 2;
+
 /** The skiffs: each route's skiffs spaced along its round trip (2 x distance / speed + dwell),
- *  half the dwell at each end; outbound with a crate of the item while the route carries. */
+ *  half the dwell at each end; outbound with a crate of the item while the route carries; over a
+ *  building at reduced alpha; on a short hop a pulse instead. */
 function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: number, y: number, w: number, h: number) => boolean) {
   const st = g.s.district!;
   const s = sheet('skiff');
@@ -369,6 +373,21 @@ function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: n
     const T = 2 * travel + dwell;
     const busy = routeBusy(g, r);
     const n = Math.max(1, r.skiffs);
+    // a short hop (2 tiles or less): no skiff sprites, which would sit on the two modules and hide
+    // them (the second gate: ~100 routes into one Dock), but a pulse running down the line
+    if (dist <= SHORT_HOP) {
+      if (!busy) continue;
+      for (let i = 0; i < Math.min(n, 3); i++) {
+        const f = (((time / Math.max(0.5, travel) + i / Math.min(n, 3) + r.id * 0.37) % 1) + 1) % 1;
+        const px = Math.round(e.ax + (e.bx - e.ax) * f), py = Math.round(e.ay + (e.by - e.ay) * f);
+        if (!vis(px - 3, py - 3, 6, 6)) continue;
+        ctx.fillStyle = C.ink;
+        ctx.fillRect(px - 2, py - 2, 4, 4);
+        ctx.fillStyle = C.lamp2;
+        ctx.fillRect(px - 1, py - 1, 2, 2);
+      }
+      continue;
+    }
     for (let i = 0; i < n; i++) {
       const t = (((time + (i * T) / n + r.id * 0.37) % T) + T) % T;
       let f: number, out: boolean, moving = true;
@@ -381,6 +400,9 @@ function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: n
       const px = Math.round(e.ax + (e.bx - e.ax) * f), py = Math.round(e.ay + (e.by - e.ay) * f) - lift;
       if (!vis(px - 8, py - 18, 16, 22)) continue;
       const left = out ? e.bx < e.ax : e.ax < e.bx;
+      // over a building it goes see-through, so the module under it still reads
+      const over = hentAt(g, 'district', Math.floor(px / TILE), Math.floor((py + lift) / TILE));
+      ctx.globalAlpha = over ? 0.45 : 1;
       // its shadow on the deck
       ctx.fillStyle = rgba(C.ink, 0.25);
       ctx.fillRect(px - 4, py + lift + 1, 8, 1);
@@ -389,6 +411,7 @@ function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: n
       else { ctx.fillStyle = C.ink; ctx.fillRect(px - 6, py - 4, 12, 5); ctx.fillStyle = C.brass1; ctx.fillRect(px - 5, py - 3, 10, 3); }
       // loaded on the outbound leg (and loading at the source): the item rides on the deck
       if (out && busy) ctx.drawImage(itemIcon(r.item), px - 4, py - 12);
+      ctx.globalAlpha = 1;
     }
   }
 }
