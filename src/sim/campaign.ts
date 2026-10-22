@@ -14,6 +14,11 @@ import { patentRefusal, hasPatent } from './patents';
 import type { PatentId } from '../data/patents';
 import { ORDER } from '../data/orders';
 import { orderFrac } from './systems/orders';
+import { Act4Bot, IslandHand, nextLegacy } from './bot4';
+import { worldOf } from './systems/islands';
+import { previewLegacy } from './relocate';
+import type { WorldId } from '../data/worlds';
+import type { LegacyId } from '../data/legacy';
 
 /** The order a sensible player buys in: the rule that raises income at once (half a claim a copy
  * of its S-graded ingot and wire lines: more source copies) and Overdrive from the first minute,
@@ -80,6 +85,12 @@ export interface RunLog {
   /** Patent nodes bought after it */
   bought: PatentId[];
   megaStage: number;
+  /** the island the run was played on, and where it Relocated to at its end (Act IV) */
+  world: WorldId;
+  relocated?: WorldId;
+  /** Legacy banked at its Relocate, and the Legacy nodes bought at its start */
+  legacy?: number;
+  legacyBought?: LegacyId[];
   decisions: number[];
   what: string[];
   clicks: number[];
@@ -109,8 +120,13 @@ export interface CampaignOpts {
    * stage 3 stands (default false: the Act I-II pace tests' campaigns stop at the Act II plan's end,
    * as they were measured; tests/pace-act3.test.ts plays with it) */
   act3?: boolean;
+  /** with `act3`: the Act IV policy (bot4.ts) takes the Act III hand-over instead, plays on to the
+   * World, Relocates when it pays (`Act4Bot.relocateTo`) and spends Legacy at each run's start
+   * (default false: tests/pace-act3.test.ts measures Act III as it was; tests/pace-act4.test.ts plays
+   * with it) */
+  act4?: boolean;
   /** called once a second (`act3`: the Act III policy, once it has the hands) */
-  onSecond?: (g: Game, run: number, bot: Act2Bot | null, act3?: Act3Bot | null) => void;
+  onSecond?: (g: Game, run: number, bot: Act2Bot | null, act3?: Act3Bot | null, act4?: Act4Bot | null) => void;
 }
 
 /** Play runs in a row on `g` (a fresh game). */
@@ -123,6 +139,21 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
     const planner = new Bot(g, 'planner');
     let bot: Act2Bot | null = null;
     let act3: Act3Bot | null = null;
+    let act4: Act4Bot | null = null;
+    const isle = o.act4 ? new IslandHand(g) : null;
+    let relocate: WorldId | null = null;
+    const world = worldOf(g);
+    // Legacy, spent first thing on a new island (the tree screen, one click a hand-beat), and so
+    // before the Patents (the Purse's)
+    const legacyBought: LegacyId[] = [];
+    if (o.act4) {
+      for (;;) {
+        const next = nextLegacy(g);
+        if (!next || !g.act({ k: 'legacy', id: next }).ok) break;
+        legacyBought.push(next);
+        g.step(TICK_RATE / 4);
+      }
+    }
     let doneAt: number | null = null;
     let handover = -1;
     let act3At = -1;
@@ -168,20 +199,25 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
           bot = new Act2Bot(g, {}, [...extra, ...PLAN2]);
           handover = runSeconds(g);
         }
-      } else if (act3) act3.update();
+      } else if (act4) act4.update();
+      else if (act3) act3.update();
       else {
         bot.update();
         // Act III (DESIGN.md §21): once the Act II plan is through and the Great Drill's stage 3
-        // stands, the Act III policy takes the hands (the Act II bot stays on as its builder)
+        // stands, the Act III policy takes the hands (the Act II bot stays on as its builder); with
+        // `act4`, the Act IV policy, which plays the Act III one and goes on to the World
         if (o.act3 && bot.step >= bot.plan.length && g.s.mega.stage >= 3) {
-          act3 = new Act3Bot(g, bot);
+          if (o.act4) { act4 = new Act4Bot(g, bot); act3 = act4.a3; }
+          else act3 = new Act3Bot(g, bot);
           act3At = runSeconds(g);
         }
       }
+      isle?.update();
       g.tick();
-      if (act3) act3.tick();
+      if (act4) act4.tick();
+      else if (act3) act3.tick();
       else bot?.tick();
-      if (g.s.tick % TICK_RATE === 0) o.onSecond?.(g, run, bot, act3);
+      if (g.s.tick % TICK_RATE === 0) o.onSecond?.(g, run, bot, act3, act4);
       if (o.loopAt !== undefined && g.s.tick % TICK_RATE === 0) {
         const at = o.loopAt === 'slice' ? (handover >= 0 ? handover : Infinity) : o.loopAt;
         if (runSeconds(g) >= at && o.burn && !burned) { burned = true; o.burn(g); }
@@ -199,6 +235,15 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
         const act = g.s.orders.active;
         committee.push(act && ORDER[act].customer === 'committee' ? orderFrac(g, act) : -1);
         const m = preview.length;
+        // Act IV (DESIGN.md §22): a Relocate once it is allowed, pays, and the World stands full
+        // (Act4Bot.relocateTo: the preview card read, like the Reorganize's)
+        const to = o.loopAt === undefined && !o.noReset && run < o.runs && act4 ? act4.relocateTo() : null;
+        if (to) {
+          // Old Habits first: the nodes to keep, one a hand-beat
+          for (const id of act4!.habits()) { g.act({ k: 'habit', id }); g.step(TICK_RATE / 4); }
+          relocate = to;
+          break;
+        }
         // Act III: once the plan is through and the District has not grown for 10 minutes (the floor
         // full, every lot bought, nothing more this player builds while the coin piles up), a player
         // resets for what the preview offers rather than idle to the run's cap (DESIGN.md §21
@@ -223,10 +268,16 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
     const log: RunLog = {
       run, start: start / TICK_RATE, end: end / TICK_RATE, handover, act3: act3At, at, perMin, preview,
       patents: reset ? pv.now : 0, peakPerMin: Math.max(0, ...perMin.filter((_, i) => i >= 4)), bought, megaStage: g.s.mega.stage,
+      world, relocated: relocate ?? undefined, legacy: relocate ? previewLegacy(g, relocate).now : undefined, legacyBought,
       ...byTime([...planner.log.decisions, ...(bot?.log.decisions ?? [])].map((t) => t - t0), [...planner.log.what, ...(bot?.log.what ?? [])]),
       clicks: [...planner.log.clicks, ...(bot?.log.clicks ?? [])],
     };
     logs.push(log);
+    if (relocate) {
+      const r = g.act({ k: 'relocate', world: relocate });
+      if (!r.ok) throw new Error('campaign: relocate refused: ' + r.why);
+      continue;
+    }
     if (!reset) break;
     const r = g.act({ k: 'reorganize' });
     if (!r.ok) throw new Error('campaign: reorganize refused: ' + r.why);

@@ -1542,10 +1542,18 @@ every route taken and every lot bought), or at the run's cap.
 | Routes; between modules (rule 5) | some | 176-180 on a full floor; up to 38 between modules | 119 of 120; 14 between |
 | Skiffs (rule 5) | more than one a route somewhere | 224 on 179 routes (1.25 a route), at most 3 on one | one each |
 | Lots bought | as the floor fills | all three, every Act III run | none |
-| District folds | some | **none** (open, below) | none |
+| Chemistry (Act III bot) | the act's chain | **Chemistry 10:03, Robotics 12:03** (run 3; Solvent, Rubber, Processors folded) | none |
+| District folds | some | **none** (open, below: no Sensors design) | none |
 | A sim tick with the biggest District | under 4 ms (e2e/perf.mjs) | **0.95 ms (139 groups)** | 0.24 ms (49) |
 
 The runs: 1 0:00-4:24 (14 Patents), 2 4:24-7:26 (7), 3 7:26-16:52 (29, Act III from 9:53), 4 16:52-26:07 (6, Act III from 19:13), 5 26:07-35:33 (5, Act III from 28:24), 6 35:33-40:00 (Act III from 37:47).
+
+**Re-measured with chemistry** (the chemistry corner, 2026-10-22, the same test): the District
+10:01, the City's stage 1 11:33, Chemistry and Robotics paid in run 3 (10:03, 12:03 in the Act IV
+campaign), 128 District groups at most (0.95 ms a tick), rule 1 and 2 at 10.4-10.5 min in three Act
+III stretches and **18.8 and 17.3 min from 36:22** in the last (run 6, 6 minutes after its
+hand-over: the same early-run wait as before's 20.1, still not looked into). Runs 1 0:00-4:24, 2
+4:24-7:26, 3 7:26-16:45 (33 Patents), 4 16:45-25:21 (6), 5 25:21-34:00 (6), 6 34:00-40:00.
 
 Lessons:
 - **The waste chute and 1 a trip halve the routes and make distance cost.** With waste going to
@@ -1577,13 +1585,17 @@ Lessons:
   Act III hand-over, as the plan opens the District (the cause not looked into yet; the same
   campaign without the route-full rule measured 9.9 at worst, so it looks like the run's path, not
   a wall). The other stretches wait at most 10.4 min, the full floor's 10-minute reset.
-- **Chemistry, and so District Folds and the City's stage 2.** Solvent needs sand, and the map's
-  only sand patch is the lab's (chunk E); a lone sand miner may not fold (a module is a line), so
-  no Factory module makes sand and no Chute can carry it to a Workshop Chem Vat line. A player
-  belts sand from the patch by hand; this bot does not yet. Without solvent there is no rubber,
-  sensor or processor, so Robotics (and District Folds behind it), sandwiches (the City's stage 2,
-  the Picnic) and the Scrap Transmuter stay out of its reach, and no depth-3 fold is measured. A
-  Sand design (a miner and a sieve or crusher, or sand from gravel) would open it for a Chute line.
+- **Chemistry reaches Robotics, not District Folds** (re-measured with the chemistry corner,
+  `src/sim/bot3.ts`, DECISIONS.md "The Act III bot's chemistry and the Act IV bot"). The sand was
+  never the wall: a Solvent design folds a sand Miner with the Chem Vat. The bot now folds Solvent,
+  Rubber and Processors in a powered corner of chunk E (each holding its own solvent vat), nests
+  Rubber II and Processors II, and pays Chemistry (10:03), Vulcanizing, Processors, Sensors and
+  Robotics (12:03) in run 3. Its Sensors line (chunk D, Chute-fed) starves for rubber: the Rubber II
+  group feeding the Chute sends its spare plastic down with the rubber, the plastic stock fills and
+  stops it. So no Sensors design, no Sensors II or Arms II, no robot arms, and District Folds (20
+  arms, 120 sensors) is out of reach; a chemistry step waiting an hour ends the plan, so the District
+  grows and resets as before. Batteries, Hydroponics, Sandwiches, umbrellas and the Engineer are not
+  taught (the City's stage 2, the Transmuter and Relocation need them).
 - **Act III orders beyond the Servo Ballet.** Spare Parts (600 bearings) needs a bearings source the
   bot can fold: a lone press may not fold, and the Gearboxes line's press feeds its own assembler.
 - **Rules 1 and 2 outside Act III**: Act II's Bay-floor wait (39.5 min at 2:48, §16) is unchanged.
@@ -1812,8 +1824,35 @@ the save's first run.
 - **The island rules hold to 80 h:** every rule has a softener in the tree, but none removes its
   rule (Pebble keeps C and D as sky, Cinder's belts still melt, Rime's lone machine still wants a
   Heater, the Old Works' rubble stays); a run on a fifth visit still plays differently from Home.
-- **Not yet measured:** these are the model's numbers; the bots' Act IV policy measures them (no
-  pace test for Act IV yet).
+- **Measured below** (the Act IV bot): the campaign does not reach the World yet.
+### Pacing (measured, the Act IV bot)
+Measured by the campaign bot with the Act IV policy (`src/sim/bot4.ts` over `src/sim/bot3.ts`,
+`tests/pace-act4.test.ts`, seed 1000, `FOLD_ACT4_HOURS` = 40 h of play, 25 min of wall time; 80 h
+did not fit the time box). The Act IV policy is written and wired (research page 4, the World by
+the District's rules, Relocate when the preview pays, Legacy in a priority, the Old Works' rubble),
+but the campaign never reaches it: Charting wants District Folds, which wants robot arms and
+sensors the Act III bot cannot yet make (§21 Pacing, Open).
+
+| Measure | Target | Measured (seed 1000, 40 h) |
+|---|---|---|
+| District open | about 11 h | 10:01 (run 3) |
+| Chemistry, Robotics | (Act III) | 10:03, 12:03 (run 3) |
+| District Folds, Charting, the World | before the first Relocate | **never** (open) |
+| First Relocate | 40-45 h | **none** (open: no World, and Relocation wants 3 Engineers and 20 umbrellas) |
+| Four islands | by 60 h | **Home only** (open) |
+| Megaproject stages | | the City's stage 1 at 11:41; no Act IV stage |
+| Legacy | the tree by 75-80 h | none banked |
+| Rule 1 per Act III stretch | 10 min | 10.4, 10.7, 10.4, 7.3 min (each the full-floor reset's 10-minute wait) |
+| Rule 2 per Act III stretch | 15 min | 10.4, 10.7, 10.4, 6.5 min |
+| Tick, the biggest floor | under 4 ms | 0.93 ms (a District of 130 groups; no World stood) |
+
+The runs: 1 0:00-4:24 (14 Patents), 2 4:24-7:26 (7), 3 7:26-16:36 (33, Act III from 9:53), 4
+16:36-25:37 (6, from 18:51), 5 25:37-34:36 (6, from 27:48), 6 34:36-40:00 (from 36:49). No number
+moved: every Act IV target is unmeasured for want of the Act III chain, not shown wrong.
+
+**Open** (`[pace4] OPEN` in the test): the Sensors line's rubber (then Arms, District Folds,
+Charting), the Act IV targets above, and the islands' layouts (the Act I-II bots lay Home's
+lines; Pebble's sky chunks, Cinder's vents and the Old Works' ruins will refuse some of them).
 
 ### Derivative, flagged and re-derived (CLAUDE.md)
 - **A prestige tree of automation bought with the second reset's currency** resembles Antimatter

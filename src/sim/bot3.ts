@@ -24,11 +24,11 @@ import { Act2Bot, BAY_PLAN, PHASE_M, PHASE_Z, working, type Dest, type FPl, type
 import { RESEARCH, type ResearchId } from '../data/research';
 import { ITEMS, type ItemId } from '../data/items';
 import { RECIPE } from '../data/recipes';
-import { HIGH } from '../data/floors';
+import { HIGH, type HighFloorId } from '../data/floors';
 import { TICK_RATE } from '../engine/time';
 import { available } from './systems/research';
 import { BYPRODUCTS, mainItem, stampCost, stampRefusal } from './systems/modules';
-import { hent, hentAt, highW, routeCap, routeWant, bayWants, lotPrice, hplaceRefusal, maxRoutes, routeRefusal } from './systems/high';
+import { hent, hentAt, hfloor, hfoldRefusal, HIGH_IDS, highW, routeCap, routeWant, bayWants, lotPrice, hplaceRefusal, maxRoutes, routeRefusal } from './systems/high';
 import { claimLoad, claimPrice, claimsHeld, placedClaims } from './systems/claims';
 import { ffoldRefusal } from './systems/nested';
 import { ORDER } from '../data/orders';
@@ -39,7 +39,7 @@ const E: Dir = 0, S: Dir = 1, W: Dir = 2, N: Dir = 3;
 
 /** Act III research, in the order this player takes it (a node whose cost the bank already holds
  * goes first, as in bot2). */
-export const WISH3: ResearchId[] = ['zoning', 'chutes', 'bearings', 'servos', 'floatingCity'];
+export const WISH3: ResearchId[] = ['zoning', 'chutes', 'bearings', 'servos', 'floatingCity', 'chemistry', 'vulcanizing', 'processors', 'sensors', 'robotics', 'districtFolds'];
 
 // ------------------------------------------------------------------ Workshop lines
 
@@ -67,6 +67,81 @@ export const LINES: Record<string, LineSpec> = {
     name: 'Lift rotors', product: 'liftRotor', w: 'steel', needs: ['bearings', 'floatingCity'],
     ms: [{ kind: 'press', recipe: 'pressBearing' }, { kind: 'assembler', recipe: 'buildGearbox', n: 'gear', s: 'steel' }, { kind: 'assembler', recipe: 'buildLiftRotor', n: 'motor', s: 'steel' }],
   },
+  // chemistry's unpowered steps (the solvent and rubber come down the Chute from the Factory's
+  // chemistry feeders, CHEM_FEED and RUBBER_FEED)
+  sensors: { name: 'Sensors', product: 'sensor', w: 'glass', needs: ['sensors'], ms: [{ kind: 'assembler', recipe: 'buildSensor', n: 'circuit', s: 'rubber' }] },
+  arms: { name: 'Robot arms', product: 'robotArm', w: 'servo', needs: ['robotics'], ms: [{ kind: 'assembler', recipe: 'buildArm', n: 'sensor', s: 'steel' }] },
+};
+
+/** The chemistry corner (chunk E's south-east, x 17-23, y 6-9, once the lab's concrete plant, its
+ * gravel press and the steel line are lifted: LAB_C). A Chem Vat draws power and power never
+ * crosses a fold box, so the box holds its own plant: an oil Boiler (fed by a Chute Mouth) steaming
+ * an Engine, and a Pole 7 tiles from E's (so the two grids never join). The vat at (21,7) faces
+ * west: its product belted west along row 7 into the loop at (16,7) and so to the Hopper; its back
+ * (22,7) and top (21,6) take inputs; its waste goes out of its south side into two crates.
+ * Solvent: a sand Miner on the patch (21,6) feeds the vat from above (a Miner and a Chem Vat:
+ * two kinds of machine, so it folds, and the module holds a sand claim), oil from the Chute.
+ * Rubber: plastic from above, solvent from behind, both from the Chute. */
+const CHEM_PLANT: Pl[] = [
+  { kind: 'chuteMouth', x: 17, y: 9, rot: E, recipe: 'oil' },
+  { kind: 'boiler', x: 18, y: 9, rot: E },
+  { kind: 'steamEngine', x: 19, y: 9, rot: E },
+  { kind: 'pole', x: 20, y: 9, rot: E },
+  ...[20, 19, 18, 17].map((x): Pl => ({ kind: 'belt', x, y: 7, rot: W })),
+];
+
+export interface CornerSpec { name: string; product: ItemId; needs: ResearchId[]; parts: Pl[]; box: Box; last: { x: number; y: number } }
+
+const CORNER_SOLVENT: Pl[] = [
+  ...CHEM_PLANT,
+  { kind: 'miner', x: 21, y: 6, rot: S },
+  { kind: 'chemVat', x: 21, y: 7, rot: W, recipe: 'mixSolvent' },
+  { kind: 'chuteMouth', x: 22, y: 7, rot: W, recipe: 'oil' },
+  { kind: 'belt', x: 21, y: 8, rot: E },
+  { kind: 'crate', x: 22, y: 8, rot: E },
+  { kind: 'crate', x: 23, y: 8, rot: N },
+];
+
+export const CORNER: Record<string, CornerSpec> = {
+  // run until research has the solvent it wants (Vulcanizing and Processors: a player lets the
+  // line pay its research before folding it), then folded
+  solvent: { name: 'Solvent', product: 'solvent', needs: ['chemistry'], box: { x: 18, y: 6, w: 4, h: 4 }, last: { x: 21, y: 7 }, parts: CORNER_SOLVENT },
+  // the solvent vat's chains: a second machine at (20,7) takes the solvent through its back and its
+  // other input from above, belted down from a Chute Mouth at (20,5) outside the box
+  rubber: {
+    name: 'Rubber', product: 'rubber', needs: ['vulcanizing'], box: { x: 18, y: 6, w: 4, h: 4 }, last: { x: 20, y: 7 },
+    parts: chain({ kind: 'chemVat', x: 20, y: 7, rot: W, recipe: 'cureRubber' }, 'plastic'),
+  },
+  processors: {
+    name: 'Processors', product: 'processor', needs: ['processors'], box: { x: 18, y: 6, w: 4, h: 4 }, last: { x: 20, y: 7 },
+    parts: chain({ kind: 'assembler', x: 20, y: 7, rot: W, recipe: 'etchProcessor' }, 'circuit'),
+  },
+};
+
+function chain(second: Pl, item: ItemId): Pl[] {
+  const solvent = CORNER_SOLVENT.filter((p) => !(p.kind === 'belt' && p.y === 7 && p.x === 20));
+  return [...solvent, second, { kind: 'belt', x: 20, y: 6, rot: S }, { kind: 'chuteMouth', x: 20, y: 5, rot: S, recipe: item }];
+}
+
+/** The lab for chemistry: Act II's lab without the concrete plant, its gravel press and the steel
+ * line (the District's groups make concrete and steel now), so chunk E's south-east corner is free
+ * for the chemistry corner. Circuits go on to the Hopper (Sensors and Processors want them). */
+export const LAB_C = PHASE_Z.filter((p) => !['gravel', 'g18', 'concrete', 'steel', 'steelSlagHeap'].includes(p));
+
+/** A Factory module placed by search to feed the Chute (or another of its feed), for a Workshop
+ * line that takes a good no hand-laid feeder makes: `to` the Chute or a feed's index, `by` where its
+ * waste goes. */
+interface Feed { design: string; to: 'chute' | 'dock' | number; by?: 'chute' | 'dock' | number }
+export const FEEDS: Record<string, Feed[]> = {
+  // oil: Plastic copies whose plastic sells at the Dock and whose oil goes down the Chute
+  oil: [0, 1, 2, 3].map((): Feed => ({ design: 'Plastic', to: 'dock', by: 'chute' })),
+  // rubber: a Rubber II group (its own Plastic copies inside: it takes nothing) into the Chute (a
+  // Rubber copy with its Plastic feeders found no room by the Chute, measured)
+  rubber: [{ design: 'Rubber II', to: 'chute', by: 'dock' }],
+  // servos for the arms line: a Servos II group fed by a Motors II and a Circuits II group
+  servos: [{ design: 'Servos II', to: 'chute', by: 'dock' }, { design: 'Motors II', to: 0, by: 'dock' }, { design: 'Circuits II', to: 0, by: 'dock' }],
+  // sensors for the arms line: a Sensors II group fed by a Circuits II and a Rubber II group
+  sensors: [{ design: 'Sensors II', to: 'chute' }, { design: 'Circuits II', to: 0, by: 'dock' }, { design: 'Rubber II', to: 0, by: 'dock' }],
 };
 
 /** The Workshop's line slots: machine rows in chunk D (x 8-15, y 7-15, free once Act II's lab is
@@ -138,18 +213,24 @@ export const DRAINS: Pl[] = [
   ...[9, 8, 7].map((y): Pl => ({ kind: 'belt', x: 14, y, rot: N })),
 ];
 
+/** The drains once the chemistry corner runs: the slag press only (the oil is the vats'). */
+export const DRAINS_C: Pl[] = DRAINS.filter((p) => !(p.x === 13));
+
 /** The bench: groups are built in the 12x8's west 6x6 and nested there; their trunks run anywhere
  * on the 12x8. Modules a group takes in from outside its box stand east of the bench. */
 const BENCH: Box = { x: 0, y: 0, w: 6, h: 6 };
 const benchZone = (): PlaceZone => ({ mods: BENCH, trunks: { x: 0, y: 0, w: FACTORY.w, h: FACTORY.h } });
 const extZone = (): PlaceZone => ({ mods: { x: 6, y: 0, w: FACTORY.w - 6, h: FACTORY.h }, trunks: { x: 0, y: 0, w: FACTORY.w, h: FACTORY.h } });
+/** The Chute's feeds (FEEDS): east of the bench, the annex too, with trunks anywhere on the floor (the
+ * Chute stands in the annex; the bench zones stop at the 12x8's edge). */
+const feedZone = (g: Game): PlaceZone => ({ mods: { x: 6, y: 0, w: g.fw - 6, h: g.fh }, trunks: { x: 0, y: 0, w: g.fw, h: g.fh } });
 
 /** A group nested on the bench (DESIGN.md §18 Nested folds) for the District: members[0] is the
  * hub, whose product leaves the box for the Factory Dock or Hopper while it is audited; each member
  * names the member its product feeds (an index) or a sink, and where its byproduct goes. `ext` are
  * modules outside the box feeding the hub: the group's ins on the District. */
 interface Member { design: string; to: number | 'dock' | 'hopper'; by?: number | 'dock' }
-export interface GroupSpec { name: string; members: Member[]; ext?: { design: string; by?: 'dock' }[] }
+export interface GroupSpec { name: string; members: Member[]; ext?: { design: string; by?: 'dock'; to?: number }[] }
 
 export const GROUPS: Record<string, GroupSpec> = {
   gearsII: { name: 'Gears II', members: [{ design: 'Gears', to: 'dock' }, { design: 'Iron ingots', to: 0, by: 'dock' }] },
@@ -179,6 +260,21 @@ export const GROUPS: Record<string, GroupSpec> = {
     name: 'Concrete II',
     members: [{ design: 'Gears', to: 'dock' }, { design: 'Concrete', to: 'dock' }, { design: 'Iron ingots', to: 0, by: 1 }, { design: 'Steel', to: 'dock', by: 1 }, { design: 'Plastic', to: 'dock', by: 1 }],
   },
+  // chemistry (DESIGN.md §21 Tier 3): oil is the bottleneck (a Plastic copy's 0.12 a second feeds
+  // an eighth of a vat), so every group carries its own Plastic copies for their oil
+  // (a Plastic copy's plastic into the Rubber, a second one's oil: a fold box wants a main route
+  // inside, and one copy sending both into the hub could not be laid, measured)
+  rubberII: { name: 'Rubber II', members: [{ design: 'Rubber', to: 'dock', by: 'dock' }, { design: 'Plastic', to: 0, by: 'dock' }, { design: 'Plastic', to: 'dock', by: 0 }] },
+  processorsII: {
+    name: 'Processors II',
+    members: [{ design: 'Processors', to: 'dock', by: 'dock' }, { design: 'Circuits', to: 0 }, { design: 'Glass', to: 1 }, { design: 'Plastic', to: 1, by: 0 }, { design: 'Plastic', to: 'dock', by: 0 }],
+  },
+  sensorsII: { name: 'Sensors II', members: [{ design: 'Sensors', to: 'dock' }, { design: 'Glass', to: 0 }], ext: [{ design: 'Circuits II', by: 'dock' }, { design: 'Rubber II', by: 'dock' }] },
+  armsII: {
+    name: 'Arms II',
+    members: [{ design: 'Robot arms', to: 'dock' }, { design: 'Steel', to: 0, by: 'dock' }],
+    ext: [{ design: 'Servos II', by: 'dock' }, { design: 'Sensors II', by: 'dock' }, { design: 'Motors II', by: 'dock', to: 0 }, { design: 'Circuits II', by: 'dock', to: 0 }],
+  },
 };
 
 // ------------------------------------------------------------------ the plan
@@ -207,6 +303,12 @@ export type Step3 =
   | { k: 'district'; design: string; n: number }
   /** an Act III order taken when nothing else is active (bot2's order desk) */
   | { k: 'order'; id: string }
+  /** the lab re-laid for the chemistry corner (LAB_C) */
+  | { k: 'chemLab' }
+  /** Factory modules placed by search to feed the Chute (FEEDS) */
+  | { k: 'feed'; feed: string }
+  /** District folds (depth 3) made, at least n (blocking until made or given up) */
+  | { k: 'dfold'; n: number }
   | { k: 'mark'; name: string };
 
 export const PLAN3: Step3[] = [
@@ -253,13 +355,52 @@ export const PLAN3: Step3[] = [
   { k: 'group', group: 'rotorsII' },
   { k: 'district', design: 'Rotors II', n: 2 },
   { k: 'district', design: 'Motors II', n: 6 },
+  // chemistry (the Act III bot's re-measure, DESIGN.md §21 Pacing): the lab's concrete corner
+  // becomes the chemistry corner; Solvent folds there (a sand Miner with the Chem Vat), its copies
+  // feed the Chute and nest with Plastic copies for their oil; then Rubber, Processors, Sensors and,
+  // after Robotics, Robot arms, each a line, a group and District copies paying research
+  { k: 'chemLab' },
+  // oil for the vats: four Plastic copies selling their plastic and sending their oil down the
+  // Chute (a copy's oil is 0.12 a second, a vat at full speed wants 1; a Chute feeder's oil only
+  // comes while its plastic is drawn, measured: the stock stood at 0.49 oil for an hour)
+  { k: 'feed', feed: 'oil' },
+  { k: 'need', r: 'chemistry' },
+  { k: 'line', line: 'solvent' },
+  { k: 'lineDone', line: 'solvent' },
+  { k: 'need', r: 'vulcanizing' },
+  { k: 'line', line: 'rubber' },
+  { k: 'lineDone', line: 'rubber' },
+  { k: 'group', group: 'rubberII' },
+  { k: 'feed', feed: 'rubber' },
+  { k: 'district', design: 'Rubber II', n: 3 },
+  { k: 'need', r: 'processors' },
+  { k: 'line', line: 'processors' },
+  { k: 'lineDone', line: 'processors' },
+  { k: 'group', group: 'processorsII' },
+  { k: 'district', design: 'Processors II', n: 2 },
+  { k: 'need', r: 'sensors' },
+  { k: 'line', line: 'sensors' },
+  { k: 'lineDone', line: 'sensors' },
+  { k: 'group', group: 'sensorsII' },
+  { k: 'district', design: 'Sensors II', n: 3 },
+  { k: 'district', design: 'Circuits II', n: 4 },
+  { k: 'need', r: 'robotics' },
+  { k: 'feed', feed: 'servos' },
+  { k: 'feed', feed: 'sensors' },
+  { k: 'line', line: 'arms' },
+  { k: 'lineDone', line: 'arms' },
+  { k: 'group', group: 'armsII' },
+  { k: 'district', design: 'Arms II', n: 3 },
+  { k: 'district', design: 'Sensors II', n: 5 },
+  { k: 'need', r: 'districtFolds' },
+  { k: 'dfold', n: 2 },
   { k: 'mark', name: 'act3end' },
 ];
 
 /** After the plan, the District grows a copy at a time while the coin is there (a copy a few
  * minutes: what the floor's income buys), in this order round and round: each copy is placed
  * beside what it feeds and routed by the same rules. */
-export const GROW: string[] = ['Servos II', 'Motors II', 'Gearboxes II', 'Concrete II', 'Rotors II', 'Circuits II', 'Gizmo works II', 'Gears II'];
+export const GROW: string[] = ['Servos II', 'Motors II', 'Sensors II', 'Gearboxes II', 'Processors II', 'Concrete II', 'Arms II', 'Rotors II', 'Circuits II', 'Rubber II', 'Gizmo works II', 'Gears II'];
 
 const HOOK = 'act3:';
 
@@ -281,13 +422,15 @@ export class Act3Bot {
   private standing: string[] = [];
   /** copies of each design wanted on the District */
   want: Record<string, number> = {};
+  /** the research this player takes, in order (bot4.ts adds Act IV's) */
+  wish: ResearchId[] = WISH3;
   private pushed = new Set<string>();
   private group: GroupRun | null = null;
   private serial = 0;
   private lookAt = 0;
   private hAt = 0;
-  private skiffAt = 0;
-  private routeAt = 0;
+  private skiffAt: Partial<Record<HighFloorId, number>> = {};
+  private routeAt: Partial<Record<HighFloorId, number>> = {};
   private odAt = 0;
   private odNext = 0;
   private stageSeen: Record<string, number> = {};
@@ -319,7 +462,7 @@ export class Act3Bot {
   private act(c: Cmd, what?: string): boolean | null {
     const r = this.b.act(c);
     if (r && what) this.b.decide(what);
-    if (r && (what === 'module:district' || what === 'lot')) this.grewAt = this.g.seconds;
+    if (r && (what === 'module:district' || what === 'module:world' || what === 'lot')) this.grewAt = this.g.seconds;
     return r;
   }
 
@@ -348,6 +491,7 @@ export class Act3Bot {
     if (this.g.s.tick < this.lookAt) return;
     this.lookAt = this.g.s.tick + TICK_RATE / 2;
     if (this.district()) return;
+    if (this.districtFold()) return;
     if (!this.b.handReady) return;
     if (this.groupWork()) return;
     this.grow();
@@ -362,7 +506,7 @@ export class Act3Bot {
    * wanted stands and the coin covers twice the stamp. */
   private grow() {
     const g = this.g;
-    if (this.step < this.plan.length || g.s.tick < this.growAt || !g.s.district) return;
+    if (this.step < this.chemStart || g.s.tick < this.growAt || !g.s.district) return;
     this.growAt = g.s.tick + 180 * TICK_RATE;
     if (Object.entries(this.want).some(([n, k]) => this.placed(n) < k && this.b.designNamed(n))) return;
     // a copy the floor could not route is not placed (every lot bought and the routes at the cap)
@@ -392,6 +536,12 @@ export class Act3Bot {
   /** A line folded leaves its slot at once: its Chute Mouths and output belt are lifted (a line
    * left running would crowd the shared output column and the corridor). */
   private freeSlots() {
+    if (this.corner && this.b.designNamed(CORNER[this.corner].name)) {
+      this.pushed.add('free:' + this.corner);
+      this.corner = null;
+      this.b.plan.push({ k: 'parts', parts: this.layoutNow() });
+      return;
+    }
     const i = this.slots.findIndex((q) => q !== null && !!this.b.designNamed(LINES[q].name));
     if (i < 0) return;
     const line = this.slots[i]!;
@@ -426,7 +576,7 @@ export class Act3Bot {
   researchNeed(item: ItemId): number {
     const r = this.g.s.research;
     let n = 0;
-    for (const id of WISH3) {
+    for (const id of this.wish) {
       if (this.g.done(id)) continue;
       const want = RESEARCH[id].cost[item];
       if (want) n += Math.max(0, want - (r.progress[id]?.[item]?.toNumber() ?? 0));
@@ -437,7 +587,7 @@ export class Act3Bot {
   private research() {
     const g = this.g;
     const r = g.s.research;
-    const open = WISH3.filter((id) => available(g, id));
+    const open = this.wish.filter((id) => available(g, id));
     if (!open.length) return;
     const covered = open.find((id) => Object.entries(RESEARCH[id].cost).every(([it, n]) => (r.progress[id]?.[it as ItemId]?.toNumber() ?? 0) + (r.bank[it as ItemId]?.toNumber() ?? 0) >= (n as number)));
     const pick = covered ?? open[0];
@@ -447,15 +597,32 @@ export class Act3Bot {
   // ---------------------------------------------------------------- the plan
 
   private runPlan() {
+    const g = this.g;
     for (let guard = 0; guard < 20 && this.step < this.plan.length; guard++) {
+      if (this.step !== this.stepAt.step) this.stepAt = { step: this.step, t: g.seconds };
       const res = this.tryStep(this.plan[this.step]);
       if (res !== 'done') {
         this.waiting = res;
+        // chemistry is the plan's optional tail: a step it has waited on for an hour (research
+        // short of goods no line here makes yet) ends it, logged, so the District's growth and the
+        // full-floor reset are never held by it (the first measure held the District 7 h)
+        if (this.step >= this.chemStart && g.seconds - this.stepAt.t > 3600) {
+          this.failed.push('chem:' + res);
+          this.step = this.plan.length;
+          this.waiting = 'plan done (chemistry stopped: ' + res + ')';
+        }
         return;
       }
       this.step++;
     }
     if (this.step >= this.plan.length) this.waiting = 'plan done';
+  }
+
+  private stepAt = { step: -1, t: 0 };
+  /** the plan's first chemistry step: the District grows from here on (GROW) */
+  get chemStart(): number {
+    const i = this.plan.findIndex((s) => s.k === 'chemLab');
+    return i < 0 ? this.plan.length : i;
   }
 
   /** Push bot2 steps once under `key`; 'done' once bot2 has worked through its plan. */
@@ -520,18 +687,33 @@ export class Act3Bot {
         return this.startLine(s.line);
       case 'lineDone': {
         // (its slot is freed as soon as the fold is: freeSlots)
-        const spec = LINES[s.line];
+        const spec = LINES[s.line] ?? CORNER[s.line];
         if (this.b.designNamed(spec.name) || this.abandoned(spec.name)) return 'done';
+        // a line not started (its research never came) is left out
+        if (this.lineAt[s.line] === undefined) return 'done';
         // a line that has not folded in 45 minutes (its Chute short of a feeder that never came) is
         // given up: its slot freed, what it would have fed left out
-        if (g.seconds - (this.lineAt[s.line] ?? g.seconds) > 45 * 60) {
+        if (g.seconds - (this.lineAt[s.line] ?? g.seconds) > (CORNER[s.line] ? 90 : 45) * 60) {
           this.failed.push('line:' + spec.name);
           const i = this.slots.indexOf(s.line);
-          if (i >= 0) { this.slots[i] = null; this.b.bgFolds = this.b.bgFolds.filter((f) => f.name !== spec.name); this.b.plan.push({ k: 'parts', parts: this.layoutNow() }); }
+          if (i >= 0) this.slots[i] = null;
+          if (this.corner === s.line) this.corner = null;
+          this.b.bgFolds = this.b.bgFolds.filter((f) => f.name !== spec.name);
+          this.b.plan.push({ k: 'parts', parts: this.layoutNow() });
           return 'done';
         }
         return `folding ${spec.name}`;
       }
+      case 'chemLab':
+        // the Chute's oil now goes to the vats, not the Hopper (Chemistry is paid by then)
+        // (the Chute's oil drain to the Hopper is lifted while the corner runs a line: layoutNow)
+        this.lab = LAB_C;
+        return this.relayout('chemLab');
+      case 'feed':
+        return this.feedStep(s.feed);
+      case 'dfold':
+        if (!g.done('districtFolds') || this.dfolds >= s.n || this.dfoldTries >= 20) return 'done';
+        return `District fold ${this.dfolds + 1} of ${s.n}`;
       case 'group': {
         const spec = GROUPS[s.group];
         if (this.b.designNamed(spec.name)) return 'done';
@@ -553,6 +735,25 @@ export class Act3Bot {
 
   private startLine(line: string): string {
     const g = this.g;
+    const cs = CORNER[line];
+    if (cs) {
+      if (this.b.designNamed(cs.name) || this.corner === line) return 'done';
+      for (const r of cs.needs) if (!g.done(r)) return `research ${r} for ${cs.name}`;
+      if (this.corner) return `the chemistry corner is busy (${this.corner})`;
+      this.corner = line;
+      this.b.found[HOOK + line] = cs.parts;
+      this.b.plan.push(
+        { k: 'parts', parts: this.layoutNow() },
+        // a vat on the Chute's oil runs short (a Plastic copy's oil feeds an eighth of one): folded
+        // once it runs a third of the time, or after 30 minutes as it is (bot2's fold step)
+        // (the Solvent line runs until research has its solvent: the corner is the only solvent
+        // there is until Rubber and Processors fold their own vats)
+        { k: 'fold', box: cs.box, name: cs.name, bg: true, nokeep: true, ready: (gg) => working(gg, cs.last.x, cs.last.y, 30, 0.3) && (line !== 'solvent' || this.researchNeed('solvent') <= 0) },
+      );
+      this.lineAt[line] = g.seconds;
+      this.b.decide('line:' + cs.name);
+      return 'done';
+    }
     const spec = LINES[line];
     if (this.b.designNamed(spec.name) || this.slots.includes(line)) return 'done';
     for (const r of spec.needs) if (!g.done(r)) return `research ${r} for ${spec.name}`;
@@ -618,7 +819,87 @@ export class Act3Bot {
   }
 
   private layoutNow(): string[] {
-    return [...this.lab, ...this.standing, ...this.slots.filter((q): q is string => !!q).map((q) => HOOK + q)];
+    // the Chute's oil goes to the corner's vats while it runs a line, else to the Hopper: a full oil
+    // stock stops every Chute feeder whose waste is oil (Motors II, Circuits II), measured
+    if (this.standing.includes(HOOK + 'drains')) this.b.found[HOOK + 'drains'] = this.corner ? DRAINS_C : DRAINS;
+    return [...this.lab, ...this.standing, ...this.slots.filter((q): q is string => !!q).map((q) => HOOK + q), ...(this.corner ? [HOOK + this.corner] : [])];
+  }
+
+  /** the chemistry corner's line, or null */
+  private corner: string | null = null;
+
+  /** Factory modules placed by search to feed the Chute (FEEDS), once each design exists. */
+  private feedStep(name: string): string {
+    const feed = FEEDS[name];
+    for (const f of feed) if (!this.b.designNamed(f.design)) return this.abandoned(f.design) ? 'done' : `no design ${f.design} for the ${name} feed`;
+    const id = (i: number) => `feed:${name}:${i}`;
+    const dest = (t: 'chute' | 'dock' | number): Dest => (typeof t === 'number' ? { k: 'mod', id: HOOK + id(t) } : { k: t });
+    // (the first is the hub its feeders' trunks come round to, unless none feeds it)
+    const hub = feed.some((f) => f.to === 0 || f.by === 0);
+    return this.viaB2('feed:' + name, feed.map((f, i) => this.fmod(id(i), f.design, dest(f.to), feedZone(this.g), f.by === undefined ? undefined : dest(f.by), hub && i === 0)));
+  }
+
+  // ---------------------------------------------------------------- District folds
+
+  /** District folds made, and audits given up */
+  dfolds = 0;
+  private dfoldTries = 0;
+  private dfoldAt = 0;
+  private dfoldName = '';
+
+  /** A District fold (DESIGN.md §21 District folds): the box round a module and the modules feeding
+   * it by routes, when that box holds only them and they are one group (the floor's own refusal
+   * says), a hub whose design has no fold yet first; audited, folded, and the new depth-3 copy put
+   * back on the District where the group stood. One command, or false. */
+  private districtFold(): boolean {
+    const g = this.g;
+    const st = g.s.district;
+    if (!st || !g.done('districtFolds')) return false;
+    const a = g.s.haudit;
+    if (a && a.floor === 'district') {
+      if (!a.result) return false;
+      if (!Object.keys(a.result.outs).length) {
+        this.dfoldTries++;
+        this.act({ k: 'hauditCancel' });
+        return true;
+      }
+      const r = this.act({ k: 'hfold', name: this.dfoldName }, 'fold');
+      if (r) {
+        this.dfolds++;
+        this.b.mark('dfold:' + this.dfoldName);
+        this.want[this.dfoldName] = this.placed(this.dfoldName) + 1;
+      }
+      return true;
+    }
+    if (a) return false;
+    if (g.s.tick < this.dfoldAt) return false;
+    this.dfoldAt = g.s.tick + 60 * TICK_RATE;
+    // once two are made, another every 10 minutes while a hub has none
+    if (this.dfolds >= 2) this.dfoldAt = g.s.tick + 600 * TICK_RATE;
+    const folded = new Set(g.s.designs.filter((d) => (d.depth ?? 1) === 3).map((d) => d.name));
+    let best: { box: Box; n: number; name: string } | null = null;
+    for (const hub of st.ents) {
+      if (hub.kind !== 'module') continue;
+      const hd = g.design(hub.design);
+      if (!hd || (hd.depth ?? 1) !== 2) continue;
+      const name = hd.name.replace(/ II$/, '') + ' III';
+      if (folded.has(name)) continue;
+      const feeders = st.routes.filter((r) => r.to === hub.id && !BYPRODUCTS.has(r.item)).map((r) => hent(g, 'district', r.from)).filter((e): e is FEnt => !!e && e.kind === 'module');
+      if (!feeders.length) continue;
+      // every feeder, else each one alone with the hub
+      for (const set of [feeders, ...feeders.map((f) => [f])]) {
+        const es = [hub, ...set];
+        const x0 = Math.min(...es.map((e) => e.x)), y0 = Math.min(...es.map((e) => e.y));
+        const box = { x: x0, y: y0, w: Math.max(...es.map((e) => e.x)) - x0 + 1, h: Math.max(...es.map((e) => e.y)) - y0 + 1 };
+        if (hfoldRefusal(g, 'district', box)) continue;
+        if (!best || es.length > best.n) best = { box, n: es.length, name };
+        break;
+      }
+    }
+    if (!best) { this.dfoldTries++; return false; }
+    this.dfoldName = best.name;
+    this.act({ k: 'haudit', floor: 'district', ...best.box }, 'audit');
+    return true;
   }
 
   /** The bench's group under way: build it (bot2 places each module by search), let it run a
@@ -723,7 +1004,7 @@ export class Act3Bot {
       const by = m.by === undefined ? undefined : sink(m.by);
       return this.fmod(gr.ids[i], m.design, sink(m.to), benchZone(), by, i === 0 || fed(i) >= 2);
     });
-    const ext = (gr.spec.ext ?? []).map((x, i) => this.fmod(gr.ext[i], x.design, { k: 'mod', id: hubId }, extZone(), x.by ? { k: x.by } : undefined));
+    const ext = (gr.spec.ext ?? []).map((x, i) => this.fmod(gr.ext[i], x.design, { k: 'mod', id: x.to === undefined ? hubId : HOOK + gr.ext[x.to] }, extZone(), x.by ? { k: x.by } : undefined));
     // the outside feeders after the members (their trunks come round to the hub's back), or, on a
     // second try, right after the hub, before the members crowd it
     return this.tried(gr.spec.name) % 2 === 0 ? [...out, ...ext] : [out[0], ...ext, ...out.slice(1)];
@@ -753,24 +1034,31 @@ export class Act3Bot {
 
   // ---------------------------------------------------------------- the District
 
-  placed(name: string): number {
-    const st = this.g.s.district;
+  placed(name: string, id: HighFloorId = 'district'): number {
+    const st = hfloor(this.g, id);
     if (!st) return 0;
     return st.ents.filter((e) => e.kind === 'module' && this.g.design(e.design)?.name === name).length;
   }
 
-  private floorEnt(kind: 'fdock' | 'fhopper' | 'fbay'): FEnt | undefined {
-    return this.g.s.district?.ents.find((e) => e.kind === kind);
+  floorEnt(kind: 'fdock' | 'fhopper' | 'fbay', id: HighFloorId = 'district'): FEnt | undefined {
+    return hfloor(this.g, id)?.ents.find((e) => e.kind === kind);
   }
 
   /** One District command (a copy stamped or placed, a route, a skiff, a lot), or false. */
   private district(): boolean {
+    return this.floorWork('district', this.want);
+  }
+
+  /** One command on a high floor (the District here, the World for bot4.ts): copies wanted stamped
+   * and placed beside what they feed, a lot as the routes or tiles run out, routes, skiffs (barges
+   * on the World). */
+  floorWork(id: HighFloorId, want: Record<string, number>): boolean {
     const g = this.g;
-    const st = g.s.district;
+    const st = hfloor(g, id);
     if (!st) return false;
     // copies wanted: stamped when none is spare, placed beside what they will feed
-    for (const [name, n] of Object.entries(this.want)) {
-      if (this.placed(name) >= n) continue;
+    for (const [name, n] of Object.entries(want)) {
+      if (this.placed(name, id) >= n) continue;
       const d = this.b.designNamed(name);
       if (!d) continue;
       if (d.spare < 1) {
@@ -778,43 +1066,43 @@ export class Act3Bot {
         // once the plan is through, a copy that can't be stamped now (claims or coin short) is no
         // longer wanted: the growth round comes back to it (a want left standing held every later
         // copy, the floor idle on 18M coin at 17 h)
-        if (stampRefusal(g, d)) { this.giveUp(name); continue; }
+        if (stampRefusal(g, d)) { this.giveUp(name, id, want); continue; }
         this.act({ k: 'stamp', id: d.id }, 'stamp');
         return true;
       }
       if (this.buyClaims(d, true)) return true;
-      const t = this.tileFor(d);
+      const t = this.tileFor(d, id);
       if (!t) {
         // the floor is full: the next lot
-        if (this.buyLot()) return true;
-        this.giveUp(name);
+        if (this.buyLot(id)) return true;
+        this.giveUp(name, id, want);
         continue;
       }
-      if (hplaceRefusal(g, 'district', d.id, t.x, t.y)) { this.giveUp(name); continue; }
-      this.act({ k: 'hplace', floor: 'district', design: d.id, x: t.x, y: t.y }, 'module:district');
+      if (hplaceRefusal(g, id, d.id, t.x, t.y)) { this.giveUp(name, id, want); continue; }
+      this.act({ k: 'hplace', floor: id, design: d.id, x: t.x, y: t.y }, 'module:' + id);
       return true;
     }
     // the route cap binding (120, and 20 a lot): the next lot, while one is for sale
-    if (st.routes.length >= maxRoutes(g, 'district') - 1 && this.buyLot()) return true;
+    if (st.routes.length >= maxRoutes(g, id) - 1 && this.buyLot(id)) return true;
     // routes, looked at every 5 s
-    if (g.s.tick >= this.routeAt) {
-      this.routeAt = g.s.tick + 5 * TICK_RATE;
-      if (this.routes()) { this.routeAt = 0; return true; }
+    if (g.s.tick >= (this.routeAt[id] ?? 0)) {
+      this.routeAt[id] = g.s.tick + 5 * TICK_RATE;
+      if (this.routes(id)) { this.routeAt[id] = 0; return true; }
     }
     // skiffs, every 5 s: one more on the route furthest under 90% of its want
-    if (g.s.tick >= this.skiffAt) {
-      this.skiffAt = g.s.tick + 5 * TICK_RATE;
+    if (g.s.tick >= (this.skiffAt[id] ?? 0)) {
+      this.skiffAt[id] = g.s.tick + 5 * TICK_RATE;
       let best: { id: number; share: number } | null = null;
       for (const r of st.routes) {
-        if (r.skiffs >= HIGH.district.maxSkiffs) continue;
-        const want = routeWant(g, 'district', r);
-        if (want <= 1e-6) continue;
-        const share = routeCap(g, 'district', r) / want;
+        if (r.skiffs >= HIGH[id].maxSkiffs) continue;
+        const w = routeWant(g, id, r);
+        if (w <= 1e-6) continue;
+        const share = routeCap(g, id, r) / w;
         if (share < 0.9 && (!best || share < best.share)) best = { id: r.id, share };
       }
-      if (best && !g.s.coin.lt(HIGH.district.skiffCost * 3)) {
-        this.act({ k: 'skiff', floor: 'district', id: best.id, n: 1 }, 'skiff');
-        this.skiffAt = g.s.tick + TICK_RATE;
+      if (best && !g.s.coin.lt(HIGH[id].skiffCost * 3)) {
+        this.act({ k: 'skiff', floor: id, id: best.id, n: 1 }, 'skiff');
+        this.skiffAt[id] = g.s.tick + TICK_RATE;
         return true;
       }
     }
@@ -824,21 +1112,21 @@ export class Act3Bot {
   /** Once the plan is through, a copy that can't be had now is no longer wanted (a want left
    * standing held every later copy: the floor idled on 18M coin at 17 h); the growth round comes
    * back to it. */
-  private giveUp(name: string) {
-    if (this.step >= this.plan.length) this.want[name] = this.placed(name);
+  private giveUp(name: string, id: HighFloorId = 'district', want: Record<string, number> = this.want) {
+    if (this.step >= this.chemStart) want[name] = this.placed(name, id);
   }
 
-  /** The District's routes at the most it holds now (120, and 20 a lot). */
-  private routesFull(): boolean {
-    const st = this.g.s.district;
-    return !!st && st.routes.length >= maxRoutes(this.g, 'district');
+  /** A floor's routes at the most it holds now (120, and 20 a lot). */
+  routesFull(id: HighFloorId = 'district'): boolean {
+    const st = hfloor(this.g, id);
+    return !!st && st.routes.length >= maxRoutes(this.g, id);
   }
 
-  /** The District's next lot, when the coin covers it with a fifth to spare. */
-  private buyLot(): boolean {
-    const p = lotPrice(this.g, 'district');
+  /** A floor's next lot, when the coin covers it with a fifth to spare. */
+  buyLot(id: HighFloorId = 'district'): boolean {
+    const p = lotPrice(this.g, id);
     if (!p || this.g.s.coin.lt(p.mul(1.2))) return false;
-    this.act({ k: 'hlot', floor: 'district' }, 'lot');
+    this.act({ k: 'hlot', floor: id }, 'lot');
     return true;
   }
 
@@ -862,20 +1150,20 @@ export class Act3Bot {
   private copies(d: ModuleDesign): number {
     let n = d.spare;
     for (const e of this.g.s.factory.ents) if (e.kind === 'module' && e.design === d.id) n++;
-    for (const e of this.g.s.district?.ents ?? []) if (e.kind === 'module' && e.design === d.id) n++;
+    for (const id of HIGH_IDS) for (const e of hfloor(this.g, id)?.ents ?? []) if (e.kind === 'module' && e.design === d.id) n++;
     return n;
   }
 
   /** Where a copy of `d` goes: the free tile nearest what its product will feed. */
-  private tileFor(d: ModuleDesign): { x: number; y: number } | null {
+  private tileFor(d: ModuleDesign, id: HighFloorId = 'district'): { x: number; y: number } | null {
     const g = this.g;
     const item = mainItem(d);
-    const dest = item ? this.destFor(item, null) : this.floorEnt('fdock');
-    const w = highW(g, 'district'), h = HIGH.district.h;
+    const dest = item ? this.destFor(item, null, id) : this.floorEnt('fdock', id);
+    const w = highW(g, id), h = HIGH[id].h;
     let best: { x: number; y: number; d: number } | null = null;
     for (let y = 0; y < h; y++)
       for (let x = 0; x < w; x++) {
-        if (hentAt(g, 'district', x, y)) continue;
+        if (hentAt(g, id, x, y)) continue;
         const dd = dest ? Math.hypot(x + 0.5 - (dest.x + dest.w / 2), y + 0.5 - (dest.y + dest.h / 2)) : 0;
         if (!best || dd < best.d - 1e-9) best = { x, y, d: dd };
       }
@@ -885,34 +1173,34 @@ export class Act3Bot {
   /** What takes this item from a module now, in this player's order: a District module still short
    * of it, research wanting it, a Megaproject wanting it, an order wanting it, the Dock if it sells,
    * else the Hopper (banked). */
-  private destFor(item: ItemId, from: FEnt | null): FEnt | undefined {
+  private destFor(item: ItemId, from: FEnt | null, id: HighFloorId = 'district'): FEnt | undefined {
     const g = this.g;
-    const st = g.s.district!;
-    if (BYPRODUCTS.has(item)) return this.floorEnt('fdock');
+    const st = hfloor(g, id)!;
+    if (BYPRODUCTS.has(item)) return this.floorEnt('fdock', id);
     let best: FEnt | undefined, gap = 0.02;
     for (const c of st.ents) {
       if (c.kind !== 'module' || c === from) continue;
       const need = g.design(c.design)?.ins[item] ?? 0;
       if (!need) continue;
       let got = 0;
-      for (const r of st.routes) if (r.to === c.id && r.item === item && r.from !== from?.id) got += Math.min(routeCap(g, 'district', r), routeWant(g, 'district', r));
+      for (const r of st.routes) if (r.to === c.id && r.item === item && r.from !== from?.id) got += Math.min(routeCap(g, id, r), routeWant(g, id, r));
       if (need - got > gap) { gap = need - got; best = c; }
     }
     if (best) return best;
-    if (this.researchNeed(item) > 0) return this.floorEnt('fhopper');
-    if (bayWants(g, 'district').has(item) && this.floorEnt('fbay')) return this.floorEnt('fbay');
+    if (this.researchNeed(item) > 0) return this.floorEnt('fhopper', id);
+    if (bayWants(g, id).has(item) && this.floorEnt('fbay', id)) return this.floorEnt('fbay', id);
     const act = g.s.orders.active;
-    if (act && (ORDER[act].wants[item] ?? 0) > 0) return this.floorEnt('fdock');
-    if (ITEMS[item].value > 0 && !ITEMS[item].refused) return this.floorEnt('fdock');
-    return this.floorEnt('fhopper');
+    if (act && (ORDER[act].wants[item] ?? 0) > 0) return this.floorEnt('fdock', id);
+    if (ITEMS[item].value > 0 && !ITEMS[item].refused) return this.floorEnt('fdock', id);
+    return this.floorEnt('fhopper', id);
   }
 
   /** Keep every District module's routes: its main product to what wants it most now, its other
    * products that sell to the Dock (its waste goes down the chute on its own). One command, or
    * false. */
-  private routes(): boolean {
+  private routes(id: HighFloorId = 'district'): boolean {
     const g = this.g;
-    const st = g.s.district!;
+    const st = hfloor(g, id)!;
     for (const m of st.ents) {
       if (m.kind !== 'module') continue;
       const d = g.design(m.design);
@@ -922,34 +1210,34 @@ export class Act3Bot {
         // a byproduct with no route goes down the waste chute to the Dock on its own (DESIGN.md §21,
         // the second gate): no route spent on it; a waste route left from before is lifted
         if (BYPRODUCTS.has(item)) {
-          if (mine[0]) { this.act({ k: 'unroute', floor: 'district', id: mine[0].id }); return true; }
+          if (mine[0]) { this.act({ k: 'unroute', floor: id, id: mine[0].id }); return true; }
           continue;
         }
         // every other output where it is wanted most (a second product, the Concrete group's
         // concrete, to the Bay as much as its first)
-        const dest = this.destFor(item, m);
+        const dest = this.destFor(item, m, id);
         if (!dest) continue;
         if (mine.some((r) => r.to === dest!.id)) {
           // a second route of the same item, left from an earlier job: lifted
           const old = mine.find((r) => r.to !== dest!.id);
-          if (old) { this.act({ k: 'unroute', floor: 'district', id: old.id }); return true; }
+          if (old) { this.act({ k: 'unroute', floor: id, id: old.id }); return true; }
           continue;
         }
         // the main product's job changed only when the old destination no longer wants it
         const keep = mine.find((r) => {
-          const to = hent(g, 'district', r.to);
+          const to = hent(g, id, r.to);
           if (!to) return false;
           if (to.kind === 'module') return true;
           if (to.kind === 'fhopper') return this.researchNeed(item) > 0;
-          if (to.kind === 'fbay') return bayWants(g, 'district').has(item);
+          if (to.kind === 'fbay') return bayWants(g, id).has(item);
           return dest!.kind === 'fdock';
         });
-        if (keep && !(dest.kind === 'module' && hent(g, 'district', keep.to)?.kind !== 'module')) continue;
-        if (keep) { this.act({ k: 'unroute', floor: 'district', id: keep.id }); return true; }
+        if (keep && !(dest.kind === 'module' && hent(g, id, keep.to)?.kind !== 'module')) continue;
+        if (keep) { this.act({ k: 'unroute', floor: id, id: keep.id }); return true; }
         // (a route the floor refuses now, the cap reached or the coin short, is left for later: a
         // refused command would hold the hands every beat)
-        if (routeRefusal(g, 'district', m.x, m.y, dest.x, dest.y, item)) continue;
-        const r = this.act({ k: 'route', floor: 'district', fx: m.x, fy: m.y, tx: dest.x, ty: dest.y, item }, 'route');
+        if (routeRefusal(g, id, m.x, m.y, dest.x, dest.y, item)) continue;
+        const r = this.act({ k: 'route', floor: id, fx: m.x, fy: m.y, tx: dest.x, ty: dest.y, item }, 'route');
         if (r !== null) return true;
       }
     }
