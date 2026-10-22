@@ -7,6 +7,7 @@ import { chromium } from 'playwright';
 export const SWIFTSHADER = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 
 export const BASE = process.env.BASE ?? 'http://127.0.0.1:5210/';
+export const LOAD_TIMEOUT = Number(process.env.LOAD_TIMEOUT ?? 300000);
 
 /** @param {{ gpu?: 'hw' | 'swiftshader' }} o */
 export async function launch(o = {}) {
@@ -24,9 +25,10 @@ export async function openGame(browser, { w = 1280, h = 720, query = '', fresh =
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
   page.on('pageerror', (e) => errors.push(`[pageerror] ${e.stack ?? e.message}`));
   if (fresh) await page.addInitScript(() => { try { if (!sessionStorage.getItem('__kept')) { localStorage.clear(); sessionStorage.setItem('__kept', '1'); } } catch {} });
-  // the dev server serves ~1,050 modules and sheets unbundled: a cold load takes ~40 s on this PC
-  await page.goto(BASE + (query ? '?' + query : ''), { timeout: 120000 });
-  await page.waitForFunction(() => window.__app && window.__app.ready, null, { timeout: 120000 });
+  // the dev server serves ~1,050 modules and sheets unbundled: a cold load takes ~40 s on this PC,
+  // 90 s or more while other work keeps the CPU busy (LOAD_TIMEOUT in ms overrides the wait)
+  await page.goto(BASE + (query ? '?' + query : ''), { timeout: LOAD_TIMEOUT });
+  await page.waitForFunction(() => window.__app && window.__app.ready, null, { timeout: LOAD_TIMEOUT });
   return { page, errors };
 }
 
