@@ -1643,6 +1643,21 @@ not the full-floor reset. **Rules 1 and 2 got worse and are open**: in the Act I
 308 min from 25:42 in run 4 (the plan's 9-hour wait on "no design Gears II" from 21:31 is fixed:
 DECISIONS.md). The District peaks at 93-103 groups.
 
+**Re-measured, the third pass** (DECISIONS.md "The third pass": the idle windows found; batteries):
+every rule 1-2 window was the plan waiting on something no line would make. The slot lines' output
+column now buffers in two crates (the corridor to the Hopper ran full and the lines stood blocked: the
+Gears line never folded in run 3), a standing line no longer holds the full-floor reset off, the
+District grows while the plan waits 20 minutes, a given-up line is retried once when research waits
+on its product, the Solvent line folds once research has its solvent, an empty Chute input gets one
+more feeder, and research nobody can pay is passed over. Measured (seed 1000, 40 h): the District
+9:53, the City's stage 1 10:56-10:58, Robotics 11:28, District Folds 11:36, **Charting and the World
+11:46** (run 3, was 15:41), Batteries researched and folded 12:28-12:36; **every Act III stretch's
+worst wait 10.2-10.8 min** in pace-act3 (rules 1 and 2; the full floor's 10-minute reset), and in
+pace-act4 7.1, 9.0 (Act IV) and 6.4 min with one 19.9 / 19.2 min from 33:50 (run 5, 38 minutes after
+its hand-over: not looked into). Runs (pace-act3): 1 0:00-4:22 (14 Patents), 2 4:22-7:24 (7), 3
+7:24-17:02 (37), 4 17:02-26:22 (12), 5 26:22-36:18 (9), 6 36:18-40:00; the District peaks at 153
+groups (1.03 ms a tick), 8 District folds.
+
 Lessons:
 - **The waste chute and 1 a trip halve the routes and make distance cost.** With waste going to
   the Dock on its own the bot flies one route a product (a second only for a second product), so
@@ -1669,6 +1684,9 @@ Lessons:
   second gate left it; the open items below are content this player does not build.
 
 **Open** (measured, not yet met, `[pace] OPEN` in the test):
+- **Rules 1 and 2** (the third pass): pace-act3 holds 10.2-10.8 min in every Act III stretch (the
+  10-minute full-floor reset); pace-act4's run 5 waits 19.9 min from 33:50 (not looked into). The
+  items below are the first measure's, kept for the record.
 - **Rules 1 and 2 at the start of run 5: 20.1 and 17.3 min from 28:29**, five minutes after its
   Act III hand-over, as the plan opens the District (the cause not looked into yet; the same
   campaign without the route-full rule measured 9.9 at worst, so it looks like the run's path, not
@@ -1971,31 +1989,36 @@ rubber, sensors and robot arms, so the campaign reaches District Folds, Charting
 run 3. Relocation is still out of reach: it wants 3 Sandwich Engineers and 20 umbrellas, and no
 bot makes batteries, sandwiches or umbrellas yet.
 
-| Measure | Target | Measured (seed 1000, 40 h) | First pass |
+| Measure | Target | Measured (third pass, seed 1000, 40 h) | Second pass |
 |---|---|---|---|
-| District open | about 11 h | 9:37 (run 3) | 10:01 |
-| Chemistry, Robotics | (Act III) | 9:43, 13:57 (run 3) | 10:03, 12:03 |
-| District Folds; Charting and the World | before the first Relocate | **15:02; 15:41** (run 3; 4 District folds by 40 h) | never |
-| World modules | | 19 at most (depth-3 copies of the District's folds) | none |
-| First Relocate | 40-45 h | **none** (open: Relocation's Engineers and umbrellas) | none |
+| District open | about 11 h | 9:53 (run 3) | 9:37 |
+| Chemistry, Robotics | (Act III) | 9:57, 11:28 (run 3) | 9:43, 13:57 |
+| District Folds; Charting and the World | before the first Relocate | **11:36; 11:46** (run 3; 3 District folds by 40 h) | 15:02; 15:41 |
+| Batteries (research, the line folded) | Relocation's chain | **12:28-12:36** (run 3; the Lighthouse 15 of 200 batteries: no Batteries copy on the Factory) | never |
+| World modules | | **63** at most (depth-3 copies of the District's folds) | 19 |
+| First Relocate | 40-45 h | **none** (open: Hydroponics' sludge, sandwiches, umbrellas, the Engineer) | none |
 | Four islands | by 60 h | **Home only** (open) | Home only |
-| Megaproject stages | | the City's stage 1 at 13:33; no Act IV stage (the Sky Anchor is researched first now; the Lighthouse wants batteries) | 11:41 |
-| Legacy | the tree by 75-80 h | none banked; preview 21 at 40 h (model ~35 at the first move) | 18 |
-| Floor bests at 40 h | 7-10 a floor | Workshop 2.5, Factory 4, District 6.25, World 6.25 | 2.5, 4, none, none |
-| Patent preview 30-40 h | | 6.3-6.5 until run 5's reset at 31:07, then 0.1-1.8 (37 of 39 nodes) | 4.3-6.5, then 0-1.5 |
-| Rule 1 per stretch | 10 min | Act III 68.9 (11:07); Act IV 13.5 (18:44); III 36.9 (22:34); III 154 (37:25) | 10.4-10.7 |
-| Rule 2 per stretch | 15 min | 34.7; 13.5; 36.9; 117 | 10.4-10.7 |
-| Tick, the biggest floor | under 4 ms | **0.65 ms** (a World of 19 modules; the District peaks at 103) | 0.93 (District 130) |
+| Megaproject stages | | the City's stage 1 at 10:56; no Act IV stage | 13:33 |
+| Legacy | the tree by 75-80 h | none banked; preview 21 at 40 h (model ~35 at the first move) | 21 |
+| Floor bests at 40 h | 7-10 a floor | Workshop 3.75, Factory 4.4, District 6.75, World 1.69 (run 5's new World) | 2.5, 4, 6.25, 6.25 |
+| Patent preview 30-40 h | | 10.2-10.3 until run 4's cap at 31:24, then 0.1-6.9 (39 of 39 nodes) | 6.3-6.5, then 0.1-1.8 |
+| Rule 1 per stretch | 10 min | Act III 7.1; Act IV 9.0; III 6.4; III **19.9** (33:50, run 5) | 68.9; 13.5; 36.9; 154 |
+| Rule 2 per stretch | 15 min | 7.1; 8.9; 6.0; **19.2** | 34.7; 13.5; 36.9; 117 |
+| Tick, the biggest floor | under 4 ms | **1.32 ms** (a World of 63 modules; the District peaks at 159) | 0.65 (World 19) |
 
-The runs: 1 0:00-4:22 (14 Patents), 2 4:22-7:07 (7), 3 7:07-19:07 (35, Act III from 9:30, Act IV
-from 15:41), 4 19:07-31:07 (6, from 21:11), 5 31:07-40:00 (from 33:04). Runs 3 and 4 end at the
-12-hour cap, not the full-floor reset. No number moved.
+The runs (third pass): 1 0:00-4:22 (14 Patents), 2 4:22-7:24 (7), 3 7:24-19:24 (36, Act III from
+9:46, Act IV from 11:46), 4 19:24-31:24 (10, from 21:22), 5 31:24-40:00 (from 33:12). Runs 3 and 4
+end at the 12-hour cap (the World keeps growing). 33 min of wall time. No number moved. The second
+pass's windows were the bot's (DECISIONS.md "The third pass"): its slot lines stood blocked on a full
+corridor, and a standing line held the full-floor reset off.
 
-**Open** (`[pace4] OPEN` in the test): rules 1 and 2 (the chemistry corner's first hour, waiting on
-Floating City research, and run 5's 2.5-hour idle from 37:25, not yet found), every ง22 target past the World (Relocation's chain:
-batteries, sandwiches, umbrellas and the Engineer), the floor bests, and the islands' layouts (the
-Act I-II bots lay Home's lines; Pebble's sky chunks, Cinder's vents and the Old Works' ruins will
-refuse some of them). Coal claims may be the number that blocks honest play (DECISIONS.md).
+**Open** (`[pace4] OPEN` in the test): rule 1 and 2's one 19.9-minute wait (run 5, from 33:50),
+every ยง22 target past the World (Relocation's chain past batteries: Hydroponics' 300 sludge,
+sandwiches, umbrellas and the Engineer; oil for the Factory's Batteries and Solvent copies, which
+want Plastic copies the placer could not lay: coal claims again), the floor bests, the Sky Anchor's
+800 bearings (nothing here makes bearings alone), and the islands' layouts (the Act I-II bots lay
+Home's lines; Pebble's sky chunks, Cinder's vents and the Old Works' ruins will refuse some of
+them). Coal claims may be the number that blocks honest play (DECISIONS.md).
 
 ### Derivative, flagged and re-derived (CLAUDE.md)
 - **A prestige tree of automation bought with the second reset's currency** resembles Antimatter

@@ -39,7 +39,7 @@ const E: Dir = 0, S: Dir = 1, W: Dir = 2, N: Dir = 3;
 
 /** Act III research, in the order this player takes it (a node whose cost the bank already holds
  * goes first, as in bot2). */
-export const WISH3: ResearchId[] = ['zoning', 'chutes', 'bearings', 'servos', 'floatingCity', 'chemistry', 'vulcanizing', 'processors', 'sensors', 'robotics', 'districtFolds'];
+export const WISH3: ResearchId[] = ['zoning', 'chutes', 'bearings', 'servos', 'floatingCity', 'chemistry', 'vulcanizing', 'processors', 'sensors', 'robotics', 'districtFolds', 'batteries', 'hydroponics'];
 
 // ------------------------------------------------------------------ Workshop lines
 
@@ -102,7 +102,7 @@ const CHEM_PLANT: Pl[] = [
   ...[20, 19, 18, 17].map((x): Pl => ({ kind: 'belt', x, y: 7, rot: W })),
 ];
 
-export interface CornerSpec { name: string; product: ItemId; needs: ResearchId[]; parts: Pl[]; box: Box; last: { x: number; y: number } }
+export interface CornerSpec { name: string; product: ItemId; needs: ResearchId[]; parts: Pl[]; box: Box; last: { x: number; y: number }; stand?: ResearchId[] }
 
 const CORNER_SOLVENT: Pl[] = [
   ...CHEM_PLANT,
@@ -130,6 +130,44 @@ export const CORNER: Record<string, CornerSpec> = {
   },
 };
 
+/** The Solvent line again, unfolded, once the corner is free: it feeds the Hopper Batteries' 150
+ * solvent (`stand`: lifted once that research has it; measured, the third pass: the Solvent line
+ * folds once Vulcanizing and Processors are paid, and nothing else here sent the Hopper solvent:
+ * the Solvent feed's copies starved for oil, and Batteries waited the hour out). Its oil is the
+ * Chute's, the feeders' byproduct. */
+CORNER.solventB = { name: 'Solvent (again)', product: 'solvent', needs: ['chemistry'], box: { x: 18, y: 6, w: 4, h: 4 }, last: { x: 21, y: 7 }, parts: CORNER_SOLVENT, stand: ['batteries'] };
+
+/** Batteries (DESIGN.md §21 Tier 3: 2 copper ingots + solvent + plastic in the Chem Vat): the
+ * solvent vat's chain like Rubber's, its plastic from above (the Chute Mouth at (20,5)) and its
+ * copper ingots from below, belted in along row 8 from a Chute Mouth at (17,8) outside the box (the
+ * Chute's copper comes from the Copper ingots feed). */
+CORNER.batteries = {
+  name: 'Batteries', product: 'battery', needs: ['batteries'], box: { x: 18, y: 6, w: 4, h: 4 }, last: { x: 20, y: 7 },
+  parts: [
+    ...chain({ kind: 'chemVat', x: 20, y: 7, rot: W, recipe: 'cellBattery' }, 'plastic'),
+    { kind: 'chuteMouth', x: 17, y: 8, rot: E, recipe: 'copperIngot' },
+    { kind: 'belt', x: 18, y: 8, rot: E }, { kind: 'belt', x: 19, y: 8, rot: E }, { kind: 'belt', x: 20, y: 8, rot: N },
+  ],
+};
+
+/** Lines on an ore patch of their own (not a slot, not the corner). Copper ingots: the Great Drill's
+ * second copper patch (chunk D, (13,13) 2x2) under a Miner facing north into a Smelter, the ingots
+ * east onto the kit line's column 15 and so to the Hopper (batteries research wants 800), the slag
+ * north into a brick press at (14,12) that hands its bricks to the same column. A Miner and a Smelter
+ * are two kinds of machine, so it folds ("Copper ingots", as Iron ingots folds); its copies feed the
+ * Factory Chute the battery vat's copper (`FEEDS.copper`). Nothing but a Factory module made copper
+ * ingots before: the Copper wire design presses its own. */
+export const PATCH: Record<string, CornerSpec> = {
+  copper: {
+    name: 'Copper ingots', product: 'copperIngot', needs: [], box: { x: 14, y: 13, w: 1, h: 2 }, last: { x: 14, y: 13 },
+    parts: [
+      { kind: 'miner', x: 14, y: 14, rot: N },
+      { kind: 'smelter', x: 14, y: 13, rot: E, recipe: 'smeltCopper' },
+      { kind: 'press', x: 14, y: 12, rot: E, recipe: 'pressBrick' },
+    ],
+  },
+};
+
 function chain(second: Pl, item: ItemId): Pl[] {
   const solvent = CORNER_SOLVENT.filter((p) => !(p.kind === 'belt' && p.y === 7 && p.x === 20));
   return [...solvent, second, { kind: 'belt', x: 20, y: 6, rot: S }, { kind: 'chuteMouth', x: 20, y: 5, rot: S, recipe: item }];
@@ -143,7 +181,7 @@ export const LAB_C = PHASE_Z.filter((p) => !['gravel', 'g18', 'concrete', 'steel
 /** A Factory module placed by search to feed the Chute (or another of its feed), for a Workshop
  * line that takes a good no hand-laid feeder makes: `to` the Chute or a feed's index, `by` where its
  * waste goes. */
-interface Feed { design: string; to: 'chute' | 'dock' | number; by?: 'chute' | 'dock' | number }
+interface Feed { design: string; to: 'chute' | 'dock' | number; by?: 'chute' | 'dock' | 'hopper' | number }
 export const FEEDS: Record<string, Feed[]> = {
   // oil: Plastic copies whose plastic sells at the Dock and whose oil goes down the Chute
   oil: [0, 1, 2, 3].map((): Feed => ({ design: 'Plastic', to: 'dock', by: 'chute' })),
@@ -152,6 +190,21 @@ export const FEEDS: Record<string, Feed[]> = {
   rubber: [{ design: 'Rubber II', to: 'chute', by: 'dock' }],
   // servos for the arms line: two Servos II groups, each fed by a Motors II and a Circuits II group
   // (an arm takes 2 servos every 16 s; with one the line stood starved of servos, measured)
+  // copper ingots for the battery vat and Batteries research (the research drain sends the Hopper
+  // what research wants of the Chute's stock)
+  copper: [{ design: 'Copper ingots', to: 'chute', by: 'dock' }, { design: 'Copper ingots', to: 'chute', by: 'dock' }],
+  // solvent and sludge: Solvent copies send their solvent down the Chute (Batteries research wants
+  // 150, the research drain sends it) and their sludge to the Factory Hopper, which takes it while
+  // Hydroponics wants it (300); their oil from Plastic copies whose plastic sells
+  chem: [
+    { design: 'Solvent', to: 'chute', by: 'hopper' }, { design: 'Plastic', to: 'dock', by: 0 }, { design: 'Plastic', to: 'dock', by: 0 },
+    { design: 'Solvent', to: 'chute', by: 'hopper' }, { design: 'Plastic', to: 'dock', by: 3 }, { design: 'Plastic', to: 'dock', by: 3 },
+  ],
+  // batteries down the Chute (the Lighthouse wants 200, the Engineer one each): a Batteries copy fed
+  // its plastic and oil by a Plastic copy, more oil by a second, its copper by a Copper ingots copy
+  battery: [
+    { design: 'Batteries', to: 'chute', by: 'dock' }, { design: 'Plastic', to: 0, by: 0 }, { design: 'Plastic', to: 'dock', by: 0 }, { design: 'Copper ingots', to: 0, by: 'dock' },
+  ],
   servos: [
     { design: 'Servos II', to: 'chute', by: 'dock' }, { design: 'Motors II', to: 0, by: 'dock' }, { design: 'Circuits II', to: 0, by: 'dock' },
     { design: 'Servos II', to: 'chute', by: 'dock' }, { design: 'Motors II', to: 3, by: 'dock' }, { design: 'Circuits II', to: 3, by: 'dock' },
@@ -174,7 +227,13 @@ export function lineLayout(spec: LineSpec, y: number): { parts: Pl[]; box: Box; 
     if (m.n) parts.push({ kind: 'chuteMouth', x, y: y - 1, rot: S, recipe: m.n });
     if (m.s) parts.push({ kind: 'chuteMouth', x, y: y + 1, rot: N, recipe: m.s });
   });
-  for (let yy = y; yy >= 7; yy--) parts.push({ kind: 'belt', x: OUT_X, y: yy, rot: N });
+  // the output column into the corridor, with a Buffer Crate at each slot's row: the corridor to
+  // the Hopper runs full with the lab's banked goods, so a line side-loading into it waited for gaps
+  // and stood blocked (measured, the third pass: the Gears line never folded in run 3, 45 min, and
+  // the Gearboxes line after it); two crates (100) let it run at speed through its audit, then
+  // drain into the corridor as it has room. (The same crates whichever slot is in use, so the two
+  // lines' layouts agree on the shared column.)
+  for (let yy = y; yy >= 7; yy--) parts.push({ kind: SLOT_ROWS.includes(yy) ? 'crate' : 'belt', x: OUT_X, y: yy, rot: N });
   return { parts, box: { x: x0, y, w: k, h: 1 }, last: { x: OUT_X - 1, y } };
 }
 
@@ -212,6 +271,11 @@ export const ZONE_PLAN: FPl[] = [
 export const CHUTE = { x: 14, y: 7 };
 const SPINE: FPl[] = ft([0, 1, 2, 3, 4, 5, 6].map((y): [number, number, Dir] => [14, y, S]));
 const FEED_SLOTS: [number, number, Dir][] = [[13, 7, E], [15, 7, W], ...[6, 5, 4, 3, 2, 1, 0].flatMap((y): [number, number, Dir][] => [[13, y, E], [15, y, W]])];
+/** The design a Chute feeder of each item is (feedShort). */
+const CHUTE_FEEDER: Partial<Record<ItemId, string>> = {
+  ironIngot: 'Iron ingots', steel: 'Steel', copperWire: 'Copper wire', plastic: 'Plastic', glass: 'Glass',
+  gear: 'Gears II', motor: 'Motors II', circuit: 'Circuits II', gearbox: 'Gearboxes II', servo: 'Servos II', rubber: 'Rubber II',
+};
 export function chuteFloor(feeders: string[]): FPl[] {
   return [...SPINE, ...feeders.slice(0, FEED_SLOTS.length).map((f, i) => fm(f, ...FEED_SLOTS[i]))];
 }
@@ -434,6 +498,21 @@ export const PLAN3: Step3[] = [
   { k: 'district', design: 'Sensors II', n: 5 },
   { k: 'need', r: 'districtFolds' },
   { k: 'dfold', n: 2 },
+  // Relocation's chain (the third pass): batteries (the Lighthouse wants 200, the Engineer one each)
+  // and Hydroponics' sludge. Copper ingots fold on chunk D's second copper patch and feed the Chute;
+  // Solvent copies send the Chute solvent and the Factory Hopper their sludge; the battery vat is the
+  // chemistry corner's last line, its copies feeding the Chute
+  { k: 'line', line: 'copper' },
+  { k: 'lineDone', line: 'copper' },
+  { k: 'feed', feed: 'copper' },
+  { k: 'feed', feed: 'chem' },
+  { k: 'line', line: 'solventB' },
+  { k: 'lineDone', line: 'solventB' },
+  { k: 'need', r: 'batteries' },
+  { k: 'line', line: 'batteries' },
+  { k: 'lineDone', line: 'batteries' },
+  { k: 'feed', feed: 'battery' },
+  { k: 'need', r: 'hydroponics' },
   { k: 'mark', name: 'act3end' },
 ];
 
@@ -496,7 +575,10 @@ export class Act3Bot {
 
   /** Is everything planned done (the campaign resets on a stalled preview only then)? */
   done(): boolean {
-    return this.step >= this.plan.length && this.b.step >= this.b.plan.length && !this.group && this.slots.every((q) => q === null);
+    // (a standing line, the arms line feeding the Hopper, keeps its slot for good: it is not work
+    // still to come; counting it held the full-floor reset off for 5 h in pace-act3's run 4, measured
+    // in the third pass)
+    return this.step >= this.plan.length && this.b.step >= this.b.plan.length && !this.group && this.slots.every((q) => q === null || !!LINES[q]?.stand);
   }
 
   private act(c: Cmd, what?: string): boolean | null {
@@ -536,6 +618,7 @@ export class Act3Bot {
     if (this.groupWork()) return;
     this.grow();
     this.drain();
+    this.feedShort();
     this.freeSlots();
     this.runPlan();
   }
@@ -572,11 +655,43 @@ export class Act3Bot {
     this.b.plan.push({ k: 'parts', parts: this.layoutNow() });
   }
 
+  private shortAt = 0;
+  private shortSeen: Partial<Record<ItemId, number>> = {};
+  private extraFeeders = 0;
+
+  /** A running line (a slot's or the corner's) whose Chute input has stood empty 10 minutes gets one
+   * more Chute feeder of the design that makes it, if the Chute floor has a slot (measured, the third
+   * pass: the Processors line drew the Chute's circuits faster than the one Circuits II feeder sent
+   * them, stood at 6 processors and was given up after 90 minutes, and Robotics waited the run out
+   * on processors). Four at most a run. */
+  private feedShort() {
+    const g = this.g;
+    if (g.s.tick < this.shortAt || !g.s.factory.ents.some((e) => e.kind === 'fchute')) return;
+    this.shortAt = g.s.tick + 60 * TICK_RATE;
+    if (this.extraFeeders >= 4 || this.feeders.length >= FEED_SLOTS.length || this.b.step < this.b.plan.length) return;
+    const drawn = new Set<ItemId>();
+    for (const q of [...this.slots, this.corner]) if (q) for (const p of this.b.found[HOOK + q] ?? []) if (p.kind === 'chuteMouth' && p.recipe) drawn.add(p.recipe as ItemId);
+    const chute = g.s.chute ?? {};
+    for (const item of drawn) {
+      if ((chute[item] ?? 0) >= 1) { delete this.shortSeen[item]; continue; }
+      this.shortSeen[item] ??= g.seconds;
+      if (g.seconds - this.shortSeen[item]! < 600) continue;
+      const design = CHUTE_FEEDER[item];
+      if (!design || !this.b.designNamed(design)) continue;
+      delete this.shortSeen[item];
+      this.extraFeeders++;
+      this.feeders.push(design);
+      this.layChute('chute:short:' + this.extraFeeders);
+      this.b.decide('feeder:' + design);
+      return;
+    }
+  }
+
   /** One more copy wanted on the District, every 3 min once the plan is through, while every copy
    * wanted stands and the coin covers twice the stamp. */
   private grow() {
     const g = this.g;
-    if (this.step < this.chemStart || g.s.tick < this.growAt || !g.s.district || this.saving) return;
+    if (!this.growing || g.s.tick < this.growAt || !g.s.district || this.saving) return;
     this.growAt = g.s.tick + 180 * TICK_RATE;
     if (Object.entries(this.want).some(([n, k]) => this.placed(n) < k && this.b.designNamed(n))) return;
     // a copy the floor could not route is not placed (every lot bought and the routes at the cap)
@@ -606,6 +721,12 @@ export class Act3Bot {
   /** A line folded leaves its slot at once: its Chute Mouths and output belt are lifted (a line
    * left running would crowd the shared output column and the corridor). */
   private freeSlots() {
+    if (this.patch && this.b.designNamed(PATCH[this.patch].name)) {
+      this.pushed.add('free:' + this.patch);
+      this.patch = null;
+      this.b.plan.push({ k: 'parts', parts: this.layoutNow() });
+      return;
+    }
     if (this.corner && this.b.designNamed(CORNER[this.corner].name)) {
       this.pushed.add('free:' + this.corner);
       this.corner = null;
@@ -643,10 +764,10 @@ export class Act3Bot {
   // ---------------------------------------------------------------- research
 
   /** What research still wants of an item (selected or later on the Act III page), after the bank. */
-  researchNeed(item: ItemId): number {
+  researchNeed(item: ItemId, of: ResearchId[] = this.wish): number {
     const r = this.g.s.research;
     let n = 0;
-    for (const id of this.wish) {
+    for (const id of of) {
       if (this.g.done(id)) continue;
       const want = RESEARCH[id].cost[item];
       if (want) n += Math.max(0, want - (r.progress[id]?.[item]?.toNumber() ?? 0));
@@ -654,13 +775,25 @@ export class Act3Bot {
     return n - (r.bank[item]?.toNumber() ?? 0);
   }
 
+  private resWatch: { id: ResearchId | null; got: number; t: number } = { id: null, got: 0, t: 0 };
+  private resSkip: Partial<Record<ResearchId, number>> = {};
+
   private research() {
     const g = this.g;
     const r = g.s.research;
     const open = this.wish.filter((id) => available(g, id));
     if (!open.length) return;
     const covered = open.find((id) => Object.entries(RESEARCH[id].cost).every(([it, n]) => (r.progress[id]?.[it as ItemId]?.toNumber() ?? 0) + (r.bank[it as ItemId]?.toNumber() ?? 0) >= (n as number)));
-    const pick = covered ?? open[0];
+    // a node selected 10 minutes without a good coming in (nothing here makes its goods: the Sky
+    // Anchor's 800 bearings, measured, the third pass, held Batteries off for good) is passed over
+    // for 30 minutes, as a player picks what the floor can pay
+    const sel = r.selected as ResearchId | null;
+    if (sel) {
+      const got = Object.values(r.progress[sel] ?? {}).reduce((a, v) => a + (v?.toNumber() ?? 0), 0);
+      if (this.resWatch.id !== sel || got > this.resWatch.got) this.resWatch = { id: sel, got, t: g.seconds };
+      else if (g.seconds - this.resWatch.t > 600 && open.length > 1) { this.resSkip[sel] = g.seconds + 1800; this.resWatch = { id: sel, got, t: g.seconds }; }
+    }
+    const pick = covered ?? open.find((id) => (this.resSkip[id] ?? 0) <= g.seconds) ?? open[0];
     if (r.selected !== pick) this.act({ k: 'research', id: pick });
   }
 
@@ -690,6 +823,17 @@ export class Act3Bot {
   }
 
   private stepAt = { step: -1, t: 0 };
+
+  /** Does the District grow (GROW) now? From the plan's first chemistry step on, and before it while
+   * the plan has waited 20 minutes on one step (research short of goods, a line slow to fold): a
+   * player builds the floor that pays while waiting, rather than idle (measured, the third pass:
+   * pace-act3's run 3 waited 68.7 min at 11:07 on the Floating City's servos with the District's
+   * growth held until chemistry; the copies grown are routed to what wants them most, the Hopper
+   * among them). */
+  get growing(): boolean {
+    if (this.step >= this.chemStart) return true;
+    return this.step < this.plan.length && this.stepAt.step === this.step && this.g.seconds - this.stepAt.t > 20 * 60;
+  }
   /** the plan's first chemistry step: the District grows from here on (GROW) */
   get chemStart(): number {
     const i = this.plan.findIndex((s) => s.k === 'chemLab');
@@ -718,7 +862,9 @@ export class Act3Bot {
         this.b.mark(s.name);
         return 'done';
       case 'need':
-        return g.done(s.r) ? 'done' : `research ${s.r}`;
+        if (g.done(s.r)) return 'done';
+        this.retryLine(s.r);
+        return `research ${s.r}`;
       case 'zone':
         if (g.done('zoning')) return 'done';
         return this.viaB2('zone', [{ k: 'fplan', name: 'a3zone', items: ZONE_PLAN, opt: true }]);
@@ -758,10 +904,25 @@ export class Act3Bot {
         return this.startLine(s.line);
       case 'lineDone': {
         // (its slot is freed as soon as the fold is: freeSlots)
-        const spec = LINES[s.line] ?? CORNER[s.line];
+        const spec = LINES[s.line] ?? CORNER[s.line] ?? PATCH[s.line];
         if (this.b.designNamed(spec.name) || this.abandoned(spec.name)) return 'done';
+        // a standing corner line is done once its research has what it makes: the corner freed
+        const st = CORNER[s.line]?.stand;
+        if (st && this.lineAt[s.line] !== undefined && (this.researchNeed(CORNER[s.line].product, st) <= 0 || st.every((r) => g.done(r)))) {
+          if (this.corner === s.line) {
+            this.corner = null;
+            this.b.plan.push({ k: 'parts', parts: this.layoutNow() });
+          }
+          return 'done';
+        }
         // a line not started (its research never came) is left out
         if (this.lineAt[s.line] === undefined) return 'done';
+        // the Solvent line folds once research has its solvent (Vulcanizing's and Processors'), or
+        // after 75 minutes as it is
+        if (s.line === 'solvent' && !this.pushed.has('fold:solvent') && (this.researchNeed('solvent', ['vulcanizing', 'processors']) <= 0 || g.seconds - this.lineAt.solvent > 75 * 60)) {
+          this.pushed.add('fold:solvent');
+          this.b.plan.push(this.cornerFold('solvent'));
+        }
         // the clock stands while the Chute is out of one of a slot line's inputs (its feed still
         // being laid: the arms line gave up 20 min before the Servos II feed's servos came,
         // measured), for an hour at most
@@ -783,6 +944,7 @@ export class Act3Bot {
           const i = this.slots.indexOf(s.line);
           if (i >= 0) this.slots[i] = null;
           if (this.corner === s.line) this.corner = null;
+          if (this.patch === s.line) this.patch = null;
           this.b.bgFolds = this.b.bgFolds.filter((f) => f.name !== spec.name);
           this.b.plan.push({ k: 'parts', parts: this.layoutNow() });
           return 'done';
@@ -826,8 +988,55 @@ export class Act3Bot {
 
   // ---------------------------------------------------------------- Workshop lines
 
+  private retried = new Set<string>();
+
+  /** The corner line's fold (beside the plan): a vat on the Chute's oil runs short (a Plastic copy's
+   * oil feeds an eighth of one), so folded once it runs a third of the time, or after 30 minutes as
+   * it is (bot2's fold step). */
+  private cornerFold(line: string): Step2 {
+    const cs = CORNER[line];
+    return { k: 'fold', box: cs.box, name: cs.name, bg: true, nokeep: true, ready: (gg) => working(gg, cs.last.x, cs.last.y, 30, 0.3) };
+  }
+
+  /** Research that has waited 30 minutes on a good only a given-up line makes (no design of it): the
+   * line is started again, once (measured, the third pass: the Gearboxes line gave up at 12:32 and
+   * Servos research, 120 gearboxes, then waited the rest of the run). While it runs it feeds the
+   * Hopper; it folds beside the plan, as any line. */
+  private retryLine(r: ResearchId) {
+    const g = this.g;
+    if (this.stepAt.step !== this.step || g.seconds - this.stepAt.t < 30 * 60) return;
+    for (const item of Object.keys(RESEARCH[r].cost) as ItemId[]) {
+      const key = Object.keys(LINES).find((k) => LINES[k].product === item && !LINES[k].stand) ?? Object.keys(CORNER).find((k) => CORNER[k].product === item);
+      if (!key || this.retried.has(key)) continue;
+      const corner = !!CORNER[key];
+      const name = corner ? CORNER[key].name : LINES[key].name;
+      if (this.b.designNamed(name) || !this.failed.includes('line:' + name)) continue;
+      if (corner ? !!this.corner : this.slots.includes(key) || !this.slots.includes(null)) continue;
+      if (this.researchNeed(item) <= 0) continue;
+      this.retried.add(key);
+      this.failed = this.failed.filter((f) => f !== 'line:' + name);
+      this.startLine(key);
+      this.b.decide('retry:' + name);
+      return;
+    }
+  }
+
   private startLine(line: string): string {
     const g = this.g;
+    const ps = PATCH[line];
+    if (ps) {
+      if (this.b.designNamed(ps.name) || this.patch === line) return 'done';
+      for (const r of ps.needs) if (!g.done(r)) return `research ${r} for ${ps.name}`;
+      this.patch = line;
+      this.b.found[HOOK + line] = ps.parts;
+      this.b.plan.push(
+        { k: 'parts', parts: this.layoutNow() },
+        { k: 'fold', box: ps.box, name: ps.name, bg: true, nokeep: true, ready: (gg) => working(gg, ps.last.x, ps.last.y, 30, 0.5) },
+      );
+      this.lineAt[line] = g.seconds;
+      this.b.decide('line:' + ps.name);
+      return 'done';
+    }
     const cs = CORNER[line];
     if (cs) {
       if (this.b.designNamed(cs.name) || this.corner === line) return 'done';
@@ -835,14 +1044,13 @@ export class Act3Bot {
       if (this.corner) return `the chemistry corner is busy (${this.corner})`;
       this.corner = line;
       this.b.found[HOOK + line] = cs.parts;
-      this.b.plan.push(
-        { k: 'parts', parts: this.layoutNow() },
-        // a vat on the Chute's oil runs short (a Plastic copy's oil feeds an eighth of one): folded
-        // once it runs a third of the time, or after 30 minutes as it is (bot2's fold step)
-        // (the Solvent line runs until research has its solvent: the corner is the only solvent
-        // there is until Rubber and Processors fold their own vats)
-        { k: 'fold', box: cs.box, name: cs.name, bg: true, nokeep: true, ready: (gg) => working(gg, cs.last.x, cs.last.y, 30, 0.3) && (line !== 'solvent' || this.researchNeed('solvent') <= 0) },
-      );
+      this.b.plan.push({ k: 'parts', parts: this.layoutNow() });
+      // (the Solvent line runs until research has its solvent: the corner is the only solvent there
+      // is until Rubber and Processors fold their own vats; its fold is pushed once it has, by
+      // lineDone, since bot2's fold step folds a line as it is after 30 minutes: measured, the third
+      // pass, the Solvent line folded at 30 minutes 18 solvent short of Processors, which then waited
+      // the hour out and ended the plan)
+      if (line !== 'solvent' && !cs.stand) this.b.plan.push(this.cornerFold(line));
       this.lineAt[line] = g.seconds;
       this.b.decide('line:' + cs.name);
       return 'done';
@@ -913,18 +1121,20 @@ export class Act3Bot {
     // the Chute's oil goes to the corner's vats while it runs a line, else to the Hopper: a full oil
     // stock stops every Chute feeder whose waste is oil (Motors II, Circuits II), measured
     if (this.standing.includes(HOOK + 'drains')) this.b.found[HOOK + 'drains'] = this.corner ? DRAINS_C : DRAINS;
-    return [...this.lab, ...this.standing, ...this.slots.filter((q): q is string => !!q).map((q) => HOOK + q), ...(this.corner ? [HOOK + this.corner] : [])];
+    return [...this.lab, ...this.standing, ...this.slots.filter((q): q is string => !!q).map((q) => HOOK + q), ...(this.corner ? [HOOK + this.corner] : []), ...(this.patch ? [HOOK + this.patch] : [])];
   }
 
   /** the chemistry corner's line, or null */
   private corner: string | null = null;
+  /** the ore-patch line under way (PATCH), or null */
+  private patch: string | null = null;
 
   /** Factory modules placed by search to feed the Chute (FEEDS), once each design exists. */
   private feedStep(name: string): string {
     const feed = FEEDS[name];
     for (const f of feed) if (!this.b.designNamed(f.design)) return this.abandoned(f.design) ? 'done' : `no design ${f.design} for the ${name} feed`;
     const id = (i: number) => `feed:${name}:${i}`;
-    const dest = (t: 'chute' | 'dock' | number): Dest => (typeof t === 'number' ? { k: 'mod', id: HOOK + id(t) } : { k: t });
+    const dest = (t: 'chute' | 'dock' | 'hopper' | number): Dest => (typeof t === 'number' ? { k: 'mod', id: HOOK + id(t) } : { k: t });
     // (a member another feeds is a hub its feeders' trunks come round to)
     if (name === 'rubber' && !this.standing.includes(HOOK + 'plasticDrain')) {
       this.standing.push(HOOK + 'plasticDrain');
@@ -1241,7 +1451,7 @@ export class Act3Bot {
    * standing held every later copy: the floor idled on 18M coin at 17 h); the growth round comes
    * back to it. */
   private giveUp(name: string, id: HighFloorId = 'district', want: Record<string, number> = this.want) {
-    if (this.step >= this.chemStart) want[name] = this.placed(name, id);
+    if (this.growing) want[name] = this.placed(name, id);
   }
 
   /** A floor's routes at the most it holds now (120, and 20 a lot). */
