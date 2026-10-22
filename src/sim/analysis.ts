@@ -15,6 +15,8 @@ import { plain, pct as fmtPct, duration } from '../engine/fmt';
 import { TICK_RATE } from '../engine/time';
 import { baseSpeed, veinBoost } from './systems/machines';
 import type { RecipeDef } from '../data/recipes';
+import { islandMiners } from './systems/islands';
+import { scenarioMiners } from './scenario';
 
 const isSink = (e: Ent) => e.kind === 'dock' || e.kind === 'hopper';
 
@@ -102,11 +104,13 @@ export function lineOf(g: Game, e: Ent): Ent[] {
 }
 
 /** Nominal input and output per minute of a machine's recipe. */
-export function nominal(m: Ent): { ins: { item: ItemId; perMin: number }[]; outs: { item: ItemId; perMin: number }[] } {
+export function nominal(m: Ent, g?: Game): { ins: { item: ItemId; perMin: number }[]; outs: { item: ItemId; perMin: number }[] } {
   const r = m.recipe ? RECIPE[m.recipe] : null;
   if (!r) return { ins: [], outs: [] };
-  // crafts a minute at the machine's own speed (a Mk2 makes 3x)
-  const crafts = (60 / r.time) * (BUILD[m.kind].speed ?? 1);
+  // crafts a minute at the machine's own speed (a Mk2 makes 3x); a Miner digs faster on Pebble Isle
+  // and on the Rich Ore board (DESIGN.md §21, §22)
+  const dig = g && m.kind === 'miner' ? islandMiners(g) * scenarioMiners(g) : 1;
+  const crafts = (60 / r.time) * (BUILD[m.kind].speed ?? 1) * dig;
   return {
     ins: r.inputs.map((s) => ({ item: s.item, perMin: s.n * crafts })),
     outs: r.outputs.map((s) => ({ item: s.item, perMin: s.n * crafts })),
@@ -253,7 +257,7 @@ export function report(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' |
     out.push({ text: 'No recipe yet: it takes the first input it can use.', tone: 'warn' });
     return out;
   }
-  const nom = nominal(m);
+  const nom = nominal(m, g);
   // what feeds it and what takes its output: read first, so the status line and the lines under it
   // agree (the UI legibility round: a kiln on its buffer read "Working 100%" over "Nothing feeds it")
   const f = nom.ins.length ? feeders(g, m) : null;
@@ -285,7 +289,7 @@ export function report(g: Game, m: Ent): { text: string; tone: 'good' | 'warn' |
     out.push({ text: `Wants ${nom.ins.map((i) => perMin(i.perMin) + ' ' + itemName(i.item).toLowerCase()).join(' + ')}`, tone: 'plain' });
     if (f.from.length) {
       const supply = f.from.map((s) => {
-        const sn = nominal(s);
+        const sn = nominal(s, g);
         return `${entName(g, s)} (${sn.outs.map((o) => perMin(o.perMin) + ' ' + itemName(o.item).toLowerCase()).join(', ')})`;
       });
       out.push({ text: `Fed by ${supply.join(', ')}`, tone: 'plain' });
@@ -350,7 +354,7 @@ export function lineReport(g: Game, m: Ent): { text: string; tone: 'good' | 'war
   const made = new Map<ItemId, number>(), used = new Map<ItemId, number>();
   const makers = new Map<ItemId, Ent[]>(), users = new Map<ItemId, Ent[]>();
   for (const e of ms) {
-    const n = nominal(e);
+    const n = nominal(e, g);
     for (const o of n.outs) { made.set(o.item, (made.get(o.item) ?? 0) + o.perMin); makers.set(o.item, [...(makers.get(o.item) ?? []), e]); }
     for (const i of n.ins) { used.set(i.item, (used.get(i.item) ?? 0) + i.perMin); users.set(i.item, [...(users.get(i.item) ?? []), e]); }
   }
@@ -373,12 +377,12 @@ export function lineReport(g: Game, m: Ent): { text: string; tone: 'good' | 'war
     const have = made.get(worst.item)!, want = used.get(worst.item)!;
     if (worst.ratio < 1) {
       const maker = makers.get(worst.item)![0];
-      const each = nominal(maker).outs.find((o) => o.item === worst!.item)!.perMin;
+      const each = nominal(maker, g).outs.find((o) => o.item === worst!.item)!.perMin;
       const more = Math.ceil((want - have) / each);
       out.push({ text: `Short of ${it}: makes ${pm(have)}, wants ${pm(want)} a minute. Add ${more} ${BUILD[maker.kind].name}${more > 1 ? 's' : ''} making ${it} (${pm(each)} each).`, tone: 'warn' });
     } else {
       const user = users.get(worst.item)![0];
-      const each = nominal(user).ins.find((i) => i.item === worst!.item)!.perMin;
+      const each = nominal(user, g).ins.find((i) => i.item === worst!.item)!.perMin;
       const more = Math.floor((have - want) / each);
       out.push({ text: `Too much ${it}: makes ${pm(have)}, uses ${pm(want)} a minute; the rest backs up.${more >= 1 ? ` ${more} more ${BUILD[user.kind].name}${more > 1 ? 's' : ''} would use it.` : ''}`, tone: 'warn' });
     }

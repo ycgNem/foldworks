@@ -206,7 +206,7 @@ function machineReport(app: App, e: Ent): Report {
   const more: Row[] = [];
   const sh = shares(e);
   const firstMin = e.kind === 'furnace' && !g.has('bellows');
-  const nom = nominal(e);
+  const nom = nominal(e, g);
   const main = nom.outs[0]?.item ?? null;
   const rep: Report = { title: entName(g, e), item: main, rows, more };
   if (firstMin) {
@@ -269,7 +269,7 @@ function machineReport(app: App, e: Ent): Report {
     more.push(rich(`in ${nom.ins.map((i) => `${icon(i.item)} ${pm(i.perMin)}/min`).join(' + ')}`));
     if (f.from.length) {
       for (const s of f.from.slice(0, 4)) {
-        const sn = nominal(s);
+        const sn = nominal(s, g);
         more.push(rich(`← ${entName(g, s)} ${sn.outs.map((o) => `${icon(o.item)} ${pm(o.perMin)}/min`).join(' ')}`));
       }
       if (f.from.length > 4) more.push(rich(`{soft:← +${f.from.length - 4} more}`));
@@ -328,7 +328,7 @@ function lineRows(app: App, m: Ent): Row[] {
   const made = new Map<ItemId, number>(), used = new Map<ItemId, number>();
   const makers = new Map<ItemId, Ent[]>(), users = new Map<ItemId, Ent[]>();
   for (const e of ms) {
-    const n = nominal(e);
+    const n = nominal(e, g);
     for (const o of n.outs) { made.set(o.item, (made.get(o.item) ?? 0) + o.perMin); makers.set(o.item, [...(makers.get(o.item) ?? []), e]); }
     for (const i of n.ins) { used.set(i.item, (used.get(i.item) ?? 0) + i.perMin); users.set(i.item, [...(users.get(i.item) ?? []), e]); }
   }
@@ -347,13 +347,13 @@ function lineRows(app: App, m: Ent): Row[] {
     const have = made.get(worst.item)!, want = used.get(worst.item)!;
     if (worst.ratio < 1) {
       const maker = makers.get(worst.item)![0];
-      const each = nominal(maker).outs.find((o) => o.item === worst!.item)!.perMin;
+      const each = nominal(maker, g).outs.find((o) => o.item === worst!.item)!.perMin;
       const add = Math.ceil((want - have) / each);
       out.push(rich(`{warn:short} ${icon(worst.item)} makes ${pm(have)}, wants ${pm(want)}/min`, true));
       out.push(rich(`fix +${add} ${BUILD[maker.kind].name} · ${pm(each)}/min each`, true));
     } else {
       const user = users.get(worst.item)![0];
-      const each = nominal(user).ins.find((i) => i.item === worst!.item)!.perMin;
+      const each = nominal(user, g).ins.find((i) => i.item === worst!.item)!.perMin;
       const add = Math.floor((have - want) / each);
       out.push(rich(`{warn:too much} ${icon(worst.item)} makes ${pm(have)}, uses ${pm(want)}/min`, true));
       if (add >= 1) out.push(rich(`fix +${add} ${BUILD[user.kind].name} would use it`, true));

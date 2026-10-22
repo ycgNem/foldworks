@@ -104,11 +104,11 @@ function workshopCause(g: Game, m: Ent, seen: Set<number>): Cause {
     if (gi < 0) return c(`${name}: no power. A Pole within ${poleReach(g)} tiles of it.`, ['{pip:power} no Pole']);
     return c(`${name}: no power. Its grid has no fuel: coal into the Boiler.`, ['{pip:power} no fuel']);
   }
-  const nom = nominal(m);
+  const nom = nominal(m, g);
   if (m.state === 'starved') {
     const item = m.why;
     const f = nom.ins.length ? feeders(g, m) : null;
-    const makers = f ? f.from.filter((s) => nominal(s).outs.some((o) => o.item === item)) : [];
+    const makers = f ? f.from.filter((s) => nominal(s, g).outs.some((o) => o.item === item)) : [];
     if (f && !makers.length && !f.stores.length) {
       if (m.kind === 'furnace') return c(`${name}: no ore. {k:LMB} the ore beside it, or a Miner on it facing in.`, [`{pip:starved} ${ic(item)} none`]);
       const mk = item ? makerName(item) : null;
@@ -116,11 +116,11 @@ function workshopCause(g: Game, m: Ent, seen: Set<number>): Cause {
     }
     const stopped = makers.find((s) => s.state !== 'work' && !s.paused && !seen.has(s.id));
     if (stopped) return workshopCause(g, stopped, seen);
-    const have = makers.reduce((n, s) => n + (nominal(s).outs.find((o) => o.item === item)?.perMin ?? 0), 0);
+    const have = makers.reduce((n, s) => n + (nominal(s, g).outs.find((o) => o.item === item)?.perMin ?? 0), 0);
     const want = nom.ins.find((i) => i.item === item)?.perMin ?? 0;
     const mk = makers[0] ? BUILD[makers[0].kind].name : item ? makerName(item) : null;
     if (have > 0 && want > have * 1.05) {
-      const each = makers[0] ? nominal(makers[0]).outs.find((o) => o.item === item)?.perMin ?? have : have;
+      const each = makers[0] ? nominal(makers[0], g).outs.find((o) => o.item === item)?.perMin ?? have : have;
       const more = Math.max(1, Math.ceil((want - have) / Math.max(0.01, each)));
       return c(`${name}: short of ${ic(item)} ${lc(item)}, ${pm(have)} of ${pm(want)} a minute. Add ${more} ${mk ?? 'feeder'}${more > 1 ? 's' : ''}.`, [`{pip:starved} ${ic(item)} ${pm(have)}/${pm(want)}`]);
     }
@@ -134,7 +134,7 @@ function workshopCause(g: Game, m: Ent, seen: Set<number>): Cause {
   if (d && isMachine(d.kind) && d.state !== 'work' && !d.paused && !seen.has(d.id)) return workshopCause(g, d, seen);
   const out = nom.outs[0];
   if (d && isMachine(d.kind) && out) {
-    const takes = nominal(d).ins.find((i) => i.item === out.item)?.perMin ?? 0;
+    const takes = nominal(d, g).ins.find((i) => i.item === out.item)?.perMin ?? 0;
     if (takes > 0 && takes < out.perMin * 0.95) {
       const more = Math.max(1, Math.ceil((out.perMin - takes) / takes));
       return c(`${name}: ${entName(g, d)} uses ${pm(takes)} of its ${pm(out.perMin)} ${lc(out.item)} a minute. Add ${more} ${BUILD[d.kind].name}${more > 1 ? 's' : ''}, or send the rest to the Dock.`, [`{pip:blocked} ${ic(out.item)} ${pm(takes)}/${pm(out.perMin)}`]);
