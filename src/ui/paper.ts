@@ -8,6 +8,7 @@ import { C, rgba } from '../data/palette';
 import { T, roleInk, roleFill, type Role } from './theme';
 import { sheet, hasArt, type SpriteSheet } from '../render/sprites';
 import { drawSmall, smallWidth, SMALL_H, drawBig, bigWidth, BIG_H, drawText } from './font';
+import { BakeCache, imageId } from './bake';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -26,11 +27,25 @@ export function hash2(a: number, b: number): number {
 
 // ---------------------------------------------------------------- 9-slices
 
+/** 9-slices tiled to a size, baked (src/ui/bake.ts): a panel's centre in 4 px tiles was hundreds of
+ *  drawImage calls a frame. */
+export const nineCache = new BakeCache(4_000_000);
+
 /** Draw a 9-slice sheet's frame tiled to w x h (edges and centre repeat, never stretch). */
 export function nineRaw(ctx: Ctx, s: SpriteSheet, f: number, x: number, y: number, w: number, h: number) {
   const img = s.frames[Math.min(f, s.frames.length - 1)];
   if (!img) return;
   const [l, t, r, b] = s.slice ?? [4, 4, 4, 4];
+  // whole sizes at least as big as the corners bake (the parts never overlap, so one drawImage of
+  // the bake under the caller's alpha is the same as the parts drawn one by one)
+  if (w === Math.floor(w) && h === Math.floor(h) && w >= l + r && h >= t + b) {
+    const bake = nineCache.get(`${imageId(img)}|${l},${t},${r},${b}|${w}x${h}`, w, h, (bc) => nineParts(bc, s, img, l, t, r, b, 0, 0, w, h));
+    if (bake) { ctx.drawImage(bake, x, y); return; }
+  }
+  nineParts(ctx, s, img, l, t, r, b, x, y, w, h);
+}
+
+function nineParts(ctx: Ctx, s: SpriteSheet, img: HTMLCanvasElement, l: number, t: number, r: number, b: number, x: number, y: number, w: number, h: number) {
   const cw = s.w - l - r, ch = s.h - t - b;
   const iw = w - l - r, ih = h - t - b;
   const part = (sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number) => {

@@ -1,5 +1,9 @@
-# Tests, builds the game and publishes it to GitHub Pages on every push to main.
+# Builds the game and publishes it to GitHub Pages on every push to main (Milestone 14).
 # One-time setup: repo Settings -> Pages -> Source: "GitHub Actions".
+# The base path is relative (vite.config.ts `base: './'`), so the build works at
+# https://<user>.github.io/<repo>/ under whatever name the repo has.
+# The fast checks run here as a gate (ci.yml runs them on every push and PR too); the pace tests,
+# which play the game for hours of sim time, run nightly and on demand in pace.yml.
 name: Deploy to GitHub Pages
 
 on:
@@ -19,6 +23,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,8 +33,9 @@ jobs:
       - run: npm ci
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
-      - run: npm test
-      - run: npm run build
+      - run: npm run typecheck
+      - run: npx vitest run --exclude "tests/pace-*"
+      - run: npx vite build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

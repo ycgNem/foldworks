@@ -1207,6 +1207,15 @@ derivation here.
   short or garbled). Loaded the backup from 12 minutes ago; the damaged one is kept in Options.").
 - Size: the Act II bot's save is 81–102 KB of JSON from 1 h to 5 h (128 KB as an export string at
   2 h), and checking one loads takes 3–4 ms; four copies fit well inside a browser's 5 MB.
+- **Save size (Milestone 14; the target is under 200 KB)**: late saves outgrew it as JSON (the
+  Act III bot's 40 h checkpoint 168 KB, 229 KB as an FW1 export string; every floor full 485 KB,
+  647 KB as an export). Since Milestone 14 a slot holds the JSON deflated (`FWZ1.`, base64url, a
+  checksum) and an export string is `FW2.` the same way: the 40 h checkpoint is **31 KB**, every
+  floor full (the dense 24x16 Workshop, the widest Factory, 168 / 200 / 172 modules on the
+  District, World and Beyond) **33 KB**, packed in about 10 ms (`tests/savesize.test.ts`; in the
+  page, `e2e/saves.mjs`: a staged World and Beyond with every high floor full, 322 KB of JSON,
+  is a 25 KB slot). A slot of plain JSON and an FW1 string still load; no payload changed, so no
+  migration (DECISIONS.md "Milestone 14").
 - **Saves v5**: the state gains `inspire` (Inspiration given per node); `paused` on machines and
   modules and the Night Shift in `upgrades` need no migration (absent means none).
 
@@ -2019,3 +2028,54 @@ whole-World audit, a Last Fold and Kernel nodes from the command log.
 - **The Seed** resembles a roguelite's carried-over starting item. Re-derived from the fold: it is the
   World folded into one tile, it digs the four raw ores the Workshop is built from, and its sides are a
   routing puzzle (which ore leaves which side).
+
+## Performance (measured, Milestone 14)
+
+The target (ROADMAP.md Milestone 14): 200 modules on a floor and a dense 16x16 Workshop at 60 fps
+on a mid laptop. A frame has 16.7 ms; the sim's share is under 4 ms (Milestone 2's budget: a 20 Hz
+tick lands in a third of the frames). `npm run perf` builds each floor at its worst with the whole
+floor in view at 1920x1080 (nothing culled): the dense Workshop (50 min of planner play, then every
+free tile of the 16x16 belted and every belt carrying an item: 250 things, 196 items); the Factory
+at its widest (18x9, 118 modules, 32 trunk tiles into the Dock and the Hopper); and every lot of
+the District, World and Beyond with 168 / 213 / 172 modules and 168 / 180 / 160 routes (336-360
+skiffs, the route cap). "Frame" is the JavaScript of one frame (render and HUD); "fps" is the
+headless page's rate (unthrottled, so above 60 when there is room). Measured 2026-10-22 on a Ryzen
+9 7945HX laptop under heavy load from other agents (the CPU at 80%+): a quiet mid laptop is
+roughly as fast, a slow one 2-3x slower, which the numbers after leave room for.
+
+| Floor | Frame before (GPU) | fps before | Frame after (GPU) | fps after | SwiftShader before → after |
+|---|---|---|---|---|---|
+| Workshop, dense 16x16 | 13.8 ms | 67 | **2.4 ms** | 193 | 14.8 ms, 11 fps → 3.2 ms, 30 fps |
+| Factory, 118 modules | 15.3 ms | 56 | **4.0 ms** | 109 | 15.8 ms, 8 fps → 5.4 ms, 19 fps |
+| District, 168 modules | 25.3 ms | 24 | **5.0 ms** | 102 | 24.8 ms, 2 fps → 7.6 ms, 18 fps |
+| World, 213 modules | 23.1 ms | 22 | **5.1 ms** | 92 | 23.4 ms, 2 fps → 7.6 ms, 18 fps |
+| Beyond, 172 modules | 23.7 ms | 29 | **4.8 ms** | 97 | 26.2 ms, 3 fps → 7.6 ms, 19 fps |
+
+- **Where the frame went**: the HUD, not the floor (on the Workshop the floor drew in under 2 ms of
+  the 14). 6,300 canvas calls a frame on the Workshop: 9-slice panels tiled in 4 px pieces (3,100
+  drawImage), pips a pixel at a time (1,400 fillRect), text a glyph at a time (500); on a full
+  high floor, 30,000 one-pixel fillRects of flight lines more, which SwiftShader rasterized at 2-3
+  fps. After: 1,480 calls on the Workshop.
+- **The fixes** (DECISIONS.md "Milestone 14"; none changes a pixel): `src/ui/bake.ts` bakes a
+  9-slice at a size, a string in a face and colour, and a pip shape in a colour, on the second
+  asking, the most recently used kept within a pixel budget; a high floor's flight lines are one
+  baked layer per march offset, repainted only when a route, its state or the selection changes;
+  the HUD's reset previews (`previewPatents`, `relocateNow`, each a walk over every module) are
+  answered once a tick (`src/app/pertick.ts`).
+- **SwiftShader** (no GPU at all) is raster-bound on the high floors at 1920x1080 (18-19 fps with a
+  5-8 ms frame): 500-900 sprite draws scaled 4x. A machine with no GPU canvas is outside the target.
+- **The sim**: a tick of the whole game with every floor full is **0.86-0.96 ms** (the worst sample
+  1.55 ms; budget 4 ms, so it passes); the dense Workshop alone 0.06 ms. Profiled (1,000 ticks):
+  `runFloor` (`src/sim/systems/high.ts`) is 80% of it, of which its own body 0.27 ms, `routeCap`
+  0.15 ms (with `hent` 0.07), `stepModule` 0.14 ms for 540 modules. Proposed fixes (not made: the
+  sim belonged to Milestone 11's work): (1) build the route groups once per layout change
+  (`hversion`) instead of a Map keyed by `from + ':' + item` strings every tick; (2) compute
+  `skiffStats` once per floor per tick (it allocates and asks `prules` and `megaDone` twice per
+  route) and cache each route's capacity by `hversion` and the rules' state; (3) test the waste
+  chute's "has a route" by number, not `m.id + ':' + item`; (4) find the Dock once per layout
+  change, not `st.ents.find` every tick. Expected: the high floors' tick about halved.
+- **Cold load** (`npm run perf -- load`): the production build (a local `vite preview`) is 6
+  requests, 0.66 MB over the wire (1.5 MB of script with every sheet under 4 KB inlined), **0.8 s**
+  to the title. The dev server is 1,057 requests (1.3-1.5 s warm, 40-90 s on a cold server); that
+  is a dev-only cost, so no atlas packing at build time.
+- Saves: §20 "Save size".

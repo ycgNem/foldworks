@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game } from '../src/sim/Game';
 import { N } from '../src/engine/num';
 import { savePayload, checkSave, fingerprint } from '../src/sim/snapshot';
-import { SAVE_VERSION, migrate, writeSaveSafe, loadSave, badSave, bakKey, badKey, parseSave, AutoSave, exportString, importString } from '../src/engine/save';
+import { SAVE_VERSION, migrate, writeSaveSafe, loadSave, badSave, bakKey, badKey, parseSave, AutoSave, exportString, importString, unpackSave } from '../src/engine/save';
 import { IDLE } from '../src/data/idle';
 import { TICK_RATE } from '../src/engine/time';
 import { Background } from '../src/app/background';
@@ -117,7 +117,7 @@ describe('rolling backups', () => {
       writeSaveSafe(1, savePayload(g, now), opts(now), s);
       now += 30_000;
     }
-    const tickOf = (k: string) => checkSave(JSON.parse(s.getItem(k)!)).s.tick;
+    const tickOf = (k: string) => checkSave(JSON.parse(unpackSave(s.getItem(k)!))).s.tick;
     const b1 = tickOf(bakKey(1, 1)), b2 = tickOf(bakKey(1, 2)), b3 = tickOf(bakKey(1, 3));
     expect(b1).toBeGreaterThan(b2);
     expect(b2).toBeGreaterThan(b3);

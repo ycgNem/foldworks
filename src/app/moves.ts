@@ -6,6 +6,7 @@ import { previewLegacy, relocateRefusal, type LegacyPreview } from '../sim/reloc
 import { worldOf } from '../sim/systems/islands';
 import { available } from '../sim/systems/research';
 import type { App } from './app';
+import { perTick } from './pertick';
 
 /** An island's name, capitalised at the start of a line when asked (the Old Works). */
 export const isleName = (w: WorldId, cap = false) => (cap ? WORLDS[w].name.replace(/^the /, 'The ') : WORLDS[w].name);
@@ -15,6 +16,11 @@ export const destinations = (app: App) => WORLD_IDS.filter((w) => w !== worldOf(
 
 /** The best island to fly to now and what it banks; null when none may be flown to. */
 export function relocateNow(app: App): { to: WorldId; p: LegacyPreview } | null {
+  // asked several times a frame by the HUD: once a tick (src/app/pertick.ts)
+  return perTick(app.game, 'relocateNow', () => relocateBest(app));
+}
+
+function relocateBest(app: App): { to: WorldId; p: LegacyPreview } | null {
   const g = app.game;
   let best: { to: WorldId; p: LegacyPreview } | null = null;
   for (const w of destinations(app)) {
