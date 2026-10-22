@@ -1797,3 +1797,23 @@ come, and Milestone 9 is marked done only after the gate is. Milestones still fi
 (CLAUDE.md's ask-before list is unchanged). The long pace tests run in the background and never
 hold a merge; their results are recorded when they land. The Act III bot was time-boxed: what it
 has measured is committed, and any target it hasn't shown holding is listed as open.
+
+### The Act III bot (`src/sim/bot3.ts`, `tests/pace-act3.test.ts`)
+- **The Act III hand-over is opt-in** (`playCampaign`'s `act3`), so the Act I-II pace tests keep
+  measuring exactly what they measured; Act III's Patents (`PATENT_PRIORITY_3`) are bought after
+  `PATENT_PRIORITY`'s, once a run has reached the District.
+- **A horizon campaign resets at its cap once a Reorganize is allowed**, and Act III campaigns
+  empty the Draughtsman's queue at a run's start (a kept Circuits design unfolded over the Act I
+  copper line and stuck run 5's planner: a bot interaction, noted for the Drawer's next review).
+- **Research retuned to what the Act II floor actually leaves** (DESIGN.md §21 Pacing): Zoning
+  200 motors, 300 circuits, 300 concrete (was 300/600/1,500: it stalled at 97% paid with nothing
+  else to wait on); Bearings 2,000 steel (3,000); the Floating City 400 concrete (3,000). The
+  City's stage 1 wants are unchanged.
+- **Measured (seed 1000, 40 h)**: the District opens at 10:01 (target ~15 h: earlier, because the
+  Great Drill finishes earlier than §16 assumed; kept, the act starts while Act II's floor is
+  still fresh), the City's stage 1 at 15:48 (target by 25 h), 49 District modules at 40 h, a tick
+  0.27 ms. **Open:** rules 1 and 2 hold through run 3's Act III stretch but not after ~21.5 h,
+  where this bot runs out of things it can build (no chemistry lines: Chem Vats, the sludge sink,
+  the City's stage 2 and the Transmuter); run 4 waits 42.5 min on Servos research; no route ever
+  needed a second skiff with this bot's placement (rule 5's skiff decision); seed 8919 not run.
+  The bot's limits, not the model's, as far as the arithmetic shows; the gate review weighs in.
