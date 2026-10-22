@@ -2225,13 +2225,14 @@ roughly as fast, a slow one 2-3x slower, which the numbers after leave room for.
 - **The sim**: a tick of the whole game with every floor full is **0.86-0.96 ms** (the worst sample
   1.55 ms; budget 4 ms, so it passes); the dense Workshop alone 0.06 ms. Profiled (1,000 ticks):
   `runFloor` (`src/sim/systems/high.ts`) is 80% of it, of which its own body 0.27 ms, `routeCap`
-  0.15 ms (with `hent` 0.07), `stepModule` 0.14 ms for 540 modules. Proposed fixes (not made: the
-  sim belonged to Milestone 11's work): (1) build the route groups once per layout change
-  (`hversion`) instead of a Map keyed by `from + ':' + item` strings every tick; (2) compute
-  `skiffStats` once per floor per tick (it allocates and asks `prules` and `megaDone` twice per
-  route) and cache each route's capacity by `hversion` and the rules' state; (3) test the waste
-  chute's "has a route" by number, not `m.id + ':' + item`; (4) find the Dock once per layout
-  change, not `st.ents.find` every tick. Expected: the high floors' tick about halved.
+  0.15 ms (with `hent` 0.07), `stepModule` 0.14 ms for 540 modules. **Fixed after Milestone 11
+  merged** (`runFloor`): the route groups are built once per route list and layout
+  (`routeGroups`, kept until a route is added or dropped or `hversion` moves), a skiff's numbers
+  once a floor a tick instead of per route (`skiffStats` asked `prules`, `megaDone` and the
+  Challenges' rules every time), the waste chute's "has a route" read from the groups' per-source
+  item sets, and the Dock found with the layout cache. With the save-size test's full late game
+  (every floor full, 2,000 ticks, a busy CPU) the tick went **1.52 ms -> 0.90 ms**, and the game's
+  fingerprint after them is the same to the character (the same sums in the same order).
 - **Cold load** (`npm run perf -- load`): the production build (a local `vite preview`) is 6
   requests, 0.66 MB over the wire (1.5 MB of script with every sheet under 4 KB inlined), **0.8 s**
   to the title. The dev server is 1,057 requests (1.3-1.5 s warm, 40-90 s on a cold server); that
