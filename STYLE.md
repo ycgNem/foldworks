@@ -237,7 +237,46 @@ glints. The ornate menu frame (brass rod, warm wood, a night-violet face) is ret
 **UI icon atlases are append-only.** Code finds icons by the JSON `names` list; new icons go on
 the end and nothing moves. `ui_icons` / `ui_icons_small` 29–33: patents (a sealed deed), blueprint
 (a plan on blue), reset (a turning violet arrow), overnight (a moon and a lantern), bearings (the
-Committee's Raccoon Bearings, a steel ring with balls).
+Committee's Raccoon Bearings, a steel ring with balls). 34-35 (Act III): district, chute. 36-38
+(Act IV): world (a sky globe of green islands on a brass stand), legacy (a gold medal in a laurel
+wreath, a red ribbon), relocate (an island flying to another along a dashed arrow).
+
+## Act IV: the islands, the World, the exotics (`pixel-art/act4/`, `python build.py`)
+
+- **The island looks** are variant sheets of Home's, named `isle_<world>_<Home name minus a
+  leading isle_>` (`isle_edge` -> `isle_cinder_edge`, `tile_grass` -> `isle_cinder_tile_grass`,
+  `tile_ore_iron` -> `isle_cinder_tile_ore_iron`), with Home's frames, order, anchors and names; an
+  island that ships no variant of a sheet uses Home's. Each keeps Home's geometry and changes
+  materials: **Pebble Isle** a pebble-strewn meadow, a shingle beach round the rim, a pale
+  conglomerate cliff, skyglass crystals, birches and cairns (owned paving as Home's); **Cinder
+  Isle** an ash field (dark warm earth flecked with pale ash, a few dim cracks), a lava band round
+  the coast that dribbles over the lip, a basalt cliff and underside with magma cracks, lava falls,
+  charred trees, basalt columns and obsidian, iron railings; **Rime** snow for the meadow and rim
+  (cloud ramp), an ice band at the coast, icicles under the lip, a frozen blue-grey cliff with
+  snow on its ledges, pale icy falls, snowy pines and a snow frog; **the Old Works** an olive
+  meadow gone wild (moss ramp), cracked and chipped paving with weeds, a crumbling stone kerb
+  round the rim, brick courses, rusted pipes and vines in the cliff, broken pillars, a chimney
+  stack and a half-buried gear. Owned land stays the calm paving everywhere; land for sale differs
+  from it in hue and lightness (ash much darker, snow much lighter, olive as dark as Home's
+  meadow); on snow the plot's dashes are dark rope (bone vanishes on it).
+- **Exotic deposits** (`ore_<x>`, as `tile_ore_*`: 0 whole, 1-4 on paving, 5-8 on the island's own
+  meadow; `_spill` 32): skyglass a radiating cluster of slender pale glass spires, cinderite black
+  pillow-lava domes cracked by glowing seams over a magma pool, rime crystal chunky teal ice blocks
+  out of a snow mound, relic a great brass gear upright and half sunk beside a broken column.
+- **Island pieces**: the Heater a finned cast-iron radiator glowing between its fins (lamp ramp
+  +1/0/-1/0), on the skid; the vent a basalt crater with a glowing throat and steam, scorched
+  ground to its tile's edge; rubble piles on a dirt mound (slabs, bricks, a girder, pipes);
+  `ruin_overlay` and `frost_overlay` are composited **source-atop** over a machine's own frame
+  (grime, cracks, rust runs, moss and ivy; a ragged snow cap, icicles, snow on the skid, frost
+  crystals), never in the pip corner.
+- **The World platform** is the District's geometry in sunlit cloud-white plate (cloud2, lit
+  cloud3) trimmed in gold (brass2-3, lamp3 gleams), gold stars where the plaza's inlays cross,
+  skylights onto the deep sky (sky0-2), lamp-lit kerb posts, a gilded truss and grander rotors
+  (four broad blades, gold-domed pods with a ring of lamps). The World Bay builds a gilded beacon
+  pylon; the Megaproject pictures (`mega_lighthouse`, `mega_anchor`) sit in its gold-and-cloud
+  frame under the deepest sky.
+- **Tier 4 icons** (`items4`): every dark body carries a lit rim or a glow so it reads in a dark
+  module well (the Act III review's finding).
 
 ## UI: paper and ink (the 180, 2026-10-21)
 
