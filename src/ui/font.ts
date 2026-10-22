@@ -15,7 +15,9 @@
 // drawImage per glyph.
 //
 // Pixel art: pixel-art/fonts/sheet.py renders the contact sheet (pixel-art/fonts/out/fonts.png)
-// straight from these tables, beside the old S&S face and Last Watt's HUD.
+// straight from these tables, beside the old S&S face and Last Watt's HUD. A string drawn twice is
+// baked (src/ui/bake.ts) and costs one drawImage from then on.
+import { BakeCache } from './bake';
 
 // ------------------------------------------------------------------------------------- Reed
 const REED: Record<string, string> = {
@@ -331,6 +333,7 @@ class Face {
   private readonly tinted = new Map<string, HTMLCanvasElement>();
   private readonly cellW: number;
   private readonly cellH: number; // the face's height, or more where a glyph hangs below it (Pip's comma)
+  private readonly bakes: BakeCache;
 
   constructor(table: Record<string, string>, readonly h: number, private readonly caps: boolean) {
     let maxW = 1;
@@ -343,6 +346,8 @@ class Face {
     }
     this.cellW = maxW + 1;
     this.cellH = maxH;
+    this.bakes = new BakeCache(600_000, 4096);
+    textBakes.push(this.bakes);
   }
 
   has(ch: string): boolean {
@@ -396,6 +401,16 @@ class Face {
   draw(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, color: string, scale: number): number {
     const atlas = this.atlas(color);
     const h = this.cellH;
+    // a string drawn again is one drawImage of its bake (src/ui/bake.ts), painted at 1x by the same
+    // loop and scaled as the glyphs were (whole multiples, smoothing off: the same pixels)
+    if (s.length > 1) {
+      const adv = this.width(s) + 1;
+      const bake = this.bakes.get(color + '\u0000' + s, adv, h, (bc) => this.glyphs1(bc, atlas, s));
+      if (bake) {
+        ctx.drawImage(bake, 0, 0, adv, h, x, y, adv * scale, h * scale);
+        return adv * scale;
+      }
+    }
     let cx = x;
     for (let i = 0; i < s.length; i++) {
       const g = this.get(s[i]);
@@ -404,7 +419,20 @@ class Face {
     }
     return cx - x;
   }
+
+  /** The glyphs of `s` at 1x from (0, 0), for a bake. */
+  private glyphs1(ctx: CanvasRenderingContext2D, atlas: HTMLCanvasElement, s: string) {
+    let cx = 0;
+    for (let i = 0; i < s.length; i++) {
+      const g = this.get(s[i]);
+      if (s[i] !== ' ') ctx.drawImage(atlas, g.ax, g.ay, g.w, this.cellH, cx, 0, g.w, this.cellH);
+      cx += g.w + 1;
+    }
+  }
 }
+
+/** Every face's baked strings (the HUD draws a few hundred strings a frame), for npm run perf. */
+export const textBakes: BakeCache[] = [];
 
 const ATLAS_COLS = 16;
 const reed = new Face(REED, FONT_H, false);

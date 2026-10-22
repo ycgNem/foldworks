@@ -367,6 +367,40 @@ sidecar; anchor [0,0] unless stated. Nothing is wired in TypeScript yet.
   `gilded`, `candy`, `starlit`. Draw `skin_<id>_<kind>` in place of `<kind>` when it exists.
 - UI icons `kernel` 39, `beyond` 40, `lastFold` 41, `ledger` 42 in `ui_icons` and `ui_icons_small`.
 
+### Milestone 11 skins as built (`pixel-art/m11-skins/`, `python build.py`, 0 PixelLab generations)
+All 38 skins of `src/data/cosmetics.ts` past the Ledger's three, **69 sheets**. The rule the
+renderer needs: **wherever it draws sheet `X` for a skinned kind, it draws `skin_<id>_X` instead
+when `hasArt` says so**, the same frame index, row (facing), anchor and position; nothing else
+changes (status pips, overlays, the module icon, `module_glow`/`module_od`, frost and ruin overlays
+all draw on top as before). `<id>` is spelled as in `cosmetics.ts` (camelCase kept:
+`skin_straightArrow_belt`); `X` is the base sheet's own name (snake_case), so it is
+`skin_${id}_${spriteName(kind)}` for a Workshop building, not `skinSprite(id, slot)` for
+`steamEngine` and the Mk2s. Every sidecar is the base's (frame, frames, anchor, fps, facings,
+icon) plus `"skin"` and `"base"`.
+
+| Kind (slot) | Base sheet(s) the renderer draws | Skin sheets |
+|---|---|---|
+| `belt` | `belt` straight, `belt_turn` where it turns (renderer.ts `belt()`) | `skin_straightArrow_belt` + `_belt_turn`; `skin_brassBelt_belt` + `_belt_turn` |
+| `module` | Factory `module` (factory.ts, 1 frame); District `dist_module`, World `world_module`, Beyond `beyond_module` (district.ts `drawModule`: `hart(F, 'module')`, 4 frames, 6 fps, icon at (4, 6)) | **one per floor**, full replacements, not overlays: `skin_<id>_module`, `skin_<id>_dist_module`, `skin_<id>_world_module`, `skin_<id>_beyond_module` for `triad pocketSquare whittled goldLeaf blueprint origami postmark ghostly` (32 sheets). Look up `skin_<id>_` + the name `hart` returned; the ghost placement preview may use it too |
+| `steamEngine` | `steam_engine` | `skin_filigree_steam_engine` |
+| `generator` | `generator` | `skin_filigree_generator` |
+| `smelter`, `smelterMk2` | `smelter`, `smelter_mk2` | `skin_chrome_smelter`, `skin_chrome_smelter_mk2`, `skin_vintage_smelter` |
+| `press`, `assembler`, `assemblerMk2` | `press`, `assembler`, `assembler_mk2` | `skin_vintage_press`, `skin_vintage_assembler`, `skin_circuitry_assembler`, `skin_pinstripe_assembler_mk2`, `skin_apron_assembler_mk2` |
+| `miner`, `furnace`, `boiler`, `mixer` | same names | `skin_drillbit_miner`; `skin_mittens_furnace`, `skin_ember_furnace`; `skin_thrifty_boiler`; `skin_spotless_mixer` |
+| `pole` | `pole` (16x24, anchor (0, 8)) | `skin_arcLight_pole` |
+| `crate`, `splitter`, `merger`, `heap`, `seed` | same names | `skin_trenchcoat_crate`; `skin_contraband_splitter`, `skin_contraband_merger`; `skin_lilypad_heap` (5 fill frames kept); `skin_seedling_seed` |
+| `skiff` (District carrier) | `skiff` (`carrier(F)`) | `skin_kite_skiff`, `skin_tug_skiff`, `skin_paperCrane_skiff` |
+| `barge` (World carrier) | `barge` | `skin_stormproof_barge`, `skin_feather_barge` |
+| `courier` (Beyond carrier) | `courier` | `skin_mirrorBall_courier` |
+| `dock` (the Workshop's, a decoration) | `dock`, or `dock_lily` once Bramble's rep is 3 | `skin_mayoral_dock` (drawn over `dock_lily`: rep 5 implies the frog flag; sidecar `"drawnOver": "dock_lily"`), `skin_bunting_dock`, `skin_sunburst_dock`: each replaces **both** `dock` and `dock_lily` |
+| `hopper` (the Workshop's, a decoration) | `hopper` | `skin_specimen_hopper`, `skin_mortarboard_hopper`, `skin_tinfoil_hopper` |
+
+Not skinned (no slot asks for them): the Factory's `factory_dock`/`factory_hopper`, the high
+floors' docks and hoppers, trunks. The Ledger's `ribbon<n>` decorations have no sheet: draw the
+`h180_ribbon` art on the Dock if wanted. Looks: `pixel-art/m11-skins/out/look_*.png` (base above
+skin, every frame) and `out/contact_skins.png` (every skin beside its base, frame 0 of each facing
+at 1x and 4x).
+
 ## Milestone 11: the long tail
 150+ trophies with small specific bonuses (generated tiers over deliveries and counters, plus
 hidden ones); the Codex completed with lore pages and Unit 7's ending; challenges to 15 and

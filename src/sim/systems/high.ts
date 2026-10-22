@@ -75,7 +75,7 @@ export const highInb = (g: Game, id: HighFloorId, x: number, y: number) => x >= 
 
 // ------------------------------------------------------------------ caches
 
-interface Cache { st: HighFloorState; ver: number; grid: Int32Array; byId: Map<number, FEnt> }
+interface Cache { st: HighFloorState; ver: number; grid: Int32Array; byId: Map<number, FEnt>; dock: FEnt | null }
 const caches = new WeakMap<Game, Partial<Record<HighFloorId, Cache>>>();
 
 /** Bumped by every layout change on a high floor (the renderer re-reads what depends on it). */
@@ -95,12 +95,40 @@ function cache(g: Game, id: HighFloorId): Cache | null {
   const W = highMaxW(id), H = HIGH[id].h;
   const grid = new Int32Array(W * H);
   const byId = new Map<number, FEnt>();
+  let dock: FEnt | null = null;
   for (const e of st.ents) {
     byId.set(e.id, e);
+    if (!dock && e.kind === 'fdock') dock = e;
     for (let y = e.y; y < e.y + e.h; y++) for (let x = e.x; x < e.x + e.w; x++) if (x < W && y < H) grid[y * W + x] = e.id;
   }
-  c = { st, ver: g.hversion, grid, byId };
+  c = { st, ver: g.hversion, grid, byId, dock };
   all[id] = c;
+  return c;
+}
+
+/** A floor's routes grouped by source and item, in the order the routes stand (routes from one
+ * output share it in turn), and the items each source sends somewhere. Kept until a route is added
+ * (the list grows) or dropped (a new list) or the layout changes. */
+interface RouteGroups { len: number; ver: number; groups: SkiffRoute[][]; out: Map<number, Set<ItemId>> }
+const routeCaches = new WeakMap<SkiffRoute[], RouteGroups>();
+
+function routeGroups(g: Game, st: HighFloorState): RouteGroups {
+  const rs = st.routes;
+  let c = routeCaches.get(rs);
+  if (c && c.len === rs.length && c.ver === g.hversion) return c;
+  const by = new Map<string, SkiffRoute[]>();
+  const out = new Map<number, Set<ItemId>>();
+  for (const r of rs) {
+    const k = r.from + ':' + r.item;
+    let gr = by.get(k);
+    if (!gr) by.set(k, (gr = []));
+    gr.push(r);
+    let items = out.get(r.from);
+    if (!items) out.set(r.from, (items = new Set()));
+    items.add(r.item);
+  }
+  c = { len: rs.length, ver: g.hversion, groups: [...by.values()], out };
+  routeCaches.set(rs, c);
   return c;
 }
 
@@ -530,15 +558,13 @@ function runFloor(g: Game, id: HighFloorId, st: HighFloorState) {
   }
   // 2. the skiffs fly: each route takes its share of its source's output, as much as its skiffs
   // carry and its destination has room for; routes from one output share it in turn
-  const groups = new Map<string, SkiffRoute[]>();
-  for (const r of st.routes) {
-    r.moved = 0;
-    const k = r.from + ':' + r.item;
-    let gr = groups.get(k);
-    if (!gr) groups.set(k, (gr = []));
-    gr.push(r);
-  }
-  for (const gr of groups.values()) {
+  const rg = routeGroups(g, st);
+  for (const r of st.routes) r.moved = 0;
+  // a skiff's numbers once a floor a tick, as routeCap reads them (DESIGN.md §25: routeCap's own
+  // skiffStats was a fifth of a full tick)
+  const sk = skiffStats(g, id);
+  const reach = megaDone(g, 'lighthouse', 4) ? RULES.lighthouseReach.value : Infinity;
+  for (const gr of rg.groups) {
     const src = hent(g, id, gr[0].from);
     if (!src) continue;
     const item = gr[0].item;
@@ -551,7 +577,7 @@ function runFloor(g: Game, id: HighFloorId, st: HighFloorState) {
         if (have <= 1e-9) break;
         const to = hent(g, id, r.to);
         if (!to) continue;
-        const cap = routeCap(g, id, r) * DT - r.moved;
+        const cap = r.skiffs * skiffRate(f, Math.min(routeDist(src, to), reach), sk.load, sk.speed, sk.dwell) * DT - r.moved;
         if (cap <= 1e-9) continue;
         const share = pass === 0 ? have / (n - j) : have;
         const amt = Math.min(share, cap, room(g, id, to, item));
@@ -570,14 +596,14 @@ function runFloor(g: Game, id: HighFloorId, st: HighFloorState) {
   // 2b. a module's waste with no route out goes down the floor's waste chute to its Dock (DESIGN.md
   // §21: the byproduct lesson was learned on the floors below; on a floor of groups it was the act's
   // biggest chore and filled the route cap: the second gate)
-  const dock = st.ents.find((e) => e.kind === 'fdock');
+  const dock = cache(g, id)?.dock;
   if (dock)
     for (const m of st.ents) {
       if (m.kind !== 'module') continue;
       for (const k of Object.keys(m.outBuf)) {
         const item = k as ItemId;
         const n = m.outBuf[item] ?? 0;
-        if (n <= 1e-9 || !BYPRODUCTS.has(item) || groups.has(m.id + ':' + item)) continue;
+        if (n <= 1e-9 || !BYPRODUCTS.has(item) || rg.out.get(m.id)?.has(item)) continue;
         m.outBuf[item] = 0;
         dock.inBuf[item] = (dock.inBuf[item] ?? 0) + n;
         hauditFlow(g, id, m, dock, item, n);

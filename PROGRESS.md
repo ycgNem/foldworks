@@ -2,6 +2,48 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
+## Status (2026-10-22, late night): Milestone 14's performance, save size and release
+
+Built in a worktree off `m9-worlds` while Milestone 11's sim and data were built elsewhere: no
+`src/sim/`, `src/data/` or `SAVE_VERSION` change. DESIGN.md "Performance (measured, Milestone 14)"
+and §20 "Save size"; DECISIONS.md "Milestone 14".
+
+### What exists
+- **`npm run perf`** builds each floor at its worst (the dense 16x16 Workshop; the widest Factory,
+  118 modules and 32 trunk tiles; every lot and 168 / 213 / 172 modules on the District, World and
+  Beyond with 160-180 routes) and times the frame, the rAF rate and the tick, with `GPU=hw` or
+  SwiftShader; `-- load` times a cold load. JSON in `e2e/out/perf/<gpu>.json`, a PNG per floor.
+- **The frame, 4-6x cheaper with the same pixels**: baked 9-slices, strings and pips
+  (`src/ui/bake.ts`), the high floors' flight lines as one baked layer per march offset
+  (`src/render/district.ts`), the HUD's reset previews once a tick (`src/app/pertick.ts`). With the
+  GPU: Workshop 13.8 → 2.4 ms a frame, Factory 15.3 → 4.0, District 25.3 → 5.0, World 23.1 → 5.1,
+  Beyond 23.7 → 4.8 (see DESIGN.md for SwiftShader and the tick).
+- **Packed saves**: slots `FWZ1.` and export strings `FW2.` (raw DEFLATE, `src/engine/deflate.ts`),
+  old slots and FW1 strings still load; a late save is 25-33 KB (was 168-485 KB of JSON).
+  `tests/savesize.test.ts` (the codec against Node's zlib, a full late game under 200 KB that
+  round-trips), `e2e/saves.mjs` (packed slots, an old plain slot continuing, the size in the page).
+- **Production build**: `npm run build` passes; a cold load of the preview is 6 requests, 0.66 MB
+  transferred, 0.8 s to the title; `npm run smoke` passes against it. No atlas needed.
+- **CI**: `.github/workflows/ci.yml` (typecheck, fast tests, build on every push and PR),
+  `deploy.yml` (the same gate, then GitHub Pages on a push to `main`), `pace.yml` (the pace tests
+  nightly and on demand, the checkpoints kept as an artifact). Nothing pushed.
+- **README.md** rewritten for the whole game: the five acts, the three resets, controls, running
+  it, the scripts, tests and e2e tools, the docs map, credits.
+
+### Stubbed / not done
+- Sim hotspots reported, not fixed (Milestone 11 owns `src/sim/`): `runFloor` in
+  `src/sim/systems/high.ts` is 80% of a 0.9 ms tick with every floor full (DESIGN.md's
+  Performance section has the proposed fixes). Under the 4 ms budget either way.
+- Measured on a Ryzen 9 7945HX laptop under heavy load from other agents, not a mid laptop: the
+  numbers carry a 2-3x margin for one. SwiftShader (no GPU at all) still drops the high floors to
+  18-19 fps at 1920x1080: a machine without GPU canvas is outside the target.
+- No itch.io page, no desktop build (the owner: no itch.io; DECISIONS.md "Milestone 14").
+- GitHub Pages is live only once `main` is pushed and Pages' source is set to GitHub Actions.
+
+### Next
+Merge into `m9-worlds`; fix the sim hotspots after Milestone 11 lands; the pace sim to 100 h with
+the Act IV and V bots.
+
 ## Status (2026-10-22, night): the second gate's fixes, Act IV's sim and islands, Act V's sim
 
 Built on `m9-worlds` (not yet merged into `main`), autonomously, overnight. DECISIONS.md "The
@@ -51,6 +93,15 @@ Act V's sim", "Milestone 12".
 Merge the World UI, Act V's screens and the Act III re-measure; mark the second gate passed with
 conditions; build the Act IV and Act V bots; Milestone 11's long tail (its sim and data being built);
 Milestone 14 (pace to 100 h, perf, saves, README, GitHub Pages; no itch.io, no desktop build).
+
+## Status (2026-10-22, night): Milestone 11's skin art drawn
+
+`pixel-art/m11-skins/` (`python build.py`, 0 PixelLab generations) draws every cosmetic's sheets:
+69 `src/art/skin_<id>_<base>` drop-in replacements (belts with their turn sheet, modules one per
+floor, the Dock and Hopper decorations), the looks and `out/contact_skins.png`. The kind to base
+sheet mapping the renderer lookup needs is in docs/endgame.md, "Milestone 11 skins as built".
+**Open:** the renderer's lookup and the picker (another agent); a look at them in the game's own
+screenshots once wired.
 
 ## Status (2026-10-22, late): Milestone 11, the long tail's sim and data, built
 

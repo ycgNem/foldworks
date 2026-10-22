@@ -3,6 +3,13 @@
 // object with a version `v`; MIGRATIONS[v] upgrades a v save to v + 1, in order, before the game
 // reads it. The game decides what goes in the payload: Foldworks writes the seed, the last
 // snapshot and the commands since it (src/sim/snapshot.ts).
+//
+// Milestone 14 (DESIGN.md §20, "Save size"): what is written to localStorage is the save's JSON
+// deflated, as `FWZ1.` + base64url + `.` + a checksum (`packSave`), and the export string is
+// `FW2.` the same way. A slot written before holds the JSON itself and an old export string is
+// `FW1.`; both still load. The packing is below the versions: it changes no payload and needs no
+// migration.
+import { deflateRaw, inflateRaw } from './deflate';
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
 export const SAVE_VERSION = 11;
@@ -185,7 +192,7 @@ export function writeSave(slot: number, payload: { seed: number; saved: number; 
   if (!s) return false;
   try {
     const d: SaveData = { ...payload, v: SAVE_VERSION };
-    s.setItem(PREFIX + slot, JSON.stringify(d));
+    s.setItem(PREFIX + slot, packSave(JSON.stringify(d)));
     return true;
   } catch (err) {
     console.error('save failed', err);
@@ -197,7 +204,7 @@ export function readSave(slot: number, s: Storage | null = store()): SaveData | 
   const raw = s?.getItem(PREFIX + slot);
   if (!raw) return null;
   try {
-    return migrate(JSON.parse(raw));
+    return migrate(JSON.parse(unpackSave(raw)));
   } catch (err) {
     console.error('load failed', err);
     return null;
@@ -234,7 +241,7 @@ export interface SafeWriteOpts {
 export function parseSave(raw: string, validate?: (d: SaveData) => void): SaveData {
   let d: any;
   try {
-    d = JSON.parse(raw);
+    d = JSON.parse(unpackSave(raw));
   } catch {
     throw new Error('it was cut short or garbled');
   }
@@ -279,7 +286,7 @@ export function writeSaveSafe(slot: number, payload: { seed: number; saved: numb
   } catch (err) {
     console.error('backup failed', err);
   }
-  const body = JSON.stringify({ ...payload, v: SAVE_VERSION });
+  const body = packSave(JSON.stringify({ ...payload, v: SAVE_VERSION }));
   try {
     s.setItem(PREFIX + slot, body);
     return { ok: true, rotated };
@@ -410,16 +417,43 @@ function checksum(s: string): string {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
+// Milestone 14: "FW2." is the same with the JSON deflated first (src/engine/deflate.ts), about a
+// tenth of the size; "FW1." strings still import.
+
 export function exportString(payload: object): string {
-  const body = b64encode(new TextEncoder().encode(JSON.stringify({ ...payload, v: SAVE_VERSION })));
-  return `FW1.${body}.${checksum(body)}`;
+  const body = b64encode(deflateRaw(new TextEncoder().encode(JSON.stringify({ ...payload, v: SAVE_VERSION }))));
+  return `FW2.${body}.${checksum(body)}`;
 }
 
 /** Parse and migrate an export string; throws an Error with a player-readable message. */
 export function importString(s: string): SaveData {
   const parts = s.trim().split('.');
-  if (parts.length !== 3 || parts[0] !== 'FW1') throw new Error('that is not a Foldworks save string');
+  if (parts.length !== 3 || (parts[0] !== 'FW1' && parts[0] !== 'FW2')) throw new Error('that is not a Foldworks save string');
   if (checksum(parts[1]) !== parts[2]) throw new Error('the save string is damaged (its checksum does not match)');
-  const json = new TextDecoder().decode(b64decode(parts[1]));
+  let json: string;
+  try {
+    const bytes = b64decode(parts[1]);
+    json = new TextDecoder().decode(parts[0] === 'FW2' ? inflateRaw(bytes) : bytes);
+  } catch {
+    throw new Error('the save string is damaged (it does not unpack)');
+  }
   return migrate(JSON.parse(json));
+}
+
+// ---------------------------------------------------------------- packed slots (Milestone 14)
+
+/** What a slot holds: the save's JSON deflated, "FWZ1." + base64url + "." + its checksum (a late
+ *  save's 170-210 KB of JSON is 20-30 KB this way, DESIGN.md §20). */
+export function packSave(json: string): string {
+  const body = b64encode(deflateRaw(new TextEncoder().encode(json)));
+  return `FWZ1.${body}.${checksum(body)}`;
+}
+
+/** The JSON a slot holds: unpacked, or as it is when it was written before saves were packed (it
+ *  starts "{"). Throws when a packed string is cut short or damaged. */
+export function unpackSave(raw: string): string {
+  if (!raw.startsWith('FWZ1.')) return raw;
+  const parts = raw.split('.');
+  if (parts.length !== 3 || checksum(parts[1]) !== parts[2]) throw new Error('it was cut short or garbled');
+  return new TextDecoder().decode(inflateRaw(b64decode(parts[1])));
 }
