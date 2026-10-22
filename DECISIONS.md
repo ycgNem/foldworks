@@ -2234,3 +2234,62 @@ linear, a Challenge's reward is a share off one price). Numbers and derivations:
   only, no distribution of other players. Drop option: keep the board's single score (§21).
 - **Hidden achievements shown as "???"** are a convention of nearly every achievement list (Steam's
   hidden achievements); kept as genre furniture, with names and conditions this game's own.
+
+## Milestone 14: performance, save size and release (2026-10-22)
+
+Built in a worktree off `m9-worlds` while Milestone 11's sim and data were built elsewhere: render,
+UI drawing, the save layer's storage and encoding, e2e, CI and docs only (no `src/sim/` or
+`src/data/` change, `SAVE_VERSION` untouched). DESIGN.md "Performance (measured, Milestone 14)" and
+§20 "Save size".
+
+- **The frame was the HUD, not the floor.** `e2e/perf.mjs` now builds every floor at its worst
+  (the dense 16x16 Workshop, the widest Factory, every lot and up to 200 modules with as many routes
+  as allowed on the District, World and Beyond) and times the frame and the tick with the real GPU
+  and with SwiftShader. Before: 14 ms a frame on the Workshop and 23-25 ms on the high floors
+  (22-29 fps with the GPU, 2-3 fps in software); the floor's own drawing was under 2 ms of the
+  Workshop's 14. 6,300 canvas calls a frame: 9-slice panels tiled in 4 px pieces (3,100), status
+  pips drawn a pixel at a time (1,400 on the Workshop, 5,000 on a full floor), text a glyph at a
+  time (500), and 30,000 one-pixel fillRects of flight lines on a floor of 200 routes.
+- **Bake what repeats, change no pixel** (`src/ui/bake.ts`): a 9-slice at a size, a string in a face
+  and colour, and a pip shape in a colour are painted once by the same code onto a small canvas and
+  drawn with one drawImage. A key is baked on its second asking (a card sliding open never fills
+  the cache) and the cache keeps the most recently used within a pixel budget (4 M px of panels,
+  0.6 M px of text per face). The flight lines of a high floor are one floor-sized layer per march
+  offset (six), repainted only when a route, its state or the selection changes
+  (`src/render/district.ts` `drawRouteLines`), painted on the CPU (`willReadFrequently`). The
+  reset previews the HUD asked two or three times a frame (`previewPatents`, `relocateNow`, walking
+  every module) are answered once a tick (`src/app/pertick.ts`). After: 2.4 ms on the Workshop,
+  4.0 ms on the Factory, 4.8-5.1 ms on the high floors with the GPU (92-193 fps headless).
+- Rejected: Path2D for the flight lines (one fill a route): faster on the GPU, slower in
+  SwiftShader (path rasterizing), and the baked layer beats it in both. Culling the floors to the
+  view: the worst case is the whole floor in view (fit-to-screen), which culling cannot help, and
+  the floors already skip sprites outside the view where it matters (skiffs, modules).
+- **Sim hotspots are reported, not fixed** (Milestone 11 owns `src/sim/` now): a tick with every
+  floor full is 0.86-0.96 ms (budget 4 ms, so it passes), 80% of it `runFloor` in
+  `src/sim/systems/high.ts`. Proposed (in DESIGN.md's section): build the route groups once per
+  layout change instead of a Map with string keys every tick; compute `skiffStats` once per floor
+  per tick and cache each route's capacity by `hversion`; key the waste chute's "has a route" test
+  by number, not `m.id + ':' + item`; find the Dock once per layout change.
+- **Saves are packed below the versions** (`src/engine/deflate.ts`, `src/engine/save.ts`): a slot
+  holds `FWZ1.` + base64url(raw DEFLATE of the JSON) + `.` + the FNV checksum, and the export string
+  is `FW2.` the same way. A slot that starts `{` (written before) and an `FW1.` string still load, a
+  cut or damaged packed slot is "cut short or garbled" as a cut JSON one was, and the backups and
+  recovery are unchanged. No migration and no `SAVE_VERSION` bump: the payload is the same object.
+  The codec is synchronous (saves are written on `beforeunload`, so CompressionStream's promise is
+  too late) and dependency-free: LZ77 over 32 KB with the fixed Huffman codes, about a third bigger
+  than zlib's best and 5-15x smaller than the JSON; its decoder reads any raw DEFLATE (tested both
+  ways against Node's zlib). The 40 h checkpoint: 168 KB of JSON (229 KB as an FW1 string) to
+  31 KB; every floor full: 485 KB to 33 KB, packed in 9-11 ms.
+- **No atlas packing**: the production build inlines every sheet under Vite's 4 KB limit, so a cold
+  load is 6 requests and 0.66 MB over the wire (1.5 MB of script), 0.8 s to the title from a local
+  preview. The dev server's ~1,050 requests are a dev-only cost.
+- **CI**: `ci.yml` runs the typecheck, the tests without the pace tests and the build on every push
+  and pull request; `deploy.yml` runs the same gate then publishes to GitHub Pages on a push to
+  `main` (it ran the whole `npm test`, pace tests included, before); `pace.yml` runs the pace tests
+  nightly and on demand and keeps the bot's checkpoints as an artifact. ROADMAP's "the pace sim on
+  every push to main" became nightly: the pace tests take far longer than a deploy should wait,
+  and a pacing regression is a design conversation, not a reason to hold a build back.
+- **No itch.io page and no desktop build**: the owner said no itch.io page, and a desktop build
+  (Electron, as in Pegwork) was only "if wanted"; the game is a static web page published to
+  GitHub Pages. `Package for web.bat` stays for zipping `dist/` for any static host.
+- Derivative check: nothing player-facing changed (the same pixels, faster), so nothing to flag.

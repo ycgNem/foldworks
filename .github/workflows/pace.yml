@@ -1,0 +1,36 @@
+# The pace tests (DESIGN.md §16, "pacing is tested, not guessed"): the bots play the game through
+# hours of sim time, headless, and every pacing lesson is checked against the current numbers.
+# Too slow for every push, so nightly and on demand (Actions -> Pace tests -> Run workflow).
+# The 1, 5, 15, 30 and 40 h checkpoints the Act III run writes are kept as an artifact (load one
+# with Options -> Import).
+name: Pace tests
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      - run: mkdir -p e2e/out/checkpoints
+      - run: npx vitest run tests/pace-
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pace-checkpoints
+          path: e2e/out/checkpoints
+          if-no-files-found: ignore

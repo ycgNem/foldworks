@@ -276,6 +276,53 @@ function arrowHead(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: nu
   }
 }
 
+interface RouteLine { ax: number; ay: number; bx: number; by: number; col: string; bold: boolean }
+
+/** The flight lines, baked (Milestone 14, DESIGN.md "Performance (measured)"): drawn a pixel at a
+ *  time they were 30,000 fillRects a frame on a floor of 200 routes (2 fps in software rendering).
+ *  The lines only change when a route, its state or the selection does, and they march through six
+ *  offsets, so each offset's whole layer is painted once onto a floor-sized canvas by the same code
+ *  and drawn with one drawImage until the routes change. Painting a layer then drawing it is the
+ *  same as painting the floor (source-over composes the same either way). Few routes, or a canvas
+ *  too big to keep: drawn directly as before. */
+const LAYERS = new Map<HighFloorId, { sig: string; x0: number; y0: number; c: (HTMLCanvasElement | null)[] }>();
+const LAYER_PAD = 6;
+function drawRouteLines(ctx: CanvasRenderingContext2D, F: HighFloorId, fw: number, fh: number, lines: RouteLine[], time: number, vis: (x: number, y: number, w: number, h: number) => boolean) {
+  const off = Math.floor(time * 10) % 6;
+  const direct = () => {
+    for (const l of lines) {
+      if (!vis(Math.min(l.ax, l.bx), Math.min(l.ay, l.by), Math.abs(l.bx - l.ax) + 1, Math.abs(l.by - l.ay) + 1)) continue;
+      flightLine(ctx, l.ax, l.ay, l.bx, l.by, l.col, time, l.bold, l.bold ? 1 : 0.75);
+      arrowHead(ctx, l.ax, l.ay, l.bx, l.by, l.bold ? l.col : C.steel4);
+    }
+  };
+  if (lines.length < 12 || typeof document === 'undefined') { direct(); return; }
+  let sig = `${fw}x${fh}`;
+  for (const l of lines) sig += `|${l.ax},${l.ay},${l.bx},${l.by},${l.col},${l.bold ? 1 : 0}`;
+  let L = LAYERS.get(F);
+  if (!L || L.sig !== sig) {
+    L = { sig, x0: -LAYER_PAD, y0: -LAYER_PAD, c: [null, null, null, null, null, null] };
+    LAYERS.set(F, L);
+  }
+  let c = L.c[off];
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = fw * TILE + 2 * LAYER_PAD;
+    c.height = fh * TILE + 2 * LAYER_PAD;
+    // painted on the CPU (thousands of 1 px rects), drawn on the GPU once a change
+    const bc = c.getContext('2d', { willReadFrequently: true });
+    if (!bc) { direct(); return; }
+    bc.translate(LAYER_PAD, LAYER_PAD);
+    // the march's phase is the layer's: time is picked so floor(time * 10) % 6 is this offset
+    for (const l of lines) {
+      flightLine(bc, l.ax, l.ay, l.bx, l.by, l.col, off / 10 + 0.01, l.bold, l.bold ? 1 : 0.75);
+      arrowHead(bc, l.ax, l.ay, l.bx, l.by, l.bold ? l.col : C.steel4);
+    }
+    L.c[off] = c;
+  }
+  ctx.drawImage(c, L.x0, L.y0);
+}
+
 // ---------------------------------------------------------------- the floor
 
 /** The Bay's frame: empty, stage1, stage2 by the open stage's progress; run1/run2 once every
@@ -317,19 +364,19 @@ export function drawDistrict(ctx: CanvasRenderingContext2D, g: Game, time: numbe
   const bayRes = (Object.values(MEGAS) as { floor: string; opens: string }[]).some((m) => m.floor === F && g.done(m.opens as never));
   if (bayRes && !st.ents.some((e) => e.kind === 'fbay')) bayMarks(ctx, time, F);
   // flight lines under everything that stands up
+  const lines: RouteLine[] = [];
   for (const r of st.routes) {
     const e = routeEnds(g, r, F);
     if (!e) continue;
-    if (!vis(Math.min(e.ax, e.bx), Math.min(e.ay, e.by), Math.abs(e.bx - e.ax) + 1, Math.abs(e.by - e.ay) + 1)) continue;
     const sel = r.id === ov.selRoute, hov = r.id === ov.hoverRoute;
     const short = routeShort(g, r, F);
     // short of skiffs: warning orange, bold (the bottleneck); selected gold; under the mouse bone;
     // the rest a quiet pencil line in ink
     const bold = sel || short || hov;
     const col = sel ? C.lamp2 : short ? C.lamp1 : hov ? C.bone : C.ink1;
-    flightLine(ctx, e.ax, e.ay, e.bx, e.by, col, time, bold, bold ? 1 : 0.75);
-    arrowHead(ctx, e.ax, e.ay, e.bx, e.by, bold ? col : C.steel4);
+    lines.push({ ax: e.ax, ay: e.ay, bx: e.bx, by: e.by, col, bold });
   }
+  drawRouteLines(ctx, F, fw, fh, lines, time, vis);
   // the buildings
   for (const e of st.ents) {
     const x = e.x * TILE, y = e.y * TILE;
@@ -390,6 +437,7 @@ function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: n
   const s = sheet(kind);
   const k = skiffStats(g, F);
   const dwell = k.dwell;
+  const shadow = rgba(C.ink, 0.25);
   for (const r of st.routes) {
     const e = routeEnds(g, r, F);
     if (!e) continue;
@@ -429,7 +477,7 @@ function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: n
       const over = hentAt(g, F, Math.floor(px / TILE), Math.floor((py + lift) / TILE));
       ctx.globalAlpha = over ? 0.45 : 1;
       // its shadow on the deck
-      ctx.fillStyle = rgba(C.ink, 0.25);
+      ctx.fillStyle = shadow;
       ctx.fillRect(px - 4, py + lift + 1, 8, 1);
       const frame = Math.floor(time * (s.fps || 16)) + i;
       if (hasArt(kind)) drawSprite(ctx, s, frame, px, py, left);

@@ -45,7 +45,8 @@ describe('saves', () => {
 describe('export strings', () => {
   it('round-trip, and refuse damaged or foreign strings with a reason', () => {
     const str = exportString({ seed: 7, saved: 1, snap: '{"a":1}', note: 'frog' });
-    expect(str.startsWith('FW1.')).toBe(true);
+    // FW2 since Milestone 14 (deflated); tests/deflate.test.ts checks an FW1 string still imports
+    expect(str.startsWith('FW2.')).toBe(true);
     const d = importString(str);
     expect(d.seed).toBe(7);
     expect(d.note).toBe('frog');

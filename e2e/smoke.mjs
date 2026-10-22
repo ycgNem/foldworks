@@ -104,7 +104,7 @@ await page.evaluate(() => { window.__app.freeze(); window.__app.step(20 * 60); }
 const before = await page.evaluate(() => ({ tick: window.__app.game.s.tick, coin: window.__app.game.s.coin.toString(), ents: window.__app.game.s.ents.length }));
 check(await page.evaluate(() => window.__app.save()), 'saves to localStorage');
 const exported = await page.evaluate(() => window.__app.exportSave());
-check(exported.startsWith('FW1.'), 'export string looks right');
+check(exported.startsWith('FW2.'), 'export string looks right (FW2: packed, Milestone 14)');
 await page.reload();
 await page.waitForFunction(() => window.__app && window.__app.ready);
 await frames(page, 4);

@@ -58,6 +58,23 @@ export function stateShape(e: { state: string; why: string | null; paused?: bool
 /** Draw a shape's 5x5 at (x, y), its ink outline one pixel around it (so it covers x-1..x+5).
  * A grey pip's shape is lightened so the ring and the bars read on dark art. */
 export function drawPipShape(ctx: CanvasRenderingContext2D, x: number, y: number, shape: PipShape, col: string) {
+  // one drawImage of the shape baked in its colour (Milestone 14: 200 modules' pips were 5,000
+  // fillRects a frame); the same fills on a 7x7, drawn one pixel up and left
+  let bake = PIP_BAKES.get(shape + col);
+  if (bake === undefined && typeof document !== 'undefined') {
+    const c = document.createElement('canvas');
+    c.width = c.height = 7;
+    const bc = c.getContext('2d');
+    if (bc) pipFills(bc, 1, 1, shape, col);
+    PIP_BAKES.set(shape + col, (bake = bc ? c : null));
+  }
+  if (bake) ctx.drawImage(bake, x - 1, y - 1);
+  else pipFills(ctx, x, y, shape, col);
+}
+
+const PIP_BAKES = new Map<string, HTMLCanvasElement | null>();
+
+function pipFills(ctx: CanvasRenderingContext2D, x: number, y: number, shape: PipShape, col: string) {
   const pts = PTS[shape];
   ctx.fillStyle = C.ink;
   // the ring and the bars hold ink inside them: the whole 7x7 less its corners
