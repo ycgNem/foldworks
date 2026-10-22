@@ -9,3 +9,7 @@ __pycache__/
 *.pyc
 *.blend1
 .claude/worktrees/
+
+# scratch output from headless campaign runs (review agents)
+/camp-*.json
+/snap-*.json
