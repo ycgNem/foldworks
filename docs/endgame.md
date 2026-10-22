@@ -310,6 +310,37 @@ Every sheet is `src/art/<name>.png` (1x, frames in one row) with a `<name>.json`
 - **Tier 5** (~8): impossible inventions (Bottled Tuesday, A Map of Everywhere, a Very Small Sun,
   the Pocket Island, the Quiet Engine, the Folded Universe Replica).
 
+### The contract for building Milestone 10 (2026-10-22: the sim and the art in parallel)
+Ids every agent shares; numbers are first passes the sim agent derives in DESIGN.md §23.
+- **The Last Fold** (reset layer 3): research `lastFold` (Act V page, `act: 5`), open once both
+  Act IV Megaprojects (`lighthouse`, `anchor`) are complete. Command `{ k: 'lastFoldAudit' }`
+  audits every module on the World floor at once (the high-floor audit over the whole floor);
+  its grade card offers `{ k: 'lastFold' }`, the reset. **Kernels** (`s.meta.kernels`, a Num) are
+  paid from the audit's value and grade. Kept: every Megaproject, the Codex, trophies, reputation,
+  the Drawer, Challenges won, Kernels and the Kernel tree. Lost: everything a Relocate loses, plus
+  Legacy, its tree and the worlds' records. The new universe's Workshop starts with **the Seed**
+  (kind `seed`, 1x1, not removable): it hums and digs a little of each raw ore out of its four
+  sides.
+- **The Kernel tree** (`src/data/kernels.ts`, nodes in `s.meta.kernelNodes`, ~10, flat prices):
+  `wideBelts` (a belt tile carries 2), `everySide` (a module takes and gives on every side),
+  `biggerBox` (the Workshop fold box 12x12), `beyond` (opens the fifth floor), `secondCookbook`
+  (alternate recipes), `longNights` (the offline ceiling 0.85), `keptIslands` (the worlds' records
+  kept through a Last Fold), `keptLegacy` (chosen Legacy nodes kept), `seedling` (the Seed digs
+  more), `endlessLedger` (infinite orders). Rules, never "+X% everything".
+- **Beyond** (the fifth floor, `HIGH.beyond`): depth-4 modules (folded on the World), its own
+  carriers (`courier`: the high-floor routes), Dock, Hopper and Bay.
+- **The Endless Ledger** (infinite orders): order n wants (n + 1) x a base amount of a product in
+  turn, linear, never timed; every tenth pays a cosmetic (a machine skin id).
+- **Tier 5** (`ITEM_IDS` after tier 4): `bottledTuesday`, `mapOfEverywhere`, `verySmallSun`,
+  `pocketIsland`, `quietEngine`, `foldedUniverse` (the Folded Universe Replica),
+  `everlastingSandwich`, `infiniteStaircase`; made on Beyond's modules' groups from tier 4 goods.
+- **Art files** (`src/art/`): `seed` (16x16, 4 frames, a hum), `items5` (8 icons, contract order,
+  with `names`), the Beyond platform (`beyond_deck`, `beyond_edge`, `beyond_under`,
+  `beyond_rotor`, `beyond_dock`, `beyond_hopper`, `beyond_bay`, frame-compatible with `world_*`;
+  the highest platform: starlit, almost no sky below), `courier` (Beyond's carrier, 4 frames),
+  `lastfold` (the Last Fold's moment: the World folding into one tile, a strip of frames for a
+  full-screen sequence), UI icons `kernel`, `beyond`, `lastFold`, `ledger`.
+
 ## Milestone 11: the long tail
 150+ trophies with small specific bonuses (generated tiers over deliveries and counters, plus
 hidden ones); the Codex completed with lore pages and Unit 7's ending; challenges to 15 and

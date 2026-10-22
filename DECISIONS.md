@@ -1977,3 +1977,36 @@ is never hidden: the stuck-finder and the pips' shapes) and DESIGN.md §17 (read
   button that names one cause by the coin it costs, in the Inspector's voice.
 - **Status icons with shapes** are the accessibility convention (Factorio's entity status icons
   among many). Generic.
+
+## Milestone 9: Act IV's sim (2026-10-22)
+
+Built in a worktree (`1430d10`, cherry-picked onto `m9-worlds` as ccebda3: the worktree couldn't
+merge, so it carried `m9-worlds`' files in base commits; its own diff applied cleanly). DESIGN.md
+§22 has every number. Nothing on the ask-before list changed: the World is `PLAN.md`'s fourth
+floor, Legacy its second reset's currency, Relocate layer 2; no new customer.
+- **Islands**: Pebble (chunks C, D, F are sky; Miners 1.5x), Cinder (12 vents: a machine beside one
+  needs no power, a burner beside one no fuel; no logistics beside one), Rime (powered machines
+  half speed unless a lit Heater is within 2 tiles or two working machines touch; the Heater 3,000,
+  1 coal per 10 s, research Thermals), the Old Works (rubble on about half the free tiles, cleared
+  for 5 + chunk price / 64 a tile; 14 ruins, 8 of them in two whole lines, repaired for a quarter
+  of their price; a ruin can't be folded). Each island's research is offered only on it.
+- **The World takes depth 3 only**; its own folds (depth 4) need research `lastFold` (Act V).
+  Barges on the gate's principle: 2 a trip, 3 tiles/s, 1.5 s dwell, 250,000 each.
+- **A depth-3 fold files a step deeper** (`designValue` + (depth - 2) x RULES.highFoldSteps): the
+  gate's "reset 3 feels like reset 1". This moves Act III's Patent numbers a little; the Act III
+  pace test is re-run with the bot's update.
+- **Megaprojects #4 and #5** take one stage per island in any order (a half-built stage is held on
+  its island); their rewards are rules (faster barges, half dwell, lots and the annex kept).
+- **Relocate**: Legacy = floor(the floors' best values this world / 4 + 3 a Megaproject stage this
+  world + 5 for a new island); the World's term counts a module after 60 s straight at half speed
+  or better. First Relocate about 35 Legacy; the tree (17 nodes, 103 Legacy) is bought out around
+  75-80 h (model estimates until the Act IV bot measures them).
+- **The Town Plan** (a Legacy node) re-places a kept District layout with its routes and skiffs from
+  the best spare copies: the act's answer to "reset 3 feels like reset 1".
+- **Act IV orders** (8, about 2.1x) and rep 5/7 rewards as rules (Harbour Rights, Field Notes,
+  High-Tension Lines, Rubble Rousers).
+- **Flagged as derivative** (owner to decide): the Legacy automation tree and the Standing Committee
+  (an auto-reset) are Antimatter Dimensions' Eternity upgrades and autobuyers, re-derived each from
+  a real Act I-III chore with flat prices; islands with rules are Factorio Space Age's planets (here
+  each rule changes which layout folds best, and there is no travel or logistics between islands);
+  rubble clearing is the land-clearing tycoon convention.
