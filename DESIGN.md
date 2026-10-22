@@ -2054,7 +2054,9 @@ Charting, the World, Relocation and the first Relocate never come by 40 h** (eve
 Home: 1 0:00-4:22, 2 4:22-7:24, 3 7:24-16:40 +45 Patents, 4 16:40-26:18 +9, 5 26:18-38:18 +5, 6 to
 40:00). Floor bests at 40 h: Workshop 3, Factory 4.4, District 6.25; the Patent preview 30-40 h
 3.5-5.5 (39 of 39 nodes); rules 1-2 per Act III stretch 40.5 / 30.5, 32.4 / 4.7 and 10.4 / 10.3 min;
-the biggest District 160 groups, 0.73 ms a tick. The Relocate rule now waits for the preview to stop
+the biggest District 160 groups, 0.73 ms a tick. At 60 h (measured once) the same: eight runs on
+Home, Charting never, 165 District groups at most, rules 1-2 12.7 and 10.2 min in runs 6 and 7. The
+Relocate rule now waits for the preview to stop
 rising (`RELOCATE_FLAT`, 45 minutes) or the World to stand full, not a flat 20 Legacy; it was not
 exercised.
 

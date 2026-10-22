@@ -3018,7 +3018,8 @@ stock, the Factory floor and the corner's machine states. **No other data or sim
   Bay, so neither project stands and Charting, the World and every Relocate are gone from the 40 h
   campaign** (all six runs on Home; 45, 9 and 5 Patents from runs 3-5). Rules 1-2: pace-act4 40.5 /
   30.5 min from 15:59 (run 3: the late groups' retries and the coils line), 32.4 min from 25:45, 10.4;
-  pace-act3 19.1, 13.7, 18.1 and 14.3 min (were 10.9, 19.9, 19.9, 10.3). DESIGN.md §21 and §22 Pacing.
+  pace-act3 19.1, 13.7, 18.1 and 14.3 min (were 10.9, 19.9, 19.9, 10.3). At 60 h (pace-act4 once):
+  eight runs on Home, still no Charting. DESIGN.md §21 and §22 Pacing.
 - **The next blocker: room on the Factory bench for the late groups.** Sandwiches II (a Plastic
   copy) and Coils II (a Plastic copy, the Rubber II feeder outside the box) are not laid; in one
   scratch run Sandwiches II was (five copies took the 300 sandwiches in an hour) and in another the
