@@ -297,6 +297,7 @@ export function auditBadge(app: App, L: Layout) {
     // costs nothing, but another clipboard is worse to cover than a corner
     const r = placeClip(b, avoid, placed, view, zones);
     placed.push(r);
+    app.hud.clipRects.push(r);
     auditClip(app, a, ws, r, b, here.length);
   });
 }

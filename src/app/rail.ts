@@ -147,7 +147,8 @@ export function rail(app: App, L: Layout) {
   const grab = !cam ? grabKind(app, goal?.ui ?? null) : null;
   const holding = !!grab && app.mode.k === 'build' && app.mode.kind === grab;
   const canGrab = !!grab && !holding && g.s.coin.gte(BUILD[grab].cost);
-  const chips = (cam ? cam.chips : goal?.chips) ?? [];
+  // a chip wider than the bubble drops words from its end (never into the Gazette's slip)
+  const chips = ((cam ? cam.chips : goal?.chips) ?? []).map((c) => fitChip(c, cw));
   const bar = cam ? undefined : goal?.bar;
   const note = cam ? null : goal?.note ? layoutRich(goal.note, cw) : null;
   // chips flow in rows
@@ -232,6 +233,19 @@ export function rail(app: App, L: Layout) {
 }
 
 export const SPEAKER_NAME: Record<Speaker, string> = { bramble: 'Mayor Bramble', unit7: 'Unit 7', voltaire: 'Dame Voltaire', committee: 'The Committee', inspector: 'The Inspector' };
+
+/** A chip's text cut to `w` px: whole words off its end, then '..' (markup kept balanced). */
+function fitChip(c: string, w: number): string {
+  if (chipWidth(c) <= w) return c;
+  const words = c.split(' ');
+  while (words.length > 1) {
+    words.pop();
+    const t = words.join(' ');
+    if ((t.match(/\{/g) ?? []).length !== (t.match(/\}/g) ?? []).length) continue;
+    if (chipWidth(t + '..') <= w) return t + '..';
+  }
+  return c;
+}
 
 /** In hand, under a Grab: how to put it down. */
 const HOLDING = '{good:in hand}  {k:LMB} place  {k:R} turn  {k:RMB} drop';

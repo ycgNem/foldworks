@@ -109,6 +109,8 @@ export interface HudState {
   /** the notebook's bookmarks up the left edge, last frame (floor tags and a report docked on the
    * left keep off them) */
   marksRect: Rect | null;
+  /** the audit clipboards on the floor this frame (the Gazette's slip yields to them) */
+  clipRects: Rect[];
   // ---- the hover delay (the owner, 2026-10-21: hover tags everywhere were overstimulating)
   /** what the mouse is over on the floor, since when, and when a floor tag was last up */
   hoverKey: string | null;
@@ -122,7 +124,7 @@ export function newHudState(): HudState {
     tabSeen: new Set(), tabRung: new Set(), opened: new Set(), codexSeen: 0, celebs: [], rain: [], coinLast: -1, glints: [], firstMiner: false,
     collapsed: new Set(), goalKey: null, goalAt: -10, goalUi: null, crawlHot: false,
     foldedAt: -10, cameos: [], offerSeen: null, codexHeard: -1, ordersHeard: -1, bellIds: new Set(), bellAt: -10, liftAngle: 180, lastPage: null, purseBottom: 70, cornerRect: null,
-    marksRect: null, hoverKey: null, hoverSince: 0, hoverShown: -10,
+    marksRect: null, clipRects: [], hoverKey: null, hoverSince: 0, hoverShown: -10,
   };
 }
 
@@ -146,6 +148,7 @@ export function drawHud(app: App, dt: number) {
     diegetic(app, L);
     panArrows(app, L);
     // the District's audit hangs its own clipboard (src/app/district.ts)
+    app.hud.clipRects = [];
     if (app.floor !== 'district') auditBadge(app, L);
     corners(app, L, dt);
     edgeArrows(app);
