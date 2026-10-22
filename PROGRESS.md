@@ -123,11 +123,12 @@ the Act IV bot"; DESIGN.md §21 and §22 Pacing (measured).
   wants from the Chute, Sensors and Robot arms are two-machine lines (a lone assembler can't fold),
   the arms line stands unfolded (Arms II never fit the bench), two Servos II feeds, a line's give-up
   clock stands while its Chute input is empty. **The campaign reaches District Folds 15:02,
-  Charting and the World 15:41** (run 3), 4 District folds, 19 World modules (0.84 ms a tick).
+  Charting and the World 15:41** (run 3), 4 District folds, 19 World modules (0.65 ms a tick).
   pace-act4 5 passed (40 h, 21 min), pace-act3 7 passed.
 - **Open**: rules 1 and 2 got worse: a 69-min wait in the chemistry corner's first hour (11:07,
-  waiting on Floating City research) and an idle of 5-9 h early in a later Act III run (pace-act4
-  run 5 from 34:57, pace-act3 run 4 from 21:31): not yet found. No Relocate: Relocation wants 3
+  waiting on Floating City research) and an idle of 2.5-5.5 h in a later Act III run (pace-act4
+  run 5 from 37:25, pace-act3 run 4 from 25:42): not yet found (a 9-hour wait on "no design Gears
+  II" is fixed). No Relocate: Relocation wants 3
   Sandwich Engineers and 20 umbrellas, and batteries, sandwiches and umbrellas are not taught (nor
   the Lighthouse's batteries). Runs 3-4 end at the 12-hour cap. Coal claims may be a number that
   blocks honest play (owner's call). The islands' layouts are untested; 80 h was not run.

@@ -1559,9 +1559,10 @@ hand-over: the same early-run wait as before's 20.1, still not looked into). Run
 the District 9:37, the City's stage 1 13:31-13:33, District Folds 15:02, Charting and the World
 15:41 (the Act IV campaign). Runs 3 and 4 now end at the 12-hour cap (7:07-19:07, 19:07-31:07),
 not the full-floor reset. **Rules 1 and 2 got worse and are open**: in the Act IV campaign 68.9 /
-34.7 min from 11:07 (the chemistry corner's first hour), 36.9 min from 22:34 and 302 min from 34:57
-(run 5: the bot idles, not yet found); in the Act III-only campaign 68.7 min in run 3 and 575 /
-553 min from 21:31 in run 4 (the same idle, earlier). The District peaks at 93-103 groups.
+34.7 min from 11:07 (the chemistry corner's first hour), 36.9 min from 22:34 and 154 min from 37:25
+(run 5: the bot idles, not yet found); in the Act III-only campaign 68.7 min in run 3 and 324 /
+308 min from 25:42 in run 4 (the plan's 9-hour wait on "no design Gears II" from 21:31 is fixed:
+DECISIONS.md). The District peaks at 93-103 groups.
 
 Lessons:
 - **The waste chute and 1 a trip halve the routes and make distance cost.** With waste going to
@@ -1835,7 +1836,7 @@ the save's first run.
 - **Measured below** (the Act IV bot): the campaign does not reach the World yet.
 ### Pacing (measured, the Act IV bot)
 Measured by the campaign bot with the Act IV policy (`src/sim/bot4.ts` over `src/sim/bot3.ts`,
-`tests/pace-act4.test.ts`, seed 1000, `FOLD_ACT4_HOURS` = 40 h of play, 21 min of wall time; 80 h
+`tests/pace-act4.test.ts`, seed 1000, `FOLD_ACT4_HOURS` = 40 h of play, 18 min of wall time; 80 h
 did not fit the time box). Second pass (DECISIONS.md "The second pass"): the Act III bot now makes
 rubber, sensors and robot arms, so the campaign reaches District Folds, Charting and the World in
 run 3. Relocation is still out of reach: it wants 3 Sandwich Engineers and 20 umbrellas, and no
@@ -1852,17 +1853,17 @@ bot makes batteries, sandwiches or umbrellas yet.
 | Megaproject stages | | the City's stage 1 at 13:33; no Act IV stage (the Sky Anchor is researched first now; the Lighthouse wants batteries) | 11:41 |
 | Legacy | the tree by 75-80 h | none banked; preview 21 at 40 h (model ~35 at the first move) | 18 |
 | Floor bests at 40 h | 7-10 a floor | Workshop 2.5, Factory 4, District 6.25, World 6.25 | 2.5, 4, none, none |
-| Patent preview 30-40 h | | 6.3-6.5 until run 5's reset at 31:07, then 0.1-1.5 (37 of 39 nodes) | 4.3-6.5, then 0-1.5 |
-| Rule 1 per stretch | 10 min | Act III 68.9 (11:07); Act IV 13.5 (18:44); III 36.9 (22:34); III 302 (34:57) | 10.4-10.7 |
-| Rule 2 per stretch | 15 min | 34.7; 13.5; 36.9; 302 | 10.4-10.7 |
-| Tick, the biggest floor | under 4 ms | **0.84 ms** (a World of 19 modules; the District peaks at 103) | 0.93 (District 130) |
+| Patent preview 30-40 h | | 6.3-6.5 until run 5's reset at 31:07, then 0.1-1.8 (37 of 39 nodes) | 4.3-6.5, then 0-1.5 |
+| Rule 1 per stretch | 10 min | Act III 68.9 (11:07); Act IV 13.5 (18:44); III 36.9 (22:34); III 154 (37:25) | 10.4-10.7 |
+| Rule 2 per stretch | 15 min | 34.7; 13.5; 36.9; 117 | 10.4-10.7 |
+| Tick, the biggest floor | under 4 ms | **0.65 ms** (a World of 19 modules; the District peaks at 103) | 0.93 (District 130) |
 
 The runs: 1 0:00-4:22 (14 Patents), 2 4:22-7:07 (7), 3 7:07-19:07 (35, Act III from 9:30, Act IV
 from 15:41), 4 19:07-31:07 (6, from 21:11), 5 31:07-40:00 (from 33:04). Runs 3 and 4 end at the
 12-hour cap, not the full-floor reset. No number moved.
 
-**Open** (`[pace4] OPEN` in the test): rules 1 and 2 (the chemistry corner's first hour, and run
-5's 5-hour idle from 34:57, not yet found), every §22 target past the World (Relocation's chain:
+**Open** (`[pace4] OPEN` in the test): rules 1 and 2 (the chemistry corner's first hour, waiting on
+Floating City research, and run 5's 2.5-hour idle from 37:25, not yet found), every §22 target past the World (Relocation's chain:
 batteries, sandwiches, umbrellas and the Engineer), the floor bests, and the islands' layouts (the
 Act I-II bots lay Home's lines; Pebble's sky chunks, Cinder's vents and the Old Works' ruins will
 refuse some of them). Coal claims may be the number that blocks honest play (DECISIONS.md).

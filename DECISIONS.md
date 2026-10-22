@@ -2508,13 +2508,14 @@ Each was a measured stall; none moved a data number.
   batteries, which no line here makes yet.
 - **Measured** (seed 1000, 40 h, `tests/pace-act4.test.ts`, 5 passed): District 9:37, Chemistry
   9:43, Robotics 13:57, **District Folds 15:02, Charting and the World 15:41** (run 3), 4 District
-  folds, 19 World modules at 0.84 ms a tick. No Relocate: Relocation wants 3 Sandwich Engineers
+  folds, 19 World modules at 0.65 ms a tick. No Relocate: Relocation wants 3 Sandwich Engineers
   and 20 umbrellas, and batteries, sandwiches and umbrellas are not taught. Runs 3 and 4 now end at
   the 12-hour cap, not the full-floor reset. Rules 1 and 2 got worse, and are open: 68.9 / 34.7 min
-  at 11:07-11:41 (the chemistry corner's first hour) and 302 min at 34:57 in run 5 (the bot idles:
-  not yet found). At 40 h the floor bests are 2.5, 4, 6.25 and 6.25 against "7-10 a floor"; the
+  at 11:07-11:41 (the chemistry corner's first hour, waiting on Floating City research) and
+  154 / 117 min from 37:25 in run 5 (the bot idles: not yet found; pace-act3's run 4 idles 324
+  min from 25:42). At 40 h the floor bests are 2.5, 4, 6.25 and 6.25 against "7-10 a floor"; the
   Legacy preview is 21 against the model's ~35; the Patent preview over 30-40 h is 6.3-6.5 before
-  run 5's reset and about 1 after it.
+  run 5's reset and 0.1-1.8 after it.
 - **A number that may block honest play** (not changed; for the owner): coal claims. Nearly every
   Act II-III design digs coal, the block's price grows by half its base a block (§18), and the
   District's growth takes every block. Rubber II, Processors II and Sensors II each waited on coal,
