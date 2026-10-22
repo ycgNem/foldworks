@@ -28,7 +28,7 @@ import { HIGH } from '../data/floors';
 import { TICK_RATE } from '../engine/time';
 import { available } from './systems/research';
 import { BYPRODUCTS, mainItem, stampCost, stampRefusal } from './systems/modules';
-import { hent, hentAt, highW, routeCap, routeWant, bayWants, lotPrice, hplaceRefusal } from './systems/high';
+import { hent, hentAt, highW, routeCap, routeWant, bayWants, lotPrice, hplaceRefusal, maxRoutes, routeRefusal } from './systems/high';
 import { claimLoad, claimPrice, claimsHeld, placedClaims } from './systems/claims';
 import { ffoldRefusal } from './systems/nested';
 import { ORDER } from '../data/orders';
@@ -303,6 +303,7 @@ export class Act3Bot {
     b.later = [];
     this.lab = b.layout.includes('motorAsm') ? PHASE_M : PHASE_Z;
     b.mark('act3');
+    this.grewAt = g.seconds;
     for (const id of ['city', 'transmuter'] as const) this.stageSeen[id] = g.s.megas?.[id]?.stage ?? 0;
   }
 
@@ -318,7 +319,23 @@ export class Act3Bot {
   private act(c: Cmd, what?: string): boolean | null {
     const r = this.b.act(c);
     if (r && what) this.b.decide(what);
+    if (r && (what === 'module:district' || what === 'lot')) this.grewAt = this.g.seconds;
     return r;
+  }
+
+  /** when the District last grew (a copy placed, a lot bought), seconds */
+  private grewAt = 0;
+
+  /** Seconds since the District last grew, once the plan is through and the floor is full (every
+   * tile taken, every lot bought) or the coin piles up past 10M with nothing bought (0 otherwise):
+   * the campaign's reset moment (src/sim/campaign.ts). A District short of coin is not full. */
+  grownAgo(): number {
+    const g = this.g;
+    if (!this.done() || !g.s.district) return 0;
+    let free = false;
+    for (let y = 0; y < HIGH.district.h && !free; y++) for (let x = 0; x < highW(g, 'district'); x++) if (!hentAt(g, 'district', x, y)) { free = true; break; }
+    const full = (!free || this.routesFull()) && !lotPrice(g, 'district');
+    return full || g.s.coin.gte(10_000_000) ? g.seconds - this.grewAt : 0;
   }
 
   update() {
@@ -348,14 +365,28 @@ export class Act3Bot {
     if (this.step < this.plan.length || g.s.tick < this.growAt || !g.s.district) return;
     this.growAt = g.s.tick + 180 * TICK_RATE;
     if (Object.entries(this.want).some(([n, k]) => this.placed(n) < k && this.b.designNamed(n))) return;
+    // a copy the floor could not route is not placed (every lot bought and the routes at the cap)
+    if (this.routesFull() && !lotPrice(g, 'district')) return;
     for (let i = 0; i < GROW.length; i++) {
       const name = GROW[(this.growNext + i) % GROW.length];
       const d = this.b.designNamed(name);
-      if (!d || g.s.coin.lt(stampCost(g, d).mul(2))) continue;
+      if (!d || g.s.coin.lt(stampCost(g, d).mul(2)) || !this.taken(d)) continue;
       this.growNext = (this.growNext + i + 1) % GROW.length;
       this.want[name] = Math.max(this.want[name] ?? 0, this.placed(name)) + 1;
       return;
     }
+  }
+
+  /** Does anything take this design's product now (a module, research, the Bay, an order, a Dock
+   * sale)? A Rotors copy once the City has its rotors makes parts nobody takes: not grown. */
+  private taken(d: ModuleDesign): boolean {
+    const item = mainItem(d);
+    if (!item) return true;
+    if (ITEMS[item].value > 0 && !ITEMS[item].refused) return true;
+    if (this.researchNeed(item) > 0 || bayWants(this.g, 'district').has(item)) return true;
+    const act = this.g.s.orders.active;
+    if (act && (ORDER[act].wants[item] ?? 0) > 0) return true;
+    return (this.g.s.district?.ents ?? []).some((c) => c.kind === 'module' && (this.g.design(c.design)?.ins[item] ?? 0) > 0);
   }
 
   /** A line folded leaves its slot at once: its Chute Mouths and output belt are lifted (a line
@@ -744,7 +775,10 @@ export class Act3Bot {
       if (!d) continue;
       if (d.spare < 1) {
         if (this.buyClaims(d, false)) return true;
-        if (stampRefusal(g, d)) continue;
+        // once the plan is through, a copy that can't be stamped now (claims or coin short) is no
+        // longer wanted: the growth round comes back to it (a want left standing held every later
+        // copy, the floor idle on 18M coin at 17 h)
+        if (stampRefusal(g, d)) { this.giveUp(name); continue; }
         this.act({ k: 'stamp', id: d.id }, 'stamp');
         return true;
       }
@@ -752,22 +786,24 @@ export class Act3Bot {
       const t = this.tileFor(d);
       if (!t) {
         // the floor is full: the next lot
-        const p = lotPrice(g, 'district');
-        if (p && !g.s.coin.lt(p.mul(1.2))) { this.act({ k: 'hlot', floor: 'district' }, 'lot'); return true; }
+        if (this.buyLot()) return true;
+        this.giveUp(name);
         continue;
       }
-      if (hplaceRefusal(g, 'district', d.id, t.x, t.y)) continue;
+      if (hplaceRefusal(g, 'district', d.id, t.x, t.y)) { this.giveUp(name); continue; }
       this.act({ k: 'hplace', floor: 'district', design: d.id, x: t.x, y: t.y }, 'module:district');
       return true;
     }
+    // the route cap binding (120, and 20 a lot): the next lot, while one is for sale
+    if (st.routes.length >= maxRoutes(g, 'district') - 1 && this.buyLot()) return true;
     // routes, looked at every 5 s
     if (g.s.tick >= this.routeAt) {
       this.routeAt = g.s.tick + 5 * TICK_RATE;
       if (this.routes()) { this.routeAt = 0; return true; }
     }
-    // skiffs, every 10 s: one more on the route furthest under 90% of its want
+    // skiffs, every 5 s: one more on the route furthest under 90% of its want
     if (g.s.tick >= this.skiffAt) {
-      this.skiffAt = g.s.tick + 10 * TICK_RATE;
+      this.skiffAt = g.s.tick + 5 * TICK_RATE;
       let best: { id: number; share: number } | null = null;
       for (const r of st.routes) {
         if (r.skiffs >= HIGH.district.maxSkiffs) continue;
@@ -783,6 +819,27 @@ export class Act3Bot {
       }
     }
     return false;
+  }
+
+  /** Once the plan is through, a copy that can't be had now is no longer wanted (a want left
+   * standing held every later copy: the floor idled on 18M coin at 17 h); the growth round comes
+   * back to it. */
+  private giveUp(name: string) {
+    if (this.step >= this.plan.length) this.want[name] = this.placed(name);
+  }
+
+  /** The District's routes at the most it holds now (120, and 20 a lot). */
+  private routesFull(): boolean {
+    const st = this.g.s.district;
+    return !!st && st.routes.length >= maxRoutes(this.g, 'district');
+  }
+
+  /** The District's next lot, when the coin covers it with a fifth to spare. */
+  private buyLot(): boolean {
+    const p = lotPrice(this.g, 'district');
+    if (!p || this.g.s.coin.lt(p.mul(1.2))) return false;
+    this.act({ k: 'hlot', floor: 'district' }, 'lot');
+    return true;
   }
 
   /** Claims for a copy of `d` (stamping it, or placing it), a block bought when it costs at most
@@ -851,7 +908,8 @@ export class Act3Bot {
   }
 
   /** Keep every District module's routes: its main product to what wants it most now, its other
-   * products that sell to the Dock, its byproducts to the Dock. One command, or false. */
+   * products that sell to the Dock (its waste goes down the chute on its own). One command, or
+   * false. */
   private routes(): boolean {
     const g = this.g;
     const st = g.s.district!;
@@ -861,9 +919,15 @@ export class Act3Bot {
       if (!d) continue;
       for (const item of Object.keys(d.outs) as ItemId[]) {
         const mine = st.routes.filter((r) => r.from === m.id && r.item === item);
-        // a byproduct to the Dock; every other output where it is wanted most (a second product,
-        // the Concrete group's concrete, to the Bay as much as its first)
-        const dest = BYPRODUCTS.has(item) ? this.floorEnt('fdock') : this.destFor(item, m);
+        // a byproduct with no route goes down the waste chute to the Dock on its own (DESIGN.md §21,
+        // the second gate): no route spent on it; a waste route left from before is lifted
+        if (BYPRODUCTS.has(item)) {
+          if (mine[0]) { this.act({ k: 'unroute', floor: 'district', id: mine[0].id }); return true; }
+          continue;
+        }
+        // every other output where it is wanted most (a second product, the Concrete group's
+        // concrete, to the Bay as much as its first)
+        const dest = this.destFor(item, m);
         if (!dest) continue;
         if (mine.some((r) => r.to === dest!.id)) {
           // a second route of the same item, left from an earlier job: lifted
@@ -882,6 +946,9 @@ export class Act3Bot {
         });
         if (keep && !(dest.kind === 'module' && hent(g, 'district', keep.to)?.kind !== 'module')) continue;
         if (keep) { this.act({ k: 'unroute', floor: 'district', id: keep.id }); return true; }
+        // (a route the floor refuses now, the cap reached or the coin short, is left for later: a
+        // refused command would hold the hands every beat)
+        if (routeRefusal(g, 'district', m.x, m.y, dest.x, dest.y, item)) continue;
         const r = this.act({ k: 'route', floor: 'district', fx: m.x, fy: m.y, tx: dest.x, ty: dest.y, item }, 'route');
         if (r !== null) return true;
       }

@@ -12,6 +12,7 @@ import { TICK_RATE } from '../src/engine/time';
 import { exportString } from '../src/engine/save';
 import { savePayload, takeSnapshot, restore } from '../src/sim/snapshot';
 import { previewPatents } from '../src/sim/reorganize';
+import { routeCap, routeWant } from '../src/sim/systems/high';
 
 export const H = 3600;
 export const HORIZON = 40 * H;
@@ -29,14 +30,18 @@ export interface Act3Record {
   /** every decision and what it was, in play time */
   decisions: number[];
   what: string[];
-  /** District modules, routes, routes between modules and skiffs on routes, sampled each minute */
-  districtByMin: { t: number; modules: number; routes: number; between: number; skiffs: number }[];
+  /** District modules, routes, routes between modules, skiffs on routes, lots bought and routes
+   * carrying under 90% of their want and the most skiffs on one route, sampled each minute */
+  districtByMin: { t: number; modules: number; routes: number; between: number; skiffs: number; lots: number; short: number; most: number }[];
+  /** District folds (depth 3) made over the campaign, and depth-3 modules standing at 40 h */
+  districtFolds: number;
+  foldsAt40: number;
   /** the most of each over the campaign, and at 40 h */
   maxModules: number;
   modulesAt40: number;
   /** Patents preview each minute, play time */
   previewByMin: { t: number; p: number }[];
-  /** the game's state at 40 h (the perf case) */
+  /** the game's state when its District was biggest (the perf case) */
   final: { snap: string; snapTick: number };
   /** clicks a second at most, over every run */
   clicksPerSecMax: number;
@@ -57,6 +62,9 @@ export function act3Campaign(seed: number, opts: { checkpoints?: boolean } = {})
   const districtByMin: Act3Record['districtByMin'] = [];
   const previewByMin: Act3Record['previewByMin'] = [];
   let maxModules = 0;
+  let biggest: { snap: string; snapTick: number } | null = null;
+  // (the counter is the run's: its rises are summed over the campaign)
+  let folds = 0, foldsSeen = 0;
   if (opts.checkpoints) mkdirSync('e2e/out/checkpoints', { recursive: true });
   const logs = playCampaign(g, {
     runs: 40,
@@ -76,10 +84,14 @@ export function act3Campaign(seed: number, opts: { checkpoints?: boolean } = {})
         const mods = d ? d.ents.filter((e) => e.kind === 'module') : [];
         const ids = new Set(mods.map((m) => m.id));
         const routes = d?.routes ?? [];
-        districtByMin.push({ t, modules: mods.length, routes: routes.length, between: routes.filter((r) => ids.has(r.to)).length, skiffs: routes.reduce((n, r) => n + r.skiffs, 0) });
-        maxModules = Math.max(maxModules, mods.length);
+        const short = routes.filter((r) => { const w = routeWant(gg, 'district', r); return w > 1e-6 && routeCap(gg, 'district', r) / w < 0.9; }).length;
+        districtByMin.push({ t, modules: mods.length, routes: routes.length, between: routes.filter((r) => ids.has(r.to)).length, skiffs: routes.reduce((n, r) => n + r.skiffs, 0), lots: d?.lots ?? 0, short, most: Math.max(0, ...routes.map((r) => r.skiffs)) });
+        if (mods.length > maxModules) { maxModules = mods.length; biggest = takeSnapshot(gg); }
         previewByMin.push({ t, p: previewPatents(gg).total });
       }
+      const fc = gg.s.counters.districtFolds ?? 0;
+      if (fc > foldsSeen) folds += fc - foldsSeen;
+      foldsSeen = fc;
       if (opts.checkpoints && CHECKPOINTS.includes(t / H)) writeFileSync(`e2e/out/checkpoints/seed${seed}-${t / H}h.txt`, exportString(savePayload(gg, 0)));
     },
   });
@@ -99,7 +111,8 @@ export function act3Campaign(seed: number, opts: { checkpoints?: boolean } = {})
   const last = districtByMin[districtByMin.length - 1];
   const rec: Act3Record = {
     seed, logs, districtAt, stages, act3At, decisions, what, districtByMin, maxModules, modulesAt40: last?.modules ?? 0,
-    previewByMin, final: takeSnapshot(g), clicksPerSecMax: maxRate, wallMs: Date.now() - t0,
+    districtFolds: folds, foldsAt40: (g.s.district?.ents ?? []).filter((e) => e.kind === 'module' && (g.design(e.design)?.depth ?? 0) === 3).length,
+    previewByMin, final: biggest ?? takeSnapshot(g), clicksPerSecMax: maxRate, wallMs: Date.now() - t0,
   };
   cache.set(seed, rec);
   return rec;
@@ -116,7 +129,7 @@ export function longestGap(times: number[], from: number, to: number): { gap: nu
   return best;
 }
 
-/** ms a tick costs on the 40 h state, over `ticks` ticks (the perf case: a District of 20+ modules). */
+/** ms a tick costs on the state with the biggest District, over `ticks` ticks (the perf case). */
 export function tickCost(r: Act3Record, ticks = 20 * 60 * 5): number {
   const g = restore({ seed: r.seed, snap: r.final.snap, snapTick: r.final.snapTick, log: [], tick: r.final.snapTick });
   g.step(TICK_RATE * 10);

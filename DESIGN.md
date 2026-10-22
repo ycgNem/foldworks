@@ -792,7 +792,9 @@ round (DECISIONS.md): Patents are filed, not re-earned.*
   - a Miner by its time digging, and a power producer (with its boiler) by its burn share;
   - a Pole by its grid's use, at most a quarter of the consumers it carries;
   - a belt, splitter, merger, crate or trunk only if it carried an item in the window;
-  - a Factory module by its stamp bill times its run fraction.
+  - a Factory module by its stamp bill times its run fraction, and a District module the same
+    way (the second gate's Act III bot: a run after the one that filed Act III's designs stood on
+    a full District and still previewed under 1 Patent, so its Reorganize was refused, §21 Pacing).
   Coin on hand counts for nothing, a building left idle for nothing, and one bought a minute
   before a reset counts a fifth, so a hoard is never burned for Patents. The slice-end factory
   stands on about 10K (0.5), the Act II bot's 4 h factory on about 33K (1.2). It replaced the
@@ -1511,69 +1513,71 @@ the board is A and B); Rich Ore makes sand free and kW dear, scored in glass fro
 Scarce Belts' 40 tiles are two-thirds of an Act II circuit line's (§18), so machines face each other
 and feed by side intake. The coin is each board's lines twice over at §4 and §18 prices.
 
-### Pacing (measured, Milestone 7)
+### Pacing (measured, Milestone 7; re-measured under the second gate's rules)
 §16's targets for Act III: the District at about **11 h** (moved from 15 h at the second gate:
 the Great Drill stands at about 9.5 h, and holding Zoning to 15 h would add Act II's dead air),
-the first Act III megaproject stage by 25 h (the Great Drill is complete at about 9.5 h), rules 1 (a goal every 10 min of active play), 2 (no 15
-min without a decision) and 5 to 40 h for the planner bot. Measured by the campaign bot with the
-Act III policy (`src/sim/bot3.ts`, `tests/pace-act3.test.ts`, seed 1000, 40 h of play, resetting
-when the Reorganize preview stalls, or at a run's cap once the Reorganize may be taken):
+the first Act III megaproject stage by 25 h, rules 1 (a goal every 10 min of active play), 2 (no
+15 min without a decision) and 5 to 40 h for the planner bot. Measured by the campaign bot with the
+Act III policy (`src/sim/bot3.ts`, `tests/pace-act3.test.ts`, seed 1000, 40 h of play). A run
+before Act III resets when the Reorganize preview stalls; an Act III run resets once its District
+is full (`ACT3_FULL`: the plan through and nothing placed or bought for 10 minutes, every tile or
+every route taken and every lot bought), or at the run's cap.
 
-| Measure | Target | Measured |
-|---|---|---|
-| District open (Zoning researched) | about 11 h | **10:01** (Act III hand-over 9:53, run 3) |
-| Floating City stage 1 (first Act III Megaproject stage) | by 25 h | **15:48** (run 4) |
-| District modules at 40 h | 20+ | **49** (50 at most; the floor full, 119 of 120 routes) |
-| Routes between District modules | some (rule 5) | up to 14 of 119 |
-| A sim tick with that District | under 4 ms (e2e/perf.mjs) | **0.24 ms** |
-| Rule 1 and rule 2 over Act III | 10 and 15 min | run 3: **8.7** min; run 4: **42.5** from 13:40; run 5: **open** (below) |
+| Measure | Target | Measured (the second gate's rules) | Before (Milestone 7) |
+|---|---|---|---|
+| District open (Zoning researched) | about 11 h | **10:01** (hand-over 9:53, run 3) | 10:01 |
+| Floating City stage 1 | by 25 h | **11:30** (run 3) | 15:48 (run 4) |
+| Rule 1 over Act III | 10 min | **20.1** min at worst (run 3 10.0, run 4 10.4, run 5 20.1 from 28:29, five minutes after its hand-over; run 6 6.0) | 42.5 in run 4; 18.5 h from 21.5 h |
+| Rule 2 over Act III | 15 min | **17.3** min at worst | the same |
+| District modules | 20+ | **139** at most (every route and lot taken; 46 at 40 h, two hours into run 6) | 49 at 40 h |
+| Routes; between modules (rule 5) | some | 176-180 on a full floor; up to 38 between modules | 119 of 120; 14 between |
+| Skiffs (rule 5) | more than one a route somewhere | 224 on 179 routes (1.25 a route), at most 3 on one | one each |
+| Lots bought | as the floor fills | all three, every Act III run | none |
+| District folds | some | **none** (open, below) | none |
+| A sim tick with the biggest District | under 4 ms (e2e/perf.mjs) | **0.95 ms (139 groups)** | 0.24 ms (49) |
 
-The runs: 1 0:00-4:24 (14 Patents), 2 4:24-7:26 (7), 3 7:26-10:46 (15, Act III from 9:53), 4
-10:46-16:38 (9, Act III from 13:12), 5 16:38-40:00 (Act III from 18:49, never reset).
+The runs: 1 0:00-4:24 (14 Patents), 2 4:24-7:26 (7), 3 7:26-16:52 (29, Act III from 9:53), 4 16:52-26:07 (6, Act III from 19:13), 5 26:07-35:33 (5, Act III from 28:24), 6 35:33-40:00 (Act III from 37:47).
 
-Lessons, and the numbers they moved (each with its derivation in `src/data/research.ts`):
-- **Zoning 300/600/1,500 → 200 motors, 300 circuits, 300 concrete.** At the Act III hand-over the
-  Act II floor makes motors only in the lab (phase M) and concrete only in the old Bay floor's two
-  copies; at the old price the first development runs stalled with Zoning nearly paid (0.97) and
-  motors short, the plan waiting on nothing else (rule 2). At the new price the District opens about
-  8 min after the hand-over, at 10:01: earlier than §16's 15 h,
-  because the Great Drill now stands at about 9.9 h in run 3. The window the test holds is 8-16 h.
-- **Bearings 3,000 → 2,000 steel** (1,500 gears unchanged): paid from the bank Act II leaves, so
-  Bearings completes within minutes of Chutes and the Chute's first lines are not held for steel.
-- **The Floating City 3,000 → 400 concrete** (60 servos unchanged): the old Bay floor that made
-  concrete is cleared for the Chute, and a Concrete group makes about 0.1 a second; at 3,000 the
-  research sat at 0.87-0.90 for hours in the development runs with the plan blocked on it. The
-  Platform's own 4,000 concrete is unchanged: four Concrete groups at the District Bay, and the
-  City's stage 1 stood at 15:48, about 2.5 h after run 4's Act III hand-over.
-- **The player's Act III build** (bot3.ts): the Workshop's chunk D holds two line slots (a chain of
-  machines facing east, fed by Chute Mouths outside the fold box, the product belted up to the
-  corridor and the Hopper) and the standing Machine Kit line; the Factory annex holds the Chute with
-  six hand-laid feeders down a spine trunk (the search placer could not fit feeders with side
-  trunks there), and the 12x8 is the bench where each group is nested; groups go up to the
-  District beside what they feed, every product routed where it is wanted most (a module short of
-  it, research, the Bay, an order, the Dock).
-- **Lift rotors**: the Rotors group takes one Steel copy, not two: a fourth route could not reach
-  the rotor assembly's back. It makes about 0.015 rotors a second; 120 came in about 30 minutes
-  from the copies placed. (Rotors II was given up on the bench in run 5: three tries.)
+Lessons:
+- **The waste chute and 1 a trip halve the routes and make distance cost.** With waste going to
+  the Dock on its own the bot flies one route a product (a second only for a second product), so
+  a District with every lot holds about 140 groups when its 180 routes are taken: the route cap
+  (120 and 20 a lot) binds before the 168 tiles, and a lot is bought as either runs out. The placer still stands every copy on the
+  free tile nearest what its product feeds, so most routes need one skiff; the far ones (a Motors
+  group feeding a Servos group four or five tiles off, 0.33 a skiff against 0.09 wanted) need one
+  too, because depth-2 flows are small. Skiffs past one a route come where a consumer is served by
+  a feeder placed for another one (three at most on one route); no route was ever left under 90% of its want for
+  long, because a skiff (40,000, 3-12 s of the floor's income at 15-30 h) is bought every 5 s
+  while one is short. Rule 5's new thinking is where a group stands; the skiff bill is small.
+- **The District files Patents through the bills term.** Before, only the Workshop's and the
+  Factory's bills counted (§19), so a run after the one that filed Act III's designs previewed
+  under 1 Patent on a full District and its Reorganize was refused: the campaign idled 5 h to its
+  horizon. A District module now counts as a Factory module does (its stamp bill times its
+  measured work): a full District of about 140 groups stands on about 1.4M of bills, about +5
+  Patents (log-damped, so a bigger floor never pays in proportion).
+- **A full District is a reset moment.** Every Act III run now builds its District out in about
+  7 h from its hand-over (a copy every 3 minutes, a lot as the room or the routes run out), resets
+  (29 Patents in run 3, then 5-6), and plays Acts I-II again with the head starts (the Charter, District Deeds,
+  the Bearing Patent): each run's Act III stretch is goal-dense from its hand-over to its full
+  floor, and rule 1's worst wait is the gap between a full floor and the 10-minute reset.
+- **No numbers moved.** Every target that this player can reach holds with Act III's data as the
+  second gate left it; the open items below are content this player does not build.
 
 **Open** (measured, not yet met, `[pace] OPEN` in the test):
-- **Rules 1 and 2 in run 4: 42.5 min from 13:40.** The plan waits on Servos (200 gearboxes, 200
-  motors) with its Gearboxes and Motors groups on the District sending what they make to the
-  Hopper and nothing else to place; a cheaper Servos, or the Bearing Patent bought a run earlier,
-  is the next thing to try.
-- **Rules 1 and 2 after about 21.5 h.** In run 5 the District is full (49 modules, 119 routes) and
-  the City's first stage stands; every goal left is chemistry's (Chemistry, then sludge for
-  Hydroponics, sandwiches for the City's second stage, processors and batteries for the
-  Transmuter), which this player does not build yet. With nothing new to patent the Reorganize is
-  refused, so the run idles to 40 h: an 18.5 h gap. The fix is content for the player (Chem Vat
-  lines on the Workshop and a sludge sink), not a number: until then Act III's own content runs out
-  at about 21 h of play.
-- **Rule 5's skiffs.** Every route carries its want with one skiff, because the placer stands each
-  copy beside what it feeds; the skiff decision never comes up. Not yet a lesson about the numbers:
-  a player who places for income first would meet it.
-- **The Scrap Transmuter and Act III orders.** The policy accepts the Servo Ballet once servos run;
-  the Transmuter needs processors and batteries (chemistry, and copper ingots no folded design
-  makes yet).
+- **Rules 1 and 2 at the start of run 5: 20.1 and 17.3 min from 28:29**, five minutes after its
+  Act III hand-over, as the plan opens the District (the cause not looked into yet; the same
+  campaign without the route-full rule measured 9.9 at worst, so it looks like the run's path, not
+  a wall). The other stretches wait at most 10.4 min, the full floor's 10-minute reset.
+- **Chemistry, and so District Folds and the City's stage 2.** Solvent needs sand, and the map's
+  only sand patch is the lab's (chunk E); a lone sand miner may not fold (a module is a line), so
+  no Factory module makes sand and no Chute can carry it to a Workshop Chem Vat line. A player
+  belts sand from the patch by hand; this bot does not yet. Without solvent there is no rubber,
+  sensor or processor, so Robotics (and District Folds behind it), sandwiches (the City's stage 2,
+  the Picnic) and the Scrap Transmuter stay out of its reach, and no depth-3 fold is measured. A
+  Sand design (a miner and a sieve or crusher, or sand from gravel) would open it for a Chute line.
+- **Act III orders beyond the Servo Ballet.** Spare Parts (600 bearings) needs a bearings source the
+  bot can fold: a lone press may not fold, and the Gearboxes line's press feeds its own assembler.
+- **Rules 1 and 2 outside Act III**: Act II's Bay-floor wait (39.5 min at 2:48, §16) is unchanged.
 
 ## 22. Act IV: Worlds and Relocate (Milestone 9, 40-80 h)
 

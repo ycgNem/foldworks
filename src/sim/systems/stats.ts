@@ -7,6 +7,7 @@ import { RULES } from '../../data/rules';
 import { TICK_RATE } from '../../engine/time';
 import { TROPHIES, type TrophyDef } from '../../data/trophies';
 import { isMachine } from '../../data/machines';
+import { HIGH_IDS } from './high';
 
 /** Count this tick's state for a machine (called by the systems that run it). */
 export function note(m: Ent) {
@@ -39,6 +40,8 @@ export function runStats(g: Game) {
     const n = RULES.billsWindow.value;
     for (const list of [g.miners, g.machines, g.power, g.heaters]) for (const m of list) rollWork(m, n);
     for (const m of g.s.factory.ents) if (m.kind === 'module') rollWork(m, n);
+    // every high floor's modules too (they count in the bills term as the Factory's do: §21 Pacing)
+    for (const id of HIGH_IDS) for (const m of g.s[id]?.ents ?? []) if (m.kind === 'module') rollWork(m, n);
   }
   checkTrophies(g);
   g.s.income.push(g.s.incomeSec);

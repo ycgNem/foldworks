@@ -55,6 +55,10 @@ export const EXTRA_CHAINS: Step2[] = ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'].fl
   { k: 'fmod', id: 'wire' + c, design: 'Copper wire', to: { k: 'mod', id: 'giz' + c }, by: { k: 'dock' }, opt: i >= 2, annex: i >= 2 },
 ]);
 
+/** Minutes the District stands full (nothing placed, no lot bought, the plan through) before the
+ * campaign's Act III player resets. */
+export const ACT3_FULL = 10;
+
 export interface RunLog {
   run: number;
   /** seconds since tick 0 when the run started and ended */
@@ -195,7 +199,17 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
         const act = g.s.orders.active;
         committee.push(act && ORDER[act].customer === 'committee' ? orderFrac(g, act) : -1);
         const m = preview.length;
-        if (o.loopAt === undefined && !o.noReset && run < o.runs && bot && (act3 ? act3.done() : bot.step >= bot.plan.length) && m > stallMin && p.now >= (o.minPatents?.(run) ?? 1) && preview[m - 1] - preview[m - 1 - stallMin] < stallGain && (committee[m - 1] < 0 || committee[m - 1] === committee[m - 1 - stallMin]) && !g.s.audits.length && !g.s.faudit) {
+        // Act III: once the plan is through and the District has not grown for 10 minutes (the floor
+        // full, every lot bought, nothing more this player builds while the coin piles up), a player
+        // resets for what the preview offers rather than idle to the run's cap (DESIGN.md §21
+        // Pacing: the second gate's bot idled 80 min and 5 h so)
+        if (o.loopAt === undefined && !o.noReset && run < o.runs && act3 && act3.grownAgo() >= ACT3_FULL * 60 && !reorganizeRefusal(g)) {
+          reset = true;
+          break;
+        }
+        // (an Act III run is not reset by the preview's stall: its District files Patents a copy at a
+        // time through the bills term, slower and slower, while there is still floor to build on)
+        if (o.loopAt === undefined && !o.noReset && run < o.runs && bot && !act3 && bot.step >= bot.plan.length && m > stallMin && p.now >= (o.minPatents?.(run) ?? 1) && preview[m - 1] - preview[m - 1 - stallMin] < stallGain && (committee[m - 1] < 0 || committee[m - 1] === committee[m - 1 - stallMin]) && !g.s.audits.length && !g.s.faudit) {
           reset = true;
           break;
         }

@@ -48,6 +48,7 @@ import { clearSeedTile, placeSeed } from './lastfold';
 import { BYPRODUCTS, mainItem, megaOpen } from './systems/modules';
 import { recipeKnown } from './transfer';
 import { workShare } from './systems/stats';
+import { highModules } from './systems/high';
 import { prules } from './patents';
 import { challengeRefusal, startChallenge } from './systems/challenges';
 import type { ChallengeId } from '../data/challenges';
@@ -201,6 +202,10 @@ export function billsStanding(g: Game): number {
     if (e.kind === 'module') b += (g.design(e.design)?.bill ?? 0) * workShare(e);
     else if (e.kind === 'trunk' && carried(e)) b += FACTORY.trunkCost;
   }
+  // a module on the District (or the World) counts as a Factory module does (DESIGN.md §19 and §21
+  // Pacing: the second gate's Act III bot found every run after the one that filed Act III's
+  // designs under 1 Patent with a full District, so its Reorganize was refused)
+  for (const e of highModules(g)) b += (g.design(e.design)?.bill ?? 0) * workShare(e);
   return b;
 }
 
