@@ -128,7 +128,7 @@ export function rail(app: App, L: Layout) {
     }
   }
   // the District builds from its tool strip (src/app/district.ts), not the wheel
-  if (app.floor !== 'district') toolboxButton(app, L.build);
+  if (!app.high) toolboxButton(app, L.build);
   if (folded) {
     // a little bubble: "!" when a new line has arrived since it was folded
     const news = hs.goalAt > hs.foldedAt;
@@ -178,8 +178,8 @@ export function rail(app: App, L: Layout) {
   let sz = size();
   // on the District the bubble keeps off the Bay's corner (south-west, beside the portrait; the
   // second gate at 1024x640): its chips, bar and note fold away first, then the whole bubble
-  if (app.floor === 'district' && g.s.district) {
-    const b = HIGH.district.bay;
+  if (app.high && g.s[app.high]) {
+    const b = HIGH[app.high].bay;
     const bay = worldRect(app, b.x, b.y, 2, 2);
     const hits = () => bx < bay.x + bay.w && bx + sz.bw > bay.x && sz.by < bay.y + bay.h && sz.by + sz.bh > bay.y;
     if (hits()) { chips = []; bar = undefined; note = null; sz = size(); }
@@ -297,7 +297,10 @@ function goalAction(app: App, ui: string | null): { go: () => void; what: string
     case 'factory': return app.floor === 'factory' ? null : { go: () => app.setFloor('factory'), what: 'the Factory floor' };
     // the District (DESIGN.md §21): the floor, and its Route tool
     case 'district': return app.floor === 'district' ? null : { go: () => app.setFloor('district'), what: 'the District' };
-    case 'route': return app.floor === 'district' && app.mode.k === 'route' ? null : { go: () => { if (app.floor !== 'district') app.setFloor('district'); if (app.floor === 'district') app.setMode({ k: 'route' }); }, what: 'the Route tool' };
+    case 'route': return app.high && app.mode.k === 'route' ? null : { go: () => { if (!app.high) app.setFloor('district'); if (app.high) app.setMode({ k: 'route' }); }, what: 'the Route tool' };
+    // the World (DESIGN.md §22)
+    case 'world': return app.floor === 'world' ? null : { go: () => app.setFloor('world'), what: 'the World' };
+    case 'relocate': return { go: () => app.togglePanel('relocate'), what: 'the Relocate card' };
     case 'fold': return app.mode.k === 'fold' ? null : { go: () => app.toggleFold(), what: 'the Fold tool' };
     default: return null;
   }
@@ -313,12 +316,13 @@ export function diegetic(app: App, L: Layout) {
   const r = app.renderer;
   const inView = (x: number, y: number) => x > 0 && x < ui.w && y > 4 && y < ui.h;
   const fac = app.floor === 'factory';
-  const dist = app.floor === 'district';
+  const hf = app.high;
+  const dist = !!hf;
   const at = (tx: number, ty: number) => { const s = r.toScreen(tx, ty); return { x: Math.round(s.x / ui.scale), y: Math.round(s.y / ui.scale) }; };
   const o = g.s.orders;
   if (o.active) {
     const d = ORDER[o.active];
-    const dock = dist ? (d.at && d.at !== 'district' ? null : g.s.district?.ents.find((e) => e.kind === 'fdock')) : fac ? g.s.factory.ents.find((e) => e.kind === 'fdock') : d.at === 'factory' || d.at === 'district' ? null : g.s.ents.find((e) => e.kind === 'dock');
+    const dock = hf ? (d.at && d.at !== hf ? null : g.s[hf]?.ents.find((e) => e.kind === 'fdock')) : fac ? g.s.factory.ents.find((e) => e.kind === 'fdock') : d.at === 'factory' || d.at === 'district' || d.at === 'world' ? null : g.s.ents.find((e) => e.kind === 'dock');
     if (dock) {
       const p = at(dock.x + dock.w - 0.25, dock.y + 0.2);
       if (inView(p.x, p.y - 20)) {
@@ -349,7 +353,7 @@ export function diegetic(app: App, L: Layout) {
   }
   const sel = g.s.research.selected;
   if (sel) {
-    const hop = dist ? g.s.district?.ents.find((e) => e.kind === 'fhopper') : fac ? g.s.factory.ents.find((e) => e.kind === 'fhopper') : g.s.ents.find((e) => e.kind === 'hopper');
+    const hop = hf ? g.s[hf]?.ents.find((e) => e.kind === 'fhopper') : fac ? g.s.factory.ents.find((e) => e.kind === 'fhopper') : g.s.ents.find((e) => e.kind === 'hopper');
     if (hop) {
       const p = at(hop.x + hop.w, hop.y);
       const cx = p.x - 7, cy = p.y + 6;

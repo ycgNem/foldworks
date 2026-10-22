@@ -376,14 +376,23 @@ function act3Megas(app: App): boolean {
   return (g.s.mega.stage ?? 0) >= 3 || g.done('zoning') || MEGA_IDS.some((m) => g.done(MEGAS[m].opens as never) || !!g.s.megas?.[m]);
 }
 
-/** The page's tabs: the Great Drill, the Floating City, the Scrap Transmuter (none before Act III). */
+/** Act IV's projects (DESIGN.md §22: the Lighthouse, the Sky Anchor) are on the page once the World
+ * is charted, their research is done or one of them has begun (their progress is kept). */
+function act4Mega(app: App, m: MegaId): boolean {
+  const g = app.game;
+  return MEGAS[m].floor !== 'world' || g.done('charting') || g.done(MEGAS[m].opens as never) || !!g.s.megas?.[m];
+}
+
+/** The page's tabs: the Great Drill, the Floating City, the Scrap Transmuter (none before Act III),
+ * the Lighthouse and the Sky Anchor (Act IV). */
 function megaTabs(app: App): MenuTab[] {
   if (!act3Megas(app)) return [];
   const short: Record<MegaId, string> = { city: 'Floating City', transmuter: 'Transmuter', lighthouse: 'Lighthouse', anchor: 'Sky Anchor' };
   return [
     { id: 'mtab_drill', label: 'Great Drill', icon: 'mega', tip: '{u:mega} Megaproject #1 · the Factory Bay', active: megaTab.id === 'drill', onClick: () => { megaTab.id = 'drill'; } },
-    ...MEGA_IDS.map((m): MenuTab => ({
-      id: 'mtab_' + m, label: short[m], icon: 'mega', tip: `{u:district} ${MEGAS[m].name} · the District Bay`,
+    ...MEGA_IDS.filter((m) => act4Mega(app, m)).map((m): MenuTab => ({
+      id: 'mtab_' + m, label: short[m], icon: 'mega',
+      tip: MEGAS[m].floor === 'world' ? `{u:world} ${MEGAS[m].name} · the World Bay · a stage on each island` : `{u:district} ${MEGAS[m].name} · the District Bay`,
       active: megaTab.id === m, onClick: () => { megaTab.id = m; },
     })),
   ];
@@ -393,7 +402,8 @@ export function megaScreen(app: App, r: Rect) {
   const ui = app.ui;
   const g = app.game;
   const tabs = megaTabs(app);
-  if (!tabs.length) megaTab.id = 'drill';
+  if (!tabs.length || (megaTab.id !== 'drill' && !tabs.some((t) => t.id === 'mtab_' + megaTab.id))) megaTab.id = 'drill';
+  if (megaTab.id !== 'drill' && MEGAS[megaTab.id].anyOrder) return worldProjectPage(app, r, megaTab.id, tabs);
   if (megaTab.id !== 'drill') return projectPage(app, r, megaTab.id, tabs);
   const stage = megaStage(g.s.mega.stage);
   const doneStage = MEGA.find((m) => m.stage === g.s.mega.stage) ?? null;
@@ -779,9 +789,9 @@ function complete(app: App, page: Rect, celebrate: boolean, t: number) {
 
 // ------------------------------------------------------------------ the Floating City, the Scrap Transmuter
 
-/** What the District's routes carry into its Bay now, items a second. */
-function districtBayFeeds(app: App): Partial<Record<ItemId, number>> {
-  const d = app.game.s.district;
+/** What a high floor's routes carry into its Bay now, items a second. */
+function districtBayFeeds(app: App, f: 'district' | 'world' = 'district'): Partial<Record<ItemId, number>> {
+  const d = app.game.s[f];
   const out: Partial<Record<ItemId, number>> = {};
   if (!d) return out;
   const bay = d.ents.find((e) => e.kind === 'fbay');
@@ -908,6 +918,142 @@ function projectPage(app: App, r: Rect, id: MegaId, tabs: MenuTab[]) {
     yy += 12;
   }
   const keep = !cur ? '{good:complete} · its rewards stand for good' : '{reset:kept through every reset}';
+  if (yy + 10 <= dp.y + dp.h) drawRich(ui, keep, dx + dw / 2, yy, dw, T.ink, { align: 'center' });
+}
+
+// ------------------------------------------------------------------ the Lighthouse, the Sky Anchor
+
+const ISLE_SHORT: Record<string, string> = { home: 'Home', pebble: 'Pebble', cinder: 'Cinder', rime: 'Rime', oldworks: 'Old Works' };
+
+/** A project of the World Bay (DESIGN.md §22 Megaprojects #4 and #5): four stages, one on each
+ * island, built in any order where the town stands. On the left each stage with its island: the
+ * one here with its meters and arrival rates, one left half built elsewhere with what it holds,
+ * the rest with what they want; each with its reward, its Patents and its Legacy. On the right the
+ * picture (pN = N stages built, run once all four stand), the islands as a stage track, the stage
+ * here in all. */
+function worldProjectPage(app: App, r: Rect, id: MegaId, tabs: MenuTab[]) {
+  const ui = app.ui;
+  const g = app.game;
+  const P = MEGAS[id];
+  app.hud.opened.add('mega:' + id);
+  const ms = g.s.megas?.[id];
+  const built = ms?.done ?? [];
+  const here = g.s.meta.world ?? 'home';
+  const cur = megaStageOf(g, id);
+  const open = g.done(P.opens as never) || built.length > 0;
+  const feeds = districtBayFeeds(app, 'world');
+  const side = Math.floor(r.w * 0.4);
+  const { body, detail } = menuTemplate(app, r, { title: 'Megaprojects', accent: T.coin, icon: 'mega', detail: side, tabs });
+  const x = body.x + 2, w = body.w - 4;
+  const end = body.y + body.h;
+  let y = body.y + 2;
+  const all = built.length >= P.stages.length;
+  const [cs, role]: [string, Role] = all ? ['COMPLETE', 'good'] : !open ? ['NOT RESEARCHED', 'soft'] : [`${built.length} OF ${P.stages.length} BUILT`, 'coin'];
+  const nameW = bigWidth(P.name) <= w - chipWidth(cs) - 8 ? P.name : P.name.replace(/^The /, '').replace(/ at the Edge$/, '');
+  ui.big(nameW, x, y, T.ink);
+  chip(ui, x + w - chipWidth(cs), y, cs, { role, solid: all || open });
+  y += 16;
+  const bay = g.s.world?.ents.some((e) => e.kind === 'fbay');
+  const opener = RESEARCH[P.opens as keyof typeof RESEARCH]?.name ?? P.opens;
+  const where = !open ? `{u:research} ${opener} {soft:opens it} · {u:world} {soft:built at the World Bay, a stage on each island}`
+    : all ? '{good:built} · {reset:its rewards stand for good}'
+    : !cur ? `{u:relocate} {soft:no stage is built on} ${ISLE_SHORT[here]} · {soft:fly to an island with one}`
+    : bay ? '{u:world} {soft:routes into the World Bay} · {reset:kept through every reset}' : "{u:world} {soft:its Bay stands in the World's south-west corner}";
+  y += drawRich(ui, where, x, y, w, T.ink) + 4;
+  for (const st of P.stages) {
+    if (y + 22 > end) break;
+    const sdone = built.includes(st.stage);
+    const now = cur?.stage === st.stage;
+    const held = !now && !sdone ? ms?.held?.[st.stage] : undefined;
+    const part = st.name.split(', ')[1]?.replace(/ \(.*\)$/, '') ?? `stage ${st.stage}`;
+    const isle = ISLE_SHORT[st.world ?? 'home'];
+    const head = `${part}`;
+    ui.text(head, x, y, sdone ? T.good : now ? T.ink : T.inkSoft);
+    let hx = x + textWidth(head) + 4;
+    if (now && open) pencil(ui, x, y + 9, textWidth(head), T.bad);
+    if (sdone) { tickStamp(ui, hx, y - 2); hx += 14; }
+    hx += chip(ui, hx, y - 2, isle, { role: st.world === here ? 'research' : 'soft', icon: 'world' }) + 3;
+    drawRich(ui, `{reset:+${st.patents}} {u:patents} {coinc:+${RULES.legacyPerStage.value}} {u:legacy}`, x + w, y, Infinity, T.ink, { align: 'right' });
+    ui.hint(x + w - 56, y - 1, 56, 11, [{ text: `{big:${st.patents} Patents · ${RULES.legacyPerStage.value} Legacy}` }, { text: '{soft:Patents at Reorganize as it is delivered · Legacy at the next Relocate}' }], 200);
+    void hx;
+    y += 12;
+    const wants = Object.entries(st.wants) as [ItemId, number][];
+    if (now && open) {
+      for (const [it, want] of wants) {
+        if (y + 19 > end) break;
+        const have = Math.min(want, Math.floor(ms?.progress[it]?.toNumber() ?? 0));
+        const f = have / want;
+        const ok = f >= 1;
+        ui.ctx.drawImage(itemIcon(it), x, y + 1);
+        ui.text(ITEMS[it].name, x + 11, y, ok ? T.good : T.ink);
+        const rate = feeds[it];
+        const rx = x + 11 + textWidth(ITEMS[it].name) + 5;
+        if (rate && !ok) chip(ui, rx, y - 2, `+${perMin(rate)}/min`, { role: 'good' });
+        else if (!ok && bay) chip(ui, rx, y - 2, 'NOT ARRIVING', { role: 'warn', solid: true });
+        ui.text(`${fmt(have)} / ${fmt(want)}`, x + w, y, ok ? T.good : T.coin, { align: 'right' });
+        meter(ui, x + 11, y + 11, w - 11, 5, f, { role: ok ? 'good' : 'coin', glint: false });
+        ui.hint(x, y, w, 18, rate && !ok ? [{ text: `{i:${it}} +${perMin(rate)}/min {soft:arriving}` }, { text: `{u:clock} about ${eta((want - have) / rate)} to go` }] : ok ? `{good:${ICON.check} enough} {i:${it}}` : [{ text: `{warn:nothing brings} {i:${it}} {warn:to the Bay}` }, { text: '{u:world} route a module making it into the World Bay' }], 180);
+        y += 18;
+      }
+    } else {
+      let hv = 0, nd = 0;
+      const ws = wants.map(([it, n]) => { const got = Math.min(n, held?.[it]?.toNumber() ?? 0); hv += got; nd += n; return `${sdone ? `{good:${fmt(n)}}` : held ? `${fmt(got)}/${fmt(n)}` : fmt(n)} {i:${it}}`; }).join('  ');
+      const tail = held && hv > 0 ? `  {coinc:${Math.floor((hv / Math.max(1, nd)) * 100)}% held} {soft:waits there}` : '';
+      y += drawRich(ui, ws + tail, x, y, w, T.ink) + 1;
+    }
+    const rw = `{soft:reward} ${st.reward}`;
+    if (y + richHeight(rw, w) <= end) y += drawRich(ui, rw, x, y, w, sdone ? T.good : T.ink) + 2;
+    rule(ui, x, y, w);
+    y += 4;
+  }
+  // ---- the right page: the picture, the islands as a stage track, the stage here in all
+  const dp = detail!;
+  const dx = dp.x + 4, dw = dp.w - 8;
+  const name = id === 'lighthouse' ? 'mega_lighthouse' : 'mega_anchor';
+  const S0 = 48;
+  const k = Math.max(1, Math.min(5, Math.floor(Math.min(dp.h - 74, dw - 12) / S0)));
+  const PX = S0 * k;
+  const ax = dx + Math.floor((dw - PX) / 2), ay = dp.y + 6;
+  const ctx = ui.ctx;
+  ctx.fillStyle = rgba(T.shadow, 0.35);
+  ctx.fillRect(ax - 3, ay - 3, PX + 9, PX + 9);
+  ui.fill(ax - 5, ay - 5, PX + 10, PX + 10, T.paperHi);
+  ui.fill(ax - 1, ay - 1, PX + 2, PX + 2, T.ink);
+  if (hasArt(name)) {
+    const s = sheet(name);
+    const flip = Math.floor(ui.time * (s.fps || 4)) % 2;
+    const fi = all ? frameNamed(s, flip ? 'run2' : 'run1') : frameNamed(s, `p${Math.min(4, built.length)}${flip ? 'b' : 'a'}`);
+    ctx.drawImage(s.frames[fi], ax, ay, PX, PX);
+  } else ui.fill(ax, ay, PX, PX, C.shadow);
+  if (all) { ui.clip(ax, ay, PX, PX); rays(app, ax + PX / 2, ay + PX / 2, PX, C.gold, 14); ui.unclip(); }
+  ctx.fillStyle = rgba(C.lamp3, 0.7);
+  ctx.fillRect(ax - 8, ay - 7, 14, 4);
+  ctx.fillRect(ax + PX - 6, ay - 7, 14, 4);
+  let yy = ay + PX + 9;
+  const n = P.stages.length;
+  const sw = Math.floor((dw - 3 * (n - 1)) / n);
+  P.stages.forEach((st, i) => {
+    const sx = dx + i * (sw + 3);
+    const sd = built.includes(st.stage), now = cur?.stage === st.stage;
+    const isle = ISLE_SHORT[st.world ?? 'home'];
+    const lab = sd ? `${ICON.check} ${textWidth(isle) + 18 <= sw ? isle : isle[0]}` : textWidth(isle) + 8 <= sw ? isle : isle.slice(0, 3);
+    const rl: Role = sd ? 'good' : now && open ? 'coin' : 'soft';
+    chip(ui, sx + Math.max(0, Math.floor((sw - chipWidth(lab)) / 2)), yy, lab, { role: rl, solid: sd || (now && open) });
+    if (now) pencil(ui, sx + 2, yy + CHIP_H + 1, sw - 4, T.bad);
+    ui.hint(sx, yy, sw, CHIP_H, [{ text: `{big:${st.name}}` }, { text: st.reward }, { text: sd ? '{good:built}' : now ? '{coinc:built here, now}' : ms?.held?.[st.stage] ? '{coinc:half built} · {soft:it waits on its island}' : '{soft:built on its island}' }], 200);
+  });
+  yy += CHIP_H + 7;
+  if (cur && open && yy + 22 <= dp.y + dp.h) {
+    let have = 0, need = 0;
+    for (const [it, want] of Object.entries(cur.wants) as [ItemId, number][]) { need += want; have += Math.min(want, ms?.progress[it]?.toNumber() ?? 0); }
+    const f = need ? have / need : 0;
+    caption(ui, `${ISLE_SHORT[here].toLowerCase()} stage in all`, dx, yy + 3);
+    ui.big(`${Math.floor(f * 100)}%`, dx + dw, yy, T.coin, { align: 'right' });
+    yy += 14;
+    meter(ui, dx, yy, dw, 7, f, { role: 'coin' });
+    yy += 12;
+  }
+  const keep = all ? '{good:complete} · its rewards stand for good' : '{reset:kept through every reset and move}';
   if (yy + 10 <= dp.y + dp.h) drawRich(ui, keep, dx + dw / 2, yy, dw, T.ink, { align: 'center' });
 }
 

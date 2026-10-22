@@ -34,6 +34,7 @@ import { bookArea, heading, disc, tick, pencilCircle, speak, ROW_H } from './led
 import { committeeFallback } from './reorganize';
 import { CHALLENGES, CHALLENGE_IDS, CHALLENGE_AFTER_RUNS } from '../data/challenges';
 import { won } from '../sim/systems/challenges';
+import { relocateClose } from './moves';
 
 /** A node's picture: an item icon, a UI icon, or a building's sprite (frame f). */
 type NodeIcon = { item: string } | { ui: UIconName } | { sprite: string; f?: number };
@@ -130,8 +131,14 @@ export function patentsScreen(app: App, r0: Rect) {
   ui.text(m.patents.eq(1) ? 'Patent to spend' : 'Patents to spend', x, body.y + 3, T.ink);
   const bankW = bigWidth(m.patents.format()) + 4 + layoutRich(m.patents.eq(1) ? 'Patent to spend' : 'Patents to spend').w;
   const bw = layoutRich('{u:reset} Reorganize').w + 14;
-  const bx = body.x + body.w - bw;
+  let bx = body.x + body.w - bw;
   if (button(ui, 'toReorganize', bx, body.y - 1, bw, 15, '{u:reset} Reorganize', { tip: [{ text: '{u:reset} {big:Reorganize}' }, { text: 'what a reset gives, keeps and loses' }] })) app.panel = 'reorganize';
+  // Act IV (DESIGN.md §22): the Relocate key beside it, once a move is possible or close
+  if (relocateClose(app)) {
+    const rw = layoutRich('{u:relocate} Relocate').w + 14;
+    bx -= rw + 3;
+    if (button(ui, 'toRelocate', bx, body.y - 1, rw, 15, '{u:relocate} Relocate', { tip: [{ text: '{u:relocate} {big:Relocate}' }, { text: 'a new island · Legacy banked · Patents and the tree reset' }] })) app.panel = 'relocate';
+  }
   // Act III (DESIGN.md §21): the Challenges won, once Challenges are offered; its tip lists all five
   const nWon = CHALLENGE_IDS.filter((id) => won(g, id)).length;
   const challengeTip = [{ text: '{big:Challenges}' }, ...CHALLENGE_IDS.map((id) => ({ text: won(g, id) ? `{good:${ICON.check} ${CHALLENGES[id].name}} ${CHALLENGES[id].reward}` : `{soft:${CHALLENGES[id].name} · ${CHALLENGES[id].goalText}}` })), { text: g.s.challenge ? `{reset:under way} ${CHALLENGES[g.s.challenge as keyof typeof CHALLENGES]?.name ?? ''}` : '{soft:taken on the Reorganize card}' }];

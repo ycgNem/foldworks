@@ -46,7 +46,7 @@ import { Bot, type Policy } from '../sim/bot';
 // Milestone 5: Reorganize, the Patent tree and the Patent Drawer (src/app/reorganize.ts, patents.ts, drawer.ts)
 import { prules } from '../sim/patents';
 // Milestone 7 (DESIGN.md §21): the District floor (src/app/district.ts, src/render/district.ts)
-import { HIGH } from '../data/floors';
+import { HIGH, type HighFloorId } from '../data/floors';
 import { MEGAS, type MegaId } from '../data/megaprojects';
 import { highW, lotPrice } from '../sim/systems/high';
 import { DS, districtInput, districtCancel } from './district';
@@ -60,6 +60,9 @@ import { uiScaleFor } from './settings';
 import { lessonEvents, lessonDebug } from './lessons';
 import { whereStuck, findStuck } from './stuck';
 import { setUiScale } from './access';
+// Milestone 9 (DESIGN.md §22): the Relocate card and the Legacy tree register their pages
+import './relocate';
+import './legacy';
 
 export type Mode =
   | { k: 'idle' }
@@ -264,7 +267,10 @@ export class App {
       if (!quiet) this.refuse('opens with {research:Zoning}');
       return;
     }
-    if (f === 'world') return;
+    if (f === 'world' && !this.game.s.world) {
+      if (!quiet) this.refuse('opens with {research:Charting}');
+      return;
+    }
     const first = f !== this.floor;
     if (first) this.renderer.fx.clearWorld();
     this.floor = f;
@@ -286,6 +292,15 @@ export class App {
       this.game.first('districtSeen');
       this.fitCamera(true);
     }
+    if (f === 'world' && !this.game.flag('worldSeen')) {
+      this.game.first('worldSeen');
+      this.fitCamera(true);
+    }
+  }
+
+  /** The high floor on screen (the District or the World, DESIGN.md §21-22), or null. */
+  get high(): HighFloorId | null {
+    return this.floor === 'district' || this.floor === 'world' ? this.floor : null;
   }
 
   /** The floors open now, bottom up (Tab cycles them; the lift shows them). */
@@ -293,6 +308,7 @@ export class App {
     const out: Floor[] = ['workshop'];
     if (factoryOpen(this.game)) out.push('factory');
     if (this.game.s.district) out.push('district');
+    if (this.game.s.world) out.push('world');
     return out;
   }
 
@@ -489,7 +505,7 @@ export class App {
           break;
         case 'land':
           a.sfx('land');
-          if (e.floor === 'district') this.toast('A District lot!', `+${HIGH.district.lotCols} columns × ${HIGH.district.h} · {reset:until Reorganize}`, C.gold, 'factory');
+          if (e.floor === 'district' || e.floor === 'world') this.toast(`A ${HIGH[e.floor].name} lot!`, `+${HIGH[e.floor].lotCols} columns × ${HIGH[e.floor].h} · {reset:until Reorganize}`, C.gold, 'factory');
           else this.toast('Land bought', `${CHUNKS.find((c) => c.id === e.id)?.name ?? 'New land'} · yours to build on`, C.gold);
           break;
         // ---- Act III (DESIGN.md §21): the District
@@ -499,9 +515,18 @@ export class App {
             banner(this, 'THE DISTRICT!', 'a third floor · groups go up · skiffs fly between them', C.gold);
             this.toast('The District is open', 'depth-2 groups · skiff routes · the lift {k:Tab}', C.gold, 'factory');
           }
+          if (e.id === 'world') {
+            // Act IV (DESIGN.md §22): the fourth floor
+            a.sfx('fanfare', 0.8);
+            banner(this, 'THE WORLD!', 'a fourth floor · District folds go up · barges fly them', C.gold);
+            this.toast('The World is open', 'depth-3 modules · barge routes · the lift {k:Tab}', C.gold, 'world');
+          }
           break;
-        case 'firstHigh': if (e.floor === 'district') this.toast('Your first District group!', 'now a route · the Route tool, then where it goes', C.gold, 'module'); break;
-        case 'firstRoute': this.toast('Skiffs away!', 'click a route for its card · + skiff where it runs short', C.gold, 'module'); break;
+        case 'firstHigh':
+          if (e.floor === 'district') this.toast('Your first District group!', 'now a route · the Route tool, then where it goes', C.gold, 'module');
+          else if (e.floor === 'world') this.toast('Your first World module!', 'now a barge route · the Route tool, then where it goes', C.gold, 'world');
+          break;
+        case 'firstRoute': this.toast(e.floor === 'world' ? 'Barges away!' : 'Skiffs away!', `click a route for its card · + ${e.floor === 'world' ? 'barge' : 'skiff'} where it runs short`, C.gold, 'module'); break;
         case 'route': break; // the renderer rings its two ends
         case 'skiff': a.sfx('click', 0.8, 1.3); break;
         case 'unroute': a.sfx('remove', 0.8); break;
@@ -554,8 +579,8 @@ export class App {
           this.audio.sfx('auditTick');
           if (e.id === 'S+') this.toast('S+! A flawless line', 'all busy · no waste · no tile spare · {k:F} fold ×1.35', C.gold, 'star');
           if (reading) break;
-          this.panel = e.floor === 'factory' || e.floor === 'district' ? 'fgrade' : 'grade';
-          if (e.floor !== 'factory' && e.floor !== 'district' && e.value !== undefined) this.gradeId = e.value;
+          this.panel = e.floor === 'factory' || e.floor === 'district' || e.floor === 'world' ? 'fgrade' : 'grade';
+          if (e.floor !== 'factory' && e.floor !== 'district' && e.floor !== 'world' && e.value !== undefined) this.gradeId = e.value;
           this.gradeAt = this.ui.time;
           this.nameDraft = null;
           this.hud.stamped = false;
@@ -582,13 +607,14 @@ export class App {
         case 'bayOpen':
           a.sfx('milestone', 0.7);
           if (e.floor === 'district') this.toast('The District Bay', 'fly {i:liftRotor} {i:concrete} in → the Floating City', C.gold, 'mega');
+          else if (e.floor === 'world') this.toast('The World Bay', 'fly {i:lighthouseLamp} {i:anchorChain} in → the Lighthouse and the Sky Anchor', C.gold, 'mega');
           else this.toast('The Megaproject Bay', 'trunk {i:drillBit} {i:concrete} {i:steel} in → the Great Drill', C.gold, 'mega');
           break;
         case 'megaGive': break;
         case 'megaDone': {
           a.sfx('megaStage');
           this.renderer.fx.kick(6);
-          if (e.floor === 'district') {
+          if (e.floor === 'district' || e.floor === 'world') {
             const m = MEGAS[e.id as MegaId];
             const st = m?.stages.find((q) => q.stage === e.value);
             this.toast(`${st?.name ?? m?.name ?? 'Megaproject'}: done!`, st?.reward ?? '', C.gold, 'mega');
@@ -683,8 +709,8 @@ export class App {
     // the Workbench Wheel: Q or Space opens it at the cursor (again: shuts it), Esc shuts it, and
     // any other tool or page key shuts it first
     const wheel = wheelOpen(this);
-    // the District has no wheel: its tools hang in the strip at the top (src/app/district.ts)
-    if (inp.wasPressed('wheel') && this.floor === 'district') inp.consume('wheel');
+    // the high floors have no wheel: their tools hang in the strip at the top (src/app/district.ts)
+    if (inp.wasPressed('wheel') && this.high) inp.consume('wheel');
     if (inp.wasPressed('wheel')) {
       if (wheel) closeWheel(this);
       else openWheel(this, this.ui.mx, this.ui.my);
@@ -693,7 +719,7 @@ export class App {
     if (wheel && (['remove', 'floor', 'fold', 'modules', 'research', 'orders', 'help', 'flow'] as const).some((a) => inp.wasPressed(a))) closeWheel(this);
     if (inp.wasPressed('rotate')) {
       if (wheel || this.mode.k === 'build' || this.mode.k === 'ftrunk' || this.mode.k === 'fmodule') { this.rot = ((this.rot + 1) % 4) as Dir; this.audio.sfx('rotate'); }
-      else if (this.hud.hoverTile && this.floor !== 'district') {
+      else if (this.hud.hoverTile && !this.high) {
         const h = this.hud.hoverTile;
         this.act(this.floor === 'factory' ? { k: 'frotate', x: h.x, y: h.y } : { k: 'rotate', x: h.x, y: h.y });
       }
@@ -713,7 +739,7 @@ export class App {
     if (inp.wasPressed('stuck') && !this.panel) whereStuck(this); // Milestone 13
     if (inp.wasPressed('cancel')) {
       if (this.panel) this.panel = null;
-      else if (this.floor === 'district' && districtCancel()) this.audio.sfx('close');
+      else if (this.high && districtCancel()) this.audio.sfx('close');
       else if (this.mode.k !== 'idle') this.setMode({ k: 'idle' });
       else { this.selected = null; this.fselected = null; }
     }
@@ -721,14 +747,14 @@ export class App {
     // 1 the trunk, 2-9 the designs)
     for (let i = 0; i < 9; i++) if (inp.wasPressed(('slot' + (i + 1)) as 'slot1')) wheelSlot(this, i);
     if (this.floor === 'factory') this.renderer.clampCam(Math.ceil(this.factorySpan()), this.game.fh);
-    else if (this.floor === 'district') this.renderer.clampCam(Math.ceil(this.districtSpan()), HIGH.district.h);
+    else if (this.high) this.renderer.clampCam(Math.ceil(this.districtSpan()), HIGH[this.high].h);
     else this.renderer.clampCam(this.game.W, this.game.H);
   }
 
-  /** The District's width the camera frames, in tiles: the floor, and the lot for sale east of it. */
-  districtSpan(): number {
+  /** A high floor's width the camera frames, in tiles: the floor, and the lot for sale east of it. */
+  districtSpan(f: HighFloorId = this.high ?? 'district'): number {
     const g = this.game;
-    return highW(g, 'district') + (lotPrice(g, 'district') ? HIGH.district.lotCols + 0.5 : 0);
+    return highW(g, f) + (lotPrice(g, f) ? HIGH[f].lotCols + 0.5 : 0);
   }
 
   /** The Factory floor's width the camera frames, in tiles: the floor, and the annex block for sale
@@ -758,7 +784,8 @@ export class App {
   /** Which edges of the floor view have more floor (or town) beyond them: for the HUD's arrows. */
   panHints(): { l: boolean; r: boolean; u: boolean; d: boolean } {
     const r = this.renderer;
-    const fw = this.floor === 'factory' ? this.game.fw : this.floor === 'district' ? Math.ceil(this.districtSpan()) : this.game.W, fh = this.floor === 'factory' ? this.game.fh : this.floor === 'district' ? HIGH.district.h : this.game.H;
+    const hf = this.high;
+    const fw = this.floor === 'factory' ? this.game.fw : hf ? Math.ceil(this.districtSpan()) : this.game.W, fh = this.floor === 'factory' ? this.game.fh : hf ? HIGH[hf].h : this.game.H;
     const a = r.screenToWorld(r.view.x, r.view.y), b = r.screenToWorld(r.view.x + r.view.w, r.view.y + r.view.h);
     return { l: a.x > 4, r: b.x < fw * TILE - 4, u: a.y > -TOWN_ROWS * TILE + 4, d: b.y < fh * TILE - 4 };
   }
@@ -777,6 +804,8 @@ export class App {
    * over a group of modules). */
   toggleFold() {
     if (!this.game.done('folding')) return this.refuse('needs {research:Folding}');
+    // a fold on the World is the Last Fold (Act V, DESIGN.md §22): no Fold tool up there
+    if (this.floor === 'world') return this.refuse('a fold up here is the Last Fold · Act V');
     if (this.floor === 'district') {
       // a District fold (DESIGN.md §21): a box over a group of groups joined by routes
       const ha = this.game.s.haudit;
@@ -814,8 +843,9 @@ export class App {
     const d = this.game.design(id);
     if (!d) return;
     if (d.spare < 1) return this.refuse('no spare copy · {k:SHIFT}{k:LMB} stamp');
-    // on the District a group (depth 2) or a District fold (depth 3) goes up here; anything else down to the Factory
-    if (this.floor === 'district' && (d.depth === 2 || d.depth === 3)) {
+    // on the District a group (depth 2) or a District fold (depth 3) goes up here, on the World a
+    // District fold (depth 3); anything else down to the Factory
+    if ((this.floor === 'district' && (d.depth === 2 || d.depth === 3)) || (this.floor === 'world' && d.depth === 3)) {
       this.panel = null;
       this.setMode(this.mode.k === 'hmodule' && this.mode.design === id ? { k: 'idle' } : { k: 'hmodule', design: id });
       return;
@@ -882,14 +912,15 @@ export class App {
   fitCamera(reset = false) {
     const g = this.game;
     const cam = this.renderer.cam;
-    if (this.floor === 'district' && g.s.district) {
+    const hf = this.high;
+    if (hf && g.s[hf]) {
       // the floor, the lot for sale east of it, a row of the plaza to the north
-      const span = this.districtSpan();
-      const z = this.fillZoom((span + 1) * TILE, (HIGH.district.h + 4) * TILE);
+      const span = this.districtSpan(hf);
+      const z = this.fillZoom((span + 1) * TILE, (HIGH[hf].h + 4) * TILE);
       if (reset || cam.zoom > z) cam.zoom = z;
       cam.x = (span / 2) * TILE;
-      cam.y = (HIGH.district.h / 2 + 0.5) * TILE;
-      this.renderer.clampCam(Math.ceil(span), HIGH.district.h);
+      cam.y = (HIGH[hf].h / 2 + 0.5) * TILE;
+      this.renderer.clampCam(Math.ceil(span), HIGH[hf].h);
       return;
     }
     if (this.floor === 'factory') {
@@ -941,7 +972,8 @@ export class App {
         box: this.foldDrag && this.floor === 'factory' ? { ...this.foldDrag, ok: !ffoldRefusal(this.game, this.dragBox()!) } : null,
       },
       district: {
-        hover: this.floor === 'district' ? h : null,
+        floor: this.high ?? 'district',
+        hover: this.high ? h : null,
         place: this.mode.k === 'hmodule' ? this.mode.design : null,
         remove: this.mode.k === 'remove',
         route: this.mode.k === 'route',
@@ -949,7 +981,7 @@ export class App {
         selected: DS.sel,
         selRoute: DS.route,
         hoverRoute: DS.hoverRoute,
-        box: this.foldDrag && this.floor === 'district' ? this.foldDrag : null,
+        box: this.foldDrag && this.high ? this.foldDrag : null,
       },
     };
   }
@@ -972,7 +1004,7 @@ export class App {
     // the tile the button went down on (drags start there even if the mouse has moved on)
     const pt = this.renderer.screenToTile(inp.mouse.px * k, inp.mouse.py * k);
     const inFloor = this.floor === 'factory' ? t.x >= 0 && t.y >= 0 && t.x < g.fw && t.y < g.fh
-      : this.floor === 'district' ? t.x >= 0 && t.y >= 0 && t.x < highW(g, 'district') && t.y < HIGH.district.h : g.inb(t.x, t.y);
+      : this.high ? t.x >= 0 && t.y >= 0 && t.x < highW(g, this.high) && t.y < HIGH[this.high].h : g.inb(t.x, t.y);
     this.hud.hoverTile = !overUI && inFloor ? t : null;
     this.townTip = !overUI && !inFloor && this.mouseIn ? this.renderer.townAt(sx, sy) : null;
 
@@ -992,7 +1024,7 @@ export class App {
         // a right tap without a drag: drop the tool, or unpin the report, or open the Workbench
         // Wheel at the cursor
         if (this.mode.k !== 'idle') this.setMode({ k: 'idle' });
-        else if (this.floor === 'district') districtCancel();
+        else if (this.high) districtCancel();
         else if (this.selected !== null || this.fselected !== null) { this.selected = null; this.fselected = null; }
         else if (this.panDrag.right) openWheel(this, this.ui.mx, this.ui.my);
       }
@@ -1002,7 +1034,7 @@ export class App {
     // the town's doors: Unit 7's observatory opens the Codex, Dame Voltaire's pavilion her orders
     if (inp.mouse.pressed[0] && !overUI && !inFloor && this.mouseIn && this.mode.k === 'idle' && this.townDoor(sx, sy)) return;
     if (this.floor === 'factory') return this.factoryInput(t, overUI, pt);
-    if (this.floor === 'district') return districtInput(this, t, overUI, pt, this.renderer.screenToWorld(sx, sy));
+    if (this.high) return districtInput(this, t, overUI, pt, this.renderer.screenToWorld(sx, sy));
     if (this.mode.k === 'fold') return this.foldInput(t, overUI, pt);
     if (this.mode.k === 'build' && this.mode.kind === 'belt') return this.beltDrag(t, overUI, pt);
     if (!inp.mouse.pressed[0] || overUI) return;

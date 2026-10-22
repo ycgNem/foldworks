@@ -575,6 +575,154 @@ export async function districtSetup(state) {
 
 export const DISTRICT = ['district', 'districtRoute', 'districtHover', 'districtStarved', 'districtPick', 'districtBox', 'districtAudit', 'districtGrade', 'districtOpen'];
 
+// ---------------------------------------------------------------- Act IV (Milestone 9: the World, Relocate, Legacy)
+/** Runs in the page (DESIGN.md §22): an Act IV game on Pebble Isle with the World floor open. Ten
+ * depth-3 modules (District folds pushed into g.s.designs) flown by barge into the World Dock, the
+ * Hopper and the World Bay (the Lighthouse's Lens Room, Pebble's stage, under way; the Beacon built
+ * on Cinder; the Keeper's House half built and held on Rime), one route short of barges (steel
+ * across the floor), one module joined to nothing, run for half a minute. This world's bests, three
+ * Legacy nodes, Patent nodes owned and one kept by Old Habits. States: world (the floor at rest),
+ * worldRoute (a barge route's card), worldPinned (a module pinned: its Stop / Start keys, its group
+ * stopped), worldHover (a module's hover tag), relocate (the Relocate card, Rime picked),
+ * relocateTravel (the town in flight), legacy (the Legacy tree, the Standing Committee pinned with its
+ * stepper), legacyHabits (Old Habits pinned: the Patent nodes to keep), research4 (Act IV's research
+ * page: Pebble's nodes here, the others on their islands), megaLighthouse (the Lighthouse's tab),
+ * lessonWorld (the first World route's lesson card). */
+export async function worldSetup(state) {
+  const a = window.__app;
+  const mod = async (p) => { for (const c of ['/src/app/hud.ts', '/src/app/screens.ts', '/src/app/app.ts']) { const m = (await (await fetch(c)).text()).match(new RegExp(`["'](${p.replace(/\./g, '\\.')}\\?[^"']*)["']`)); if (m) return import(m[1]); } return import(p); };
+  a.newGame(41);
+  a.freeze();
+  a.toasts = [];
+  a.trophyPops = [];
+  const g = a.game;
+  const N = g.s.coin.constructor;
+  g.s.coin = N.of(6.4e9);
+  g.s.earned = N.of(9.1e10);
+  g.s.land = ['A', 'B', 'E'];
+  g.s.upgrades.push('bellows');
+  const { RESEARCH_LIST } = await import('/src/data/research.ts');
+  const early = RESEARCH_LIST.filter((d) => (d.act ?? 1) < 4).map((d) => d.id);
+  g.s.research.done = [...early, 'charting', 'lighthouse', 'relocation', 'skyglassCutting'];
+  g.s.research.selected = state === 'research4' ? 'horizonOptics' : 'skyAnchor';
+  if (state === 'research4') g.s.research.progress = { horizonOptics: { skyglassLens: N.of(130), sensor: N.of(22) } };
+  g.s.mega = { stage: 3, progress: {} };
+  g.s.flags.push('factoryOpen', 'factorySeen', 'sliceEnd', 'ordersSeen', 'districtSeen', 'worldSeen');
+  g.s.orders.done = ['boardwalk', 'lampPosts', 'gizmoFestival', 'calibration', 'streetlamps', 'lensArray'];
+  g.s.orders.rep = { bramble: 5, unit7: 5, voltaire: 4, committee: 7 };
+  g.s.income = Array(60).fill(820000);
+  // this world: Pebble Isle, its bests, the Legacy tree begun, the Patent nodes of this world
+  const m = g.s.meta;
+  m.world = 'pebble';
+  m.visited = ['home', 'cinder', 'pebble'];
+  m.relocations = 2;
+  m.runs = 9;
+  const fb = (value, item, grade, steps, tier) => ({ value, item, grade, steps, tier });
+  m.here = { start: -20 * 60 * 95, best: { workshop: fb(8.4, 'skyglassLens', 'S', 4, 2), factory: fb(9.6, 'horizonLens', 'A', 6, 1), district: fb(11.2, 'sandwichEngineer', 'A', 8, 1) }, stages: 1, opened: true, runs: 3 };
+  m.worldRecords = {
+    home: { workshop: fb(7.2, 'gizmo', 'S+', 4, 1), factory: fb(9.1, 'circuit', 'S', 5, 1), district: fb(10.4, 'robotArm', 'A', 7, 1), world: fb(12.6, 'sandwichEngineer', 'A', 9, 1) },
+    cinder: { workshop: fb(9.9, 'cinderAlloy', 'S', 4, 2), factory: fb(8.8, 'sunsetDye', 'A', 5, 1) },
+    pebble: m.here.best,
+  };
+  m.legacy = N.of(state === 'legacy' || state === 'legacyHabits' ? 23 : 6);
+  m.legacyEarned = N.of(58);
+  m.legacyNodes = ['patentPurse', 'oldHabits', 'patentClerk', 'standingCommittee', 'skiffGuild', ...(state === 'legacyHabits' ? ['secondNature'] : [])];
+  m.standing = state === 'legacy' ? 24 : null;
+  m.nodes = ['bellows', 'starterLine', 'notebooks', 'copperDeeds', 'surveyCharter', 'quickAudit', 'moreAuditors', 'draughtsman', 'drawerSpace', 'dispatcher', 'zoningCharter', 'longSkiffs'];
+  m.habits = ['quickAudit', 'draughtsman', 'dispatcher'];
+  // the World's projects: the Lens Room (here) under way, the Beacon built on Cinder, the Keeper's
+  // House half built on Rime (held there)
+  g.s.megas = {
+    city: { stage: 2, progress: {} }, transmuter: { stage: 2, progress: {} },
+    lighthouse: { stage: 1, done: [2], progress: { lighthouseLamp: N.of(96), horizonLens: N.of(58) }, held: { 3: { lighthouseLamp: N.of(150), stormCell: N.of(120) } } },
+    anchor: { stage: 0, done: [], progress: {} },
+  };
+  g.s.ents = g.s.ents.filter((e) => e.kind === 'dock' || e.kind === 'hopper' || e.kind === 'furnace');
+  g.rebuild();
+  a.renderer.ground = null;
+  const gr = (letter, mult) => ({ letter, score: 0.86, u: 0.9, w: 1, c: 0.8, mult });
+  let nid = 1;
+  const D = (name, ins, outs, letter = 'A', mult = 1.1) => ({ id: nid++, name, box: { x: 2, y: 2, w: 5, h: 4 }, parts: [], ins, outs, grade: gr(letter, mult), bill: 3.2e6, stamped: 0, spare: 6, depth: 3, hfloor: 'district', hparts: [], hroutes: [] });
+  const T = {
+    lens: D('Skyglass Lenses III', {}, { skyglassLens: 0.8 }, 'S', 1.25),
+    sensor: D('Sensors III', {}, { sensor: 0.3 }),
+    horizon: D('Horizon Optics III', { skyglassLens: 0.4, sensor: 0.2 }, { horizonLens: 0.1 }),
+    lamp: D('Lighthouse Lamps III', {}, { lighthouseLamp: 0.15 }, 'B', 1),
+    engineer: D('Engineers III', {}, { sandwichEngineer: 0.02 }, 'S', 1.25),
+    arm: D('Robot Arms III', {}, { robotArm: 0.06 }),
+    proc: D('Processors III', {}, { processor: 0.25 }),
+    steel: D('Steel works III', {}, { steel: 1.6 }, 'S', 1.25),
+  };
+  g.s.designs = Object.values(T);
+  g.s.nextDesign = nid;
+  a.step(2); // Charting done: the World opens, the Lighthouse's research brings its Bay
+  a.step(20);
+  const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
+  const put = (d, x, y) => act({ k: 'hplace', floor: 'world', design: d.id, x, y });
+  const fly = (fx, fy, tx, ty, item, barges = 1) => {
+    act({ k: 'route', floor: 'world', fx, fy, tx, ty, item });
+    const st = g.s.world;
+    const r = st.routes[st.routes.length - 1];
+    for (let i = r.skiffs; i < barges; i++) act({ k: 'skiff', floor: 'world', id: r.id, n: 1 });
+  };
+  // the north-west: lenses and sensors into horizon lenses, to the Bay in the south-west corner
+  put(T.lens, 3, 2); put(T.horizon, 4, 2); put(T.sensor, 4, 3); put(T.lens, 2, 2);
+  fly(3, 2, 4, 2, 'skyglassLens'); fly(4, 3, 4, 2, 'sensor'); fly(4, 2, 0, 10, 'horizonLens');
+  fly(2, 2, 14, 1, 'skyglassLens');
+  // lamps beside the Bay
+  put(T.lamp, 2, 9); put(T.lamp, 2, 10);
+  fly(2, 9, 0, 10, 'lighthouseLamp'); fly(2, 10, 0, 10, 'lighthouseLamp');
+  // finished goods fly anywhere: engineers to the Dock, robot arms and processors to the Hopper
+  put(T.engineer, 10, 3); put(T.arm, 11, 6); put(T.proc, 9, 7);
+  fly(10, 3, 14, 1, 'sandwichEngineer'); fly(11, 6, 14, 5, 'robotArm'); fly(9, 7, 14, 5, 'processor');
+  // bulk beside the Dock (two barges), and bulk across the floor on one: short of barges
+  put(T.steel, 12, 1); put(T.steel, 1, 6);
+  fly(12, 1, 14, 1, 'steel', 2); fly(1, 6, 14, 1, 'steel');
+  // a module joined to nothing (it backs up: the red pip)
+  put(T.proc, 7, 9);
+  a.step(20 * 30);
+  g.events.drain();
+  a.toasts = [];
+  a.trophyPops = [];
+  a.refusal = null;
+  a.hud.celebs = [];
+  a.hud.rain = [];
+  a.hud.confetti = 0;
+  a.setFloor('world', true);
+  a.fitCamera(true);
+  a.renderer.fx.flyers = [];
+  a.renderer.fx.pops = [];
+  a.renderer.fx.parts = [];
+  const DS = a.districtUI;
+  DS.game = g; DS.floor = 'world';
+  DS.route = null; DS.pick = null; DS.from = null; DS.sel = null; DS.hoverRoute = null; DS.page = 0;
+  const find = (fx, fy, item) => { const st = g.s.world; const from = st.ents.find((e) => e.x === fx && e.y === fy); return st.routes.filter((r) => r.from === from.id && r.item === item).pop(); };
+  if (state === 'worldRoute') DS.route = find(1, 6, 'steel').id;
+  if (state === 'worldHover') return { hover: [4, 2] };
+  if (state === 'worldPinned') {
+    act({ k: 'pause', floor: 'world', x: 3, y: 2, on: true });
+    a.step(3);
+    DS.sel = g.s.world.ents.find((e) => e.x === 3 && e.y === 2).id;
+  }
+  if (state === 'lessonWorld') { a.onboarding.lessons.show(a, 'worldRoute'); }
+  if (state === 'relocate' || state === 'relocateTravel') {
+    const R = await mod('/src/app/relocate.ts');
+    R.pickIsland('rime');
+    a.panel = 'relocate';
+    if (state === 'relocateTravel') R.travelDebug(a, 'pebble', 'rime', 21, 1.6);
+  }
+  if (state === 'legacy' || state === 'legacyHabits') {
+    (await mod('/src/app/legacy.ts')).pinLegacy(state === 'legacy' ? 'standingCommittee' : 'oldHabits');
+    a.panel = 'legacy';
+  }
+  if (state === 'research4') { (await mod('/src/app/screens.ts')).setTreePage(a, 4); a.panel = 'research'; }
+  if (state === 'megaLighthouse') { (await mod('/src/app/act2screens.ts')).setMegaTab('lighthouse'); a.panel = 'mega'; a.gradeAt = a.ui.time - 30; }
+  // a card's own key hovered (its tip shows what it does), else the mouse rests at the centre
+  return state === 'relocate' ? { hoverId: 'relocateGo' } : state === 'legacy' ? { hoverId: 'standPlus1' } : state === 'legacyHabits' ? { hoverId: 'habit_draughtsman' } : state === 'research4' ? { hoverId: 'node:frostWorks' } : null;
+}
+
+export const WORLD = ['world', 'worldRoute', 'worldPinned', 'worldHover', 'relocate', 'relocateTravel', 'legacy', 'legacyHabits', 'research4', 'megaLighthouse', 'lessonWorld'];
+
 // ---------------------------------------------------------------- Act III (Milestone 7: the player-facing pieces)
 /** Runs in the page (Act III's pieces on the Workshop, the Factory and the pages, DESIGN.md §21):
  * act3ws (a Chem Vat, a Greenhouse and three Chute Mouths: pushing, pushing, empty), act3mouth (a
@@ -902,6 +1050,7 @@ for (const s of ACT2) STATES[s] = s;
 for (const s of WORKSHOP) STATES[s] = { ws: s };
 for (const s of M5) STATES[s] = { m5: s };
 for (const s of DISTRICT) STATES[s] = { d: s };
+for (const s of WORLD) STATES[s] = { w: s }; // Act IV
 for (const s of ACT3) STATES[s] = { a3: s }; // Act III
 Object.assign(STATES, ACT3_M5); // Act III
 
@@ -921,7 +1070,7 @@ async function main() {
     for (const [state, fn] of Object.entries(STATES)) {
       if (only.length && !only.includes(state)) continue;
       const name = `${w}x${h}-${state}`;
-      const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.d ? await page.evaluate(districtSetup, f.d) : f.a3 ? await page.evaluate(act3Setup, f.a3) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post)) : await page.evaluate(f));
+      const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.d ? await page.evaluate(districtSetup, f.d) : f.w ? await page.evaluate(worldSetup, f.w) : f.a3 ? await page.evaluate(act3Setup, f.a3) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post)) : await page.evaluate(f));
       // Milestone 13: lesson cards held off (a state asks for its own), the keys and the UI scale
       // as they came (the states that change them come last in a size's run, or put them back here)
       await page.evaluate(() => { const o = window.__app.onboarding; o.lessons.hold(true); o.keys.reset(window.__app); let st = {}; try { st = JSON.parse(localStorage.getItem('foldworks_settings') || '{}'); } catch {} if (st.uiScale) o.setUiScale(0); });

@@ -85,13 +85,14 @@ export function ambience(app: App, dt: number) {
   };
   let srcs: Src[];
   if (app.floor === 'factory') srcs = floorSources(g.s.factory.ents, at);
-  else if (app.floor === 'district') {
-    const st = g.s.district;
+  else if (app.high) {
+    const hf = app.high;
+    const st = g.s[hf];
     srcs = st ? floorSources(st.ents, at) : [];
     // skiffs in flight: each busy route's skiffs, heard at the middle of its flight line
     if (st) for (const rt of st.routes) {
       if (!(rt.flow > 0.01 || (rt.used !== undefined && g.s.tick - rt.used < TICK_RATE))) continue;
-      const p = hent(g, 'district', rt.from), q = hent(g, 'district', rt.to);
+      const p = hent(g, hf, rt.from), q = hent(g, hf, rt.to);
       if (!p || !q) continue;
       const x = at((p.x + p.w / 2 + q.x + q.w / 2) / 2, (p.y + p.h / 2 + q.y + q.h / 2) / 2);
       if (x !== null) srcs.push({ fam: 'skiff', x, w: Math.max(1, rt.skiffs) });

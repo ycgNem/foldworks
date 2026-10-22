@@ -13,7 +13,8 @@ import { RECIPE } from '../data/recipes';
 import { ITEMS, type ItemId } from '../data/items';
 import { ellipsize, bigWidth } from '../ui/font';
 import { itemIcon } from '../render/sprites';
-import { keepRefusal, keptBill, keptLand, unfoldKeptRefusal, encodeDesign } from '../sim/drawer';
+import { keepRefusal, keptBill, keptLand, unfoldKeptRefusal, encodeDesign, drawerSlots } from '../sim/drawer';
+import { lrules } from '../sim/legacy';
 import { previewPatents, designValue } from '../sim/reorganize';
 import { prules } from '../sim/patents';
 import { mainItem } from '../sim/systems/modules';
@@ -49,10 +50,19 @@ function partCol(kind: string): string {
 /** A layout drawn at k px a tile, as the floor it came from: buildings by family, each crafting
  * machine with its product's icon once the tiles are big enough to read (8 px), belts with a dot
  * pointing their way. */
-function picture(app: App, parts: DesignPart[], w: number, h: number, x: number, y: number, k: number) {
+function picture(app: App, parts: DesignPart[], w: number, h: number, x: number, y: number, k: number, nested?: KeptDesign['nested']) {
   const ui = app.ui;
   ui.fill(x - 1, y - 1, w * k + 2, h * k + 2, C.ink);
   for (let ty = 0; ty < h; ty++) for (let tx = 0; tx < w; tx++) ui.fill(x + tx * k, y + ty * k, k, k, (tx + ty) % 2 ? C.ground1 : C.ground0);
+  // a nested design kept by the Group Drawer (DESIGN.md §22): its group's layout, each module tile
+  // named by its product, its trunks
+  for (const p of nested ?? []) {
+    const px = x + p.dx * k, py = y + p.dy * k;
+    if (p.kind === 'trunk') { ui.fill(px + 1, py + 1, k - 2, k - 2, C.hull1); continue; }
+    ui.fill(px, py, k, k, C.ink);
+    ui.fill(px + 1, py + 1, k - 2, k - 2, C.brass1);
+    if (p.item && k >= 8) ui.ctx.drawImage(itemIcon(p.item), px + Math.floor((k - 8) / 2), py + Math.floor((k - 8) / 2));
+  }
   for (const p of parts) {
     const d = BUILD[p.kind];
     const px = x + p.dx * k, py = y + p.dy * k;
@@ -86,7 +96,8 @@ export function drawerScreen(app: App, r0: Rect) {
   const ui = app.ui;
   const g = app.game;
   const m = g.s.meta;
-  const slots = prules(g).drawerSlots;
+  // the Patent tree's slots and the Legacy tree's (A Longer Drawer, DESIGN.md §22)
+  const slots = drawerSlots(g);
   const r = bookArea(r0);
   const { body, detail } = menuTemplate(app, r, { title: 'The Patent Drawer', accent: C.violet, icon: 'fold', detail: Math.floor(r.w * 0.4) });
   // ---- the tools: import a string, and who unfolds the queue
@@ -98,7 +109,9 @@ export function drawerScreen(app: App, r0: Rect) {
   if (body.x + iw + 8 + NL.w <= body.x + body.w) drawLayout(ui, NL, body.x + body.w, body.y + 4, T.inkSoft, { align: 'right' });
   // ---- the kept designs
   let y = body.y + 20;
-  const runDesigns = g.s.designs.filter((d) => !d.fparts && !m.drawer.some((k) => k.src === d.id));
+  // the Group Drawer (a Legacy node) keeps nested Factory designs too
+  const nested = lrules(g).groupDrawer;
+  const runDesigns = g.s.designs.filter((d) => (!d.fparts || (nested && d.fparts.length > 0 && (d.depth ?? 1) < 3)) && !m.drawer.some((k) => k.src === d.id));
   const runH = runDesigns.length ? Math.min(Math.floor(body.h * 0.36), 18 + Math.ceil(runDesigns.length / 2) * 17) : 0;
   const keptEnd = body.y + body.h - (runH ? runH + 4 : 0);
   heading(ui, 'Kept', body.x, y, body.w, 'reset', `{soft:${m.drawer.length} of ${slots} slots}`);
@@ -163,7 +176,7 @@ function keptCard(app: App, k: KeptDesign, x: number, y: number, w: number, h: n
   if (on) { ctx.fillStyle = rgba(T.reset, 0.9); ctx.fillRect(x + 10, y + h - 3, w - 20, 1); }
   // the picture, small
   const t = Math.max(1, Math.min(3, Math.floor((h - 6) / Math.max(k.w, k.h))));
-  picture(app, k.parts, k.w, k.h, x + 12, y + 3 + Math.floor((h - 6 - k.h * t) / 2), t);
+  picture(app, k.parts, k.w, k.h, x + 12, y + 3 + Math.floor((h - 6 - k.h * t) / 2), t, k.nested);
   const tx = x + 16 + Math.max(20, k.w * t);
   if (k.product) ctx.drawImage(itemIcon(k.product), tx, y + 4);
   const queued = g.s.meta.queue.indexOf(k.id);
@@ -223,7 +236,7 @@ function keptDetail(app: App, k: KeptDesign, r: Rect) {
   const t = Math.max(3, Math.min(10, Math.floor(Math.min(r.w - 4, 90) / Math.max(k.w, k.h))));
   const ph = Math.min(k.h * t, 60);
   const tt = Math.max(2, Math.min(t, Math.floor(ph / k.h)));
-  picture(app, k.parts, k.w, k.h, r.x + Math.floor((r.w - k.w * tt) / 2), y + 1, tt);
+  picture(app, k.parts, k.w, k.h, r.x + Math.floor((r.w - k.w * tt) / 2), y + 1, tt, k.nested);
   y += k.h * tt + 6;
   const foot = r.y + r.h - 54;
   const row = (a: string, b: string) => { if (y + ROW_H <= foot) y += kvRow(ui, r.x, y, r.w, a, b); };

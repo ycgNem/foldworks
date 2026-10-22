@@ -62,6 +62,9 @@ import { DX, DY } from '../sim/world';
 import { HIGH } from '../data/floors';
 import { MEGAS } from '../data/megaprojects';
 import { hent, megaStageOf, routeCap, routeWant, maxRoutes, lotPrice } from '../sim/systems/high';
+import { relocateRefusal } from '../sim/relocate';
+import { WORLD_IDS } from '../data/worlds';
+import { worldOf } from '../sim/systems/islands';
 
 /** Who says a goal: the corner shows their portrait and the bubble's tail points at them. */
 export type Speaker = 'bramble' | 'unit7' | 'voltaire' | 'committee' | 'inspector';
@@ -298,7 +301,66 @@ function districtGoal(g: Game): Goal | null {
   }
   const a3 = act3Goal(g);
   if (a3) return a3;
-  return ordersGoal(g) ?? researchToward(g, 'floatingCity') ?? researchToward(g, 'scrapTransmuter');
+  return ordersGoal(g) ?? researchToward(g, 'floatingCity') ?? researchToward(g, 'scrapTransmuter') ?? researchToward(g, 'charting');
+}
+
+/** The coach on the World floor (DESIGN.md §22): only this floor's chores, as on the District. A
+ *  District fold up, barge routes, the World Dock, a route short of barges, the cap, the Bay's stage
+ *  of the island the town is on, then a Relocate worth taking, orders and the Act IV nodes. */
+function worldGoal(g: Game): Goal | null {
+  const s = g.s;
+  const st = s.world!;
+  const f = HIGH.world;
+  const barge = `a barge {coin:${big(f.skiffCost)}}`;
+  const mods = st.ents.filter((e) => e.kind === 'module');
+  if (!mods.length) {
+    if (!s.designs.some((d) => d.depth === 3 && d.spare > 0)) return say('inspector', 'Only District folds go up here. Fold a group of groups. {k:F}', { chips: ['{u:fold} depth 3 → the World'], ui: 'district' });
+    return say('bramble', 'The World is open! Put a District fold up, from the strip.', { chips: ['{u:fold} depth-3 modules', '{k:Tab} the lift'], ui: 'world' });
+  }
+  if (!st.routes.length) return say('bramble', 'Now join them by barge! Route, a source, then where it goes.', { chips: [barge, `${f.speed} tiles/s · ${f.load} a trip`], ui: 'route' });
+  if (!st.routes.some((r) => hent(g, 'world', r.to)?.kind === 'fdock')) return say('bramble', 'Fly something to the World Dock! It pays best up here.', { chips: [barge], ui: 'route' });
+  const max = maxRoutes(g, 'world');
+  if (st.routes.length >= max - 10) {
+    const price = lotPrice(g, 'world');
+    return say('inspector', 'Routes nearly at the cap. Buy a lot.', { chips: [`{warn:routes ${st.routes.length}/${max}}`, ...(price ? [`a lot {coin:${price.format()}} +${RULES.routesPerLot.value} routes`] : [])] });
+  }
+  const short = st.routes.find((r) => { const w = routeWant(g, 'world', r); return w > 1e-9 && routeCap(g, 'world', r) < w * 0.9; });
+  if (short) {
+    const w = routeWant(g, 'world', short), c = routeCap(g, 'world', short);
+    return say('bramble', 'A route is short of barges! Click its orange line, then + barge.', { bar: frac(c, w), chips: [`{i:${short.item}} ${c.toFixed(2)}/s of ${w.toFixed(2)}/s`, barge], ui: 'world' });
+  }
+  // the Lighthouse and the Sky Anchor: the stage of this island, at the World Bay
+  for (const mid of ['lighthouse', 'anchor'] as const) {
+    if (!g.done(MEGAS[mid].opens as never) && !(s.megas?.[mid]?.done?.length)) continue;
+    const stg = megaStageOf(g, mid);
+    if (!stg) continue;
+    const bay = st.ents.find((e) => e.kind === 'fbay');
+    if (!bay) return say('bramble', "Clear the World's south-west corner! The Bay lands there.", { chips: [`{u:mega} tiles ${f.bay.x}-${f.bay.x + 1}, ${f.bay.y}-${f.bay.y + 1}`], ui: 'world' });
+    const prog = s.megas?.[mid]?.progress ?? {};
+    let have = 0, need = 0;
+    const chips = (Object.entries(stg.wants) as [ItemId, number][]).map(([k, n]) => {
+      const got = Math.min(n, prog[k]?.toNumber() ?? 0);
+      have += got;
+      need += n;
+      return `{i:${k}} ${fmt(got)}/${fmt(n)}`;
+    });
+    if (have >= need) continue;
+    const fed = st.routes.some((r) => r.to === bay.id);
+    return say('bramble', fed ? `${stg.name.split(', ')[1]?.split(' (')[0] ?? stg.name}! Keep them flying in!` : `Fly the ${mid === 'lighthouse' ? 'lamps' : 'chains'} and this island's goods to the World Bay!`, { bar: frac(have, need), chips, ui: 'mega' });
+  }
+  if (!relocateRefusalAny(g)) return say('committee', '"psst." "a new island." "for Legacy." The Relocate card.', { chips: ['{u:relocate} Relocate'], ui: 'relocate' });
+  return ordersGoal(g) ?? researchToward(g, 'relocation') ?? researchToward(g, 'lighthouse') ?? researchToward(g, 'skyAnchor');
+}
+
+/** Can the town fly to any island now (DESIGN.md §22)? null when it can. */
+function relocateRefusalAny(g: Game): string | null {
+  let why: string | null = 'no island';
+  for (const w of WORLD_IDS) {
+    if (w === worldOf(g)) continue;
+    why = relocateRefusal(g, w);
+    if (!why) return null;
+  }
+  return why;
 }
 
 /** The District's chain (DESIGN.md §21): Zoning, the first group up, the first route, something
@@ -443,6 +505,7 @@ function gradedLine(letter: string): string {
 export function nextGoal(g: Game, floor?: string): Goal | null {
   const s = g.s;
   if (floor === 'district' && s.district) return districtGoal(g);
+  if (floor === 'world' && s.world) return worldGoal(g);
   const furnace = g.machines.find((m) => m.kind === 'furnace');
   const hasBellows = g.has('bellows');
   const count = (k: string) => s.ents.filter((e) => e.kind === k).length;

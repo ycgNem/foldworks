@@ -11,8 +11,13 @@
 // Dock, the Hopper and the Bay, and a route's readout (pillar 3). The District fold: the drag box,
 // the Inspector's clipboard on the audited box, and the grade card (fold.ts drawGrade). Reads the
 // App and the Game; changes the game only through App.act.
+//
+// Act IV (DESIGN.md §22): the World floor is the same UI over `g.s.world`: barges instead of
+// skiffs, depth-3 modules (the District's folds) on its strip, its own Dock, Hopper, lots and Bay
+// (the Lighthouse and the Sky Anchor), no Fold tool (a fold up there is the Last Fold, Act V). Both
+// floors' pinned reports carry a labelled Stop / Start for the module and its route group.
 import { C } from '../data/palette';
-import { HIGH } from '../data/floors';
+import { HIGH, type HighFloorId } from '../data/floors';
 import { ITEMS, itemName, type ItemId } from '../data/items';
 import { RESEARCH } from '../data/research';
 import { RULES, SCORE_WEIGHTS } from '../data/rules';
@@ -22,14 +27,18 @@ import { TICK_RATE } from '../engine/time';
 import { prules } from '../sim/patents';
 import type { Game } from '../sim/Game';
 import type { FEnt, SkiffRoute } from '../sim/world';
-import { highW, hent, hentAt, hname, routeDist, routeCap, routeWant, routeRefusal, lotPrice, megaStageOf, gradeHAudit, skiffRateNow, maxRoutes, drillFactor } from '../sim/systems/high';
+import { highW, hent, hentAt, hname, routeDist, routeCap, routeWant, routeRefusal, lotPrice, megaStageOf, gradeHAudit, skiffRateNow, maxRoutes, drillFactor, projectOpen } from '../sim/systems/high';
+import { hpauseTargets } from '../sim/systems/pause';
+import { WORLDS } from '../data/worlds';
+import { worldOf } from '../sim/systems/islands';
 import { BYPRODUCTS, defaultName, mainItem } from '../sim/systems/modules';
 import { bigWidth, smallWidth, LINE_H, BIG_LINE_H, ICON } from '../ui/font';
 import { layoutRich, drawLayout, richWidth, drawRich, CHIP_H, type RichLayout } from '../ui/rich';
 import { T, type Role } from '../ui/theme';
 import { sheet, itemIcon, hasArt } from '../render/sprites';
 import { mainOutput } from '../render/factory';
-import { routeAtWorld, routeEnds, routeShort, routeItems, districtMegaFrac } from '../render/district';
+import { routeAtWorld, routeEnds, routeShort, routeItems, districtMegaFrac, hart, carrier } from '../render/district';
+import { liftWingW } from './topbar';
 import { button, tag, tagSize, rule, meter, chip, chipWidth, clipboard, twine, uiIcon, dot, type UIconName } from './chrome';
 import { bigSafe, worldRect, place, zones } from './tags';
 import { drawGrade } from './fold';
@@ -37,10 +46,20 @@ import type { Layout } from './layout';
 import type { App } from './app';
 import type { Rect, TipLine } from '../ui/ui';
 
-const ID = 'district' as const;
+/** The high floor on screen: the District, or the World (one UI for both, DESIGN.md §22). Set by
+ *  every entry point from the app's floor (`at`). */
+let ID: HighFloorId = 'district';
+/** The high floor the app shows, or null on the Workshop and the Factory. */
+export const highOf = (app: App): HighFloorId | null => (app.floor === 'district' || app.floor === 'world' ? app.floor : null);
+function at(app: App) { ID = highOf(app) ?? 'district'; }
+/** what flies the routes here, in words: skiffs on the District, barges on the World */
+const word = () => carrier(ID);
+const Word = () => (ID === 'world' ? 'Barge' : 'Skiff');
+const words = (n: number) => `${n} ${word()}${n === 1 ? '' : 's'}`;
 
-/** The District's UI state: the Route tool's source and its item list, the pinned thing, the
- *  route whose card is open, the route under the mouse, the tool strip's page of groups. */
+/** The high floors' UI state: the Route tool's source and its item list, the pinned thing, the
+ *  route whose card is open, the route under the mouse, the tool strip's page of groups, and the
+ *  floor they belong to (ids are per floor). */
 export const DS = {
   from: null as { x: number; y: number } | null,
   pick: null as { fx: number; fy: number; tx: number; ty: number; items: ItemId[] } | null,
@@ -49,13 +68,15 @@ export const DS = {
   hoverRoute: null as number | null,
   page: 0,
   game: null as Game | null,
+  floor: 'district' as HighFloorId,
 };
 
-/** Forget what belongs to another game or has gone from the floor. */
+/** Forget what belongs to another game, another floor, or has gone from the floor. */
 function sync(app: App) {
   const g = app.game;
-  if (DS.game !== g) { DS.from = null; DS.pick = null; DS.sel = null; DS.route = null; DS.hoverRoute = null; DS.page = 0; DS.game = g; }
-  const st = g.s.district;
+  at(app);
+  if (DS.game !== g || DS.floor !== ID) { DS.from = null; DS.pick = null; DS.sel = null; DS.route = null; DS.hoverRoute = null; DS.page = 0; DS.game = g; DS.floor = ID; }
+  const st = g.s[ID];
   if (!st) { DS.sel = null; DS.route = null; return; }
   if (DS.sel !== null && !hent(g, ID, DS.sel)) DS.sel = null;
   if (DS.route !== null && !st.routes.some((r) => r.id === DS.route)) DS.route = null;
@@ -83,16 +104,16 @@ export function rate(n: number): string {
 }
 const MINUS = '-'; // the bitmap font has no U+2212 minus sign
 const coinK = (n: number) => Num.of(n).format();
-const skiffCost = () => HIGH.district.skiffCost;
+const skiffCost = () => HIGH[ID].skiffCost;
 const gradeRole = (l: string): Role => (l === 'S+' || l === 'S' ? 'coin' : l === 'A' ? 'good' : l === 'B' ? 'research' : l === 'C' ? 'warn' : 'bad');
 const meterRole = (v: number): Role => (v >= 0.9 ? 'good' : v >= 0.6 ? 'warn' : 'bad');
 const icon = (id: string | null | undefined) => (id && id in ITEMS ? `{i:${id}}` : '');
 
 /** The readout every route carries (DESIGN.md §21): `3 skiffs · 1.4/s of 2.1 wanted · 6.2 tiles`. */
 export function routeReadout(g: Game, r: SkiffRoute): string {
-  const e = routeEnds(g, r);
+  const e = routeEnds(g, r, ID);
   const dist = e ? routeDist(e.a, e.b) : 0;
-  return `${r.skiffs} skiff${r.skiffs === 1 ? '' : 's'} · ${rate(r.flow)}/s of ${rate(routeWant(g, ID, r))} wanted · ${dist.toFixed(1)} tiles`;
+  return `${words(r.skiffs)} · ${rate(r.flow)}/s of ${rate(routeWant(g, ID, r))} wanted · ${dist.toFixed(1)} tiles`;
 }
 
 /** A thing's short name on the District. */
@@ -102,7 +123,7 @@ function nameOf(g: Game, e: FEnt): string {
 
 /** Skiffs a route needs to carry all it is wanted. */
 function skiffsNeeded(g: Game, r: SkiffRoute): number {
-  const e = routeEnds(g, r);
+  const e = routeEnds(g, r, ID);
   if (!e) return r.skiffs;
   const per = skiffRateNow(g, ID, routeDist(e.a, e.b));
   const want = routeWant(g, ID, r);
@@ -122,6 +143,8 @@ interface DRep {
   verbs?: string;
   /** a module's routes, buttons in the pinned report (each opens its card) */
   routes?: SkiffRoute[];
+  /** a module: the pinned report's Stop / Start keys (the pause command, DESIGN.md §22) */
+  pause?: FEnt;
 }
 
 /** A row only the pinned report shows (the brief hover keeps to the cause), and one only a hover
@@ -147,7 +170,7 @@ interface Supply {
 }
 
 function supplyOf(g: Game, e: FEnt, item: ItemId): Supply {
-  const st = g.s.district!;
+  const st = g.s[ID]!;
   const drill = drillFactor(g);
   const need = (g.design(e.design)?.ins[item] ?? 0) * drill;
   const ins = st.routes.filter((r) => r.to === e.id && r.item === item);
@@ -182,10 +205,10 @@ function supplyOf(g: Game, e: FEnt, item: ItemId): Supply {
 function starvedCause(g: Game, e: FEnt, item: ItemId): string {
   const s = supplyOf(g, e, item);
   if (s.why === 'none') return `{bad:no route brings} ${icon(item)}`;
-  if (s.why === 'skiffs') return `{warn:short of skiffs} · the ${s.src ? nameOf(g, s.src) : '?'} route`;
+  if (s.why === 'skiffs') return `{warn:short of ${word()}s} · the ${s.src ? nameOf(g, s.src) : '?'} route`;
   if (s.why === 'makes') return `{warn:its feeders make too little} ${icon(item)}`;
   if (s.why === 'feeder') return `its feeder is {warn:${s.src!.state}}`;
-  return `${icon(item)} {soft:by skiff} ${rate(s.gets)}/s`;
+  return `${icon(item)} {soft:by ${word()}} ${rate(s.gets)}/s`;
 }
 
 /** The pinned report's numbers for every input a module is short of (or the one it starves on):
@@ -202,7 +225,7 @@ function starvedRows(g: Game, e: FEnt): string[] {
     out.push(`${PIN}${icon(item)} needs ${rate(s.need)}/s · gets ${s.gets < s.need * 0.9 ? `{warn:${rate(s.gets)}}` : rate(s.gets)}`);
     const name = s.src ? nameOf(g, s.src) : '?';
     if (s.why === 'none') out.push(`${PIN}{bad:no route brings it} · the Route tool`);
-    else if (s.why === 'skiffs') out.push(`${PIN}add a skiff to the ${name} route {soft:(${rate(routeCap(g, ID, s.route!))}/s now)}`);
+    else if (s.why === 'skiffs') out.push(`${PIN}add a ${word()} to the ${name} route {soft:(${rate(routeCap(g, ID, s.route!))}/s now)}`);
     else if (s.why === 'makes') out.push(`${PIN}its feeders ${s.shared ? 'spare it' : 'make'} ${rate(s.makes)}: place another ${name}`);
     else if (s.why === 'feeder') out.push(`${PIN}its feeder ${name} is {warn:${s.src!.state}}`);
   }
@@ -211,13 +234,13 @@ function starvedRows(g: Game, e: FEnt): string[] {
 
 /** Why a module's `item` backs up, as a row. */
 function blockedCause(g: Game, e: FEnt, item: string): string {
-  const st = g.s.district!;
+  const st = g.s[ID]!;
   const outs = st.routes.filter((r) => r.from === e.id && r.item === item);
   if (!outs.length) return BYPRODUCTS.has(item) ? `{bad:no route takes} ${icon(item)} · waste blocks it` : `{bad:no route takes} ${icon(item)}`;
-  if (outs.some((r) => routeShort(g, r))) {
+  if (outs.some((r) => routeShort(g, r, ID))) {
     const cap = outs.reduce((s, r) => s + routeCap(g, ID, r), 0);
     const made = (g.design(e.design)?.outs[item as ItemId] ?? 0) * drillFactor(g);
-    return `{warn:short of skiffs} ${rate(cap)}/s of ${rate(made)}/s made`;
+    return `{warn:short of ${word()}s} ${rate(cap)}/s of ${rate(made)}/s made`;
   }
   const to = hent(g, ID, outs[0].to);
   return to ? `→ ${nameOf(g, to)} {warn:takes no more}` : '{warn:its route lands nowhere}';
@@ -226,30 +249,37 @@ function blockedCause(g: Game, e: FEnt, item: string): string {
 /** The report for a thing on the District. */
 function entRep(app: App, e: FEnt): DRep {
   const g = app.game;
-  const st = g.s.district!;
+  const st = g.s[ID]!;
   const rows: string[] = [];
   const more: string[] = [];
   const inflow = (to: FEnt) => st.routes.filter((r) => r.to === to.id).sort((a, b) => b.flow - a.flow);
   if (e.kind === 'fdock') {
     const ins = inflow(e);
-    rows.push('{coin} buys what the skiffs bring');
+    rows.push(`{coin} buys what the ${word()}s bring`);
     if (ins.length) rows.push(ins.slice(0, 4).map((r) => `${icon(r.item)} ${rate(r.flow)}/s`).join('  '));
     else rows.push('{soft:no route lands here yet}');
     const o = g.s.orders.active;
     if (o) more.push('fills the active order first');
-    return { title: 'District Dock', uicon: 'orders', rows, more, verbs: '{k:LMB} orders' };
+    return { title: `${HIGH[ID].name} Dock`, uicon: 'orders', rows, more, verbs: '{k:LMB} orders' };
   }
   if (e.kind === 'fhopper') {
     const sel = g.s.research.selected;
     rows.push(sel ? `{u:research} counts toward ${RESEARCH[sel].name}` : '{u:research} {warn:pick research}');
     const ins = inflow(e);
     if (ins.length) rows.push(ins.slice(0, 4).map((r) => `${icon(r.item)} ${rate(r.flow)}/s`).join('  '));
-    return { title: 'District Hopper', uicon: 'research', rows, more, verbs: '{k:LMB} inspire' };
+    return { title: `${HIGH[ID].name} Hopper`, uicon: 'research', rows, more, verbs: '{k:LMB} inspire' };
   }
   if (e.kind === 'fbay') {
-    const mf = districtMegaFrac(g);
+    const mf = districtMegaFrac(g, ID);
     if (!mf) {
-      rows.push('{good:every project here stands}');
+      // the World's projects build one stage on each island (DESIGN.md §22): none may be here
+      const here = worldOf(g);
+      const worldProjects = (['lighthouse', 'anchor'] as const).filter((m) => projectOpen(g, m));
+      if (ID === 'world' && worldProjects.length && worldProjects.some((m) => (g.s.megas?.[m]?.done?.length ?? 0) < MEGAS[m].stages.length)) {
+        rows.push(`{soft:no stage is built on} ${WORLDS[here].name}`);
+        rows.push('{u:relocate} each stage on its own island');
+        more.push('{u:mega} the Megaproject page lists them');
+      } else rows.push('{good:every project here stands}');
       return { title: 'Megaproject Bay', uicon: 'mega', rows, more };
     }
     const m = MEGAS[mf.id];
@@ -264,7 +294,8 @@ function entRep(app: App, e: FEnt): DRep {
   if (!d) return { title: 'Module', rows, more };
   rows.push(`{chip:${gradeRole(d.grade.letter)}:${d.grade.letter}} rates ×${d.grade.mult.toFixed(2)} · {research:depth ${d.depth ?? 2}}`);
   const p = Math.round(e.fAvg * 100);
-  if (e.state === 'work') rows.push(`{chip:good:WORKING} ${p}% of full speed`);
+  if (e.paused) rows.push('{chip:soft:STOPPED} by you · makes nothing');
+  else if (e.state === 'work') rows.push(`{chip:good:WORKING} ${p}% of full speed`);
   else if (e.state === 'starved') {
     rows.push(`{chip:warn:STARVED} ${icon(e.why)} · ${p}%`);
     if (e.why && e.why in ITEMS) rows.push(HOVER + starvedCause(g, e, e.why as ItemId));
@@ -287,7 +318,7 @@ function entRep(app: App, e: FEnt): DRep {
   if (!mine.length) more.push('{warn:no routes} · the Route tool joins it');
   const odReady = odOn && !od && !cool;
   return {
-    title: d.name, item: mainItem(d), rows, more, routes: mine,
+    title: d.name, item: mainItem(d), rows, more, routes: mine, pause: e,
     verbs: `{k:LMB} ${odReady ? `overdrive ${RULES.overdriveMult.value}x ${RULES.overdriveSeconds.value}s` : 'pin'}  {k:X} remove`,
   };
 }
@@ -295,15 +326,17 @@ function entRep(app: App, e: FEnt): DRep {
 /** The report for a route under the mouse. */
 function routeRep(app: App, r: SkiffRoute): DRep {
   const g = app.game;
-  const e = routeEnds(g, r);
+  const e = routeEnds(g, r, ID);
   const rows = [`${e ? nameOf(g, e.a) : '?'} → ${e ? nameOf(g, e.b) : '?'}`, routeReadout(g, r)];
-  if (routeShort(g, r)) rows.push(`{warn:short of skiffs} · ${skiffsNeeded(g, r) - r.skiffs} more carry it all`);
-  return { title: 'Skiff route', item: r.item, rows, more: [], verbs: '{k:LMB} its card' };
+  if (routeShort(g, r, ID)) rows.push(`{warn:short of ${word()}s} · ${skiffsNeeded(g, r) - r.skiffs} more carry it all`);
+  return { title: `${Word()} route`, item: r.item, rows, more: [], verbs: '{k:LMB} its card' };
 }
 
 interface Laid { rep: DRep; cw: number; w: number; h: number; rows: { lay: RichLayout; h: number; chip: boolean }[]; routesH: number; verbs: RichLayout | null; brief: boolean }
 
 const ROUTE_ROW = 14;
+/** the pinned report's Stop / Start keys: a row this tall */
+const PAUSE_ROW = 19;
 
 function layRep(rep: DRep, full: boolean, maxCw: number, brief: boolean, close: boolean, maxH = Infinity): Laid {
   // the pinned report's own rows (marked PIN) stay out of every hover; a hover's short cause
@@ -323,12 +356,31 @@ function layRep(rep: DRep, full: boolean, maxCw: number, brief: boolean, close: 
   let laid = rows.map((s) => { const L = layoutRich(s, cw); const c = s.includes('{chip:'); return { lay: L, h: Math.max(L.h, c ? CHIP_H : 0) + 1, chip: c }; });
   let routes = full ? rep.routes ?? [] : [];
   const verbs = verbsS ? layoutRich(verbsS, cw) : null;
-  const measure = () => titleH + 3 + laid.reduce((s, r) => s + r.h, 0) + (routes.length ? 6 + routes.length * ROUTE_ROW : 0) + (verbs ? verbs.h + 4 : 0);
+  const pauseH = full && rep.pause ? PAUSE_ROW : 0;
+  const measure = () => titleH + 3 + laid.reduce((s, r) => s + r.h, 0) + (routes.length ? 6 + routes.length * ROUTE_ROW : 0) + pauseH + (verbs ? verbs.h + 4 : 0);
   // too tall for its room: the route list shortens first, then rows go from the end
   while (tagSize(cw, measure(), 'left').h > maxH && routes.length > 2) routes = routes.slice(0, routes.length - 1);
   while (tagSize(cw, measure(), 'left').h > maxH && laid.length > 2) laid = laid.slice(0, laid.length - 1);
   const sz = tagSize(cw, measure(), 'left');
-  return { rep: { ...rep, routes }, cw, w: sz.w, h: sz.h, rows: laid, routesH: routes.length ? 6 + routes.length * ROUTE_ROW : 0, verbs, brief };
+  return { rep: { ...rep, routes, pause: full ? rep.pause : undefined }, cw, w: sz.w, h: sz.h, rows: laid, routesH: routes.length ? 6 + routes.length * ROUTE_ROW : 0, verbs, brief };
+}
+
+/** The pinned report's Stop / Start keys (the pause command, DESIGN.md §22, as the Factory's): the
+ *  module alone, and every module joined to it by routes. */
+function pauseKeys(app: App, e: FEnt, x: number, y: number, w: number) {
+  const ui = app.ui;
+  const g = app.game;
+  const group = hpauseTargets(g, ID, e, true);
+  const groupStopped = group.some((q) => q.paused);
+  const one = e.paused ? '{u:play} Start' : '{u:pause} Stop';
+  const all = `${groupStopped ? '{u:play} Start' : '{u:pause} Stop'} all ${group.length}`;
+  const w1 = group.length > 1 ? Math.floor((w - 4) / 2) : w;
+  if (button(ui, 'dPause', x, y, w1, 15, one, { tip: e.paused ? [{ text: '{big:Start it}' }, { text: 'it takes and makes again' }] : [{ text: '{big:Stop it}' }, { text: 'takes nothing, makes nothing · its routes wait' }, { text: '{soft:offline and overnight too}' }] })) {
+    app.act({ k: 'pause', floor: ID, x: e.x, y: e.y, on: !e.paused });
+  }
+  if (group.length > 1 && button(ui, 'dPauseGroup', x + w1 + 4, y, w - w1 - 4, 15, all, { tip: [{ text: `{big:${groupStopped ? 'Start' : 'Stop'} its group}` }, { text: `${group.length} modules joined by routes` }] })) {
+    app.act({ k: 'pause', floor: ID, x: e.x, y: e.y, line: true, on: !groupStopped });
+  }
 }
 
 function drawRep(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: number; y: number } | null; pin?: boolean; close?: () => void; blocking?: boolean }) {
@@ -353,17 +405,21 @@ function drawRep(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: num
     rule(ui, r.x, yy + 2, L.cw);
     yy += 6;
     for (const q of rep.routes) {
-      const e = routeEnds(g, q);
+      const e = routeEnds(g, q, ID);
       const out = e?.a.id === DS.sel;
       const other = e ? (out ? e.b : e.a) : null;
-      const short = routeShort(g, q);
+      const short = routeShort(g, q, ID);
       const s = `${out ? '→' : '←'} ${icon(q.item)} ${other ? nameOf(g, other) : '?'} ${short ? `{warn:${rate(q.flow)}/${rate(routeWant(g, ID, q))}}` : `${rate(q.flow)}/s`}`;
-      if (button(ui, 'dRouteRow:' + q.id, r.x, yy, L.cw, ROUTE_ROW - 1, '', { active: DS.route === q.id, tip: [{ text: '{big:Skiff route}' }, { text: routeReadout(g, q) }, { text: '{k:LMB} its card' }] })) { DS.route = q.id; }
+      if (button(ui, 'dRouteRow:' + q.id, r.x, yy, L.cw, ROUTE_ROW - 1, '', { active: DS.route === q.id, tip: [{ text: `{big:${Word()} route}` }, { text: routeReadout(g, q) }, { text: '{k:LMB} its card' }] })) { DS.route = q.id; }
       ui.clip(r.x + 2, yy, L.cw - 4, ROUTE_ROW);
       drawRich(ui, s, r.x + 3, yy + 2, Infinity, T.ink);
       ui.unclip();
       yy += ROUTE_ROW;
     }
+  }
+  if (rep.pause) {
+    pauseKeys(app, rep.pause, r.x, yy + 2, L.cw);
+    yy += PAUSE_ROW;
   }
   if (L.verbs) {
     rule(ui, r.x, yy, L.cw);
@@ -377,6 +433,7 @@ function drawRep(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: num
 /** What the mouse is over on the District, as a key (the hover tag waits on it not changing). */
 export function districtHoverKey(app: App): string | null {
   const g = app.game;
+  at(app);
   const h = app.hud.hoverTile;
   if (DS.hoverRoute !== null) return DS.hoverRoute === DS.route ? null : 'r' + DS.hoverRoute;
   if (!h) return null;
@@ -389,8 +446,9 @@ export function districtHover(app: App, o: { brief: boolean; alpha: number }) {
   const ui = app.ui;
   const g = app.game;
   let rep: DRep | null = null, near: Rect | null = null;
+  at(app);
   if (DS.hoverRoute !== null) {
-    const r = g.s.district?.routes.find((q) => q.id === DS.hoverRoute);
+    const r = g.s[ID]?.routes.find((q) => q.id === DS.hoverRoute);
     if (r) {
       rep = routeRep(app, r);
       near = { x: ui.mx - 6, y: ui.my - 6, w: 12, h: 12 };
@@ -414,8 +472,8 @@ export function districtHover(app: App, o: { brief: boolean; alpha: number }) {
 
 /** The tool strip's rect (the floor's tags keep off it). */
 function stripRect(app: App, L: Layout): Rect {
-  // between the Purse and the lift's District wing (topbar.ts districtWing: 15 px left of the case)
-  const x0 = L.purse.x + L.purse.w + 10, x1 = L.lift.x - 15 - 8;
+  // between the Purse and the lift's wings (topbar.ts liftWingW: the District's and the World's)
+  const x0 = L.purse.x + L.purse.w + 10, x1 = L.lift.x - liftWingW(app) - 8;
   const w = Math.min(x1 - x0, stripNatural(app));
   return { x: Math.round(x0 + (x1 - x0 - w) / 2), y: 4, w, h: 30 };
 }
@@ -424,6 +482,7 @@ function stripRect(app: App, L: Layout): Rect {
 function hintOf(app: App, L: Layout): { s: string; r: Rect } | null {
   let s: string;
   if (app.mode.k === 'route') s = DS.from ? '{k:LMB} where it goes · {k:Esc} another source' : '{k:LMB} the module it starts at · {k:Esc} done';
+  else if (app.mode.k === 'remove') s = `{bad:Remove} {k:LMB} a module or a route · ${word()}s refunded · {k:Esc} done`;
   else if (app.mode.k === 'hmodule') {
     const d = app.game.design(app.mode.design);
     s = `{good:in hand} ${d ? bigSafe(d.name) : ''} · {k:LMB} place  {k:Esc} drop`;
@@ -435,7 +494,9 @@ function hintOf(app: App, L: Layout): { s: string; r: Rect } | null {
 
 /** HUD rects on the District that the floor's tags keep off. */
 export function districtZones(app: App, L: Layout): Rect[] {
-  if (app.floor !== 'district' || !app.game.s.district) return [];
+  const f = highOf(app);
+  if (!f || !app.game.s[f]) return [];
+  at(app);
   const out = [stripRect(app, L)];
   const lot = lotRect(app, L);
   if (lot) out.push(lot);
@@ -450,16 +511,19 @@ function tools(app: App): Tool[] {
   const g = app.game;
   const mk = (id: string, label: string, ic: UIconName, on: boolean, tip: TipLine[], go: () => void): Tool => ({ id, label, icon: ic, on, tip, go, w: 26 + richWidth(label) });
   const out = [
-    mk('dRoute', 'Route', 'flow', app.mode.k === 'route', [{ text: '{big:Route}' }, { text: '{k:LMB} a module, then where it goes' }, { text: `a skiff {coin:${coinK(skiffCost())}} · refunded when lifted` }], () => app.setMode(app.mode.k === 'route' ? { k: 'idle' } : { k: 'route' })),
-    mk('dRemove', 'Remove', 'remove', app.mode.k === 'remove', [{ text: '{big:Remove}' }, { text: '{k:LMB} a module back to the inventory' }, { text: 'its routes go with it · skiffs refunded' }], () => app.setMode(app.mode.k === 'remove' ? { k: 'idle' } : { k: 'remove' })),
+    mk('dRoute', 'Route', 'flow', app.mode.k === 'route', [{ text: '{big:Route}' }, { text: '{k:LMB} a module, then where it goes' }, { text: `a ${word()} {coin:${coinK(skiffCost())}} · refunded when lifted` }], () => app.setMode(app.mode.k === 'route' ? { k: 'idle' } : { k: 'route' })),
+    mk('dRemove', 'Remove', 'remove', app.mode.k === 'remove', [{ text: '{big:Remove}' }, { text: '{k:LMB} a module back to the inventory' }, { text: `its routes go with it · ${word()}s refunded` }], () => app.setMode(app.mode.k === 'remove' ? { k: 'idle' } : { k: 'remove' })),
   ];
-  if (g.done('districtFolds' as never)) out.push(mk('dFold', 'Fold', 'fold', app.mode.k === 'fold', [{ text: '{big:District fold}' }, { text: '{k:LMB} drag a box over a joined group' }, { text: `up to ${Math.max(HIGH.district.foldMax, prules(g).highFoldMax)}×${Math.max(HIGH.district.foldMax, prules(g).highFoldMax)} · depth 3 · {k:F}` }], () => app.toggleFold()));
+  // the World takes no fold of its own: a fold up there is the Last Fold (Act V, DESIGN.md §22)
+  if (ID === 'district' && g.done('districtFolds' as never)) out.push(mk('dFold', 'Fold', 'fold', app.mode.k === 'fold', [{ text: '{big:District fold}' }, { text: '{k:LMB} drag a box over a joined group' }, { text: `up to ${Math.max(HIGH.district.foldMax, prules(g).highFoldMax)}×${Math.max(HIGH.district.foldMax, prules(g).highFoldMax)} · depth 3 · {k:F}` }], () => app.toggleFold()));
   return out;
 }
 
 /** Designs with spare copies the District takes: depth-2 groups and its own depth-3 folds (DESIGN.md
  *  §21), the groups first. */
 function groups(app: App) {
+  // the World takes depth 3 only: the District's folds (DESIGN.md §22)
+  if (ID === 'world') return app.game.s.designs.filter((d) => d.depth === 3 && d.spare > 0);
   const ds = app.game.s.designs.filter((d) => (d.depth === 2 || d.depth === 3) && d.spare > 0);
   return [...ds.filter((d) => d.depth === 2), ...ds.filter((d) => d.depth === 3)];
 }
@@ -469,15 +533,19 @@ const SLOT = 21;
 /** The route count on the strip (DESIGN.md §21: `routes 96/140`), warn ink within 10 of the cap. */
 function routesLabel(app: App): string {
   const g = app.game;
-  const n = g.s.district?.routes.length ?? 0, max = maxRoutes(g, ID);
+  const n = g.s[ID]?.routes.length ?? 0, max = maxRoutes(g, ID);
   return n >= max - 10 ? `{warn:routes ${n}/${max}}` : `routes ${n}/${max}`;
 }
+
+/** The strip's words when no group is in hand: what goes up here and where it comes from. */
+const NONE = () => (ID === 'world' ? '{soft:no spare District folds}' : '{soft:no spare groups}');
+const groupsCap = () => (ID === 'world' ? 'MODULES' : 'GROUPS');
 
 function stripNatural(app: App): number {
   const ts = tools(app);
   const tw = ts.reduce((s, t) => s + t.w + 3, 0);
   const gs = groups(app);
-  const slots = gs.length ? 6 + smallWidth('GROUPS') + 4 + gs.length * (SLOT + 2) : 6 + richWidth('{soft:no spare groups}');
+  const slots = gs.length ? 6 + smallWidth(groupsCap()) + 4 + gs.length * (SLOT + 2) : 6 + richWidth(NONE());
   return 12 + tw + 4 + richWidth(routesLabel(app)) + 6 + slots;
 }
 
@@ -499,7 +567,7 @@ function toolStrip(app: App, L: Layout) {
   // the route count: how many more the floor holds (a refusal at the cap says why: the sim)
   const rl = routesLabel(app), rw = richWidth(rl);
   const g = app.game;
-  const nR = g.s.district?.routes.length ?? 0, maxR = maxRoutes(g, ID);
+  const nR = g.s[ID]?.routes.length ?? 0, maxR = maxRoutes(g, ID);
   drawRich(ui, rl, x + 2, y + 5, Infinity, T.inkSoft);
   ui.hint(x, y, rw + 4, 20, [
     { text: '{big:Routes}' },
@@ -512,12 +580,14 @@ function toolStrip(app: App, L: Layout) {
   x += 5;
   const gs = groups(app);
   if (!gs.length) {
-    drawRich(ui, '{soft:no spare groups}', x, y + 5, Infinity, T.inkSoft);
-    ui.hint(x, y, R.x + R.w - x, 20, [{ text: '{big:Groups}' }, { text: 'depth-2 groups and depth-3 folds go up here' }, { text: 'fold a group on the {u:factory} Factory · stamp copies on the Modules page' }], 210);
+    drawRich(ui, NONE(), x, y + 5, Infinity, T.inkSoft);
+    ui.hint(x, y, R.x + R.w - x, 20, ID === 'world'
+      ? [{ text: '{big:Modules}' }, { text: 'depth-3 modules go up here: the District\'s folds' }, { text: 'fold a group of groups on the {u:district} District · stamp copies on the Modules page' }]
+      : [{ text: '{big:Groups}' }, { text: 'depth-2 groups and depth-3 folds go up here' }, { text: 'fold a group on the {u:factory} Factory · stamp copies on the Modules page' }], 210);
     return;
   }
-  ui.small('GROUPS', x, y + 7, T.inkSoft);
-  x += smallWidth('GROUPS') + 4;
+  ui.small(groupsCap(), x, y + 7, T.inkSoft);
+  x += smallWidth(groupsCap()) + 4;
   const room = Math.max(1, Math.floor((R.x + R.w - 4 - x) / (SLOT + 2)));
   const pages = Math.max(1, Math.ceil(gs.length / room));
   const per = pages > 1 ? Math.max(1, room - 1) : room;
@@ -527,7 +597,8 @@ function toolStrip(app: App, L: Layout) {
   for (const d of shown) {
     const holding = app.mode.k === 'hmodule' && app.mode.design === d.id;
     const out = mainItem(d);
-    const deep = d.depth === 3;
+    // a depth-3 fold among the District's groups wears a mark; on the World every one is depth 3
+    const deep = d.depth === 3 && ID === 'district';
     const tip: TipLine[] = [
       { text: `{big:${bigSafe(d.name)}}` },
       ...(deep ? [{ text: '{research:depth 3} · a District fold' }] : []),
@@ -536,9 +607,10 @@ function toolStrip(app: App, L: Layout) {
       { text: `${d.spare} spare · {k:LMB} take one` },
     ];
     if (button(ui, 'dGroup:' + d.id, x, y, SLOT, 20, '', { active: holding, tip })) app.pickModule(d.id);
-    const s = hasArt('dist_module') ? sheet('dist_module') : sheet('module');
+    const mn = hart(ID, 'module');
+    const s = hasArt(mn) ? sheet(mn) : sheet('module');
     ui.ctx.drawImage(s.frames[0], x + 2, y + 1);
-    if (out) ui.ctx.drawImage(itemIcon(out), x + 6, y + 1 + (hasArt('dist_module') ? 6 : 4));
+    if (out) ui.ctx.drawImage(itemIcon(out), x + 6, y + 1 + (hasArt(mn) ? 6 : 4));
     ui.small(String(d.spare), x + SLOT - 2, y + 11, T.ink, { align: 'right' });
     // a depth-3 fold: a research-teal rim inside the slot and a "3" tab on its top-left corner
     if (deep) {
@@ -569,8 +641,8 @@ function lotRect(app: App, L: Layout): Rect | null {
   const g = app.game;
   const price = lotPrice(g, ID);
   if (!price) return null;
-  const fw = highW(g, ID), fh = HIGH.district.h;
-  const r = worldRect(app, fw, 0, HIGH.district.lotCols, fh);
+  const fw = highW(g, ID), fh = HIGH[ID].h;
+  const r = worldRect(app, fw, 0, HIGH[ID].lotCols, fh);
   if (r.x > ui.w - 8 || r.x + r.w < 8) return null;
   const priceS = `{coin:${price.format()}}`;
   const bw = Math.max(richWidth('Buy lot') + 14, chipWidth(priceS)), bh = 17 + 2 + CHIP_H;
@@ -594,7 +666,7 @@ function lotButton(app: App, L: Layout) {
   if (!price || !R) return;
   const can = g.s.coin.gte(price);
   const priceS = `{coin:${price.format()}}`;
-  const tip: TipLine[] = [{ text: '{big:A District lot}' }, { text: `+${HIGH.district.lotCols} columns · +${RULES.routesPerLot.value} routes` }, { text: can ? `{k:LMB} buy ${priceS}` : `{soft:you have} {coin:${g.s.coin.format()}}` }, { text: '{reset:until Reorganize}' }];
+  const tip: TipLine[] = [{ text: `{big:A ${HIGH[ID].name} lot}` }, { text: `+${HIGH[ID].lotCols} columns · +${RULES.routesPerLot.value} routes` }, { text: can ? `{k:LMB} buy ${priceS}` : `{soft:you have} {coin:${g.s.coin.format()}}` }, { text: '{reset:until Reorganize}' }];
   if (button(ui, 'buyLot', R.x, R.y, R.w, 17, 'Buy lot', { gold: can, tip })) app.act({ k: 'hlot', floor: ID });
   chip(ui, R.x + Math.round((R.w - chipWidth(priceS)) / 2), R.y + 19, priceS, { role: can ? 'coin' : 'soft' });
 }
@@ -621,7 +693,7 @@ function itemPicker(app: App) {
   rule(ui, R.x, R.y + BIG_LINE_H, R.w, true);
   let y = R.y + BIG_LINE_H + 4;
   p.items.forEach((it, i) => {
-    if (button(ui, 'dPick:' + it, R.x, y, R.w, 15, rows[i], { tip: [{ text: `{big:${bigSafe(itemName(it))}}` }, { text: `by skiff to ${nameOf(g, to)}` }, { text: `{k:LMB} fly it · a skiff {coin:${coinK(skiffCost())}}` }] })) {
+    if (button(ui, 'dPick:' + it, R.x, y, R.w, 15, rows[i], { tip: [{ text: `{big:${bigSafe(itemName(it))}}` }, { text: `by ${word()} to ${nameOf(g, to)}` }, { text: `{k:LMB} fly it · a ${word()} {coin:${coinK(skiffCost())}}` }] })) {
       const ok = app.act({ k: 'route', floor: ID, fx: p.fx, fy: p.fy, tx: p.tx, ty: p.ty, item: it }).ok;
       DS.pick = null;
       if (ok) DS.from = null;
@@ -656,22 +728,24 @@ function routeCard(app: App, L: Layout) {
   if (id === null) return;
   const ui = app.ui;
   const g = app.game;
-  const r = g.s.district?.routes.find((q) => q.id === id);
-  const e = r ? routeEnds(g, r) : null;
+  const r = g.s[ID]?.routes.find((q) => q.id === id);
+  const e = r ? routeEnds(g, r, ID) : null;
   if (!r || !e) { DS.route = null; return; }
   const want = routeWant(g, ID, r);
   const cap = routeCap(g, ID, r);
-  const short = routeShort(g, r);
+  const short = routeShort(g, r, ID);
   const per = skiffRateNow(g, ID, routeDist(e.a, e.b));
+  const w1 = word();
   const lines = [`${icon(r.item)} ${nameOf(g, e.a)} → ${nameOf(g, e.b)}`, routeReadout(g, r)];
-  if (short) lines.push(`{warn:short of skiffs} · ${skiffsNeeded(g, r) - r.skiffs} more carry all ${rate(want)}/s`);
-  else if (want > 1e-9 && r.flow < want * 0.9 && e.a.state !== 'work') lines.push(`its source is {warn:${e.a.state}} · skiffs wait on it`);
-  lines.push(`{soft:a skiff carries} ${rate(per)}/s {soft:here}` + (r.skiffs > 1 ? ` {soft:· ${r.skiffs} carry} ${rate(cap)}/s` : ''));
+  if (short) lines.push(`{warn:short of ${w1}s} · ${skiffsNeeded(g, r) - r.skiffs} more carry all ${rate(want)}/s`);
+  else if (want > 1e-9 && r.flow < want * 0.9 && e.a.state !== 'work') lines.push(`its source is {warn:${e.a.state}} · ${w1}s wait on it`);
+  lines.push(`{soft:a ${w1} carries} ${rate(per)}/s {soft:here}` + (r.skiffs > 1 ? ` {soft:· ${r.skiffs} carry} ${rate(cap)}/s` : ''));
   const lays = lines.map((s) => layoutRich(s, 230));
-  const plus = `+ skiff {coin:${coinK(skiffCost())}}`;
-  const minus = `${MINUS} skiff +${coinK(skiffCost())}`;
+  const plus = `+ ${w1} {coin:${coinK(skiffCost())}}`;
+  const minus = `${MINUS} ${w1} +${coinK(skiffCost())}`;
   const btnW = [richWidth(plus) + 14, richWidth(minus) + 14, richWidth('Remove route') + 14];
-  const cw = Math.max(150, bigWidth('Skiff route') + 28, ...lays.map((l) => l.w), btnW[0] + btnW[1] + 4);
+  const title = `${Word()} route`;
+  const cw = Math.max(150, bigWidth(title) + 28, ...lays.map((l) => l.w), btnW[0] + btnW[1] + 4);
   const ch = BIG_LINE_H + 3 + lays.reduce((s, l) => s + l.h, 0) + 10 + 2 * 19;
   const sz = tagSize(cw, ch, 'left');
   // beside the route's middle, off its two ends
@@ -679,7 +753,7 @@ function routeCard(app: App, L: Layout) {
   const also = [worldRect(app, e.a.x, e.a.y, e.a.w, e.a.h), worldRect(app, e.b.x, e.b.y, e.b.w, e.b.h)];
   const at = placeWide(app, mid, sz.w, sz.h, also);
   const R = tag(ui, at.x, at.y, sz.w, sz.h, { pin: true, hole: 'left' });
-  ui.big('Skiff route', R.x + 2, R.y, T.ink);
+  ui.big(title, R.x + 2, R.y, T.ink);
   ui.ctx.drawImage(itemIcon(r.item), R.x + R.w - 24, R.y + 1);
   if (button(ui, 'dCloseRoute', R.x + R.w - 12, R.y - 1, 12, 12, '{u:remove}', { tip: 'close {k:Esc}' })) { DS.route = null; return; }
   rule(ui, R.x, R.y + BIG_LINE_H, R.w, true);
@@ -688,11 +762,11 @@ function routeCard(app: App, L: Layout) {
   meter(ui, R.x, y + 2, R.w, 5, want > 1e-9 ? Math.min(1, r.flow / want) : 1, { role: short ? 'warn' : 'good', target: 0.9, glint: false });
   y += 10;
   const can = g.s.coin.gte(skiffCost());
-  const max = HIGH.district.maxSkiffs;
-  if (button(ui, 'dSkiffPlus', R.x, y, btnW[0], 17, plus, { gold: can && short, disabled: r.skiffs >= max, tip: [{ text: '{big:One more skiff}' }, { text: `+${rate(per)}/s · ${r.skiffs + 1} skiffs` }, { text: r.skiffs >= max ? `{soft:${max} is the most a route takes}` : `{coin:${coinK(skiffCost())}} · refunded when lifted` }] })) app.act({ k: 'skiff', floor: ID, id: r.id, n: 1 });
-  if (button(ui, 'dSkiffMinus', R.x + btnW[0] + 4, y, btnW[1], 17, minus, { disabled: r.skiffs <= 1, tip: [{ text: '{big:One skiff fewer}' }, { text: r.skiffs <= 1 ? '{soft:a route keeps one · remove the route}' : `${MINUS}${rate(per)}/s · {coin:${coinK(skiffCost())}} back` }] })) app.act({ k: 'skiff', floor: ID, id: r.id, n: -1 });
+  const max = HIGH[ID].maxSkiffs;
+  if (button(ui, 'dSkiffPlus', R.x, y, btnW[0], 17, plus, { gold: can && short, disabled: r.skiffs >= max, tip: [{ text: `{big:One more ${w1}}` }, { text: `+${rate(per)}/s · ${words(r.skiffs + 1)}` }, { text: r.skiffs >= max ? `{soft:${max} is the most a route takes}` : `{coin:${coinK(skiffCost())}} · refunded when lifted` }] })) app.act({ k: 'skiff', floor: ID, id: r.id, n: 1 });
+  if (button(ui, 'dSkiffMinus', R.x + btnW[0] + 4, y, btnW[1], 17, minus, { disabled: r.skiffs <= 1, tip: [{ text: `{big:One ${w1} fewer}` }, { text: r.skiffs <= 1 ? '{soft:a route keeps one · remove the route}' : `${MINUS}${rate(per)}/s · {coin:${coinK(skiffCost())}} back` }] })) app.act({ k: 'skiff', floor: ID, id: r.id, n: -1 });
   y += 19;
-  if (button(ui, 'dUnroute', R.x, y, btnW[2], 17, 'Remove route', { tip: [{ text: '{big:Remove route}' }, { text: `its ${r.skiffs} skiff${r.skiffs === 1 ? '' : 's'} refunded` }] })) { if (app.act({ k: 'unroute', floor: ID, id: r.id }).ok) DS.route = null; }
+  if (button(ui, 'dUnroute', R.x, y, btnW[2], 17, 'Remove route', { tip: [{ text: '{big:Remove route}' }, { text: `its ${words(r.skiffs)} refunded` }] })) { if (app.act({ k: 'unroute', floor: ID, id: r.id }).ok) DS.route = null; }
   void L;
 }
 
@@ -781,7 +855,8 @@ function auditClip(app: App) {
 /** Everything the District puts on the HUD (no page open): the tool strip, the lot's button, the
  *  audit's clipboard, the route card, the item list, the pinned report. */
 export function districtHud(app: App, L: Layout) {
-  if (app.floor !== 'district' || !app.game.s.district) return;
+  const f = highOf(app);
+  if (!f || !app.game.s[f]) return;
   sync(app);
   toolStrip(app, L);
   lotButton(app, L);
@@ -807,12 +882,12 @@ export function districtInput(app: App, t: { x: number; y: number }, overUI: boo
   const g = app.game;
   const inp = app.input;
   sync(app);
-  if (!g.s.district) return;
-  const W = highW(g, ID), H = HIGH.district.h;
+  if (!g.s[ID]) return;
+  const W = highW(g, ID), H = HIGH[ID].h;
   const inFloor = (p: { x: number; y: number }) => p.x >= 0 && p.y >= 0 && p.x < W && p.y < H;
   // the route under the mouse (not over a thing, not with a tool that places)
   const thing = inFloor(t) ? hentAt(g, ID, t.x, t.y) : null;
-  DS.hoverRoute = !overUI && app.mouseIn && !thing && (app.mode.k === 'idle' || app.mode.k === 'remove') ? routeAtWorld(g, w.x, w.y, 3)?.id ?? null : null;
+  DS.hoverRoute = !overUI && app.mouseIn && !thing && (app.mode.k === 'idle' || app.mode.k === 'remove') ? routeAtWorld(g, w.x, w.y, 3, ID)?.id ?? null : null;
   if (app.mode.k === 'fold') {
     const cx = Math.max(0, Math.min(W - 1, t.x)), cy = Math.max(0, Math.min(H - 1, t.y));
     if (inp.mouse.pressed[0] && !overUI && inFloor(pt)) app.foldDrag = { x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
@@ -849,7 +924,7 @@ export function districtInput(app: App, t: { x: number; y: number }, overUI: boo
     if (!src) { DS.from = null; return; }
     if (!thing) { app.refuse('Click where it goes: a module, the Dock, the Hopper or the Bay'); return; }
     if (thing === src) { DS.from = null; app.audio.sfx('close'); return; }
-    const items = routeItems(g, src, thing);
+    const items = routeItems(g, src, thing, ID);
     if (!items.length) {
       // the sim says why, for the first thing the source makes
       const d = g.design(src.design);
@@ -882,6 +957,7 @@ export function hgradeCard(app: App, L: Layout) {
   const g = app.game;
   const a = g.s.haudit;
   if (!a || !a.result) { app.panel = null; return; }
+  ID = a.floor;
   const res = a.result;
   const mods = a.ids.map((id) => hent(g, a.floor, id)).filter((m): m is FEnt => !!m);
   const bill = mods.reduce((s, m) => s + (g.design(m.design)?.bill ?? 0), 0);
@@ -896,10 +972,11 @@ export function hgradeCard(app: App, L: Layout) {
     parts: mods.map((m) => ({
       id: m.id,
       draw: (x: number, y: number) => {
-        const s = hasArt('dist_module') ? sheet('dist_module') : sheet('module');
+        const mn = hart(a.floor, 'module');
+        const s = hasArt(mn) ? sheet(mn) : sheet('module');
         app.ui.ctx.drawImage(s.frames[0], x, y);
         const out = mainOutput(g, m.design);
-        if (out) app.ui.ctx.drawImage(itemIcon(out), x + 4, y + (hasArt('dist_module') ? 6 : 4));
+        if (out) app.ui.ctx.drawImage(itemIcon(out), x + 4, y + (hasArt(mn) ? 6 : 4));
       },
       name: hname(g, m),
       busy: res.busy[m.id] ?? 0,

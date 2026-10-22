@@ -130,6 +130,8 @@ export class Renderer {
   plat = new Platform();
   /** the District's sky platform (DESIGN.md §21), higher and brighter than the Factory's */
   dplat = new DistrictPlatform();
+  /** the World's (DESIGN.md §22): the District's geometry in its own art */
+  wplat = new DistrictPlatform('world');
   /** chunks being paved over after a buy: the wave's centre (tile units), its age, which tiles
    *  it has reached (a dust puff as it reaches each) */
   private paving: { id: string; x: number; y: number; t: number; hit: Uint8Array }[] = [];
@@ -182,11 +184,11 @@ export class Renderer {
     // over it); below, the south rim and the cliff under it (the sky island)
     const pad = 4 * TILE;
     const top = (TOWN_ROWS + 1) * TILE;
-    const bot = this.floor === 'factory' ? this.plat.below : this.floor === 'district' ? this.dplat.below : this.isle.below;
+    const bot = this.floor === 'factory' ? this.plat.below : this.floor === 'district' ? this.dplat.below : this.floor === 'world' ? this.wplat.below : this.isle.below;
     c.x = mw + pad * 2 <= halfW * 2 ? mw / 2 : Math.max(halfW - pad, Math.min(mw + pad - halfW, c.x));
     // zoomed out far enough for the whole island (or platform) to show: frame all of it; else the
     // player may pan on down past the cliff to the island's point
-    const B = this.floor === 'factory' ? this.plat.bounds() : this.floor === 'district' ? this.dplat.bounds() : this.isle.bounds();
+    const B = this.floor === 'factory' ? this.plat.bounds() : this.floor === 'district' ? this.dplat.bounds() : this.floor === 'world' ? this.wplat.bounds() : this.isle.bounds();
     const low = Math.max(mh + bot, B.y1);
     if (B.y1 > B.y0 && B.y1 - B.y0 <= halfH * 2) c.y = (B.y0 + B.y1) / 2;
     else c.y = mh + top + bot <= halfH * 2 ? Math.max((mh + bot - top) / 2, Math.min(low - halfH, c.y)) : Math.max(halfH - top, Math.min(low - halfH, c.y));
@@ -271,11 +273,11 @@ export class Renderer {
             fx.ring(px + c, py + c, C.bone, 10 * big, 0.25, 6);
           } else this.drops.set((e.y ?? 0) * 4096 + (e.x ?? 0), { t: this.time, landed: false });
           if (e.id === 'pole') { fx.ring(px + 8, py + 8, C.teal1, (poleReach(g) + 0.5) * TILE, 0.5, 6); this.sfx('powerOn', 0.5); }
-          if (e.floor === 'district' && e.id === 'module' && (g.s.counters.districtPlaced ?? 0) <= 1) {
-            // the first group up on the District
+          if ((e.floor === 'district' || e.floor === 'world') && e.id === 'module' && (g.s.counters[e.floor + 'Placed'] ?? 0) <= 1) {
+            // the first group up on the District (or the World)
             fx.burst(px + 8, py + 8, 40, [C.gold, C.brass1, C.hot, C.bone], 80, 40, 1, 1.1);
             fx.ring(px + 8, py + 8, C.gold, 30, 0.8, 4);
-            fx.text(px + 8, py - 14, 'FIRST DISTRICT GROUP!', C.gold, 2, true);
+            fx.text(px + 8, py - 14, e.floor === 'world' ? 'FIRST WORLD MODULE!' : 'FIRST DISTRICT GROUP!', C.gold, 2, true);
             fx.kick(4);
             this.sfx('fanfare', 0.6);
           }
@@ -320,9 +322,9 @@ export class Renderer {
           // x, y is the machine's (or module's) centre tile; d is how many it set running hot
           const cx = px + 8, cy = py + 8;
           const n = e.d ?? 1;
-          if (e.floor === 'factory' || e.floor === 'district') {
+          if (e.floor === 'factory' || e.floor === 'district' || e.floor === 'world') {
             // a module and every module trunked (or flown) to it: a burst on each, a big one on the clicked
-            for (const m of e.floor === 'district' ? g.s.district?.ents ?? [] : g.s.factory.ents) {
+            for (const m of e.floor === 'factory' ? g.s.factory.ents : g.s[e.floor]?.ents ?? []) {
               if (m.kind !== 'module' || !(m.od ?? 0) || m.id === e.value) continue;
               fx.burst(m.x * TILE + 8, m.y * TILE + 8, 12, [C.hot, C.glow, C.gold], 55, 20, 1, 0.6);
               fx.ring(m.x * TILE + 8, m.y * TILE + 8, C.glow, 14, 0.4, 4);
@@ -383,7 +385,7 @@ export class Renderer {
           break;
         }
         case 'fold': {
-          if (e.floor === 'factory' || e.floor === 'district') {
+          if (e.floor === 'factory' || e.floor === 'district' || e.floor === 'world') {
             fx.burst(px, py, 40, [C.gold, C.brass1, C.hot, C.bone], 90, 30, 1, 1);
             fx.ring(px, py, C.gold, 40, 0.8, 6);
             break;
@@ -406,7 +408,7 @@ export class Renderer {
           this.sfx('place', 0.7, 1.3);
           break;
         }
-        case 'firstRoute': fx.text(px + 8, py - 14, 'FIRST SKIFF ROUTE!', C.gold, 2, true); fx.kick(3); this.sfx('fanfare', 0.5); break;
+        case 'firstRoute': fx.text(px + 8, py - 14, e.floor === 'world' ? 'FIRST BARGE ROUTE!' : 'FIRST SKIFF ROUTE!', C.gold, 2, true); fx.kick(3); this.sfx('fanfare', 0.5); break;
         case 'bayOpen': fx.ring(px, py, C.gold, 40, 0.9, 6); fx.burst(px, py, 30, [C.gold, C.iron2, C.hot], 70, 40, 1, 1); fx.kick(3); break;
         case 'megaGive': fx.pop(px, py - 20, e.value ?? 1, 'mega:' + e.id, C.gold, e.id ?? null); fx.burst(px, py, 4, [C.gold, C.iron2], 25, 40); break;
         case 'megaDone': fx.ring(px, py, C.gold, 60, 1.2, 6); fx.burst(px, py, 80, [C.gold, C.hot, C.bone, C.iron2], 120, 40, 2, 1.6); break;
@@ -433,9 +435,9 @@ export class Renderer {
     drawSky(ctx, this.W, this.H, this.cam, this.time, ov.floor);
     ctx.setTransform(z, 0, 0, z, ox, oy);
     ctx.imageSmoothingEnabled = false;
-    if (ov.floor === 'district') {
-      // the District (DESIGN.md §21): its own platform, no town up here
-      this.dplat.draw(ctx, highW(g, 'district'), HIGH.district.h, this.time);
+    if (ov.floor === 'district' || ov.floor === 'world') {
+      // the District (DESIGN.md §21) and the World (§22): their own platforms, no town up here
+      (ov.floor === 'world' ? this.wplat : this.dplat).draw(ctx, highW(g, ov.floor), HIGH[ov.floor].h, this.time);
       const a = this.screenToWorld(this.view.x, this.view.y), b = this.screenToWorld(this.view.x + this.view.w, this.view.y + this.view.h);
       drawDistrict(ctx, g, this.time, ov.district, { x0: a.x, y0: a.y, x1: b.x, y1: b.y });
       this.effects(dt);
@@ -1372,8 +1374,8 @@ export class Renderer {
   private orderCascade(g: Game, id: string) {
     const fx = this.fx;
     let dock: { x: number; y: number } | null = null;
-    if (this.floor === 'factory' || this.floor === 'district') {
-      const d = (this.floor === 'district' ? g.s.district?.ents ?? [] : g.s.factory.ents).find((e) => e.kind === 'fdock');
+    if (this.floor === 'factory' || this.floor === 'district' || this.floor === 'world') {
+      const d = (this.floor === 'factory' ? g.s.factory.ents : g.s[this.floor]?.ents ?? []).find((e) => e.kind === 'fdock');
       if (d) dock = { x: d.x + 1, y: d.y + 1 };
     } else {
       const d = g.s.ents.find((e) => e.kind === 'dock');
