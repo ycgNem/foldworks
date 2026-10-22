@@ -21,8 +21,8 @@ describe('idle and offline at every stage (Milestone 6 exit), run 1, early', () 
       const hour = [1, 2].find((h) => stageRow(SEED, h).done.includes(u.requires));
       expect(hour, `${u.name} offered by 2 h`).toBeDefined();
       const r = stageRow(SEED, hour!);
-      // a night: the first hour pays in full either way; the other 7 at e, so +eff of them
-      const perNight = u.eff * (r.idle8h - r.idle1h);
+      // a night: the replayed window pays in full either way; the rest at e, so +eff of it
+      const perNight = u.eff * (r.idle8h - r.idleR);
       console.log(`[pace] ${u.name} (${u.cost}): offered by ${hour} h, +${Math.round(perNight)} coin a night, pays back in ${(u.cost / perNight).toFixed(2)} nights`);
       expect(u.cost / perNight).toBeLessThanOrEqual(2);
     }

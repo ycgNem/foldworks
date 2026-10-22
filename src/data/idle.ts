@@ -20,6 +20,21 @@ export const IDLE = {
   /** a jam inside a measuring window opens it again (the rates before it are a line now stopped),
    * at most this many times in one live stretch */
   remeasureMax: r(8, '§12 Extrapolating in segments: a cascade stops a line machine by machine within a minute or two (the slice\'s copper line: 4 machines); 8 windows of 3 min opened again cover the longest cascade the bots build, at most 24 min more of live ticks'),
+  // ---- the compute budget (§20): the replay is shortened so a run costs about 5 s, by a tick's
+  // cost estimated from what ticks (never a clock: the window is the same in every replay)
+  /** ms the live ticks of one offline run (the replay and its segments' re-measures) may cost */
+  replayBudgetMs: r(5000, '§20 The compute budget: an 8 h report in about 5 s (the Milestone 6 target; the Acts IV-V review measured 24-38 s at 15-40 h with the full hour replayed)'),
+  /** the share of the budget the first replay takes; the segments\' settle-and-measure share the rest */
+  replayShare: r(0.75, '§20 The compute budget: the bots\' factories need 0-7 segments in 8 h, 2-4 min of live ticks each; three quarters to the replay leaves a quarter for them'),
+  /** the shortest first replay, however dear a tick: a settle and a full measuring window */
+  replayMinSeconds: r(240, '§20 The compute budget: 60 s for lines to settle plus 3 min of rates (the segments\' own live stretch), so the rates are measured the same way however big the factory'),
+  /** the shortest measuring window after a segment once the budget is spent */
+  measureMinSeconds: r(60, '§20 The compute budget: a minute of rates after the 60 s settle (a District module at 0.05/s delivers 3 items in it; the Workshop\'s slowest line, a craft every 4-8 s)'),
+  /** a tick's estimated cost: a fixed part, and per thing that ticks (ms on the reference PC) */
+  tickBaseMs: r(0.008, '§20 The compute budget, calibrated: a tick with nothing built costs 0.007-0.011 ms (the checkpoints at 1, 5, 15, 30 and 40 h stripped bare; node, the owner\'s PC, best of 3 x 1,500 ticks, other agents running)'),
+  tickWorkshopMs: r(0.0005, '§20 The compute budget, calibrated: the Workshop of the 1-40 h checkpoints (164-208 belts, Miners, machines, crates and heaps) costs 0.070-0.113 ms a tick over its bare floor: 0.00043-0.00054 ms a piece'),
+  tickFactoryMs: r(0.0012, '§20 The compute budget, calibrated: the Factory\'s modules and trunks (18-48 of them) cost 0.041-0.062 ms a tick: 0.0010-0.0013 ms a piece'),
+  tickHighMs: r(0.0018, '§20 The compute budget, calibrated: the high floors\' modules and routes (72, 108 and 242 of them at 30, 40 and 15 h) cost 0.13, 0.19 and 0.44 ms a tick: 0.0017-0.0018 ms a piece'),
   /** time slices the extrapolation credits in, so orders and research land at their times */
   creditSlice: r(900, '§12 Report: the extrapolated part is credited in 15-minute slices, so an order or a research node lands on the timeline within 15 min of when it would'),
   /** timeline entries kept in a report */
@@ -27,7 +42,7 @@ export const IDLE = {
   // ---- the overnight forecast (§20)
   forecastHours: r(8, '§20 Safe for overnight: a night is 8 h; the screen also offers 1 h and 24 h'),
   /** an offline run or a forecast in the app: ms of it per animation frame, checked every chunk of ticks */
-  jobMsPerFrame: r(20, '§20 Background tab: 20 ms of an offline run a frame keeps the page drawing at 30+ fps; at 0.05 ms an Act II tick (measured) an 8 h run (about 86,000 ticks: the 1 h replay and its re-measured segments) shows its report in about 5 s, with a progress bar, never a frozen page'),
+  jobMsPerFrame: r(20, '§20 Background tab: 20 ms of an offline run a frame keeps the page drawing at 30+ fps; the compute budget (replayBudgetMs) holds an 8 h run\'s live ticks to about 5 s of work, so its report shows in about 5-8 s with a progress bar, never a frozen page (it was 24-38 s at 15-40 h before the budget)'),
   jobChunkTicks: r(100, '§20 Background tab: the clock is read every 100 ticks (about 5 ms), so a frame overruns its 20 ms by at most that'),
   // ---- Inspiration (§15)
   inspireShare: r(0.001, '§15 Inspiration: 1 click = 0.1% of the selected node\'s remaining cost'),

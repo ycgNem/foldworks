@@ -308,9 +308,12 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
 
 - On load, or when a hidden tab comes back with time the background pump could not run (§20),
   elapsed time `t` (capped at **7 days**; the slice had 24 h) is computed as:
-  1. **Replay**: up to **1 h** of real ticks headless (72,000 ticks), both floors, through the same
+  1. **Replay**: up to **1 h** of real ticks headless (72,000 ticks), every floor, through the same
      systems: Workshop lines item by item, modules as rates. Heaps fill and lines jam during it as
-     they would live.
+     they would live. **The compute budget** (§20) shortens it on a big factory: a tick's cost is
+     estimated from the number of things that tick, and the replay takes three quarters of about
+     5 s of ticks (4 min at least), so an Act II factory replays about 20 minutes and a 15 h one
+     about 6.
   2. **Extrapolate the rest in segments.** Rates come from what reached each Dock, Hopper and the
      Megaproject Bay over the last 5 minutes of live ticks, and from each rising Slag Heap's fill
      rate. A segment runs until the next thing that would change those rates: **a heap filling**,
@@ -337,17 +340,33 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
   Dock stopped taking slag (The Pile filled)"), **how many machines it stopped** and **a fix the
   player can build** ("9 more Slag Heaps keep it running 8h", "a belt taking copper ingots to the
   Dock"), with a button that jumps to the root; each **heap filling** that stopped nothing; **orders
-  filled**; **research finished**; the **Megaproject**'s stages and its wants met. A `~` marks a time
+  filled**; **research finished**; the **Megaproject**'s stages and its wants met. **On the high
+  floors** (since the Acts IV-V review): a District, World or Beyond module that ran under half
+  speed 10 s straight is a row like a Workshop line (copies of one group stopped the same way are
+  one row, "Motors II's line stopped: Servos II takes no more motors (7 modules, 5 copies)"), with
+  the District's starved report's cause and fix ("its gears wait on the skiffs", fix "1 more skiff
+  on the Gears II route"); **a route short of carriers** (under 90% of its want, the Dispatcher's
+  test) is a row naming it and how many carriers it is short ("The Concrete II to Dock route was
+  short of 2 skiffs the whole time", fix "2 more skiffs carry all its steel", a chip "carries
+  42%"), with a Go button that pins the route. **The Standing Committee never Reorganizes while
+  away**: its number reached is a row, "The Committee would have reorganized at 28 Patents", and
+  it fires at its next check once you are back. A `~` marks a time
   worked out from the rates rather than replayed. Then the totals: coin, items into the Hopper,
   Machine Kits banked, what the Bay was given, what sold most. Its footer says how the number was
-  made ("Paid: the first 1h 04m at 100% (as if open), the other 6h 56m at 50%"), so it is a number
-  the player can check (pillar 4).
+  made ("Paid: the first 1h 04m at 100% (as if open), the other 6h 56m at 50%"; on a big factory
+  "the first 6m 35s at 100%, the other 7h 53m at 55%"), so it is a number the player can check
+  (pillar 4).
 - **The forecast** (§20, "safe for overnight") is this same run on a copy of the game.
 - *Measured* (§13 check 12 and §20's stage table): at every stage measured (the slice end, run 1
   at 1–5 h, the campaign's runs 2, 3 and 4 to 13.9 h of play, seeds 1000 and 8919), 8 h offline
   pays 0.56–0.61 of 8 h open and idle at 0.5 and 0.78–0.81 at the 0.75 ceiling; the 7 h after the
   first pay 0.50–0.54 and
-  0.75–0.77 of what open idle pays in them. Open and idle the factory earns less every hour as
+  0.75–0.77 of what open idle pays in them. *Re-measured with the compute budget* (§20; check 12
+  (b) now read after the replayed window): the slice end replays 31 min and pays 0.56 / 0.78 of
+  open idle, the rest at 0.52–0.53 / 0.76–0.77 (both seeds); run 1 at 1 h and 2 h replays 22 and
+  20 min and pays 0.56 and 0.53 at 0.5 (the rest at 0.53 and 0.51), 0.78 and 0.76 at 0.75 (0.77,
+  0.75); the Night Shift now pays back in 0.96 and 1.65 nights (more of a night is paid at e).
+  Runs 2–4 (the other pace-idle files) were not re-run in this change. Open and idle the factory earns less every hour as
   heaps fill (the slice factory: 126K in its first hour, then 48K, then 40.5K an hour once 11 of 23
   Workshop machines have jammed).
 
@@ -1127,6 +1146,11 @@ derivation here.
   timeline within 15 min of when it would have (`~` marks such a time).
 - **The timeline keeps 40 entries**, nearest the start (a week away fills it with the first
   morning's jams; the totals cover the rest).
+- **Segments end at a crate or the Chute's stock filling too** (since the compute budget): with a
+  replay of minutes, a Buffer Crate (50) or the Factory Chute's stock (20 an item) that fills after
+  it would otherwise be paid on as if its line ran on. Their fill rates are measured in the window
+  like a heap's; the segment ends when one fills, it is set full, and the live minutes after let
+  its line back up (a jam row if a machine stops).
 - **The run is spread over frames** (20 ms a frame, the clock read every 100 ticks), with a
   progress bar, never a frozen page. Measured in Chrome on the Act II bot's 2 h factory (179
   Workshop buildings, 48 Factory pieces): an 8 h offline run takes **3.0–3.6 s** while the page
@@ -1134,6 +1158,61 @@ derivation here.
   2.5–3.1 s at every stage from 1 h to 5 h (the review round, with the order and research
   segments and the windows opened again: 3–6 s in node with eight test files running side by side,
   across runs 1–3; Chrome not re-measured).
+
+### The compute budget (the Acts IV-V review)
+The review measured an 8 h offline run at **24-38 s** on the 15 h and 40 h checkpoints (the full
+hour replayed at 0.84-1.17 ms a tick; `jobMsPerFrame` had assumed 0.05 ms and "about 5 s"). The
+replay is now shortened by a **deterministic** budget (`src/sim/offline.ts` `tickCostMs`,
+`src/data/idle.ts`): nothing in `src/sim/` reads a clock, so the window is the same in every replay
+and on every machine, and a forecast is still the morning's report.
+- **A tick's cost** is estimated from what ticks: **0.008 ms**, plus **0.0005 ms** a Workshop piece
+  (belts, Miners, machines, splitters, crates, heaps), **0.0012 ms** a Factory piece (modules and
+  trunks) and **0.0018 ms** a high-floor piece (modules and routes on the District, the World and
+  Beyond). *Calibrated* in node on the owner's PC (best of 3 × 1,500 ticks, with other agents'
+  work running, as the PC usually is) on the five campaign checkpoints, each also with its high
+  floors, its Workshop, or everything stripped, so each part is measured apart:
+
+  | Checkpoint | Workshop / Factory / high pieces | measured ms a tick | estimated |
+  |---|---|---|---|
+  | 1 h | 164 / 40 / 0 | 0.130 | 0.138 |
+  | 5 h | 171 / 48 / 0 | 0.163 | 0.151 |
+  | 15 h | 208 / 18 / 242 | 0.634 | 0.569 |
+  | 30 h | 208 / 18 / 72 | 0.291 | 0.263 |
+  | 40 h | 208 / 18 / 108 | 0.327 | 0.328 |
+
+- **The budget**: the live ticks of one run (the replay, its windows opened again, each segment's
+  settle and measure) may cost about **5,000 ms** at that estimate. The first replay takes
+  **three quarters** of it (an hour at most, **4 min** at least: a settle and a full measuring
+  window), its last 5 minutes (or all of it, when shorter) measured as before. Each segment after a
+  heap fills keeps its **60 s** settle (physical: the jam spreading) and measures for what the
+  budget has left, **3 min** down to **1 min** at least. A small factory (the slice, Act I) still
+  replays the whole hour; the Act II bot's factory replays about 20 min; a 15 h District about
+  6.5 min.
+- **Honesty with a shorter window**: the replayed part pays in full and the rest at e, as before,
+  so a shorter replay pays a little less (more of the time at e), never more. A heap filling was
+  already a segment; **a crate or the Chute's stock filling** is one too now (above), so a line that
+  stops after a short replay is still not paid on. Jams inside a measuring window still open it
+  again (at most 8 times, at the window's current length). Check 12 (b) is restated on the replayed
+  window: it pays as open idle does, the rest at e − 0.03 to e + 0.05 of what open idle pays in it
+  (`tests/pace-idle-helpers.ts` measures open idle over the same window).
+- **Measured, before and after** (node, the owner's PC, other agents running; 8 h away, the
+  report's coin at each checkpoint's own efficiency):
+
+  | Checkpoint | before: s / replayed | after: s / replayed | segments before / after | coin before / after |
+  |---|---|---|---|---|
+  | 1 h | 11.1 s / 1h 26m | 7.5-7.8 s / 47m 16s | 5 / 10 | 1.98M / 1.82M |
+  | 5 h | 13.1 s / 1h 08m | 6.1-6.4 s / 29m 34s | 2 / 3 | 2.63M / 2.44M |
+  | 15 h | 41.6 s / 1h 01m | 5.1-6.6 s / 6m 38s-7m 29s | 0 / 0-1 | 131M / 120M |
+  | 30 h | 20.5 s / 1h | 4.6-5.2 s / 11m 52s | 0 / 0 | 38.8M / 36.8M |
+  | 40 h | 24.4 s / 1h | 4.2-4.4 s / 9m 32s | 0 / 0 | 77.5M / 73.6M |
+
+  (Two runs after, the second with a pace test running beside it; between them a window opened
+  again went back to 3 min at most, as before the budget, which gave the 15 h run one segment.)
+
+  In Chrome, with the page drawing (`e2e/out/offshot.mjs`, my own server): 15 h **3.3-4.1 s**, 40 h
+  **3.4-4.1 s** (the 15 h one with a District route cut to one skiff). A factory needing many segments goes past 5 s (the 1 h checkpoint's 10 segments, two
+  minutes each at the floor: 7.8 s); the windows' floors are kept for honesty. "Replayed" counts
+  the re-measures. The coin falls 5-8%: the minutes no longer replayed pay at e instead of 100%.
 
 ### Safe for overnight: the forecast and stopping a line
 - **The forecast is the offline model on a copy of the game** (`forecast(g, hours)`), for 1, 8
@@ -1781,7 +1860,7 @@ of about 0 at 30-40 h).
 | the Town Archive | 8 | the Purse | every run starts knowing Act I's research |
 | Standing Charts | 7 | the Archive | once the World floor stood in this world, later runs here know Charting |
 | the Patent Clerk | 6 | - | buys open Patent nodes in the tree's order as Patents allow, every 5 s |
-| the Standing Committee | 10 | the Clerk | Reorganizes by itself when the preview reaches the number set (`{ k: 'standing', at }`; never in a Challenge, waits for audits) |
+| the Standing Committee | 10 | the Clerk | Reorganizes by itself when the preview reaches the number set (`{ k: 'standing', at }`; never in a Challenge, waits for audits; **never while away**, the tab hidden or the game closed: the offline report says when it would have, and it fires at its next check once you are back) |
 | the Regrader | 9 | - | kept designs unfold, audit and fold by themselves at a run's start (the 10 s refold check when the layout suits the island) |
 | the Town Plan | 9 | the Regrader | keep 2 District layouts (`keepPlan`, `forgetPlan`); each run places them again from spare copies of the best design of each tile's product and depth, routes and skiffs paid |
 | Contract Runners | 7 | - | every order on offer fills from every Dock at once |

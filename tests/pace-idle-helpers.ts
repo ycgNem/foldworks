@@ -11,7 +11,7 @@
 // bounded against open idle: never more than it, at least e of it, and check 12 (b): the first
 // hour paid as open idle pays it, the other 7 at about e of what open idle pays in them.
 import { restore, checkSave, savePayload, takeSnapshot } from '../src/sim/snapshot';
-import { runOffline, offlineEfficiency } from '../src/sim/offline';
+import { runOffline, offlineEfficiency, OfflineRun } from '../src/sim/offline';
 import { IDLE } from '../src/data/idle';
 import { TICK_RATE } from '../src/engine/time';
 import { Game } from '../src/sim/Game';
@@ -35,6 +35,10 @@ export interface StageRow {
   idle30: number;
   idle1h: number;
   idle8h: number;
+  /** the first replay's length (s; an hour unless the compute budget shortens it, DESIGN.md §20)
+   * and what open idle pays in it */
+  replayS: number;
+  idleR: number;
   offline8h: number;
   offlineMax8h: number;
   /** the efficiency the game itself has at the stage (its Patents) */
@@ -53,13 +57,20 @@ export interface StageRow {
   lines: number;
 }
 
-/** Check 12 (b), restated for any efficiency e (DESIGN.md §13): 8 h away pays the first hour as
- * open idle pays it (replayed, in full) and, for the other 7, between e - 0.03 and e + 0.05 of
- * what open idle pays in them (the 4-minute re-measures after each segment pay in full: the +0.05;
- * whole items floored in each credit slice: the -0.03). `share` is that measured fraction. */
+/** Check 12 (b), restated for any efficiency e (DESIGN.md §13): 8 h away pays the replayed window
+ * as open idle pays it (in full: the first hour, or less when the compute budget shortens it,
+ * DESIGN.md §20) and, for the rest, between e - 0.03 and e + 0.05 of what open idle pays in it (the
+ * re-measures after each segment pay in full: the +0.05; whole items floored in each credit slice:
+ * the -0.03). `share` is that measured fraction. */
 export const CHECK12_BELOW = 0.03;
 export const CHECK12_ABOVE = 0.05;
-export const share = (off: number, r: { idle1h: number; idle8h: number }) => (off - r.idle1h) / (r.idle8h - r.idle1h);
+export const share = (off: number, r: { idle1h: number; idle8h: number; idleR?: number }) => {
+  const first = r.idleR ?? r.idle1h;
+  return (off - first) / (r.idle8h - first);
+};
+
+/** The first replay's length for a state (s): the compute budget's, read without running it. */
+export const replayWindow = (g: Game) => new OfflineRun(g, AWAY).firstReplay;
 
 /** Stages where rule 4's band does not hold, measured, with the reason (DESIGN.md §20, open for
  * the lead: the bot's own build and the economy decide them, not the offline model). The offline
@@ -96,12 +107,20 @@ export function measure(seed: number, run: number, hour: number, snap: { snap: s
   const effNow = offlineEfficiency(live);
   const done = [...live.s.research.done];
   live.s.visible = false;
+  const replayS = replayWindow(copy());
   const e0 = live.s.earned.toNumber();
   const tl0 = performance.now();
-  live.step(ACTIVE_FOR * TICK_RATE);
+  // open idle over the replayed window too (check 12 (b) pays it in full), on the way to 30 min
+  const r0 = Math.min(replayS, ACTIVE_FOR);
+  live.step(Math.round(r0 * TICK_RATE));
+  let idleR = live.s.earned.toNumber() - e0;
+  live.step(Math.round((ACTIVE_FOR - r0) * TICK_RATE));
   const tickMs = (performance.now() - tl0) / (ACTIVE_FOR * TICK_RATE);
   const idle30 = live.s.earned.toNumber() - e0;
-  live.step((H - ACTIVE_FOR) * TICK_RATE);
+  const r1 = Math.min(H, Math.max(replayS, ACTIVE_FOR));
+  live.step(Math.round((r1 - ACTIVE_FOR) * TICK_RATE));
+  if (replayS > ACTIVE_FOR) idleR = live.s.earned.toNumber() - e0;
+  live.step(Math.round((H - r1) * TICK_RATE));
   const idle1h = live.s.earned.toNumber() - e0;
   live.step((AWAY - H) * TICK_RATE);
   const idle8h = live.s.earned.toNumber() - e0;
@@ -114,7 +133,7 @@ export function measure(seed: number, run: number, hour: number, snap: { snap: s
   checkSave(JSON.parse(save));
   const checkMs = performance.now() - tc;
   const row: StageRow = {
-    seed, run, hour, active30, idle30, idle1h, idle8h, effNow, done,
+    seed, run, hour, active30, idle30, idle1h, idle8h, replayS, idleR, effNow, done,
     offline8h: off.coin.toNumber(), offlineMax8h: offMax.coin.toNumber(),
     offlineMs, segments: off.segments, jams: off.jams, lines: off.lines.length, tickMs, saveChars: save.length, checkMs,
   };
@@ -127,7 +146,7 @@ const k = (x: number) => (Math.abs(x) >= 1e6 ? (x / 1e6).toFixed(2) + 'M' : Math
 /** One line for the log (and DESIGN.md §20's table). */
 export function describe(r: StageRow): string {
   const extra = (o: number) => (r.idle8h > r.idle1h ? share(o, r).toFixed(2) : 'n/a');
-  return `[pace] seed ${r.seed} run ${r.run} at ${r.hour} h: active 30 min ${k(r.active30)}, idle 30 min ${k(r.idle30)} (active/idle ${(r.active30 / r.idle30).toFixed(2)}); idle 1 h ${k(r.idle1h)}, 8 h ${k(r.idle8h)}; 8 h offline ${k(r.offline8h)} at ${E_BASE} (${(r.offline8h / r.idle8h).toFixed(2)} of idle, the 7 h after the first at ${extra(r.offline8h)}; ${(r.offline8h / r.idle1h).toFixed(2)} h of the first idle hour) and ${k(r.offlineMax8h)} at ${E_MAX} (${(r.offlineMax8h / r.idle8h).toFixed(2)}, ${extra(r.offlineMax8h)}; ${(r.offlineMax8h / r.idle1h).toFixed(2)} h); its own efficiency ${r.effNow}; offline run ${Math.round(r.offlineMs)} ms, ${r.segments} segments, ${r.jams} machines jammed in ${r.lines} lines; a tick ${r.tickMs.toFixed(4)} ms; save ${Math.round(r.saveChars / 1024)} KB, checked in ${Math.round(r.checkMs)} ms`;
+  return `[pace] seed ${r.seed} run ${r.run} at ${r.hour} h: active 30 min ${k(r.active30)}, idle 30 min ${k(r.idle30)} (active/idle ${(r.active30 / r.idle30).toFixed(2)}); idle 1 h ${k(r.idle1h)}, 8 h ${k(r.idle8h)}; replayed ${Math.round(r.replayS / 60)} min (idle ${k(r.idleR)} in it); 8 h offline ${k(r.offline8h)} at ${E_BASE} (${(r.offline8h / r.idle8h).toFixed(2)} of idle, the rest after the replay at ${extra(r.offline8h)}; ${(r.offline8h / r.idle1h).toFixed(2)} h of the first idle hour) and ${k(r.offlineMax8h)} at ${E_MAX} (${(r.offlineMax8h / r.idle8h).toFixed(2)}, ${extra(r.offlineMax8h)}; ${(r.offlineMax8h / r.idle1h).toFixed(2)} h); its own efficiency ${r.effNow}; offline run ${Math.round(r.offlineMs)} ms, ${r.segments} segments, ${r.jams} machines jammed in ${r.lines} lines; a tick ${r.tickMs.toFixed(4)} ms; save ${Math.round(r.saveChars / 1024)} KB, checked in ${Math.round(r.checkMs)} ms`;
 }
 
 const cache = new Map<string, StageRow>();
@@ -237,7 +256,7 @@ export function stageChecks(r: StageRow): { name: string; ok: boolean; value: nu
     add(`offline at ${e} <= open idle`, off / r.idle8h, off <= r.idle8h);
     add(`offline at ${e} >= ${e} x open idle`, off / r.idle8h, off >= e * r.idle8h);
     const x = share(off, r);
-    add(`check 12 at ${e}: the 7 h after the first at ${e - CHECK12_BELOW}-${e + CHECK12_ABOVE} of open idle`, x, x >= e - CHECK12_BELOW - 1e-9 && x <= e + CHECK12_ABOVE + 1e-9);
+    add(`check 12 at ${e}: the time after the replay at ${e - CHECK12_BELOW}-${e + CHECK12_ABOVE} of open idle`, x, x >= e - CHECK12_BELOW - 1e-9 && x <= e + CHECK12_ABOVE + 1e-9);
   }
   return rows;
 }

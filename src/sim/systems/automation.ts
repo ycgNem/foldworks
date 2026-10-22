@@ -142,12 +142,27 @@ function townPlan(g: Game) {
 }
 
 /** The Standing Committee: Reorganize by itself once the preview reaches the player's number,
- * never during a Challenge, and only when a Reorganize would be allowed (no audit running). */
+ * never during a Challenge, and only when a Reorganize would be allowed (no audit running).
+ * **Never while away** (the tab hidden, or the game closed: the offline run hides it): a reset is
+ * the player's to see happen, and an offline replay that reset the run paid the time away into a
+ * run that no longer existed (the Acts IV-V review: runs 5 -> 6, the District emptied, the report
+ * "coin -21.3M"). The offline report says when it would have (`standingDue`); back in the game, it
+ * fires at its next check. */
 function standingCommittee(g: Game) {
-  const at = g.s.meta.standing;
-  if (at === null || at === undefined || g.s.challenge) return;
-  if (previewPatents(g).now < at || reorganizeRefusal(g)) return;
+  if (!g.s.visible) return;
+  if (standingDue(g) === null) return;
   if (reorganize(g).ok) g.bump('standingReorganizes');
+}
+
+/** The Patents the Standing Committee would Reorganize at now, or null when it would not (no
+ * Committee, no number set, a Challenge, the preview short of the number, or a Reorganize refused).
+ * Read whether or not the player is away: the offline report's "would have reorganized" row. */
+export function standingDue(g: Game): number | null {
+  const at = g.s.meta.standing;
+  if (!lrules(g).standing || at === null || at === undefined || g.s.challenge || g.s.scenario) return null;
+  const now = previewPatents(g).now;
+  if (now < at || reorganizeRefusal(g)) return null;
+  return now;
 }
 
 /** The node the bank pays the largest share of (the cheapest, on a tie). */

@@ -18,14 +18,14 @@ import { runOffline } from '../src/sim/offline';
 import { restore } from '../src/sim/snapshot';
 import { TICK_RATE } from '../src/engine/time';
 import type { Game } from '../src/sim/Game';
-import { CHECK12_ABOVE, CHECK12_BELOW, E_BASE, E_MAX, share } from './pace-idle-helpers';
+import { CHECK12_ABOVE, CHECK12_BELOW, E_BASE, E_MAX, share, replayWindow } from './pace-idle-helpers';
 
 const AWAY = 8 * 3600;
 
 const copy = (g: Game) => restore({ seed: g.s.seed, snap: JSON.stringify(g.s), snapTick: g.s.tick, log: [], tick: g.s.tick });
 
 describe('pace: offline is honest at the slice end (§13 check 12)', () => {
-  const rows: { active: number; idle10: number; idle1h: number; idle8h: number; off: number; offMax: number }[] = [];
+  const rows: { active: number; idle10: number; idle1h: number; idle8h: number; idleR: number; off: number; offMax: number }[] = [];
   for (const seed of SEEDS.slice(0, 2)) {
     const { g, bot } = play(seed, 'planner', 75 * 60, (_g, b) => b.log.at.sliceEnd !== undefined);
     const snap = copy(g);
@@ -39,23 +39,30 @@ describe('pace: offline is honest at the slice end (§13 check 12)', () => {
     const offMax = runOffline(copy(snap), AWAY, { eff: E_MAX }).coin.toNumber();
     const live = copy(snap);
     live.s.visible = false;
+    // the replayed window (an hour unless the compute budget shortens it, DESIGN.md §20) pays as
+    // open idle does; check 12 (b) reads the rest
+    const R = replayWindow(copy(snap));
     const i0 = live.s.earned.toNumber();
-    live.step(10 * 60 * TICK_RATE);
-    const idle10 = live.s.earned.toNumber() - i0;
-    live.step(50 * 60 * TICK_RATE);
-    const idle1h = live.s.earned.toNumber() - i0;
-    live.step((AWAY - 3600) * TICK_RATE);
-    const idle8h = live.s.earned.toNumber() - i0;
-    const r = { active, idle10, idle1h, idle8h, off, offMax };
+    const marks = [...new Set([600, R, 3600, AWAY])].sort((a, b) => a - b);
+    const at: Record<number, number> = {};
+    let t = 0;
+    for (const m of marks) {
+      live.step(Math.round((m - t) * TICK_RATE));
+      t = m;
+      at[m] = live.s.earned.toNumber() - i0;
+    }
+    const idle10 = at[600], idle1h = at[3600], idle8h = at[AWAY], idleR = at[R];
+    console.log(`[pace] slice end, seed ${seed}: the first replay ${Math.round(R / 60)} min`);
+    const r = { active, idle10, idle1h, idle8h, idleR, off, offMax };
     rows.push(r);
-    console.log(`[pace] slice end, seed ${seed}: active ${Math.round(active)} coin/h, active / idle (10 min) ${(active / 6 / idle10).toFixed(2)}; open idle 1 h ${Math.round(idle1h)}, 8 h ${Math.round(idle8h)}; 8 h offline at ${E_BASE} ${Math.round(off)} (${(off / idle8h).toFixed(2)} of idle, the 7 h after the first at ${share(off, r).toFixed(2)}, ${(off / active).toFixed(2)} h of active) and at ${E_MAX} ${Math.round(offMax)} (${(offMax / idle8h).toFixed(2)}, ${share(offMax, r).toFixed(2)}, ${(offMax / active).toFixed(2)} h of active)`);
+    console.log(`[pace] slice end, seed ${seed}: active ${Math.round(active)} coin/h, active / idle (10 min) ${(active / 6 / idle10).toFixed(2)}; open idle 1 h ${Math.round(idle1h)}, 8 h ${Math.round(idle8h)}; 8 h offline at ${E_BASE} ${Math.round(off)} (${(off / idle8h).toFixed(2)} of idle, the rest after the replay at ${share(off, r).toFixed(2)}, ${(off / active).toFixed(2)} h of active) and at ${E_MAX} ${Math.round(offMax)} (${(offMax / idle8h).toFixed(2)}, ${share(offMax, r).toFixed(2)}, ${(offMax / active).toFixed(2)} h of active)`);
   }
   const vsIdle = spread(rows.map((r) => r.off / r.idle8h));
   const vsIdleMax = spread(rows.map((r) => r.offMax / r.idle8h));
   const sh = spread(rows.map((r) => share(r.off, r)));
   const shMax = spread(rows.map((r) => share(r.offMax, r)));
   const ratio = spread(rows.map((r) => r.active / 6 / r.idle10));
-  console.log(`[pace] slice end: offline / open idle ${vsIdle.mean.toFixed(2)} at ${E_BASE} and ${vsIdleMax.mean.toFixed(2)} at ${E_MAX}; the 7 h after the first at ${sh.min.toFixed(2)}-${sh.max.toFixed(2)} and ${shMax.min.toFixed(2)}-${shMax.max.toFixed(2)}; active / idle ${ratio.min.toFixed(2)}-${ratio.max.toFixed(2)}`);
+  console.log(`[pace] slice end: offline / open idle ${vsIdle.mean.toFixed(2)} at ${E_BASE} and ${vsIdleMax.mean.toFixed(2)} at ${E_MAX}; the rest after the replay at ${sh.min.toFixed(2)}-${sh.max.toFixed(2)} and ${shMax.min.toFixed(2)}-${shMax.max.toFixed(2)}; active / idle ${ratio.min.toFixed(2)}-${ratio.max.toFixed(2)}`);
 
   it('offline pays something', () => {
     expect(vsIdle.min).toBeGreaterThan(0.3);
@@ -66,7 +73,7 @@ describe('pace: offline is honest at the slice end (§13 check 12)', () => {
     expect(vsIdle.min).toBeGreaterThanOrEqual(E_BASE);
     expect(vsIdleMax.min).toBeGreaterThanOrEqual(E_MAX);
   });
-  it('the 7 h after the first hour pay about e of open idle (b), at 0.5 and 0.75', () => {
+  it('the time after the replayed window pays about e of open idle (b), at 0.5 and 0.75', () => {
     expect(sh.min).toBeGreaterThanOrEqual(E_BASE - CHECK12_BELOW);
     expect(sh.max).toBeLessThanOrEqual(E_BASE + CHECK12_ABOVE);
     expect(shMax.min).toBeGreaterThanOrEqual(E_MAX - CHECK12_BELOW);

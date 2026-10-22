@@ -2501,3 +2501,56 @@ items are the bot's reach, not the model's).
   the District at 10:01, Robotics at 12:03, each Act III stretch's worst wait 10.4-10.7 min (the
   full-floor reset), a District of 130 groups at 0.93 ms a tick. Open: every §22 target; the
   islands' layouts; 80 h of play (about 50 minutes of wall time).
+
+## Fixes after the review: offline (2026-10-22)
+
+The three offline findings of the Acts IV-V review, fixed in a worktree (time-boxed, about 3 h).
+DESIGN.md §12 and §20 carry the numbers.
+- **The Standing Committee never fires while away** (`!g.s.visible`: the tab hidden or the game
+  closed; the offline run hides it). The critic's case (the 40 h checkpoint, the Clerk and the
+  Committee at 3 Patents, 8 h away) read runs 5 -> 6, the District 46 modules -> 0 and a report of
+  "coin -21.3M"; now runs 5 -> 5, 46 modules stand, +73.6M, and a row "The Committee would have
+  reorganized at 4 Patents". *Why not let it reset and report it*: a reset is the player's moment
+  (the reset screen, the Patents filed, the head starts), and the replay would pay the time away
+  into a run that no longer exists; holding costs at most the time away at the old run's income,
+  which the report pays honestly. Back in the game it fires at its next 10 s check, so the
+  automation stands. `standingDue(g)` (the Committee's own test, read whether away or not) is what
+  the report asks. A hidden tab holds it too (the background pump is time away). Regression:
+  `tests/offline-review.test.ts`, the critic's case built in a sandbox (the checkpoint is not in
+  the repo).
+- **The report sees the high floors.** A District, World or Beyond module that runs **under half
+  speed 10 s straight** while away is a row like a Workshop line (modules joined by routes are one
+  line; copies of one group that stop the same way fold into one row, "(7 modules, 5 copies)": the
+  District stamps groups by the dozen). Its cause and fix are the District's starved report's (no
+  route brings it, its route short of carriers and how many more, its feeder stopped, its feeders
+  make too little; blocked: nothing takes it, another group takes no more, or it waits on its
+  carriers at the Dock). *Why "under half speed" and not the Workshop's "blocked 10 s"*: a module
+  fed by carriers flickers blocked between loads at 95% (measured on the 15 h checkpoint: Gears II
+  at 95% read "stopped" six times in the first draft). **A route short of carriers** (under 90% of
+  its want, the Dispatcher's test; a route with no carrier is one the player parked, as the Stuck?
+  button reads it) is a row whether it was short when you left or became short while away: it
+  names the route, how many carriers it is short ("short of 2 skiffs"), what it carries
+  ("carries 42%"), and the fix ("2 more skiffs carry all its steel"; past the 12 a route takes, its
+  ends closer). *Why report a route short at the start* (a Workshop jam already there is not
+  news): it ran short the whole time away, which is the news a District player needs, and the
+  report is the only place the time away is accounted. Go pins the route on its floor.
+- **The compute budget**: a tick's cost estimated from the number of things that tick (weights
+  calibrated on the five checkpoints, each part measured apart: DESIGN.md §20), the live ticks of
+  a run held to about 5 s at that estimate, the first replay three quarters of it (an hour at most,
+  4 min at least), each later segment's measuring window what is left (3 min down to 1). 8 h away
+  went from 41.6 s to 5.1-6.6 s at 15 h and 24.4 s to 4.2-4.4 s at 40 h (node; 3.3-4.1 s in Chrome).
+  *Deterministic*, never a clock (the sim stays pure, a forecast stays the morning's report, a
+  replay of the command log reads the same window). *Honesty kept*: the replayed part pays in full
+  and the rest at e, so a shorter window pays less, never more (the coin falls 5-8% on the
+  checkpoints); **a crate or the Chute's stock filling is a segment now**, as a heap's was, so a line
+  that stops after a short replay is not paid on. Check 12 (b) is restated on the replayed window
+  (open idle over the same window pays in full; `tests/pace-idle-helpers.ts`, `tests/pace-offline.test.ts`
+  measure it there): *why* the numbers legitimately move: an Act II factory now replays about
+  20 minutes, not the hour, so "the 7 h after the first hour" is no longer what is paid at e.
+- **Kept open**: the overnight forecast (`src/app/overnight.ts`, not in this change's files) lists
+  only jams and heaps, so a short route shows in the morning's report but not yet in the evening's
+  forecast rows (its coin is the same run's); the weights were calibrated with other agents running
+  (§20 once read an Act II tick at 0.03-0.04 ms where this calibration reads 0.13-0.16: a quieter PC
+  runs under the 5 s, never over, since the window is fixed by the estimate); a factory that needs
+  many segments still goes past 5 s (the 1 h checkpoint's 10: 7.8 s).
+- Nothing derivative: the budget, the rows and the hold are the offline model's own rules.
