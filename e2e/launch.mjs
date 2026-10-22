@@ -38,5 +38,10 @@ export async function frames(page, n = 2) {
 export async function hoverTile(page, x, y) {
   const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), [x, y]);
   await page.mouse.move(p.x, p.y);
+  // a floor tag comes after the mouse rests on its thing (src/app/hud.ts HOVER_DELAY) and fades in
+  await page.waitForTimeout(HOVER_WAIT);
   return p;
 }
+
+/** ms to rest on a floor thing before its hover tag is up (HOVER_DELAY 0.45 s + the fade) */
+export const HOVER_WAIT = 650;

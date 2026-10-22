@@ -15,7 +15,7 @@ import { FACTORY } from '../data/land';
 import { megaStage } from '../data/megaprojects';
 import { TICK_RATE } from '../engine/time';
 import { plain, pct, duration } from '../engine/fmt';
-import { bigWidth, hasBigGlyph, BIG_LINE_H, LINE_H } from '../ui/font';
+import { bigWidth, textWidth, hasBigGlyph, BIG_LINE_H, LINE_H } from '../ui/font';
 import { layoutRich, drawLayout, richWidth, CHIP_H } from '../ui/rich';
 import { T, type Role } from '../ui/theme';
 import { itemIcon } from '../render/sprites';
@@ -35,9 +35,10 @@ import type { App } from './app';
 // ------------------------------------------------------------------ rows
 
 /** One row of a report: rich text (it may wrap), a bar against a target, a ruled gap. `opt` rows
- * are the first to go when a pinned tag would be too tall (the line around it). */
+ * are the first to go when a pinned tag would be too tall (the line around it); `tut` rows (how to
+ * work it, which the goal's bubble also says) stay out of the brief hover. */
 export type Row =
-  | { t: 'rich'; s: string; opt?: boolean }
+  | { t: 'rich'; s: string; opt?: boolean; tut?: boolean }
   | { t: 'bar'; frac: number; target?: number | null; role: Role; note?: string; opt?: boolean }
   | { t: 'rule'; opt?: boolean };
 
@@ -146,8 +147,8 @@ function machineReport(app: App, e: Ent): Report {
   const rep: Report = { title: entName(g, e), item: main, rows, more };
   if (firstMin) {
     const cranks = r ? Math.ceil(r.time / RULES.crankSeconds.value) : 8;
-    rows.push(rich('{k:LMB} the ore patch → feeds her'));
-    rows.push(rich(`{k:LMB} her ×${cranks} → {i:ironIngot}`));
+    rows.push({ t: 'rich', s: '{k:LMB} the ore patch → feeds her', tut: true });
+    rows.push({ t: 'rich', s: `{k:LMB} her ×${cranks} → {i:ironIngot}`, tut: true });
   }
   if (!r) {
     rows.push(rich('{chip:warn:NO RECIPE} it takes its first input'));
@@ -455,12 +456,29 @@ function factoryReport(app: App, e: FEnt): Report {
 
 // ------------------------------------------------------------------ laying out and drawing
 
-interface Laid { rep: Report; rows: { row: Row; h: number }[]; cw: number; w: number; h: number; verbsH: number; modesH: number; /** rows left out to fit (optional ones count half) */ cut: number }
+interface Laid { rep: Report; rows: { row: Row; h: number }[]; cw: number; w: number; h: number; verbsH: number; modesH: number; /** rows left out to fit (optional ones count half) */ cut: number; /** the brief hover: the name in Reed */ brief: boolean }
 
 const ROW_GAP = 1;
 const BAR_H = 9;
 const MODES_H = 15;
 const MIN_CW = 116;
+/** the brief hover's narrowest content and most rows */
+const BRIEF_CW = 64;
+const BRIEF_ROWS = 5;
+
+/** The brief hover (the owner, 2026-10-21: the hover tags took too much room): the name, the
+ * status chips and the rows that name a cause, the rate, and the one verb the left button does.
+ * No bars, no how-to rows, no R and X. Every row the hover showed before is one click away (the
+ * pinned tag). Past BRIEF_ROWS the plain rows go first: a status chip or a row in warn or bad ink
+ * (a cause) is never cut, so the brief tag never hides a bottleneck (pillar 3). */
+function briefOf(rep: Report): Report {
+  const all = rep.rows.filter((r) => r.t === 'rich' && !r.tut);
+  const cause = (r: Row) => r.t === 'rich' && /\{(chip:|bad:|warn:)/.test(r.s);
+  let room = BRIEF_ROWS - all.filter(cause).length;
+  const rows = all.length <= BRIEF_ROWS ? all : all.filter((r) => cause(r) || room-- > 0);
+  const lmb = rep.verbs?.split('  ').find((v) => v.startsWith('{k:LMB}'));
+  return { ...rep, rows, more: [], modes: undefined, verbs: lmb ? lmb.replace(/^\{k:LMB\} pin$/, '{k:LMB} more') : undefined };
+}
 
 function rowH(r: Row, cw: number): number {
   if (r.t === 'rich') return Math.max(layoutRich(r.s, cw).h, r.s.includes('{chip:') ? CHIP_H : 0);
@@ -470,16 +488,18 @@ function rowH(r: Row, cw: number): number {
 
 /** Lay out a report no wider than maxCw (content) and no taller than maxH (outer): optional rows
  * go first, then rows are cut with a count of how many more there are. */
-function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: boolean): Laid {
+function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: boolean, brief = false): Laid {
+  if (brief) rep = briefOf(rep);
   let rows: Row[] = full ? [...rep.rows, ...(rep.more ?? [])] : rep.rows;
-  const titleW = bigWidth(bigSafe(rep.title)) + (rep.item || rep.uicon ? 12 : 0) + (closeBtn ? 16 : 0);
+  const titleH = brief ? LINE_H : BIG_LINE_H;
+  const titleW = (brief ? textWidth(rep.title) : bigWidth(bigSafe(rep.title))) + (rep.item || rep.uicon ? 12 : 0) + (closeBtn ? 16 : 0);
   const natural = Math.max(...rows.map((r) => (r.t === 'rich' ? richWidth(r.s) : r.t === 'bar' ? 150 : 0)), rep.verbs ? richWidth(rep.verbs) : 0);
-  const cw = Math.min(maxCw, Math.max(MIN_CW, titleW, natural));
+  const cw = Math.min(maxCw, Math.max(brief ? BRIEF_CW : MIN_CW, titleW, natural));
   const modesH = full && rep.modes ? MODES_H + ROW_GAP : 0;
   const verbsH = rep.verbs ? layoutRich(rep.verbs, cw).h + 4 : 0;
   const measure = (rs: Row[]) => {
     const hs = rs.map((row) => ({ row, h: rowH(row, cw) }));
-    const ch = BIG_LINE_H + 3 + hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + modesH + verbsH;
+    const ch = titleH + 3 + hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + modesH + verbsH;
     return { hs, outer: tagSize(cw, ch, 'left').h };
   };
   let m = measure(rows);
@@ -493,8 +513,8 @@ function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: 
     rows = [...rows.slice(0, keep), rich(`{soft:+${more} more ${more > 1 ? 'rows' : 'row'}}`)];
     m = measure(rows);
   }
-  const sz = tagSize(cw, BIG_LINE_H + 3 + m.hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + modesH + verbsH, 'left');
-  return { rep, rows: m.hs, cw, w: sz.w, h: sz.h, verbsH, modesH, cut };
+  const sz = tagSize(cw, titleH + 3 + m.hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + modesH + verbsH, 'left');
+  return { rep, rows: m.hs, cw, w: sz.w, h: sz.h, verbsH, modesH, cut, brief };
 }
 
 /** Draw a laid-out report as a tag at (x, y): on a string to `anchor`, or pinned. */
@@ -502,13 +522,15 @@ function drawLaid(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: nu
   const ui = app.ui;
   const rep = L.rep;
   const r = tag(ui, x, y, L.w, L.h, { hole: 'left', anchor: o.pin ? null : o.anchor ?? null, pin: o.pin, blocking: o.blocking ?? !!o.pin });
-  ui.big(bigSafe(rep.title), r.x + (o.pin ? 2 : 0), r.y, T.ink);
+  const titleH = L.brief ? LINE_H : BIG_LINE_H;
+  if (L.brief) ui.text(rep.title, r.x, r.y, T.ink);
+  else ui.big(bigSafe(rep.title), r.x + (o.pin ? 2 : 0), r.y, T.ink);
   let ix = r.x + r.w - 8 - (o.close ? 16 : 0);
-  if (rep.item && rep.item in ITEMS) ui.ctx.drawImage(itemIcon(rep.item), ix, r.y + 1);
-  else if (rep.uicon) uiIcon(ui, rep.uicon, ix, r.y + 1, 1);
+  if (rep.item && rep.item in ITEMS) ui.ctx.drawImage(itemIcon(rep.item), ix, r.y + (L.brief ? 0 : 1));
+  else if (rep.uicon) uiIcon(ui, rep.uicon, ix, r.y + (L.brief ? 0 : 1), 1);
   if (o.close && button(ui, 'closeReport', r.x + r.w - 12, r.y - 1, 12, 12, '{u:remove}', { tip: 'close {k:Esc}' })) o.close();
-  rule(ui, r.x, r.y + BIG_LINE_H, r.w, true);
-  let yy = r.y + BIG_LINE_H + 3;
+  rule(ui, r.x, r.y + titleH, r.w, !L.brief);
+  let yy = r.y + titleH + 3;
   for (const { row, h } of L.rows) {
     if (row.t === 'rich') {
       const lay2 = layoutRich(row.s, L.cw);
@@ -614,7 +636,7 @@ export function pinnedReport(app: App, L: Layout) {
   // or on the left between the Purse and the speaker's corner when it would sit on what it reports on
   const cw = L.wide ? 206 : 198;
   const rTop = L.slips.y + 18, rBot = L.notebook.y - 6;
-  const lTop = app.hud.purseBottom + 6, lBot = (app.hud.cornerRect?.y ?? ui.h - 96) - 6;
+  const lTop = app.hud.purseBottom + 6, lBot = Math.min(app.hud.cornerRect?.y ?? ui.h - 96, app.hud.marksRect?.y ?? Infinity) - 6;
   const rLaid = lay(rep, true, cw, rBot - rTop, true);
   const ry = Math.max(rTop, rBot - rLaid.h);
   const rx = ui.w - 6 - rLaid.w;
@@ -643,17 +665,23 @@ export function worldTip(app: App, x: number, y: number, w = 1, h = 1, goalTile?
 }
 
 /** The hover report for a machine, power building or Factory module: a tag on a string from it,
- * the rows that matter. Drawn over everything (the tooltip layer); returns true if it drew. */
-export function hoverEnt(app: App, e: Ent | null, fe: FEnt | null): boolean {
+ * the rows that matter (brief: the status line, see `briefOf`). Drawn over everything (the
+ * tooltip layer) at `alpha` (it fades in); returns true if it drew. */
+export function hoverEnt(app: App, e: Ent | null, fe: FEnt | null, o: { brief?: boolean; alpha?: number } = {}): boolean {
   const ui = app.ui;
   const rep = e ? entReport(app, e) : fe ? factoryReport(app, fe) : null;
   if (!rep) return false;
   const ent = (e ?? fe)!;
   const near = worldRect(app, ent.x, ent.y, ent.w, ent.h);
-  const laid = lay(rep, false, 232, ui.h - 10, false);
+  const laid = lay(rep, false, o.brief ? 200 : 232, ui.h - 10, false, o.brief);
   const p = place(app, { x: near.x - 6, y: near.y - 6, w: near.w + 12, h: near.h + 12 }, laid.w, laid.h, pinRect ? [pinRect] : []);
   const anchor = { x: near.x + Math.floor(near.w / 2), y: near.y + Math.floor(near.h / 2) };
-  ui.later(() => drawLaid(app, laid, p.x, p.y, { anchor, blocking: false }));
+  const alpha = o.alpha ?? 1;
+  ui.later(() => {
+    ui.ctx.globalAlpha = alpha;
+    drawLaid(app, laid, p.x, p.y, { anchor, blocking: false });
+    ui.ctx.globalAlpha = 1;
+  });
   return true;
 }
 

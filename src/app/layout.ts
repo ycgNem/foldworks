@@ -2,7 +2,8 @@
 // columns: the floor runs edge to edge and the camera frames all of it (`center`). Things hang on
 // the corners of it: the Purse top-left (with the rate tag, the trouble bell and the Committee's
 // contract slip under it), the lift top-right (slips under it), the speaker's corner bottom-left
-// (the portrait on its lily pad, the bubble), the notebook and the Swamp Gazette bottom-right.
+// (the portrait on its lily pad, the bubble, the Build button over the portrait), the notebook with
+// its bookmarks and the Swamp Gazette bottom-right.
 // Full-screen menus are the ledger book (`overlay`), which leaves a margin on its right for the
 // notebook's section tabs.
 import type { Rect } from '../ui/ui';
@@ -26,7 +27,10 @@ export interface Layout {
   corner: Rect;
   /** the portrait's top-left (48x48) */
   portrait: { x: number; y: number };
-  /** the notebook (24x24) and the folded Gazette (36x26), bottom-right */
+  /** the Build button (the wheel at the screen's centre), standing on the portrait's head */
+  build: Rect;
+  /** the notebook (24x24) and the folded Gazette (36x26), bottom-right; the notebook's bookmarks
+   * (its main pages, labelled) stack up the left edge from the Build button (topbar.ts) */
   notebook: Rect;
   newspaper: Rect;
   wide: boolean;
@@ -66,13 +70,14 @@ export function layout(w: number, h: number): Layout {
   const slipW = wide ? 168 : 150;
   const slips = { x: w - 6 - slipW, y: lift.y + lift.h + 6, w: slipW, h: Math.max(40, h - (lift.y + lift.h + 6) - 80) };
   const portrait = { x: 8, y: h - 60 };
+  const build = { x: portrait.x, y: portrait.y - 40, w: 48, h: 36 };
   const corner = { x: 4, y: h - 92, w: Math.min(312, Math.floor(w * 0.52)), h: 88 };
   const newspaper = { x: w - 6 - 36, y: h - 6 - 26, w: 36, h: 26 };
   const notebook = { x: newspaper.x + 6, y: newspaper.y - 6 - 24, w: 24, h: 24 };
   const top = { x: 0, y: 0, w, h: 0 };
   const band = { x: 0, y: h, w, h: 0 };
   return {
-    center, overlay, tabs, purse, bell, lift, slips, corner, portrait, notebook, newspaper, wide,
+    center, overlay, tabs, purse, bell, lift, slips, corner, portrait, build, notebook, newspaper, wide,
     top, rail: corner, band, crawl: newspaper, side: slips, ticker: newspaper, left: corner, right: slips, bottom: band,
   };
 }

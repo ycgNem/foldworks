@@ -2,13 +2,15 @@
 // bottom-left, and the speech bubble with the current goal beside it (rich text, its progress as a
 // meter, its chips, its note), its tail at the portrait's mouth. A click on the portrait folds the
 // bubble away (a "!" bubble when a new line arrives) or unfolds it; a click on the bubble opens what
-// the goal names (a page, a floor, a tool), or folds it. At the start the Bellows' Buy button sits
-// in the bubble. Other speakers take the corner for a few seconds for their own lines: a customer
-// offering an order or thanking you for one, Unit 7 logging a Codex first. The toolbox (the wheel at
-// the screen's centre) sits on the pad's shoulder. Also the diegetic touches on the floor: the
+// the goal names (a page, a floor, a tool, a building into your hand), or folds it. At the start
+// the Bellows' Buy button sits in the bubble; a goal that names a building gets a Grab button.
+// Other speakers take the corner for a few seconds for their own lines: a customer offering an
+// order or thanking you for one, Unit 7 logging a Codex first. The Build button (the wheel at the
+// screen's centre) stands on the portrait's head. Also the diegetic touches on the floor: the
 // active order's flag over the Dock, the research ring over the Hopper, the goal's bobbing arrow.
 import { C, rgba } from '../data/palette';
-import { UPGRADES } from '../data/machines';
+import { BUILD, UPGRADES, type BuildKind } from '../data/machines';
+import { Num } from '../engine/num';
 import { ORDER, CUSTOMERS, type CustomerId } from '../data/orders';
 import { itemName } from '../data/items';
 import { ICON, drawText, LINE_H } from '../ui/font';
@@ -124,7 +126,7 @@ export function rail(app: App, L: Layout) {
       else { hs.collapsed.add('goal'); hs.foldedAt = ui.time; }
     }
   }
-  toolboxButton(app, P.x + 2, P.y - 18);
+  toolboxButton(app, L.build);
   if (folded) {
     // a little bubble: "!" when a new line has arrived since it was folded
     const news = hs.goalAt > hs.foldedAt;
@@ -139,6 +141,11 @@ export function rail(app: App, L: Layout) {
   const lay = layoutRich(text, cw);
   const bellows = !cam && !g.has('bellows');
   const canBuy = bellows && g.s.coin.gte(UPGRADES.bellows.cost);
+  // a goal that names a building: its Grab button in the bubble (the Build button and the wheel
+  // stay the way to everything else), or, with it in hand, how to put it down
+  const grab = !cam ? grabKind(app, goal?.ui ?? null) : null;
+  const holding = !!grab && app.mode.k === 'build' && app.mode.kind === grab;
+  const canGrab = !!grab && !holding && g.s.coin.gte(BUILD[grab].cost);
   const chips = (cam ? cam.chips : goal?.chips) ?? [];
   const bar = cam ? undefined : goal?.bar;
   const note = cam ? null : goal?.note ? layoutRich(goal.note, cw) : null;
@@ -153,8 +160,11 @@ export function rail(app: App, L: Layout) {
   if (bar !== undefined) ch += 9;
   if (chipRows.length) ch += 3 + chipRows.length * (CHIP_H + 2);
   if (bellows) ch += canBuy ? 20 : 11;
+  if (canGrab) ch += 20;
+  else if (holding) ch += 12;
   if (note) ch += 5 + note.h;
-  const natural = Math.max(lay.w, ...chipRows.map((r) => r.reduce((s, c) => s + chipWidth(c) + 3, -3)), note ? note.w : 0, canBuy ? 130 : bellows ? 110 : 0);
+  const grabLabel = grab ? `Grab a ${BUILD[grab].name} {coin:${Num.of(BUILD[grab].cost).format()}}` : '';
+  const natural = Math.max(lay.w, ...chipRows.map((r) => r.reduce((s, c) => s + chipWidth(c) + 3, -3)), note ? note.w : 0, canBuy ? 130 : bellows ? 110 : 0, canGrab ? richWidth(grabLabel) + 16 : 0, holding ? richWidth(HOLDING) : 0);
   const bw = Math.min(maxW, natural + 12);
   const bh = ch + 10;
   const bx = P.x + 54;
@@ -194,6 +204,15 @@ export function rail(app: App, L: Layout) {
       yy += 11;
     }
   }
+  if (canGrab && grab) {
+    const d = BUILD[grab];
+    const down = app.floor !== 'workshop' ? '{k:LMB} down to the Workshop, in hand' : '{k:LMB} take it · then {k:LMB} the floor';
+    if (button(ui, 'grabBuild', r.x, yy + 2, Math.min(r.w, richWidth(grabLabel) + 16), 17, grabLabel, { gold: true, pulse: true, tip: [{ text: `{big:${bigSafe(d.name)}}` }, { text: d.blurb }, { text: down }] })) grabIt(app, grab);
+    yy += 20;
+  } else if (holding) {
+    ui.rich(HOLDING, r.x, yy + 1, Infinity, T.inkSoft);
+    yy += 12;
+  }
   if (note) {
     rule(ui, r.x, yy + 2, r.w);
     drawLayout(ui, note, r.x, yy + 4, T.warn);
@@ -213,8 +232,28 @@ export function rail(app: App, L: Layout) {
 
 export const SPEAKER_NAME: Record<Speaker, string> = { bramble: 'Mayor Bramble', unit7: 'Unit 7', voltaire: 'Dame Voltaire', committee: 'The Committee', inspector: 'The Inspector' };
 
-/** What a click on the goal's bubble does when the goal names a page, a floor or a tool. */
+/** In hand, under a Grab: how to put it down. */
+const HOLDING = '{good:in hand}  {k:LMB} place  {k:R} turn  {k:RMB} drop';
+
+/** The building a goal names ('build:<kind>'), if it can be built now. */
+function grabKind(app: App, ui: string | null): BuildKind | null {
+  if (!ui?.startsWith('build:')) return null;
+  const k = ui.slice(6) as BuildKind;
+  return k in BUILD && app.game.unlocked(k) ? k : null;
+}
+
+/** Put the goal's building in your hand; it is a Workshop building, so from the Factory floor the
+ * lift goes down first. */
+function grabIt(app: App, k: BuildKind) {
+  if (app.floor !== 'workshop') app.setFloor('workshop');
+  app.pickBuild(k);
+}
+
+/** What a click on the goal's bubble does when the goal names a page, a floor, a tool or a
+ * building (it goes into your hand). */
 function goalAction(app: App, ui: string | null): { go: () => void; what: string } | null {
+  const k = grabKind(app, ui);
+  if (k) return app.mode.k === 'build' && app.mode.kind === k ? null : { go: () => grabIt(app, k), what: `grab a ${BUILD[k].name}` };
   switch (ui) {
     case 'research': return { go: () => app.togglePanel('research'), what: 'research' };
     case 'orders': return { go: () => app.togglePanel('orders'), what: 'orders' };

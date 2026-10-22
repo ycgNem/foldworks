@@ -435,6 +435,8 @@ export class App {
             a.sfx('codex', 0.6, 1.2);
             this.renderer.firstMiner(e.x ?? 0, e.y ?? 0);
             this.toast('Your first Miner!', '{i:ironOre} every 2 s, no clicks · belt it to the furnace', C.gold, 'build');
+            // the quick ways into the wheel, once the Build button has shown the slow one
+            this.toast('Building, quicker', '{k:RMB} the floor · {k:LMB} empty paving · {k:Q}', C.leaf, 'build');
           }
           // the first Mk2 machine: a fanfare and a banner
           if (e.id && /Mk2$/.test(e.id) && (e.floor ?? 'workshop') === 'workshop' && (this.game.s.counters.mk2Built ?? 0) <= 1 && this.game.s.ents.filter((q) => /Mk2$/.test(q.kind)).length === 1) {
@@ -909,7 +911,10 @@ export class App {
       if (e.kind === 'dock') this.togglePanel('orders');
       else if (e.kind === 'hopper') this.togglePanel('research');
       else this.selected = this.selected === e.id ? null : e.id;
-    } else this.selected = null;
+    } else if (this.selected !== null) this.selected = null;
+    // empty paving: the Workbench Wheel opens where you clicked (a click on a plot to build on it
+    // is what a new player tries first; not before the Bellows, while every click feeds the ore)
+    else if (r.why === 'nothing to click' && !g.oreAt(t.x, t.y) && g.has('bellows')) openWheel(this, this.ui.mx, this.ui.my);
   }
 
   /** A click on the town: a building with a page opens it. */

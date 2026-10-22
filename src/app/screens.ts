@@ -30,7 +30,7 @@ import { drawRich, richHeight, richWidth, CAP_H, BIG_CAP_H, CHIP_H } from '../ui
 // ---- Milestone 6 (idle and offline): the offline report, the overnight forecast, notation
 import { offlineReportCard } from './offlinereport';
 import { overnightScreen } from './overnight';
-import { cycleNotation, NOTATION_LABEL } from './settings';
+import { cycleNotation, NOTATION_LABEL, cycleHoverTags, getHoverTags, HOVER_LABEL } from './settings';
 import { getNotation } from '../engine/num';
 // Milestone 5: Reorganize, the Patent Office and the Patent Drawer
 import { reorganizeCard } from './reorganize';
@@ -952,6 +952,13 @@ function optionsScreen(app: App, r: Rect) {
     if (button(ui, 'opt:notation', bx, by, nw, 17, cur, { tip: [{ text: '{big:Numbers}' }, { text: notes.map((n) => (n === cur ? `{ink:${n}}` : `{soft:${n}}`)).join(' · ') }, { text: '{k:LMB} next' }] })) cycleNotation();
   }, nw);
   row('{u:play}', 'Reduced motion', toggle('opt:Reduced motion', app.renderer.fx.calm, () => { app.renderer.fx.calm = !app.renderer.fx.calm; }));
+  // how much a hover over the floor shows (the owner, 2026-10-21: the tags took too much room)
+  const hovers = Object.values(HOVER_LABEL) as string[];
+  const hw = Math.max(80, ...hovers.map((n) => richWidth(n) + 16));
+  row('{u:stats}', 'Hover tags', (bx, by) => {
+    const cur = HOVER_LABEL[getHoverTags()];
+    if (button(ui, 'opt:hover', bx, by, hw, 17, cur, { tip: [{ text: '{big:Hover tags}' }, { text: hovers.map((n) => (n === cur ? `{ink:${n}}` : `{soft:${n}}`)).join(' · ') }, { text: '{k:LMB} next · {k:LMB} a machine pins every row' }] })) cycleHoverTags();
+  }, hw);
   // the drawn keyboard lives on its own page
   y += 6;
   const help = app.input.binds.help?.[0];

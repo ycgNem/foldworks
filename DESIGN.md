@@ -87,9 +87,9 @@ output is full, the smelter stops ("blocked: slag"). That's the first bottleneck
 slag to a Slag Heap or, after research 9, to a press making bricks.
 
 **Status pips** (pillar 3): every machine draws one. Green = working, yellow = starved (names
-the item), red = blocked (names the item), grey = unconnected. Hovering shows
-"Smelter 3: starved of iron ore 41% of the last minute; feeding miner makes 30/min, this smelter
-wants 30/min, the belt is shared with smelter 2."
+the item), red = blocked (names the item), grey = unconnected. Hovering shows the status and its
+cause ("Smelter 3: starved of iron ore 41%"); clicking pins the whole report: "feeding miner makes
+30/min, this smelter wants 30/min, the belt is shared with smelter 2."
 
 ## 5. Floors (slice)
 

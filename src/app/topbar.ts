@@ -17,12 +17,15 @@ import { CLAIM_PRICE } from '../data/land';
 import { TICK_RATE } from '../engine/time';
 import { Num } from '../engine/num';
 import { plain } from '../engine/fmt';
-import { bigWidth, BIG_LINE_H, LINE_H, ICON } from '../ui/font';
+import { bigWidth, textWidth, smallWidth, BIG_LINE_H, LINE_H, ICON } from '../ui/font';
 import { layoutRich, drawLayout, richWidth } from '../ui/rich';
 import { T } from '../ui/theme';
-import { outlinedText, ribbonRaw, type RibbonColor } from '../ui/paper';
+import { outlinedText, ribbonRaw, RIBBON, type RibbonColor } from '../ui/paper';
 import { itemIcon, hasArt, sheet, frameNamed } from '../render/sprites';
-import { offeredOrders } from '../sim/systems/orders';
+import { megaFrac } from '../render/factory';
+import { megaStage } from '../data/megaprojects';
+import { offeredOrders, orderFrac } from '../sim/systems/orders';
+import { researchFrac } from '../sim/systems/research';
 import { powered } from '../render/powerview';
 import { sign, tag, tagSize, coinIcon, sparkline, dot, uiIcon, rule, chip, chipWidth, type UIconName } from './chrome';
 import type { Layout } from './layout';
@@ -452,6 +455,70 @@ export function pages(app: App): Page[] {
   return out;
 }
 
+/** Pages that live only inside the book (the notebook opens them); every other page is also a
+ * bookmark on the screen. */
+const IN_BOOK = new Set(['stats', 'trophies', 'gazette', 'options', 'keys', 'overnight']);
+/** a bookmark's band (the ribbon art's 12 rows) and the step between them */
+const MARK_H = 12;
+const MARK_STEP = 14;
+/** how far a bookmark runs past the left edge (its notched end tucked away) */
+const MARK_TUCK = 8;
+
+/** A page's live number for its bookmark (Pip: caps, digits, %), or ''. */
+function markStatus(app: App, p: Page): string {
+  const g = app.game;
+  switch (p.panel) {
+    case 'research': { const sel = g.s.research.selected; return sel ? `${Math.floor(researchFrac(g, sel) * 100)}%` : p.dot ? 'PICK' : ''; }
+    case 'orders': { const a = g.s.orders.active; return a ? `${Math.floor(orderFrac(g, a) * 100)}%` : p.dot ? 'NEW' : ''; }
+    case 'mega': return megaStage(g.s.mega.stage) ? `${Math.floor(megaFrac(g) * 100)}%` : '';
+    default: return p.dot ? 'NEW' : '';
+  }
+}
+
+/** The notebook's bookmarks (the owner, 2026-10-21: the notebook with half the game in it was too
+ * discreet): its main pages as ribbons tucked under the left edge, stacked up from the Build button
+ * (the screen's one column of things to open), each with its icon, its name and its live number
+ * (research, the order and the Megaproject as %), a red dot when it wants you. Click one to open
+ * its page. With more pages than room under the Purse, the last ones stay in the book. */
+export function bookmarks(app: App, L: Layout) {
+  const ui = app.ui;
+  // clear of the Build button, and of a speaker's bubble tall enough to reach up beside it
+  const gb = ui.ids.get('goalBubble');
+  const bottom = Math.min(L.build.y, gb && gb.x < 120 ? gb.y : Infinity) - 4;
+  const room = Math.max(0, Math.floor((bottom - app.hud.purseBottom - 6) / MARK_STEP));
+  const ps = pages(app).filter((p) => !IN_BOOK.has(p.id)).slice(0, room);
+  if (!ps.length) { app.hud.marksRect = null; return; }
+  const rows = ps.map((p) => ({ p, status: markStatus(app, p), name: p.name.replace(/ \d+\/\d+$/, '') }));
+  const inner = Math.max(...rows.map((r) => textWidth(r.name) + 4 + (r.status ? smallWidth(r.status) + 5 : 0)));
+  const w = MARK_TUCK + 5 + 8 + 3 + inner + 5;
+  let y = bottom - ps.length * MARK_STEP;
+  app.hud.marksRect = { x: 0, y, w: w - MARK_TUCK + 4, h: ps.length * MARK_STEP };
+  for (const { p, status, name } of rows) {
+    const hov = ui.hover(0, y, w - MARK_TUCK + 3, MARK_STEP - 1);
+    // a hovered bookmark slides out a little further
+    const x = -MARK_TUCK + (hov ? 3 : 0);
+    const P = RIBBON[p.color];
+    const x0 = x + MARK_TUCK;
+    ui.mark('mark:' + p.id, 0, y, w - MARK_TUCK, MARK_H);
+    ui.region(0, y, w - MARK_TUCK + 3, MARK_H, 'button');
+    ribbonRaw(ui.ctx, x, y, w, MARK_H, p.color, 'in');
+    uiIcon(ui, p.icon, x0 + 4, y + 2, 1);
+    ui.text(name, x0 + 15, y + 2, P.text, { shadow: P.line });
+    if (status) ui.small(status, x + w - 6 - smallWidth(status), y + 4, P.text, { shadow: P.line });
+    if (p.dot && Math.floor(ui.time * 2.5) % 2 === 0) dot(ui, x + w - 3, y - 1, C.pipRed);
+    if (hov) {
+      ui.hoverId = 'mark:' + p.id;
+      const pageTip = MENUS.find((q) => q.id === p.id)?.tip;
+      ui.tip([{ text: `{big:${bigSafe(p.name)}}${p.key ? `  {k:${p.key}}` : ''}` }, ...(pageTip ? [{ text: pageTip }] : []), { text: '{k:LMB} open' }], 190);
+      if (ui.clicked) {
+        ui.eat();
+        app.togglePanel(p.panel);
+      }
+    }
+    y += MARK_STEP;
+  }
+}
+
 /** The notebook, bottom-right: opens the book at the last page; a dot when a page wants you. */
 export function notebook(app: App, L: Layout) {
   const ui = app.ui;
@@ -472,7 +539,8 @@ export function notebook(app: App, L: Layout) {
   if (hov) {
     ui.hoverId = 'notebook';
     const keys = ps.filter((p) => p.key).map((p) => `{k:${p.key}} ${p.name.toLowerCase()}`).join('  ');
-    ui.tip([{ text: '{big:Notebook}' }, { text: `{k:LMB} open${wants.length ? ` · {warn:${wants.map((p) => p.name).join(', ')}}` : ''}` }, { text: keys }], 220);
+    const inBook = ps.filter((p) => IN_BOOK.has(p.id)).map((p) => p.name.replace(/ \d+\/\d+$/, '').toLowerCase()).join(' · ');
+    ui.tip([{ text: '{big:Notebook}' }, { text: `{k:LMB} every page${wants.length ? ` · {warn:${wants.map((p) => p.name).join(', ')}}` : ''}` }, { text: `{soft:${inBook}}` }, { text: keys }], 220);
     if (ui.clicked) {
       ui.eat();
       const last = app.hud.lastPage;
@@ -516,8 +584,10 @@ export function sectionTabs(app: App, L: Layout) {
 /** HUD rects the floor's tags and the reports keep off, this frame. */
 export function cornerZones(app: App, L: Layout, purseBottom: number): Rect[] {
   const gs = app.ui.ids.get('gazetteSlip');
+  const mk = app.hud.marksRect;
   return [
     ...(gs ? [{ x: gs.x - 2, y: gs.y - 2, w: gs.w + 4, h: app.ui.h - gs.y + 2 }] : []),
+    ...(mk ? [{ x: 0, y: mk.y - 4, w: mk.w + 4, h: mk.h + 8 }] : []),
     { x: 0, y: 0, w: L.purse.x + 150, h: purseBottom + 4 },
     { x: L.lift.x - 4, y: 0, w: L.lift.w + 10, h: L.lift.y + L.lift.h + 4 },
     { x: L.notebook.x - 4, y: L.notebook.y - 4, w: app.ui.w - L.notebook.x + 4, h: app.ui.h - L.notebook.y + 4 },

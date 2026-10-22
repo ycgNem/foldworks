@@ -68,6 +68,8 @@ export class UI {
   /** where this frame's tooltip may not sit, and the room it should stay in (a world tooltip:
    * clear of the hovered tile, its neighbours and the goal's tile; see `tip`) */
   private tipPlace: TipPlace | null = null;
+  /** this frame's tooltip opacity (a hover tag fades in after its delay); 1 each frame */
+  tipAlpha = 1;
   time = 0;
   clicked = false;
   rclicked = false;
@@ -105,6 +107,7 @@ export class UI {
     this.dt = dt;
     this.tooltip = null;
     this.tipPlace = null;
+    this.tipAlpha = 1;
     this.prevBlocks = this.blocks;
     this.ids = this.nextIds;
     this.nextIds = new Map();
@@ -381,6 +384,7 @@ export class UI {
     const anchor = near ? { x: near.x + Math.floor(near.w / 2), y: near.y + Math.floor(near.h / 2) } : { x: this.mx, y: this.my };
     const hole: HoleSide = holeToward(x, y, w, h, anchor) === 'right' ? 'right' : 'left';
     if (this.audit) this.rec('panel', x, y, w, h);
+    this.ctx.globalAlpha = this.tipAlpha;
     tagRaw(this.ctx, x, y, w, h, { hole, anchor });
     let ty = y + padY;
     const tx = hole === 'left' ? x + TAG_HEAD + 2 : x + padX;
@@ -388,5 +392,6 @@ export class UI {
       drawLayout(this, l.L, tx, ty, l.col);
       ty += l.L.h;
     }
+    this.ctx.globalAlpha = 1;
   }
 }

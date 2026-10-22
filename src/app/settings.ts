@@ -1,4 +1,5 @@
-// Player settings that are not part of the game (DESIGN.md §20): how big numbers are written.
+// Player settings that are not part of the game (DESIGN.md §20): how big numbers are written, and
+// how much a hover over the floor shows.
 // Kept in localStorage apart from the save, so a notation follows the browser, not the factory,
 // and never touches the sim's state (an export string carries the game, not the reader's taste).
 import { NOTATIONS, getNotation, setNotation, type Notation } from '../engine/num';
@@ -6,7 +7,13 @@ import { store } from '../engine/save';
 
 const KEY = 'foldworks_settings';
 
-interface Settings { notation?: Notation }
+/** How much a hover over the floor shows: the status line (brief), every row it showed before
+ * 2026-10-21 (full), or nothing until you click (off). */
+export type HoverTags = 'brief' | 'full' | 'off';
+export const HOVER_TAGS: HoverTags[] = ['brief', 'full', 'off'];
+let hoverTags: HoverTags = 'brief';
+
+interface Settings { notation?: Notation; hover?: HoverTags }
 
 function read(): Settings {
   try {
@@ -26,6 +33,25 @@ function write(s: Settings) {
 export function loadSettings() {
   const s = read();
   if (s.notation && NOTATIONS.includes(s.notation)) setNotation(s.notation);
+  if (s.hover && HOVER_TAGS.includes(s.hover)) hoverTags = s.hover;
+}
+
+export function getHoverTags(): HoverTags {
+  return hoverTags;
+}
+
+/** The Options page's button for hover tags. */
+export const HOVER_LABEL: Record<HoverTags, string> = {
+  brief: 'Brief {soft:status only}',
+  full: 'Full {soft:every row}',
+  off: 'Off {soft:click to see}',
+};
+
+/** Step to the next hover setting and remember it. */
+export function cycleHoverTags(): HoverTags {
+  hoverTags = HOVER_TAGS[(HOVER_TAGS.indexOf(hoverTags) + 1) % HOVER_TAGS.length];
+  write({ ...read(), hover: hoverTags });
+  return hoverTags;
 }
 
 /** Each notation's name and a sample, as a row (docs/hud-180.md: no parentheses, one colon at

@@ -1623,3 +1623,54 @@ and readability (DESIGN.md §17).
 - **Brass rotor pods under a sky platform**: the steampunk family (*BioShock Infinite*'s
   Columbia). Generic.
 - **Squash-and-stretch on placement**: a generic animation principle, common in builders.
+
+## After the owner's first play: building, hovers, the notebook (2026-10-21)
+
+The owner, after playing the sky island build: *"it's not common place info to know to right
+click to get the miner, the hovering over things gets annoying with how much space it takes up, a
+lil overstimulating, and the notebook with half the game in it is a lil too discreet."* Three
+fixes, none on CLAUDE.md's ask-before list (no tile size, palette, tick rate, currency, floor,
+reset layer or milestone order changed), no sim, data or save change. Pillars: readability
+(DESIGN.md §17) and pillar 3 (a bottleneck is never hidden).
+
+- **Building has a button you can see.** The 20x16 toolbox over Bramble's head became a 48x36
+  **Build** button there (the toolbox art over the word in Bullfrog, a `Q` keycap on its corner),
+  gold and hopping while the goal points into the wheel. The wheel still opens at the cursor by a
+  right tap, `Q` or `Space`; **a left click on empty paving** now opens it there too (the first
+  thing a new player tries), but not before the Bellows, while every click in the first minute
+  is on the ore and a near miss would pop the wheel. A left click with a report pinned only
+  unpins it.
+- **A goal that names a building has a Grab button in the bubble** ("Grab a Miner {coin}"), gold
+  like the Bellows' Buy button; clicking the bubble does the same. With it in hand the bubble shows
+  `in hand · LMB place · R turn · RMB drop`. The first Miner's celebration adds a slip naming the
+  quick ways in (right tap, a click on paving, `Q`). The wheel stays the one menu; the button only
+  puts the goal's building in your hand. On the Factory floor (Voltaire's Boiler goal shows there)
+  Grab takes the lift down to the Workshop first, and the Build button glows only for a goal in
+  this floor's wheel, and not once the goal's building is in hand.
+- **Hover tags wait and shrink.** A floor tag comes after the mouse rests 0.45 s on its thing
+  (0.12 s for the next one while one was up a moment ago, so reading along a line is quick and a
+  sweep across the floor shows nothing), fading in over 0.1 s. Machines and modules show a **brief
+  tag**: the name in Reed (not Bullfrog), the status chips, the rows in warn or bad ink (the
+  causes), the rate, and the one verb the left button does (`more` for pin). No bars, no how-to
+  rows (the bubble says those), no R and X keycaps (the simple tags, a belt's or a heap's, drop
+  that row too). Past five rows plain rows go first and a cause
+  never does, so pillar 3 holds; every row is one click away in the pinned report, which is
+  unchanged. A new **Options → Hover tags** setting picks Brief (default), Full (every hover row,
+  as before) or Off (nothing until you click), stored with the notation in `foldworks_settings`.
+- **The notebook's main pages are bookmarks on the screen**: ribbons tucked under the left edge,
+  stacked up from the Build button: Research, Orders, then Modules, Codex, Survey, the
+  Megaproject, the Drawer and Patents as they open, each with its icon, its name, a live number
+  (research, the order and the Megaproject as %, `PICK` or `NEW` when it wants you) and the red dot.
+  Statistics, Trophies, the Gazette, Options, Keys and Overnight stay inside the book (the notebook
+  icon opens it; its tag lists them). They went on the left, not over the notebook: on the right,
+  at 1024x640 they took 60 px from a pinned report docked there and cut three of its rows.
+- **e2e**: `hoverTile` and the screens and look harnesses rest `HOVER_WAIT` (650 ms) on a floor
+  thing before a shot; `wheelcheck` covers the paving click, the unpin-first click and the Grab
+  button, and its "click outside" check uses a tile still on screen since the sky island's framing
+  (it had been failing on `main`).
+
+### Flagged as derivative (owner to decide)
+- **A column of labelled menu buttons down the left edge** (here bookmarks, with Build at the
+  foot): the Roblox tycoon convention (Miner's Haven among many). Our ribbons, art and pages.
+- **Click an empty plot to build on it**: the tycoon and city-builder convention. Generic.
+- **A tooltip delay with a warm-up**: every desktop OS. Generic.

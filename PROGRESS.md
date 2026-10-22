@@ -2,6 +2,40 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
+## Status (2026-10-21, latest): after the owner's first play (building, hovers, the notebook)
+
+The owner: a right click to get the Miner is nobody's first guess; hover tags took too much room
+("a lil overstimulating"); the notebook "with half the game in it" was too discreet.
+DECISIONS.md: "After the owner's first play".
+
+### What changed
+
+- **The Build button** (`src/app/wheel.ts` `toolboxButton`, `layout.ts` `build`): 48x36 on
+  Bramble's head, the toolbox over "Build", a `Q` keycap; gold while the goal points into the
+  wheel. **A left click on empty paving** opens the wheel there after the Bellows (`app.ts`).
+- **Grab in the bubble** (`rail.ts`): a goal naming a building gets "Grab a Miner {coin}"; with it
+  in hand the bubble shows how to put it down; from the Factory floor it takes the lift down first.
+  A slip after the first Miner names the quick ways in.
+- **Hover tags** (`hud.ts` `hoverReport`, `tags.ts` `briefOf`, `ui.ts` `tipAlpha`): a 0.45 s rest
+  (0.12 s while warm), a 0.1 s fade, and a brief tag (name in Reed, chips, causes, rate, one verb).
+  **Options → Hover tags**: Brief / Full / Off (`settings.ts`). The pinned report is unchanged.
+- **The notebook's bookmarks** (`topbar.ts` `bookmarks`): its main pages as labelled ribbons up the
+  left edge over the Build button, with live % and the red dot; the rest stay in the book.
+- **e2e**: hovers rest `HOVER_WAIT` before a shot; `wheelcheck` covers the paving click and the
+  Grab button, and its stale off-screen tile is fixed.
+
+### Measured
+
+No sim, data number or save changed (`src/sim/` untouched). `npm run typecheck` clean; `npm test`
+38 files, 662 passed and 1 todo (as before); `npm run screens` clean at three sizes; `npm run
+smoke` green; `node e2e/wheelcheck.mjs` all ok (its "click outside" check had been failing on
+`main` since the sky island); `npm run shots` reaches every moment.
+
+### Open
+
+- The owner's look at the left column and the brief tags; the derivative flags in DECISIONS.md.
+- The earlier sections' open items still stand.
+
 ## Status (2026-10-21, later): the sky island (the world redesigned)
 
 The owner: "full redesign the way the gameplay/game looks, the planks and worlds … the surrounding

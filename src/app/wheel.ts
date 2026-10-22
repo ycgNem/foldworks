@@ -1,6 +1,6 @@
 // The Workbench Wheel (docs/hud-180.md "The Workbench Wheel"): the build menu, opened at the
-// cursor (a right tap on the floor, Q or Space) or at the screen's centre (the toolbox beside the
-// speaker's corner). A wooden hub holds the last building picked; brass petals on an inner ring
+// cursor (a right tap on the floor, a click on empty paving, Q or Space) or at the screen's centre
+// (the Build button on the speaker's head). A wooden hub holds the last building picked; brass petals on an inner ring
 // are the categories that exist (Tools, Build, Power, Heavy, Upgrades; on the Factory floor Tools,
 // Trunk, Modules); hovering or clicking one fans its items on an outer arc as paper discs, each
 // with its sprite at 1x and a Pip price tag on a string. The hovered item's tag hangs beside the
@@ -22,7 +22,7 @@ import { Num } from '../engine/num';
 import { perMin } from '../engine/fmt';
 import { bigWidth, smallWidth, drawSmall, SMALL_H } from '../ui/font';
 import { richWidth, layoutRich, drawLayout } from '../ui/rich';
-import { art } from '../ui/paper';
+import { art, buttonRaw } from '../ui/paper';
 import { T, onPaper } from '../ui/theme';
 import { sheet, itemIcon, spriteName, type SpriteSheet } from '../render/sprites';
 import { mainOutput } from '../render/factory';
@@ -231,7 +231,10 @@ function bookkeeping(app: App) {
     fresh ||= CHUNKS.some((c) => c.cost && !g.s.land.includes(c.id) && (!c.requires || g.done(c.requires)) && g.s.coin.gte(c.cost));
   }
   W.fresh = fresh;
-  W.goal = goalUi.startsWith('build:') || goalUi === 'bellows' || goalUi === 'land' || goalUi === 'fold';
+  // the Build button glows for a goal inside this floor's wheel (a Workshop building, the Bellows
+  // and land are not on the Factory floor's), not once the goal's building is in hand
+  const held = app.mode.k === 'build' && goalUi === 'build:' + app.mode.kind;
+  W.goal = (app.floor === 'workshop' && !held && (goalUi.startsWith('build:') || goalUi === 'bellows' || goalUi === 'land')) || goalUi === 'fold';
 }
 
 const STARTERS = new Set<string>(['belt', 'miner', 'smelter', 'heap']);
@@ -951,32 +954,39 @@ const PETAL_VERBS: Record<PetalId, string> = {
   trunk: '{k:1} trunk  {k:LMB} drag', modules: '{k:2}-{k:9} place  {k:SHIFT}{k:LMB} stamp',
 };
 
-// ---------------------------------------------------------------- the toolbox
+// ---------------------------------------------------------------- the Build button
 
-/** The toolbox button beside the speaker's corner (the screen says where): opens the wheel at the
- * screen's centre, for mouse-only players and the first goal. 20x16. */
-export function toolboxButton(app: App, x: number, y: number): void {
+/** The Build button standing on the speaker's head (the screen says where): the toolbox over the
+ * word, its key on the corner. It opens the wheel at the screen's centre. The owner (2026-10-21):
+ * a right click is nobody's first guess, so building has a button you can see; the right tap,
+ * `Q`, `Space` and a click on empty paving stay the quick ways. Gold, and hopping, while the goal
+ * points into the wheel; a red dot when a petal holds something new. */
+export function toolboxButton(app: App, R: { x: number; y: number; w: number; h: number }): void {
   const ui = app.ui;
   const ctx = ui.ctx;
-  const w = 20, h = 16;
-  x = Math.round(x); y = Math.round(y);
+  const { x, y, w, h } = R;
   const hov = ui.hover(x, y, w, h);
   ui.mark('toolbox', x, y, w, h);
   ui.region(x, y, w, h, 'button', true);
-  // the goal points into the wheel: the toolbox hops
-  const hop = W.goal && !W.open && Math.floor(ui.time * 2.5) % 3 === 0 ? 1 : 0;
+  const lit = W.goal && !W.open;
+  const hop = lit && Math.floor(ui.time * 2.5) % 3 === 0 ? 1 : 0;
+  const by = y - hop;
+  const dy = buttonRaw(ctx, x, by, w, h, W.open || (hov && app.input.mouse.down[0]) ? 'down' : hov ? 'hover' : 'up', lit ? 'gold' : 'paper');
   const a = art('h180_toolbox');
-  if (a) ctx.drawImage(a.frames[hov || W.open ? 1 : 0], x, y - hop);
+  const ix = x + Math.floor((w - 20) / 2) - 3, iy = by + 3 + dy;
+  if (a) ctx.drawImage(a.frames[hov || W.open ? 1 : 0], ix, iy);
   else {
-    ctx.fillStyle = C.ink; ctx.fillRect(x, y + 4 - hop, w, h - 4);
-    ctx.fillStyle = C.red; ctx.fillRect(x + 1, y + 5 - hop, w - 2, h - 6);
-    ctx.fillStyle = C.brass2; ctx.fillRect(x + 8, y + 8 - hop, 4, 3);
+    ctx.fillStyle = C.ink; ctx.fillRect(ix, iy + 4, 20, 12);
+    ctx.fillStyle = C.red; ctx.fillRect(ix + 1, iy + 5, 18, 10);
+    ctx.fillStyle = C.brass2; ctx.fillRect(ix + 8, iy + 8, 4, 3);
   }
-  if (W.goal && !W.open && Math.floor(ui.time * 4) % 2 === 0) dot(ui, x + w - 3, y - 1 - hop, C.gold);
-  else if (W.fresh && !W.open && Math.floor(ui.time * 3) % 2 === 0) dot(ui, x + w - 3, y - 1 - hop, C.pipRed);
+  keycapK(ui, 'Q', x + w - keycapWidthOf('Q') - 3, by + 3 + dy);
+  ui.big('Build', x + Math.floor(w / 2), by + 20 + dy, T.ink, { align: 'center' });
+  if (lit && Math.floor(ui.time * 4) % 2 === 0) dot(ui, x + w - 3, by - 1, C.gold);
+  else if (W.fresh && !W.open && Math.floor(ui.time * 3) % 2 === 0) dot(ui, x + w - 3, by - 1, C.pipRed);
   if (hov) {
     ui.hoverId = 'toolbox';
-    ui.tip([{ text: '{big:Workbench}' }, { text: '{k:RMB} {k:Q} {k:SPACE} open' }], 120);
+    ui.tip([{ text: '{big:Build}' }, { text: '{k:LMB} here · {k:RMB} the floor · {k:Q}' }], 170);
     if (ui.clicked) {
       ui.eat();
       if (W.open) closeWheel(app);

@@ -24,13 +24,14 @@ import { layout, type Layout } from './layout';
 import { button, uiIcon, slip, ribbon, chip, UICON, type UIconName } from './chrome';
 import { drawScreen } from './screens';
 import { auditBadge } from './fold';
-import { purse, bell, counters, lift, notebook, sectionTabs, edgeArrows, cornerZones } from './topbar';
+import { purse, bell, counters, lift, notebook, bookmarks, sectionTabs, edgeArrows, cornerZones } from './topbar';
 import { rail, diegetic, type Cameo } from './rail';
 import { newspaper } from './gazette';
 import { floorTags } from './floortags';
 import { pinnedReport, hoverEnt, worldTip, zones, pinTop, bigSafe } from './tags';
 import { drawWheel } from './wheel';
 import { nextGoal } from './goals';
+import { getHoverTags } from './settings';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
 
@@ -104,6 +105,14 @@ export interface HudState {
   /** the Purse's foot and the speaker's corner, last frame (the floor's tags keep off them) */
   purseBottom: number;
   cornerRect: Rect | null;
+  /** the notebook's bookmarks up the left edge, last frame (floor tags and a report docked on the
+   * left keep off them) */
+  marksRect: Rect | null;
+  // ---- the hover delay (the owner, 2026-10-21: hover tags everywhere were overstimulating)
+  /** what the mouse is over on the floor, since when, and when a floor tag was last up */
+  hoverKey: string | null;
+  hoverSince: number;
+  hoverShown: number;
 }
 
 export function newHudState(): HudState {
@@ -112,6 +121,7 @@ export function newHudState(): HudState {
     tabSeen: new Set(), tabRung: new Set(), opened: new Set(), codexSeen: 0, celebs: [], rain: [], coinLast: -1, glints: [], firstMiner: false,
     collapsed: new Set(), goalKey: null, goalAt: -10, goalUi: null, crawlHot: false,
     foldedAt: -10, cameos: [], offerSeen: null, codexHeard: -1, ordersHeard: -1, bellIds: new Set(), bellAt: -10, liftAngle: 180, lastPage: null, purseBottom: 70, cornerRect: null,
+    marksRect: null, hoverKey: null, hoverSince: 0, hoverShown: -10,
   };
 }
 
@@ -177,12 +187,13 @@ function corners(app: App, L: Layout, dt: number) {
   app.hud.purseBottom = counters(app, L, bb);
   lift(app, L, dt);
   notebook(app, L);
+  bookmarks(app, L);
   // the Gazette's slip reaches left as far as the speaker's bubble allows
   const b = ui.ids.get('goalBubble');
   const left = b && b.y + b.h > L.newspaper.y ? b.x + b.w + 8 : L.portrait.x + 60;
   newspaper(app, L, left);
   const gb = ui.ids.get('goalBubble');
-  app.hud.cornerRect = { x: 0, y: Math.min(L.portrait.y - 22, gb ? gb.y : ui.h), w: gb ? gb.x + gb.w + 4 : L.portrait.x + 64, h: ui.h };
+  app.hud.cornerRect = { x: 0, y: Math.min(L.build.y - 4, gb ? gb.y : ui.h), w: gb ? gb.x + gb.w + 4 : L.portrait.x + 64, h: ui.h };
 }
 
 /** Sounds the renderer asked for, screen-wide events, the fold animation's target, and which
@@ -446,17 +457,50 @@ function celebrations(app: App, L: Layout, dt: number) {
 
 // ------------------------------------------------------------------ the hover report
 
+/** Seconds the mouse rests on a thing before its tag comes; once one has been up, the next comes
+ * quicker for a moment (moving along a line reads it), and a sweep across the floor shows none. */
+const HOVER_DELAY = 0.45;
+const HOVER_WARM = 0.12;
+const HOVER_FADE = 0.1;
+
+/** What the mouse is over on the floor or the town, as a key (a tag waits on it not changing). */
+function hoverKeyOf(app: App): string | null {
+  const g = app.game;
+  const h = app.hud.hoverTile;
+  if (!h) return app.townTip ? 'town:' + app.townTip : null;
+  // the pinned thing has its whole report up already: no hover tag for it
+  if (app.floor === 'factory') { const fe = g.fentAt(h.x, h.y); return fe && fe.id !== app.fselected ? 'f' + fe.id : null; }
+  if (g.s.sparks.some((p) => p.x === h.x && p.y === h.y)) return `s${h.x},${h.y}`;
+  const e = g.entAt(h.x, h.y);
+  if (e) return e.id === app.selected ? null : 'e' + e.id;
+  if (!g.owned(h.x, h.y)) return 'c' + (g.chunkAt(h.x, h.y)?.id ?? '');
+  return g.oreAt(h.x, h.y) ? `o${h.x},${h.y}` : null;
+}
+
 /** The hover report: machines, power buildings and Factory modules get their tag on a string
- * (tags.ts); the Dock, the Hopper, belts, heaps, crates, ore, land and Sparks a short tag. */
+ * (tags.ts); the Dock, the Hopper, belts, heaps, crates, ore, land and Sparks a short tag. Each
+ * waits HOVER_DELAY on its thing and fades in; the Options page's Hover tags picks brief (the
+ * status line), full (every hover row) or off (a click pins the whole report either way). */
 function hoverReport(app: App) {
   const ui = app.ui;
+  const hs = app.hud;
+  const mode = getHoverTags();
+  const key = app.mode.k === 'idle' && !ui.tooltip && mode !== 'off' ? hoverKeyOf(app) : null;
+  if (key !== hs.hoverKey) { hs.hoverKey = key; hs.hoverSince = ui.time; }
+  if (!key) return;
+  const age = ui.time - hs.hoverSince - (ui.time - hs.hoverShown < 0.35 ? HOVER_WARM : HOVER_DELAY);
+  if (age < 0) return;
+  hs.hoverShown = ui.time;
+  const alpha = Math.min(1, age / HOVER_FADE);
+  ui.tipAlpha = alpha;
+  const brief = mode === 'brief';
   const h = app.hud.hoverTile;
-  if (!h && app.townTip && app.mode.k === 'idle' && !ui.tooltip) { ui.tip([{ text: app.townTip }], 240); return; }
-  if (!h || app.mode.k !== 'idle' || ui.tooltip) return;
+  if (!h && app.townTip) { ui.tip([{ text: app.townTip }], 240); return; }
+  if (!h) return;
   const g = app.game;
   if (app.floor === 'factory') {
     const fe = g.fentAt(h.x, h.y);
-    if (fe && fe.id !== app.fselected) hoverEnt(app, null, fe);
+    if (fe && fe.id !== app.fselected) hoverEnt(app, null, fe, { brief, alpha });
     return;
   }
   const goal = nextGoal(g);
@@ -481,17 +525,19 @@ function hoverReport(app: App) {
     return;
   }
   if (app.selected === e.id) return;
-  if (hoverEnt(app, e, null)) return;
+  if (hoverEnt(app, e, null, { brief, alpha })) return;
   const on = worldTip(app, e.x, e.y, e.w, e.h, goal?.tile);
+  // brief: no R and X keycap row (the same on every building; the Keys page has them)
+  const rx = brief ? [] : [{ text: '{k:R} turn  {k:X} remove' }];
   if (e.kind === 'dock') { ui.tip([{ text: '{big:The Dock}' }, { text: BUILD.dock.blurb }, { text: '{k:LMB} orders' }], 180, on); return; }
   if (e.kind === 'hopper') { ui.tip([{ text: '{big:The Hopper}' }, { text: BUILD.hopper.blurb }, { text: '{k:LMB} research' }], 180, on); return; }
   if (e.kind === 'belt') {
-    ui.tip([{ text: '{big:Belt}' }, { text: e.item ? `{i:${e.item}} ${itemName(e.item).toLowerCase()}${e.mv ? '' : ' · {bad:stuck}'}` : '{soft:empty}' }, { text: '{k:R} turn  {k:X} remove' }], 170, on);
+    ui.tip([{ text: '{big:Belt}' }, { text: e.item ? `{i:${e.item}} ${itemName(e.item).toLowerCase()}${e.mv ? '' : ' · {bad:stuck}'}` : '{soft:empty}' }, ...rx], 170, on);
     return;
   }
   if (e.kind === 'heap') { ui.tip([{ text: '{big:Slag Heap}' }, { text: `{i:slag} ${e.count} / ${BUILD.heap.capacity}` }, { text: '{soft:empties out its front}' }], 170, on); return; }
   if (e.kind === 'crate') { ui.tip([{ text: '{big:Buffer Crate}' }, { text: `${e.store.length} / ${BUILD.crate.capacity}${e.store.length ? ` {i:${e.store[0]}}` : ''}` }], 150, on); return; }
-  ui.tip([{ text: `{big:${bigSafe(BUILD[e.kind].name)}}` }, { text: BUILD[e.kind].blurb }, { text: '{k:R} turn  {k:X} remove' }], 180, on);
+  ui.tip([{ text: `{big:${bigSafe(BUILD[e.kind].name)}}` }, { text: BUILD[e.kind].blurb }, ...rx], 180, on);
 }
 
 // ------------------------------------------------------------------ title

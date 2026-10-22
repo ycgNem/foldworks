@@ -5,7 +5,7 @@
 // factoryOD, act2ws, townStart, townLamps, townFestival, townAct2; the Workshop's audits3 and gradeSplus; foldAnim writes a strip of frames of a fold)
 // Writes e2e/out/look/<state>-<w>x<h>.png. For eyeballing while working; npm run screens is the audit.
 import fs from 'node:fs';
-import { launch, openGame, frames } from './launch.mjs';
+import { launch, openGame, frames, HOVER_WAIT } from './launch.mjs';
 import { act2Setup, ACT2, dragTiles, workshopSetup, WORKSHOP, m5Setup, M5, idleSetup } from './screens.mjs';
 
 const [arg = 'start', w = '1280', h = '720'] = process.argv.slice(2);
@@ -220,7 +220,7 @@ if (H180.includes(state)) {
     await frames(page, 3);
     const p = await page.evaluate((id) => { const a = window.__app; const q = a.ui.ids.get(id); return q ? a.uiToCss(q.x + q.w / 2, q.y + q.h / 2) : null; }, hover);
     if (p) await page.mouse.move(p.x, p.y);
-  } else if (hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), hover); await page.mouse.move(p.x, p.y); }
+  } else if (hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), hover); await page.mouse.move(p.x, p.y); await page.waitForTimeout(HOVER_WAIT); }
 }
 // ---- end of the 180's states ----
 if (H180.includes(state)) { /* set up above */ }
@@ -245,7 +245,7 @@ else if (state === 'foldAnim') {
 else if (ACT2.includes(state)) {
   held = await page.evaluate(act2Setup, state);
   if (held?.drag) await dragTiles(page, held.drag);
-  else if (held?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), held.hover); await page.mouse.move(p.x, p.y); }
+  else if (held?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), held.hover); await page.mouse.move(p.x, p.y); await page.waitForTimeout(HOVER_WAIT); }
 }
 // ---- the 180's fold look states (fold.ts): an audit still warming up, the Modules page with no
 // designs yet, and three audits with the camera panned away so their clipboards hang as tags at

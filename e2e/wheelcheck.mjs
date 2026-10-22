@@ -1,7 +1,9 @@
 // The Workbench Wheel's input, checked end to end (src/app/wheel.ts): a right tap opens it at the
 // cursor, a held tool is dropped by a right tap first, Q and Space open it, Esc and a click outside
-// shut it, a petal fans on hover, a picked item is the tool in hand, number keys pick, the toolbox
-// opens it, world clicks never reach the floor while it is open, and the town's doors open pages.
+// shut it, a petal fans on hover, a picked item is the tool in hand, number keys pick, the Build
+// button opens it, so does a left click on empty paving (a pinned report unpins first), the goal
+// bubble's Grab button holds the Miner, world clicks never reach the floor while it is open, and
+// the town's doors open pages.
 // node e2e/wheelcheck.mjs   (BASE=http://127.0.0.1:<port>/)
 import { launch, openGame, frames } from './launch.mjs';
 
@@ -58,7 +60,8 @@ await page.keyboard.press('Escape'); await frames(page, 3);
 await page.evaluate(() => window.__app.pickBuild('belt')); await frames(page, 2);
 await page.keyboard.press('KeyQ'); await frames(page, 4);
 const before = (await st()).ents;
-const far = await tile(1, 7);
+// an empty tile on screen (the sky island framing put row 7 below a 720 px window)
+const far = await tile(4, 1);
 await page.mouse.move(far.x, far.y); await frames(page, 2);
 await page.mouse.down(); await frames(page, 2); await page.mouse.up(); await frames(page, 4);
 s = await st();
@@ -80,6 +83,24 @@ if (p) {
   ok((await st()).open, 'the toolbox opens it');
   await page.keyboard.press('Escape'); await frames(page, 3);
 } else console.log('skip: no toolbox drawn');
+// a left click on empty paving opens it there (after the Bellows); with a report pinned it unpins
+p = await tile(4, 1);
+await page.mouse.move(p.x, p.y); await frames(page, 2);
+await page.mouse.down(); await frames(page, 2); await page.mouse.up(); await frames(page, 4);
+ok((await st()).open, 'a left click on empty paving opens it');
+await page.keyboard.press('Escape'); await frames(page, 3);
+await page.evaluate(() => { const a = window.__app; a.selected = a.game.s.ents.find((e) => e.kind === 'furnace').id; });
+await page.mouse.down(); await frames(page, 2); await page.mouse.up(); await frames(page, 4);
+ok(!(await st()).open && (await page.evaluate(() => window.__app.selected)) === null, 'a left click on paving with a report pinned unpins it, no wheel');
+// the goal names the Miner: its Grab button in Bramble's bubble puts one in your hand
+p = await mark('grabBuild');
+if (p) {
+  await page.mouse.move(p.x, p.y); await frames(page, 2);
+  await page.mouse.down(); await frames(page, 2); await page.mouse.up(); await frames(page, 4);
+  s = await st();
+  ok(s.mode === 'build' && s.kind === 'miner', 'the bubble\'s Grab button holds a Miner');
+  await page.keyboard.press('Escape'); await frames(page, 3);
+} else ok(false, 'the bubble has a Grab button for the Miner goal');
 // Tools: the Remove tool from the wheel
 await page.mouse.move(floorP.x, floorP.y);
 await page.keyboard.press('KeyQ'); await frames(page, 4);

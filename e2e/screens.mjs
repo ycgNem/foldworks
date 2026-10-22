@@ -8,7 +8,7 @@
 // commands, then puts the app in one of the ACT2 states.
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { launch, openGame, frames } from './launch.mjs';
+import { launch, openGame, frames, HOVER_WAIT } from './launch.mjs';
 
 /** Runs in the page. state: orders2 | codex | survey | mega | megaDone | fgrade | faudit | factory2 | fbox | modules2 */
 export async function act2Setup(state) {
@@ -413,7 +413,7 @@ const STATES = {
     const a = window.__app; a.setMode({ k: 'idle' });
     const f = a.game.machines.find((m) => m.kind === 'furnace'); a.selected = f.id;
   },
-  hoverReport: () => { const a = window.__app; a.selected = null; return { hover: [3, 3] }; },
+  hoverReport: () => { const a = window.__app; a.selected = null; a.setMode({ k: 'idle' }); return { hover: [3, 3] }; },
   research: () => {
     const a = window.__app; const g = a.game;
     g.s.research.done = ['pressing', 'surveyEast', 'gearcutting']; g.s.research.selected = 'copperSmelting';
@@ -581,7 +581,7 @@ async function main() {
         await frames(page, 2);
         const p = await page.evaluate((id) => { const a = window.__app; const q = a.ui.ids.get(id); return q ? a.uiToCss(q.x + q.w / 2, q.y + q.h / 2) : null; }, r.hoverId);
         if (p) await page.mouse.move(p.x, p.y);
-      } else if (r?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), r.hover); await page.mouse.move(p.x, p.y); }
+      } else if (r?.hover) { const p = await page.evaluate(([x, y]) => window.__app.tileToCss(x, y), r.hover); await page.mouse.move(p.x, p.y); await page.waitForTimeout(HOVER_WAIT); }
       else await page.mouse.move(Math.floor(w / 2), Math.floor(h / 2) + 40);
       // toasts and trophies shown at rest, where they land: sliding in they are not layout yet (the
       // audit skips them then), and a shot mid-slide looks cut off at the edge

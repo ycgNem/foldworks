@@ -273,6 +273,13 @@ floor edge to edge under it.**
     Gazette), so a button reads as a button, not a coin.
   - **Role colours** for ribbons and bookmarks: moss, copper, teal, violet, brass ramps, `bone`
     text on the body.
+- **The left column** (after the owner's first play, DECISIONS.md): the notebook's main pages as
+  ribbon bookmarks tucked under the left edge (icon, name in Reed `bone` with the ribbon's line as
+  a 1 px shadow, a Pip number at the right end, sliding 3 px out on hover), the **Build** button
+  under them (a paper button, gold while the goal wants it), Bramble at the foot.
+- **Hover tags are brief and quiet**: a 0.45 s rest before one shows, a 0.1 s fade in, the name in
+  Reed under a light rule, chips and causes only. Bullfrog titles, bars and keycap rows belong to
+  the pinned report.
 - **The Inspector** (`portrait_inspector*`, `pixel-art/hud180/inspector.py`): an olive frog a step
   darker than Bramble, a black bowler with a brass band, a monocle on a chain, a drooping brown
   moustache (it curls up when he cheers), half-lidded eyes, a grey suit, a red bow tie, the
