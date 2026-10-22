@@ -2113,3 +2113,85 @@ their derivations are DESIGN.md §23; all are model estimates until an Act V bot
   covered by §22's flags; nothing new.
 - Open: Cinder's chip shrinks to "C" on the Lighthouse page at 1024; the World ground uses the
   District frame where no `world_*` sprite exists; the Relocate foot row is hidden at 1024 by Fly.
+
+## The Act III bot's chemistry and the Act IV bot (2026-10-22)
+
+Built in a worktree, time-boxed (about 3 h); what it measured is below and in DESIGN.md §21 and
+§22 Pacing. **No data number moved**: nothing the bot measured proved a number wrong (the open
+items are the bot's reach, not the model's).
+
+### The Act III bot's chemistry (`src/sim/bot3.ts`)
+- **The sand was there all along.** The last re-measure said solvent was out of reach because a
+  lone sand Miner can't fold. But a **Solvent design folds a sand Miner with the Chem Vat** (two
+  kinds of machine, so it is a line), its copies hold a sand claim (40,000 a block of 4), and its
+  oil comes from the Chute. So the line a player builds is a Solvent line on the sand patch, not a
+  Sand design and not a hand-belted sand run.
+- **The chemistry corner.** Once the Floating City's rotors stand, the lab drops its concrete plant,
+  gravel press and steel line (the District's groups make concrete and steel by then: `LAB_C`), and
+  chunk E's south-east (x 17-23, y 6-9) becomes one powered slot: a Chem Vat at (21,7) facing west
+  into the loop, oil from a Chute Mouth behind it, sand from a Miner on the patch above it, waste
+  out of its south side into two crates, and its own plant inside the fold box (an oil Boiler fed
+  by a Chute Mouth, an Engine, a Pole 7 tiles from chunk E's so the grids never join: power never
+  crosses a fold box). **Solvent** runs there until research has its solvent (Vulcanizing and
+  Processors: a player lets the line pay its research), then folds. **Rubber** and **Processors**
+  are the same vat with a second machine at (20,7) taking the solvent through its back and its other
+  input belted down from a Chute Mouth at (20,5): each design holds its own solvent vat and sand
+  claim, so neither needs solvent from anywhere (the Factory never had to carry it).
+- **Oil is chemistry's bottleneck**, as §21's derivation says (a Plastic copy's 0.12 oil a second
+  feeds an eighth of a vat). Measured: a Chute feeder's oil comes only while its plastic is drawn
+  (the stock stood at 0.49 for an hour), so oil comes from Plastic copies placed by search that
+  sell their plastic at the Dock and send their oil down the Chute (`FEEDS.oil`); the Chute's oil
+  drain to the Hopper is lifted only while the corner runs a line (a full oil stock stops every
+  Chute feeder whose waste is oil: the Circuits II feeder stood blocked, measured).
+- **Factory feeds for the Chute** (`FEEDS`, placed by search east of the bench and in the annex,
+  where the Chute stands; the bench zones stop at the 12x8 and no trunk reached it): oil, rubber
+  (a Rubber II group), servos and sensors for the arms line. A Rubber copy with its own Plastic
+  feeders found no room by the Chute; a Rubber II group placed, but its second Plastic copy's
+  plastic comes down with the rubber and the full plastic stock stops it; a drain for the plastic
+  jammed the Workshop corridor; a group sending both of one Plastic copy's goods into the Rubber
+  ("Rubber works") audited at nothing. **So the Sensors line starves for rubber: open.**
+- **Groups**: Rubber II (a Plastic copy's plastic into the Rubber, a second one's oil: a fold box
+  wants a main route inside, and one copy sending both into the hub could not be laid), Processors
+  II (Circuits, Glass and Plastic copies round it), Sensors II, Arms II (whose outside feeders may
+  feed each other: `ext[].to`). Solvent II was dropped: its Plastic copies' only route into it was
+  their oil, a byproduct, and a nested fold box wants a main route inside.
+- **Chemistry never holds the District**: the District grows (`GROW`) from the plan's first
+  chemistry step on, and a chemistry step that has waited an hour ends the plan (logged in
+  `failed` as `chem:...`), so the full-floor reset still comes (the first measure, with the plan
+  waiting on Robotics, held the District at 31 modules and rule 1 at 408 minutes).
+- **District folds**: the box round a District module and the modules routed into it, when the
+  floor's own refusal (`hfoldRefusal`) passes it (one group, nothing else in the box), a hub whose
+  design has no depth-3 fold yet first; audited, folded and the depth-3 copy placed back.
+- **The District's code takes a floor** (`floorWork(id, want)`): the World's copies, routes, barges
+  and lots run by the same rules (bot4.ts).
+- Batteries, Hydroponics, Sandwiches, umbrellas and the Engineer are **not taught yet**: Robotics,
+  District Folds and Charting need none of them; Relocation (3 Engineers, 20 umbrellas) and the
+  Scrap Transmuter do.
+
+### The Act IV bot (`src/sim/bot4.ts`, `tests/pace-act4.test.ts`)
+- **Opt-in** (`playCampaign`'s `act4`, with `act3`): the Act IV policy takes the Act III hand-over
+  and plays the Act III policy inside it, so pace-act3 measures exactly the Act III bot.
+- **Research page 4 after page 3**: Charting, the Lighthouse, the Sky Anchor, Relocation, then the
+  island's own chain on its island.
+- **The World**: once it opens, the District's folds go up there (copies already on the District
+  stay); a copy more every 3 minutes in turn over the depth-3 designs while the coin covers twice
+  the stamp; barges, routes and lots by the District's rules.
+- **Relocate when it pays** (`relocateTo`, read each minute like the Reorganize rule): allowed,
+  the preview at least 20 Legacy on the first move (Home's seven stages stand by then) and 4 after
+  (a node's worth), and the World full (no copy placed, no lot bought) for 10 minutes, or two hours
+  past Relocation with the preview there. Old Habits keeps the Act III head starts (`HABITS`).
+- **Islands in this order**: the Old Works (its ruins fold lines the first hour hasn't reached; its
+  rule is a cost, not a new layout), Rime (dense lines warm each other), Cinder, Pebble (half the
+  land) last.
+- **Legacy in this order** (`LEGACY_PRIORITY`): the Purse, the Archive, the Clerk, the Skiff Guild,
+  Old Habits, the Regrader, Standing Charts, Contract Runners, the drawers and the Town Plan, Second
+  Nature, the Standing Committee; an island's softener first when the town is going there.
+- **Island chores** (`IslandHand`, from a run's first tick): on the Old Works a rubble tile cleared
+  every 2 s at most, nearest the town first, while the coin covers four times its price. The other
+  islands' rules act on the lines as laid (the bots' layouts are Home's): not yet adapted.
+- **Measured** (seed 1000, 40 h, `tests/pace-act4.test.ts`, 4 passed): the Act IV policy is never
+  reached. Charting wants District Folds, which wants robot arms and 120 sensors, and the Act III
+  bot's Sensors line starves for rubber (above). What the campaign does measure holds as before:
+  the District at 10:01, Robotics at 12:03, each Act III stretch's worst wait 10.4-10.7 min (the
+  full-floor reset), a District of 130 groups at 0.93 ms a tick. Open: every §22 target; the
+  islands' layouts; 80 h of play (about 50 minutes of wall time).

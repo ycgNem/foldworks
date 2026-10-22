@@ -65,10 +65,10 @@ describe(`Act III pacing to 40 h (seed ${SEED})`, () => {
   // Measured and printed, not asserted (DESIGN.md §21 Pacing): rules 1 and 2 hold while the
   // District grows, a copy every few minutes and a lot as the routes or the tiles run out; once the
   // floor is full (about 140 groups on 180 routes, every lot) this player has nothing left to
-  // build, because every goal after the City's stage 1 is chemistry's (Chemistry, sludge for
-  // Hydroponics, sandwiches for the City's stage 2, the Transmuter), which it does not build, and
-  // District Folds is behind Robotics. It then resets (src/sim/campaign.ts ACT3_FULL), so the worst
-  // wait is about the reset's 10 minutes; OPEN: run 5's 20.1 min just after its hand-over.
+  // build: it now builds chemistry as far as Robotics research (the chemistry corner,
+  // src/sim/bot3.ts), but its Sensors line starves for rubber, so Robotics, District Folds, sludge
+  // for Hydroponics, the City's stage 2 and the Transmuter stay out of reach. It then resets
+  // (src/sim/campaign.ts ACT3_FULL), so the worst wait is about the reset's 10 minutes.
   it('rules 1 and 2 over Act III (logged; OPEN past the first megaproject stage)', () => {
     const r = act3Campaign(SEED);
     const goals = r.decisions.filter((_, i) => GOAL.test(r.what[i]));
@@ -99,7 +99,7 @@ describe(`Act III pacing to 40 h (seed ${SEED})`, () => {
     );
     expect(most.between).toBeGreaterThanOrEqual(2);
     expect(r.districtByMin.some((s) => s.skiffs > s.routes)).toBe(true);
-    if (r.districtFolds === 0) console.log('[pace] OPEN District folds: none made (District Folds is research behind Robotics, which wants sensors and processors: chemistry, which this player does not build)');
+    if (r.districtFolds === 0) console.log('[pace] OPEN District folds: none made (District Folds is research behind Robotics, which wants sensors: the Sensors line starves for rubber, DESIGN.md §21 Pacing)');
   }, T);
 
   // (the campaign now resets once a District is full, so 40 h can fall early in a run: the test
