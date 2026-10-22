@@ -2010,3 +2010,19 @@ floor, Legacy its second reset's currency, Relocate layer 2; no new customer.
   a real Act I-III chore with flat prices; islands with rules are Factorio Space Age's planets (here
   each rule changes which layout folds best, and there is no travel or logistics between islands);
   rubble clearing is the land-clearing tycoon convention.
+
+### Act IV's islands on the Workshop (the screen)
+- **Each island's look is a sheet set** (`isle_<world>_*`), falling back to Home's sheet by sheet;
+  **Pebble Isle's sky chunks** are baked as sky (the island's coast follows the land row by row, so
+  Sky Moorings bringing F back as land works), invisible to every buy surface, and the camera stops
+  where the land ends.
+- **Clear is a click on the rubble** ("{k:LMB} Clear · {coin}" in its hover tag, the way land is
+  bought); **Repair is a gold button in a ruin's pinned report** (a hover tag can't be clicked).
+  The first time a whole ruined line runs: "THE OLD LINE RUNS!".
+- **The island's rule is always readable**: a slip under the Purse (`Rime · MACHINES NEED
+  WARMTH`, the full rule in its tip); a machine's report says `cold: 0.5x ...` or `warm`, or
+  `vented: no power, no fuel`; the frost overlay and the cold row read the sim's `cold` flag; the
+  vents' shimmer marks the four tiles beside each (the sim's "beside").
+- **A lesson card per island**, the first time the town stands on it.
+- Open: after a repair the report's mode buttons sit where Repair was (a double click could switch
+  the mode); on Pebble the town's south-row houses sit on the rim of A and B.
