@@ -1215,7 +1215,7 @@ export const ACT5 = ['lastFoldWorld', 'lastFoldAudit', 'lastFoldCard', 'lastFold
  * Workshop): the long tail's data laid over it, then one of the long tail's screens. State: shelf |
  * shelfHidden | shelfBonuses | shelfWardrobe | codexTier | codexLore | codexEnding | ending |
  * endingTyping | challengeList | challengeShut | challengeSlip | reorgNext | boards | boardNight |
- * skinPicker | skinned | photo | trophyToast */
+ * skinPicker | skinned | skinnedDistrict | skinnedWorld | photo | trophyToast */
 export async function tailSetup(state) {
   const a = window.__app;
   const g = a.game;
@@ -1284,19 +1284,37 @@ export async function tailSetup(state) {
       a.selected = null;
       g.s.research.done.push('heavyMachines', 'circuits');
       const act = (c) => { try { a.act(c); } catch { /* a place that does not fit is skipped */ } };
-      act({ k: 'place', kind: 'press', x: 3, y: 2, rot: 0 });
-      act({ k: 'place', kind: 'assembler', x: 5, y: 2, rot: 0 });
-      act({ k: 'place', kind: 'pressMk2', x: 3, y: 4, rot: 0 });
-      act({ k: 'place', kind: 'assemblerMk2', x: 6, y: 4, rot: 0 });
+      act({ k: 'place', kind: 'press', x: 6, y: 9, rot: 0 });
+      act({ k: 'place', kind: 'assembler', x: 8, y: 9, rot: 0 });
+      act({ k: 'place', kind: 'smelter', x: 10, y: 9, rot: 0 });
+      act({ k: 'place', kind: 'pressMk2', x: 6, y: 11, rot: 0 });
+      act({ k: 'place', kind: 'assemblerMk2', x: 9, y: 11, rot: 0 });
+      act({ k: 'place', kind: 'miner', x: 12, y: 9, rot: 2 });
       g.events.drain();
-      m.skins = { miner: 'gilded', press: 'candy', pressMk2: 'candy', assembler: 'starlit', assemblerMk2: 'starlit', steamEngine: 'filigree' };
+      m.skins = { miner: 'gilded', press: 'candy', pressMk2: 'candy', assembler: 'starlit', assemblerMk2: 'starlit', smelter: 'chrome', steamEngine: 'filigree', boiler: 'thrifty', mixer: 'spotless', belt: 'straightArrow', hopper: 'mortarboard', dock: 'bunting' };
+      m.cosmetics.push('thrifty', 'spotless', 'straightArrow', 'mortarboard');
       a.toasts = [];
-      a.lookAt(5, 4);
+      a.refusal = null;
+      a.lookAt(10, 6);
+      break;
+    }
+    case 'skinnedDistrict':
+    case 'skinnedWorld': {
+      a.panel = null;
+      a.selected = null;
+      m.cosmetics.push('blueprint', 'ghostly', 'paperCrane', 'stormproof');
+      m.skins = state === 'skinnedDistrict' ? { module: 'ghostly', skiff: 'paperCrane' } : { module: 'blueprint', barge: 'stormproof' };
+      a.toasts = [];
       break;
     }
     case 'photo': a.panel = null; a.selected = null; L.photo(true); break;
     case 'trophyToast': a.panel = null; a.selected = null; a.trophyPops = [{ id: 'tenThousandTeeth', t: 0.3 }]; break;
   }
+  // the watchers see the Challenges won and the cosmetics granted as news: let them, then clear it
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  a.hud.celebs = [];
+  a.toasts = [];
+  if (state !== 'trophyToast') a.trophyPops = [];
   return null;
 }
 
@@ -1470,9 +1488,19 @@ for (const s of ACT5) STATES[s] = { a5: s }; // Act V
 export const TAIL = {
   shelf: 'ledger', shelfHidden: 'ledger', shelfBonuses: 'ledger', shelfWardrobe: 'ledger', codexTier: 'ledger', codexLore: 'ledger', codexEnding: 'ledger',
   ending: 'ledger', endingTyping: 'ledger', challengeList: 'ledger', challengeShut: 'ledger', challengeSlip: 'act2power', reorgNext: 'ledger', boards: 'ledger',
-  boardNight: 'ledger', skinPicker: 'act2power', skinned: 'act2power', photo: 'act2power', trophyToast: 'act2power',
+  boardNight: 'ledger', skinPicker: 'act2power', skinned: 'act2power', skinnedDistrict: 'district', skinnedWorld: 'world', photo: 'act2power', trophyToast: 'act2power',
 };
 for (const [s, base] of Object.entries(TAIL)) STATES[s] = { base, post: tailSetup, arg: s };
+
+/** Run a long-tail state on a page (shots.mjs, tailshots.mjs): its base, then tailSetup. */
+export async function runTail(page, state) {
+  const b = STATES[STATES[state].base];
+  if (b.a5) await page.evaluate(act5Setup, b.a5);
+  else if (b.d) await page.evaluate(districtSetup, b.d);
+  else if (b.w) await page.evaluate(worldSetup, b.w);
+  else await page.evaluate(b);
+  await page.evaluate(tailSetup, state);
+}
 
 async function main() {
   const only = process.argv.slice(2);

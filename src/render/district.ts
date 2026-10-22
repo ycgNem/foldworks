@@ -25,7 +25,7 @@ import { drawText, textWidth } from '../ui/font';
 import { paperRaw } from '../ui/paper';
 import { onPaper } from '../ui/theme';
 import { sheet, itemIcon, hasArt, drawSprite } from './sprites';
-import { skinnedName } from './skins'; // Milestone 11: a chosen skin's sheet
+import { skinName } from './skins'; // Milestone 11: a chosen skin's sheet
 import { mainOutput } from './factory';
 import { TILE } from './ground';
 import { drawPip, type PipShape } from './pips'; // Milestone 13: pips with shapes
@@ -414,7 +414,7 @@ export function drawDistrict(ctx: CanvasRenderingContext2D, g: Game, time: numbe
 /** A District module: its building (lit and working while it runs), its main output in the window. */
 function drawModule(ctx: CanvasRenderingContext2D, g: Game, e: FEnt, x: number, y: number, time: number, f: HighFloorId) {
   const out = mainOutput(g, e.design);
-  const mn = skinnedName(g, 'module') ?? hart(f, 'module');
+  const mn = skinName(g, 'module', hart(f, 'module'));
   if (hasArt(mn)) {
     const s = sheet(mn);
     const f = e.state === 'work' ? 1 + ((Math.floor(time * (s.fps || 6)) + e.id) % Math.max(1, s.frames.length - 1)) : 0;
@@ -435,8 +435,9 @@ const SHORT_HOP = 2;
 function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: number, y: number, w: number, h: number) => boolean, F: HighFloorId) {
   const st = g.s[F]!;
   const kind = carrier(F);
-  const skin = skinnedName(g, kind);
-  const s = sheet(skin ?? kind);
+  const skinN = skinName(g, kind, kind);
+  const skin = skinN !== kind;
+  const s = sheet(skinN);
   const k = skiffStats(g, F);
   const dwell = k.dwell;
   const shadow = rgba(C.ink, 0.25);

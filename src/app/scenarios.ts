@@ -22,7 +22,7 @@ import { migrate, store, SAVE_VERSION } from '../engine/save';
 import { plain } from '../engine/fmt';
 import { Num } from '../engine/num';
 import { textWidth, bigWidth, smallWidth, ellipsize, LINE_H } from '../ui/font';
-import { drawRich, richHeight, CHIP_H } from '../ui/rich';
+import { drawRich, richHeight, richWidth, CHIP_H } from '../ui/rich';
 import { T } from '../ui/theme';
 import { itemIcon } from '../render/sprites';
 import { button, chip, chipWidth, rule, pencil, meter } from './chrome';
@@ -171,7 +171,7 @@ export function scenarioPick(id: ScenarioId | null) { page.sel = id; }
 
 /** A share as the board prints it ("-" for a record from the older store, which never knew). */
 const wasteText = (w: number) => (w >= 1 ? '-' : `${Math.round(w * 100)}%`);
-const measureName: Record<string, string> = { perTile: 'a tile', rate: 'a minute', perKw: 'a kW' };
+const measureName: Record<string, string> = { perTile: 'per tile', rate: 'per minute', perKw: 'per kW' };
 
 /** The Scenarios page: the eight boards with their best scores down the left page; the board picked
  * on the right, with its efficiency board and its keys. */
@@ -212,7 +212,7 @@ export function scenariosScreen(app: App, r: Rect) {
     const tw = x + w - 4 - sw - tx;
     const ty = top + Math.floor((rowH - 1 - (rowH >= 26 ? 18 : 9)) / 2);
     ui.text(ellipsize(d.name, tw), tx, ty, here ? T.reset : T.ink);
-    if (rowH >= 26) ui.small(ellipsize(`${twist(here ? g : null, d)} · ${d.unit}`.toUpperCase(), tw), tx, ty + 11, T.inkSoft);
+    if (rowH >= 26) ui.small(ellipsize(`${twist(here ? g : null, d)}, ${d.unit}`.replace(/ · /g, ', ').toUpperCase(), tw), tx, ty + 11, T.inkSoft);
     if (rec) {
       ui.text(scoreText(rec.score), x + w - 4, ty, T.coin, { align: 'right' });
       if (rowH >= 26) ui.small(`GRADE ${rec.grade}`, x + w - 4, ty + 11, T.inkSoft, { align: 'right' });
@@ -266,8 +266,8 @@ function boardSide(app: App, dp: Rect, id: ScenarioId, rec: BoardRecord | null) 
     const uw = dx + dw - (dx + 12 + bigWidth(rec ? scoreText(rec.score) : '-') + 6);
     if (uw > 20) ui.small(ellipsize(unit.toUpperCase(), uw), dx + dw, dy + 4, T.inkSoft, { align: 'right' });
     dy += 14;
-    if (rec) drawRich(ui, `{soft:grade} ${rec.grade} {soft:· each best is its own, from any fold}`, dx, dy, dw, T.ink);
-    else drawRich(ui, `{soft:fold a line of} {i:${d.product}} {soft:to score}`, dx, dy, dw, T.ink);
+    const gl = rec ? [`{soft:grade} ${rec.grade} {soft:· each best from any fold}`, `{soft:grade} ${rec.grade}`].find((q) => richWidth(q) <= dw) ?? '' : [`{soft:fold a line of} {i:${d.product}} {soft:to score}`, `{soft:fold} {i:${d.product}} {soft:to score}`].find((q) => richWidth(q) <= dw) ?? '';
+    drawRich(ui, gl, dx, dy, Infinity, T.ink);
     dy += 12;
     // three cells: per tile, per kW, waste (the fold audit's own terms: C, §18's power, W)
     const cells: [string, string, number][] = [
@@ -287,7 +287,7 @@ function boardSide(app: App, dp: Rect, id: ScenarioId, rec: BoardRecord | null) 
     dy += 30;
   }
   if (dy + 10 <= end) {
-    const s = `{soft:scored ${measureName[d.measure]}: the best fold of} {i:${d.product}}`;
+    const s = `{soft:scored ${measureName[d.measure]}: the best fold of} {i:${d.product}} {soft:${ITEMS[d.product].name.toLowerCase()}}`;
     drawRich(ui, s, dx, dy, dw, T.ink);
   }
   // the keys along the foot

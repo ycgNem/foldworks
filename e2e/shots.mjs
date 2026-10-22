@@ -180,7 +180,7 @@ await page.evaluate(() => window.__app.onboarding.lessons.hold(false));
 // efficiency board, the skin picker in a Miner's report, skinned machines, photo mode and the PNG
 // it exports (saved from the download).
 {
-  const { STATES, tailSetup, act5Setup } = await import('./screens.mjs');
+  const { runTail } = await import('./screens.mjs');
   await page.evaluate(() => window.__app.onboarding.lessons.hold(true));
   for (const [state, name, note] of [
     ['shelf', '20-trophy-shelf', 'the Trophy Shelf: the index of groups, Act I\'s stickers, the one in hand with its bonus'],
@@ -190,14 +190,13 @@ await page.evaluate(() => window.__app.onboarding.lessons.hold(false));
     ['challengeList', '23-challenges', 'the Challenges page: all fifteen by act, Headwinds picked for the next run'],
     ['boardNight', '24-scenario-board', "the Scenarios page: Night Market's efficiency board"],
     ['skinPicker', '25-skin-picker', "a Miner's pinned report with its Skin list open"],
-    ['skinned', '26-skinned-machines', 'gilded Miners, candy Presses, starlit Assemblers (a skin without art falls back)'],
+    ['skinned', '26-skinned-machines', 'skinned Workshop machines: gilded Miner, candy and starlit Mk1 and Mk2, filigree Steam Engine'],
+    ['skinnedDistrict', '26b-skinned-district', 'the District with ghostly modules and paper-crane skiffs'],
+    ['skinnedWorld', '26c-skinned-world', 'the World with blueprint modules and stormproof barges'],
     ['photo', '27-photo-mode', 'photo mode: the HUD hidden, the snap strip'],
   ]) {
     await page.mouse.move(2, Math.floor(h * 0.3));
-    const base = STATES[STATES[state].base];
-    if (base.a5) await page.evaluate(act5Setup, base.a5);
-    else await page.evaluate(base);
-    await page.evaluate(tailSetup, state);
+    await runTail(page, state);
     await frames(page, 6);
     await shot(name, note);
   }

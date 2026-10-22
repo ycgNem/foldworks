@@ -3,7 +3,7 @@
 // Usage: node e2e/tailshots.mjs [w h] [state ...]  (BASE=... for another server)
 import fs from 'node:fs';
 import { launch, openGame, frames } from './launch.mjs';
-import { STATES, tailSetup, act5Setup, TAIL } from './screens.mjs';
+import { runTail, TAIL } from './screens.mjs';
 
 const args = process.argv.slice(2);
 const nums = args.filter((x) => /^\d+$/.test(x)).map(Number);
@@ -17,10 +17,7 @@ await page.evaluate(() => window.__app.onboarding.lessons.hold(true));
 for (const state of Object.keys(TAIL)) {
   if (only.length && !only.includes(state)) continue;
   await page.mouse.move(2, Math.floor(h * 0.3));
-  const base = STATES[STATES[state].base];
-  if (base.a5) await page.evaluate(act5Setup, base.a5);
-  else await page.evaluate(base);
-  await page.evaluate(tailSetup, state);
+  await runTail(page, state);
   await frames(page, 6);
   await page.screenshot({ path: `${OUT}/${w}x${h}-${state}.png` });
   console.log(`${w}x${h}-${state}`);

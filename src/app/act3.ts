@@ -26,12 +26,13 @@ import { fplaceRefusal } from '../sim/systems/modules';
 import { scenarioOf } from '../sim/scenario';
 import type { Game } from '../sim/Game';
 import { slip, button, tag, tagSize } from './chrome';
-import { SHORT, openChallenges } from './challenges';
 import { challengeProgress } from '../sim/systems/challenges';
 import { registerCounter } from './topbar';
 import { banner } from './hud';
 import { sampleMouth, type MouthLook } from './mouths';
 import { scoreText, backToTown, twist, liveBest, townRecord, watchBest } from './scenarios';
+// (after './hud': hud loads the screens first, so no page registers while screens.ts is loading)
+import { SHORT, openChallenges } from './challenges';
 import type { App } from './app';
 
 // ------------------------------------------------------------------ the frame

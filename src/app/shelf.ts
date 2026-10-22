@@ -37,7 +37,7 @@ const GROUP_DEFS: { id: ShelfTab; label: string; from: string; tip: string }[] =
   { id: 'act1', label: 'Act I', from: 'warmHands', tip: 'the Workshop, the first folds' },
   { id: 'act2', label: 'Act II', from: 'manOfSteel', tip: 'steel, power, the Great Drill' },
   { id: 'act3', label: 'Act III', from: 'upInTheAir', tip: 'the District and its goods' },
-  { id: 'deliveries', label: 'Deliveries', from: 'tenThousandTeeth', tip: 'long deliveries over every run' },
+  { id: 'deliveries', label: 'Hauls', from: 'tenThousandTeeth', tip: 'long deliveries, counted over every run' },
   { id: 'firsts', label: 'Firsts', from: 'hardSet', tip: 'firsts of Acts II-V and the Codex' },
   { id: 'resets', label: 'Resets', from: 'freshStart', tip: 'Reorganize and Relocate' },
   { id: 'heights', label: 'Heights', from: 'urbanPlanner', tip: 'the high floors, the Last Fold, grades' },
@@ -138,7 +138,7 @@ export function shelfPage(app: App, r: Rect) {
     st.tab = GROUP_DEFS.find((d) => d.id !== 'hidden' && gs[d.id].some((t) => !trophyEarned(g, t)))?.id ?? 'act1';
   }
   // ---- the index down the left edge
-  const IW = body.w >= 360 ? 80 : 66;
+  const IW = body.w >= 360 ? 80 : 72;
   indexColumn(app, body.x, body.y, IW, body.h);
   const page: Rect = { x: body.x + IW + 7, y: body.y, w: body.w - IW - 7, h: body.h };
   ui.ctx.fillStyle = rgba(T.paperEdge, 0.5);
@@ -207,6 +207,7 @@ function stickerGrid(app: App, list: TrophyDef[], page: Rect): TrophyDef | null 
     const cx = x0 + (i % cols) * cell, cy = y0 + Math.floor(i / cols) * cell;
     if (cy + cell > page.y + page.h) return;
     const earned = trophyEarned(g, t);
+    ui.region(cx, cy, cell, cell, 'button', false);
     const ctx = ui.ctx;
     ctx.fillStyle = rgba(T.paperLo, 0.8);
     ctx.fillRect(cx + 2, cy + cell - 2, cell - 4, 1);
@@ -217,7 +218,6 @@ function stickerGrid(app: App, list: TrophyDef[], page: Rect): TrophyDef | null 
     else sticker(app, t, ccx, ccy, earned, TROPHIES.indexOf(t), R);
     const hv = ui.hover(cx, cy, cell, cell);
     ui.mark('trophy:' + t.id, cx, cy, cell, cell);
-    ui.region(cx, cy, cell, cell, 'button', false);
     if (!earned && !t.hidden && progress(t) > 0) meter(ui, cx + 6, cy + cell - 7, cell - 12, 3, progress(t), { role: 'coin', glint: false });
     if (st.focus === t.id) penCircle(ui, ccx, ccy, 15, 1);
     if (hv) {
@@ -345,7 +345,7 @@ function bonusesPage(app: App, page: Rect) {
   const r = trules(g);
   const x = page.x + 2, w = page.w - 4;
   let y = page.y + 1;
-  y += caption(ui, 'every trophy\'s bonus, summed, each kind capped', x, y) + 2;
+  y += caption(ui, ['every trophy\'s bonus, summed, each kind capped', 'every bonus summed, each kind capped', 'summed, each capped'].find((q) => smallWidth(q.toUpperCase()) <= w) ?? '', x, y) + 2;
   const two = w >= 300;
   const cw = two ? Math.floor((w - 12) / 2) : w;
   const rows: [string, string, number | null, string][] = [];
@@ -432,8 +432,8 @@ function wardrobePage(app: App, page: Rect) {
     const worn = skinFor(g, slot);
     const on = st.slot === slot;
     const hov = ui.hover(cx, cy, CELL - 2, CELL - 2);
-    ui.mark('wardrobe:' + slot, cx, cy, CELL - 2, CELL - 2);
     ui.region(cx, cy, CELL - 2, CELL - 2, 'button', false);
+    ui.mark('wardrobe:' + slot, cx, cy, CELL - 2, CELL - 2);
     ui.fill(cx, cy, CELL - 2, CELL - 2, on ? T.ink : owned.length ? T.paperEdge : rgba(T.paperEdge, 0.4));
     ui.fill(cx + 1, cy + 1, CELL - 4, CELL - 4, on ? C.lamp3 : hov ? T.paperHi : owned.length ? T.paper : rgba(T.paperLo, 0.5));
     ui.ctx.globalAlpha = owned.length ? 1 : 0.45;

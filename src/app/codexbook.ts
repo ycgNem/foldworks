@@ -10,7 +10,7 @@ import { ITEMS, type ItemId } from '../data/items';
 import { RULES } from '../data/rules';
 import { CODEX_ITEMS, CODEX_PAGES, TIERS, type Tier, type CodexPage, type PageGroup } from '../data/codex';
 import { codexCompletion, pageOpen } from '../sim/longtail';
-import { ICON, bigWidth, ellipsize, wrapText, LINE_H } from '../ui/font';
+import { ICON, bigWidth, ellipsize, wrapText, smallWidth, LINE_H } from '../ui/font';
 import { drawRich, richHeight } from '../ui/rich';
 import { T } from '../ui/theme';
 import { itemIcon } from '../render/sprites';
@@ -127,8 +127,9 @@ function tierSide(app: App, dp: Rect, tier: Tier, hovered: ItemId | null, open: 
   for (const t of TIERS) {
     const n = comp.tiers[t];
     const s = `${n.have}/${n.total}`;
+    const lw = smallWidth('TIER III') + 5;
     ui.small(`TIER ${ROMAN[t]}`, x, y + 1, t === tier ? T.research : T.inkSoft);
-    meter(ui, x + 34, y + 1, w - 34 - 24, 4, n.total ? n.have / n.total : 0, { role: n.have === n.total ? 'good' : 'research', glint: false });
+    meter(ui, x + lw, y + 1, w - lw - 26, 4, n.total ? n.have / n.total : 0, { role: n.have === n.total ? 'good' : 'research', glint: false });
     ui.small(s, x + w, y + 1, n.have === n.total ? T.good : T.inkSoft, { align: 'right' });
     y += 8;
   }

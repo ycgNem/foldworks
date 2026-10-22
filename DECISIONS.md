@@ -2235,6 +2235,81 @@ linear, a Challenge's reward is a share off one price). Numbers and derivations:
 - **Hidden achievements shown as "???"** are a convention of nearly every achievement list (Steam's
   hidden achievements); kept as genre furniture, with names and conditions this game's own.
 
+### Milestone 11's screens (2026-10-22)
+Built autonomously (the owner: "decide everything, don't ask"), app and UI code, the skin lookup and
+the photo export in `src/render/`, the e2e states and shots; no sim or data change.
+- **The Trophy Shelf is an index and a page** (`src/app/shelf.ts`): 205 stickers do not fit one
+  grid, so the left page has an index down its edge (Act I, Act II, Act III, Hauls, Firsts, Resets,
+  Heights, Feats, Hidden, each with its count; the groups are the data file's own blocks, cut at an
+  anchor trophy each, so a trophy added inside a block lands in its group), then **Bonuses** and the
+  **Wardrobe**. A group's stickers in a grid (a hidden one a dashed "?" until earned), the closest
+  still to earn under them; a click holds a sticker on the right page, which gives its condition,
+  its progress and **its bonus** ("its bonus, yours for good" once earned; "???" while hidden).
+- **Bonuses** lists every kind the shelf can give, summed (`trules`), each with a meter against its
+  cap (`TROPHY_CAPS`) and the cap printed beside it; the products sped up and the buildings made
+  free as chips under them. The cap is on the page because it is the design's promise (pillar 1:
+  the shelf is a set of small rules, never a multiplier on its own size).
+- **A trophy's ribbon says its bonus** on a slip under it (the newest one only, so two trophies at
+  once never stack two slips).
+- **The Codex has the same index**: Tiers I-V with their counts, then the Lore. A tier pins its
+  specimens (fewer and larger than the old page of every item); the right page has the completion
+  overall and a meter a tier. The Lore lists the 16 pages in four groups, open ones in ink, shut ones
+  pencilled with a lock; the right page reads the open one in Unit 7's capitals or says what opens it.
+- **Unit 7's ending is its own moment** (`src/app/ending.ts`): the first time the floor is back with
+  nothing open after the first Last Fold (the sequence and the Kernel tree first), the night sky
+  fills the screen: Unit 7 and the World it logged pinned on a mount, "Collection Complete", its five
+  lines typed out, then LOGGED stamped over the mount; Skip, then Onward or Read in the Codex. The
+  Codex's ending page keeps "The ending, again". A save loaded with the page already open does not
+  replay it (the watcher only counts the page opening in the game it is watching).
+- **The Challenges page** (`src/app/challenges.ts`): fifteen keys on the Reorganize card's strip
+  would take three rows of the contract, so the strip keeps "Ordinary run", the Challenge picked
+  and "Challenges (n open)", and the page lists all fifteen by act (won, under way, open, or shut
+  with a lock), each with its rule and goal in a few words; the right page has the rule, goal,
+  reward (and the skin it pays), what it needs (ticked or crossed), the run's progress when it is
+  under way, and "Take it next run" (back to the contract) or Give up. A Challenge whose floor has
+  never stood is listed, not offered. The slip under the Purse shows the goal's count ("1,000 STEEL
+  412/1,000") and opens the page on a click. `SHORT` (the slip's words) lives on the page now, with
+  real entries for all fifteen.
+- **Scenarios: a list and a board** (`src/app/scenarios.ts`): eight boards, each a row (its land
+  in miniature, its twist and unit, its best and grade); the board picked on the right page with its
+  pitch, its chips and its **efficiency board**: the best score big, then per tile, per kW and waste
+  in three cells (each the best of its own fold, as the sim keeps them). "Back to your town" hands
+  the board's bests to the town with `{ k: 'boards' }`. The app's older store
+  (`foldworks_scenario_best`) is read once into the town's boards (a record that only knew its score
+  gets per tile on a per-tile board, per kW on a per-kW one, and waste 1, shown as a dash) and
+  removed. Inside a board the record to beat is the town's (taken when the board was opened).
+- **Skins** (`src/render/skins.ts`): the rule the art was drawn to (docs/endgame.md "Milestone 11
+  skins as built"): wherever the renderer draws base sheet X for a skinned kind it draws
+  `skin_<id>_X` when that sheet exists, same frame, facing, anchor and position, else X: Workshop
+  buildings (the default branch, the heap, the Seed, the Dock and its lily form, the Hopper), belts
+  and belt turns, Factory modules (`skin_<id>_module`), high-floor modules (`skin_<id>_dist_module`,
+  `_world_module`, `_beyond_module`, via `hart`), skiffs, barges and couriers, and the building
+  ghost. Pips, glows and overlays draw on top as before. Six lines in `renderer.ts`, two in
+  `factory.ts`, four in `district.ts`.
+- **Wearing a skin**: a building's pinned report gets a labelled "Skin: <name>" key once a skin for
+  its kind is owned; it opens Plain and the skins owned for it as keys inside the report (no
+  floating menu: the report is already the place for a building's settings). A Factory module's
+  report has the same for `module`. The **Wardrobe** (on the shelf) shows every kind a skin dresses
+  as a key (dimmed while none is owned), the worn ones as chips, and for the kind picked its preview,
+  the keys to wear one and the skins still to earn with where each comes from. The Ledger's shelf
+  gets a "Wear them: the Wardrobe" key (the Act V note "no picker yet" is retired).
+- **Free buildings**: the wheel's slot reads FREE and its chip "free, a trophy" while `freeBuild`
+  says the next one is free; the price shown is `buildPrice` (a Challenge's discount included).
+- **Photo mode** (`src/app/photo.ts`, `src/render/photo.ts`): a labelled "Photo" key beside Stuck?
+  and the HUD key (H, "HUD on/off", which had no handler) hide the HUD; a strip along the foot snaps
+  the **whole floor** (its island or platform and the town, not the view) at 1x or 2x into an
+  offscreen canvas, downloaded as `foldworks-<floor>-<date>-<time>.png`, with a white flash and a
+  "Saved" note. The renderer draws the photo as it draws a frame (its context, size, view and
+  camera pointed at the canvas for one draw, then put back), so nothing in the Renderer changed for
+  it. On a high floor the key hides while the audit slip covers its place (H still works).
+- **Pages register safely**: two pages drawn from `screens.ts`'s switch (challenges, ending) and
+  the long tail's frame hooks added from `app.ts` (`tailframe.ts`), because a page module evaluated
+  while `screens.ts` is still loading cannot call `registerScreen` under Vitest's loader; the
+  registry itself is a hoisted `var`, so the browser never minded.
+- Derivative check: an index of achievement groups and a cosmetics wardrobe are genre furniture
+  (most achievement lists and skin menus), built from this game's notebook kit; photo mode is a
+  convention of many builders (no layout taken from one). Nothing new beyond the sim's flags above.
+
 ## Milestone 14: performance, save size and release (2026-10-22)
 
 Built in a worktree off `m9-worlds` while Milestone 11's sim and data were built elsewhere: render,

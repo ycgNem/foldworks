@@ -21,7 +21,7 @@ import { paperRaw, tagRaw, chipRaw, coinRaw, COIN_W, outlinedText } from '../ui/
 import { Ground, TILE } from './ground';
 import { drawOreFx } from './orefx';
 import { sheet, drawRot, frameAt, itemIcon, hasArt, spriteName } from './sprites';
-import { skinned, skinnedName } from './skins'; // Milestone 11: a chosen skin's sheet
+import { skinned, skinName } from './skins'; // Milestone 11: a chosen skin's sheet
 import { Fx, FOLD_DUR, FOLD_FLASH } from './fx';
 import { onGridKind, powered, gridIndex, cheb, wirePairs, reached, capacity } from './powerview';
 import { Town, TOWN_ROWS } from './town';
@@ -619,10 +619,10 @@ export class Renderer {
     const stuck = b.item !== null && !b.mv;
     const t = stuck ? 0 : this.time;
     if (turn) {
-      const s = sheet('belt_turn');
+      const s = skinned(g, 'belt', 'belt_turn');
       drawRot(this.ctx, s, frameAt(s, t), b.x * TILE, b.y * TILE, b.rot, turn === 1);
     } else {
-      const s = sheet('belt');
+      const s = skinned(g, 'belt', 'belt');
       drawRot(this.ctx, s, frameAt(s, t), b.x * TILE, b.y * TILE, b.rot);
     }
   }
@@ -841,8 +841,9 @@ export class Renderer {
     switch (e.kind) {
       case 'dock':
       case 'hopper': {
-        const sk = skinnedName(g, e.kind);
-        const s = sk ? sheet(sk) : sheet(e.kind === 'dock' && g.s.orders.rep.bramble >= 3 ? 'dock_lily' : e.kind);
+        // a skin replaces the Dock whether it is the lily one or not (skin_<id>_dock)
+        const sk = skinName(g, e.kind, e.kind);
+        const s = sk !== e.kind ? sheet(sk) : sheet(e.kind === 'dock' && g.s.orders.rep.bramble >= 3 ? 'dock_lily' : e.kind);
         const ss = s.placeholder && e.kind === 'dock' ? sheet('dock') : s;
         ctx.drawImage(ss.frames[frameAt(ss, this.time)], x, y);
         return;
@@ -879,7 +880,7 @@ export class Renderer {
         // the Seed (DESIGN.md §23): its 4-frame hum while any side takes its ore, frame 0 (the
         // still pose) when every side holds one; a coloured notch at each edge says which ore
         // leaves that side (hovered or pinned: the ore icons themselves, seedLabels)
-        const s = sheet('seed');
+        const s = skinned(g, 'seed', 'seed');
         drawRot(ctx, s, e.state === 'work' ? frameAt(s, this.time + e.id * 0.17) : 0, x, y, 0);
         this.seedNotches(e, x, y);
         this.pip(x + W - TILE, y, e.state === 'work' ? C.pipGreen : C.pipRed, e.state === 'blocked');

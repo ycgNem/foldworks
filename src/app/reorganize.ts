@@ -131,7 +131,7 @@ function nextKeys(offered: ChallengeId[], x: number, w: number): { id: Challenge
   let bx = x0, row = 0;
   const ids: (ChallengeId | null | 'all')[] = [null, ...(st.pick ? [st.pick] : []), 'all'];
   for (const id of ids) {
-    const bw = textWidth(id === 'all' ? allLabel(offered) : nextLabel(id)) + (id === 'all' ? 22 : 12);
+    const bw = textWidth(id === 'all' ? allLabel(offered) : nextLabel(id)) + (id === 'all' ? 30 : 12);
     if (bx + bw > x + w && bx > x0) { row++; bx = x0; }
     out.push({ id, x: bx, row, w: bw });
     bx += bw + 3;

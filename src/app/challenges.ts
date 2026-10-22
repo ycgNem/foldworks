@@ -8,7 +8,7 @@ import { CHALLENGES, CHALLENGE_IDS, CHALLENGE_AFTER_RUNS, type ChallengeId } fro
 import { cosmeticDef, COSMETICS } from '../data/cosmetics';
 import { won, challengeRefusal, challengeProgress } from '../sim/systems/challenges';
 import { ICON, bigWidth, ellipsize, smallWidth, textWidth } from '../ui/font';
-import { drawRich, richHeight } from '../ui/rich';
+import { drawRich, richHeight, richWidth } from '../ui/rich';
 import { T } from '../ui/theme';
 import { button, meter, rule } from './chrome';
 import { menuTemplate } from './widgets';
@@ -66,7 +66,9 @@ const STATE_CHIP: Record<ChallengeState, string> = { won: '{chip:good:WON}', run
 /** The skin a Challenge also pays. */
 const skinOf = (id: ChallengeId) => COSMETICS.find((c) => c.source.k === 'challenge' && c.source.id === id);
 
-function challengesPage(app: App, r: Rect) {
+/** The page (drawn from screens.ts's switch: a page imported by screens.ts must not register while
+ * screens.ts is still loading). */
+export function challengesPage(app: App, r: Rect) {
   const ui = app.ui;
   const g = app.game;
   const side = Math.min(206, Math.floor(r.w * 0.4));
@@ -79,7 +81,8 @@ function challengesPage(app: App, r: Rect) {
   const acts = [1, 2, 3, 4] as const;
   const rows = CHALLENGE_IDS.length + acts.length;
   const rh = Math.max(12, Math.min(16, Math.floor((body.h - 12) / rows)));
-  caption(ui, `${nWon} of ${CHALLENGE_IDS.length} won · a rule until its goal, then a reward for good`, x, y);
+  const cap = [`${nWon} of ${CHALLENGE_IDS.length} won, a rule until its goal, then a reward for good`, `${nWon} of ${CHALLENGE_IDS.length} won, a rule until its goal`, `${nWon} of ${CHALLENGE_IDS.length} won`].find((q) => smallWidth(q.toUpperCase()) <= w) ?? '';
+  caption(ui, cap, x, y);
   y += 11;
   for (const a of acts) {
     const list = CHALLENGE_IDS.filter((id) => challengeAct(id) === a);
@@ -177,9 +180,10 @@ function sidePage(app: App, dp: Rect) {
   } else if (s === 'won') {
     button(ui, 'challengeWon', x, fy, w, 16, 'Won · the reward is yours', { disabled: true });
   } else if (why) {
-    ui.clip(x, fy, w, 17);
-    drawRich(ui, `{u:lock} {soft:${why.replace(/[{}]/g, '')}}`, x, fy + 3, w, T.ink);
-    ui.unclip();
+    // the refusal on one line (the needs are spelt out above): the sim's words when they fit
+    const full = `{u:lock} {soft:${why.replace(/[{}]/g, '')}}`;
+    const line = richWidth(full) <= w ? full : c.needs && why === c.needs.text ? '{u:lock} {soft:shut until it has what it needs}' : '{u:lock} {soft:not open for the next run}';
+    drawRich(ui, line, x, fy + 3, Infinity, T.ink);
   } else if (button(ui, 'challengeTake', x, fy, w, 16, picked ? 'Next run: picked' : 'Take it next run', { gold: !picked, active: picked, tip: [{ text: `{big:${c.name}}` }, { text: 'the next Reorganize starts the run under its rule' }, { text: '{soft:sign the contract to begin}' }] })) {
     pickNextRun(id);
     app.panel = 'reorganize';
@@ -190,5 +194,3 @@ function sidePage(app: App, dp: Rect) {
   void speaker;
 }
 
-import { registerScreen } from './screens';
-registerScreen('challenges', challengesPage);

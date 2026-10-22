@@ -2,8 +2,7 @@
 // first Last Fold, gets its own moment instead of a list row. Once the Last Fold's sequence and the
 // Kernel tree are closed (the first time the floor is back with nothing open), the night sky fills
 // the screen: Unit 7 at the top, the World it logged as the last specimen pinned on a mount, and its
-// five lines typed out one by one in its capitals; then LOGGED is stamped over the mount and a new
-// empty drawer slides out under it. "Onward" closes it; "Read it in the Codex" opens the page. The
+// five lines typed out one by one in its capitals; then LOGGED is stamped over the mount. "Onward" closes it; "Read it in the Codex" opens the page. The
 // Codex's Lore keeps a key to see it again. Presentation only.
 import { C, rgba } from '../data/palette';
 import { CODEX_PAGES } from '../data/codex';
@@ -11,8 +10,6 @@ import { pageOpen } from '../sim/longtail';
 import { bigWidth, wrapText, LINE_H } from '../ui/font';
 import { sheet } from '../render/sprites';
 import { button, portrait, pushpin, stamp } from './chrome';
-import { registerScreen } from './screens';
-import { lastFoldPlaying } from './lastfold';
 import { codexTab } from './codexbook';
 import { endingState, openEnding } from './endingstate';
 import type { Game } from '../sim/Game';
@@ -27,14 +24,14 @@ export { openEnding };
 
 /** Once a frame: the page opening in this game (not a save loaded with it open) queues the moment,
  * which waits until the floor is back with nothing open. */
-export function endingWatch(app: App) {
+export function endingWatch(app: App, lastFoldOn: boolean) {
   if (!END || app.screen !== 'play') return;
   const g = app.game;
   const open = pageOpen(g, END);
   if (watch.game !== g) { watch.game = g; watch.open = open; return; }
   if (open && !watch.open) watch.pending = true;
   watch.open = open;
-  if (watch.pending && !app.panel && !lastFoldPlaying(app) && !app.offlineJob) {
+  if (watch.pending && !app.panel && !lastFoldOn && !app.offlineJob) {
     watch.pending = false;
     openEnding(app);
   }
@@ -44,7 +41,8 @@ export function endingWatch(app: App) {
 const CPS = 42;
 const LEAD = 1.2;
 
-registerScreen('ending', (app) => {
+/** The moment, full screen (drawn from screens.ts's switch). */
+export function endingPage(app: App) {
   const ui = app.ui;
   const ctx = ui.ctx;
   const W = ui.w, H = ui.h;
@@ -74,7 +72,7 @@ registerScreen('ending', (app) => {
   // the head: Unit 7 and the last specimen side by side, the title under them
   let y = 12;
   const bob = Math.floor(ui.time * 1.5) % 4 === 0 ? 1 : 0;
-  const tall = H >= 330;
+  const tall = H >= 300;
   if (tall) {
     portrait(ui, 'unit7', cx - 54, y + bob, 48);
     // the mount: the World, folded into the Seed, pinned
@@ -133,4 +131,4 @@ registerScreen('ending', (app) => {
     if (button(ui, 'endingOnward', cx + 4, footY, bw, 17, 'Onward', { gold: true, icon: 'play', tip: [{ text: '{big:Onward}' }, { text: 'a new drawer, a new universe' }] })) { app.panel = null; app.audio.sfx('close'); }
     if (button(ui, 'endingCodex', cx - 4 - bw, footY, bw, 17, 'Read in the Codex', { icon: 'codex', tip: "{u:codex} the page in Unit 7's Codex" })) { codexTab('lore', 'ending'); app.panel = 'codex'; app.audio.sfx('open'); }
   }
-});
+}

@@ -182,7 +182,7 @@ export function drawHud(app: App, dt: number) {
   lessonFrame(app, L); // Milestone 13: lesson cards on firsts (src/app/lessons.ts)
   keysFrame(app);
   refusal(app, dt);
-  celebrations(app, L, dt);
+  if (app.panel !== 'ending') celebrations(app, L, dt); // Milestone 11: Unit 7's ending has the screen
   drawWheel(app, L);
 }
 
@@ -210,7 +210,9 @@ function corners(app: App, L: Layout, dt: number) {
     const sk = ui.ids.get('whereStuck'), bl = ui.ids.get('nextProblem');
     const px = sk ? sk.x + sk.w + 4 : bl && bb > pb ? bl.x + bl.w + 6 : L.bell.x;
     const py = sk ? sk.y : pb + 5;
-    if (app.screen === 'play' && !app.offlineJob) { photoButton(app, px, py); bb = Math.max(bb, py + 18); }
+    // a high floor's audit slip reaches left over that place while it runs: the key (H) still works
+    const slipUp = !!app.high && !!app.game.s.haudit;
+    if (app.screen === 'play' && !app.offlineJob && !slipUp) { photoButton(app, px, py); bb = Math.max(bb, py + 18); }
   }
   app.hud.purseBottom = counters(app, L, bb);
   lift(app, L, dt);

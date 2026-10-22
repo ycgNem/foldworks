@@ -2,6 +2,31 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
+## Status (2026-10-22, late night): Milestone 11's screens, built
+
+Built in a worktree off `m9-worlds` (the skin art merged in), app, UI and e2e code, the skin lookup
+and the photo export in `src/render/` (`skins.ts`, `photo.ts`, and a dozen lines where the
+renderer picks a building's, belt's, module's or carrier's sheet). DECISIONS.md "Milestone 11's
+screens". **The Trophy Shelf** (`src/app/shelf.ts`): an index of nine groups with counts, the
+group's stickers ("?" for hidden), the closest still to earn, the sticker in hand with its bonus,
+**Bonuses** (every kind summed against its cap) and the **Wardrobe** (every kind a skin dresses,
+wear one, what is still to earn); a trophy's ribbon says its bonus. **The Codex**
+(`src/app/codexbook.ts`): Tiers I-V and the Lore (16 pages, open ones readable, shut ones with
+their hint); **Unit 7's ending** has its own night-sky moment after the first Last Fold
+(`src/app/ending.ts`). **Challenges** (`src/app/challenges.ts`): all fifteen by act with rule, goal,
+reward, needs and progress, opened from the Reorganize card's strip and the Challenge slip (which
+shows the goal's count); `SHORT` has real entries. **Scenarios**: eight boards, each board's
+efficiency board (score, per tile, per kW, waste), the bests handed to the town with `boards` on the
+way back, the older localStorage store retired into them. **Skins** drawn wherever the base sheet is
+(Workshop buildings, belts, the Seed, the Dock and Hopper, modules on every floor, skiffs, barges,
+couriers), worn from a building's report ("Skin: ..." key) or the Wardrobe. **Photo mode**: a
+"Photo" key and H hide the HUD; Snap 1x/2x downloads a PNG of the whole floor. The wheel shows FREE
+for a trophy's free building. Checks: `tsc` clean; Vitest (non-pace) 1241 passed; `npm run screens`
+clean at three sizes with 21 new states (`TAIL` in `e2e/screens.mjs`, `tailSetup`); the shots'
+long-tail section (20-27b) looked at; `node e2e/tailshots.mjs [w h] [state...]` shoots the long
+tail's states alone. **Open:** no bot plays a Challenge or a Scenario board, so the boards' numbers
+on screen are set by the e2e states; the ending's typing speed and Bonuses' order are first cuts.
+
 ## Status (2026-10-22, late night): Milestone 14's performance, save size and release
 
 Built in a worktree off `m9-worlds` while Milestone 11's sim and data were built elsewhere: no
@@ -82,7 +107,7 @@ Act V's sim", "Milestone 12".
   (`src/app/lastfold.ts`, `kernels.ts`, `endless.ts`).
 
 ### Stubbed / not done
-- No skin picker: cosmetics show on the Ledger's shelf only (the sim applies none yet). Beyond's
+- (Milestone 11's screens since: skins are worn from a report or the Wardrobe.) Beyond's
   Bay position stays empty (no Megaproject #6). Beyond's lots, tool strip and route cards are
   the District's widgets over `g.s.beyond`.
 - No Act IV or Act V bot: Act IV and V pacing are model estimates (DESIGN.md §22, §23). The Act

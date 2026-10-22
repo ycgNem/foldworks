@@ -51,6 +51,8 @@ import { scenariosScreen, scenariosOpen } from './scenarios';
 // Milestone 11 (DESIGN.md §24): the Trophy Shelf in groups, its Bonuses and the Wardrobe
 import { shelfPage } from './shelf';
 import { codexBook } from './codexbook';
+import { challengesPage } from './challenges';
+import { endingPage } from './ending';
 
 export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options' | 'modules' | 'grade' | 'offline' | 'sliceEnd'
   // Act II (Milestone 4): the Factory floor's grade card, the Codex, the Survey Office, the Megaproject
@@ -111,6 +113,8 @@ export function drawScreen(app: App, L: Layout) {
     case 'patents': return patentsScreen(app, r);
     case 'drawer': return drawerScreen(app, r);
     case 'scenarios': return scenariosScreen(app, r);
+    case 'challenges': return challengesPage(app, r); // Milestone 11
+    case 'ending': return endingPage(app); // Milestone 11: Unit 7's ending
   }
 }
 

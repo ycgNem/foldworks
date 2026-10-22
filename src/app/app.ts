@@ -69,9 +69,15 @@ import './legacy';
 import './lastfold';
 import './kernels';
 import './endless';
-import './ending'; // Milestone 11: Unit 7's ending, its own moment
-import './challenges'; // Milestone 11: the Challenges page
 import { openChallenges } from './challenges';
+import { endingWatch } from './ending';
+import { tailHooks } from './tailframe';
+import { photoKeys } from './photo';
+import { retireOldBests } from './scenarios';
+import { lastFoldPlaying } from './lastfold';
+// Milestone 11's frame hooks (src/app/tailframe.ts): photo mode's keys, the older Scenario store
+// retired into the town's boards, Unit 7's ending queued once the Last Fold's moment is over
+tailHooks.push(photoKeys, retireOldBests, (app) => endingWatch(app, lastFoldPlaying(app)));
 import { shelfTab, type ShelfTab } from './shelf';
 import { codexTab, type CodexTab } from './codexbook';
 import { scenarioPick } from './scenarios';

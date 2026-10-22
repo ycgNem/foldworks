@@ -9,14 +9,16 @@ import { T } from '../ui/theme';
 import { floorPhoto, bareOverlay } from '../render/photo';
 import { button, slip } from './chrome';
 import type { App } from './app';
+import type { Game } from '../sim/Game';
 
-const st = { on: false, flash: -10, saved: '', savedAt: -10, enteredAt: -10 };
+const st = { on: false, flash: -10, saved: '', savedAt: -10, enteredAt: -10, game: null as Game | null };
 
 export const photoOn = () => st.on;
 
 export function setPhoto(app: App, on: boolean) {
   if (on === st.on) return;
   st.on = on;
+  st.game = app.game;
   st.enteredAt = app.ui.time;
   if (on) { app.selected = null; app.fselected = null; app.setMode({ k: 'idle' }); }
   app.audio.sfx(on ? 'open' : 'close', 0.6);
@@ -25,6 +27,8 @@ export function setPhoto(app: App, on: boolean) {
 /** The keys: H toggles, Esc leaves (once a frame, before the HUD). */
 export function photoKeys(app: App) {
   const inp = app.input;
+  // another game (a new one, a board, the town again) starts with the HUD up
+  if (st.game !== app.game) { st.game = app.game; st.on = false; }
   if (app.screen !== 'play' || inp.typing) return;
   if (inp.wasPressed('hud') && !app.panel) { inp.consume('hud'); setPhoto(app, !st.on); return; }
   if (st.on && (app.panel || app.offlineJob)) { st.on = false; return; }
