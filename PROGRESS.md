@@ -23,11 +23,24 @@ README). Each piece's own status section follows below; DECISIONS.md has every d
 - **To publish**: merge `m9-worlds` into `main`, push, and set the repository's Pages source to
   "GitHub Actions" (`.github/workflows/deploy.yml`). No itch.io page and no desktop build.
 
+### The Acts IV-V review and its fixes
+The idle-critic reviewed Acts IV-V and the long tail (DECISIONS.md "The Acts IV-V review"): Act
+IV conditional, Act V failing on its economy, the long tail a checklist. Every finding was decided
+and fixed the same night: the Committee no longer reorganizes offline (the report had shown coin
+-21.3M); the high floors appear in the offline report; the replay costs ~5 s, not 24-42 s;
+Automation survives the Last Fold; each universe's first Relocate is worth ~33-35 Legacy again;
+Kernels count kinds (a copy a quarter), so the first Last Fold pays ~11; the Seed carries Acts
+I-II's research; Rime re-derived without the Heater (it was Space Age's Aquilo); rubble stays
+cleared and clears by drag; the Town Plan covers every high floor; trophy caps at most 1.5x and
+Act IV-V trophies pay Act IV-V rules; the Ledger turns through tier 3-5 goods with lore folios.
+
 ### Measured vs estimated
 - Measured by bots: Acts I-III to 40 h (seed 1000; DESIGN.md §21 Pacing), performance (§25), save
-  size (§20).
-- Estimated only: Act IV's and Act V's pacing (§22, §23) until the Act IV bot (being written) and
-  an Act V bot measure them; the new Challenges' goal times (§24).
+  size (§20). The campaign now reaches District Folds at 15:02 and the World at 15:41, but never
+  Relocates: no bot line yet makes Relocation's batteries, umbrellas and Sandwich Engineers (a
+  third bot pass is on it, with the idle windows its plan leaves in later Act III runs).
+- Estimated only: the first Relocate and the island climb, all of Act V (§22, §23), the new
+  Challenges' goal times (§24).
 
 ## Status (2026-10-22, late night): Milestone 11's screens, built
 
