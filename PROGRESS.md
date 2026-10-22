@@ -94,6 +94,15 @@ Merge the World UI, Act V's screens and the Act III re-measure; mark the second 
 conditions; build the Act IV and Act V bots; Milestone 11's long tail (its sim and data being built);
 Milestone 14 (pace to 100 h, perf, saves, README, GitHub Pages; no itch.io, no desktop build).
 
+## Status (2026-10-22, night): Milestone 11's skin art drawn
+
+`pixel-art/m11-skins/` (`python build.py`, 0 PixelLab generations) draws every cosmetic's sheets:
+69 `src/art/skin_<id>_<base>` drop-in replacements (belts with their turn sheet, modules one per
+floor, the Dock and Hopper decorations), the looks and `out/contact_skins.png`. The kind to base
+sheet mapping the renderer lookup needs is in docs/endgame.md, "Milestone 11 skins as built".
+**Open:** the renderer's lookup and the picker (another agent); a look at them in the game's own
+screenshots once wired.
+
 ## Status (2026-10-22, late): Milestone 11, the long tail's sim and data, built
 
 Built in a worktree off `m9-worlds`, sim, data, tests and docs only (the screens are another

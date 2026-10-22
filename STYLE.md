@@ -270,6 +270,13 @@ burst where the creases cross), ledger (a leather ledger with a gold infinity).
 - **Skins** recolour a machine's body by ramp and never its skid, lamps, ink or workpieces: gilded
   (gold body, silver drill), candy (red and bone diagonal stripes, mint trim), starlit (night-blue
   body with stars, kept out of the pip corner).
+- **Milestone 11's skins** (`pixel-art/m11-skins/`, docs/endgame.md "Milestone 11 skins as built")
+  follow the same rule: a recolour by ramp plus a few pixels placed by hand, never the silhouette,
+  the skid, the lamps that say "working" or the workpieces; the pip corner is stepped down its own
+  ramp if a recolour would make it brighter than the base was there. A module skin changes the
+  brass band (the module's cue) and keeps each floor's roof or dome and the dark icon well; a
+  carrier skin keeps its hull outline; a decoration adds to the Dock or Hopper and keeps it a
+  destination. No colour added.
 
 ## Act IV: the islands, the World, the exotics (`pixel-art/act4/`, `python build.py`)
 
