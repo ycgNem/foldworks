@@ -341,6 +341,32 @@ Ids every agent shares; numbers are first passes the sim agent derives in DESIGN
   `lastfold` (the Last Fold's moment: the World folding into one tile, a strip of frames for a
   full-screen sequence), UI icons `kernel`, `beyond`, `lastFold`, `ledger`.
 
+### Act V art as built (`pixel-art/act5/`, `python build.py`, 0 PixelLab generations): what the code needs
+Every sheet is `src/art/<name>.png` (1x, frames in one row unless `facings`) with a `<name>.json`
+sidecar; anchor [0,0] unless stated. Nothing is wired in TypeScript yet.
+- `seed`: 16x16, 4 frames, 4 fps, one facing, on the standard skid; frame 0 is the still pose (a
+  stopped Seed holds it); the pip corner is empty in every frame.
+- `items5`: 8x8, 8 frames with `names`, the contract's order.
+- The Beyond platform, frame-compatible with `world_*` (the District renderer with a prefix):
+  `beyond_deck` (16, the `dist_deck` names), `beyond_edge` (28), `beyond_under` (9),
+  `beyond_rotor` **64x32, 4 frames, 8 fps, anchor (32, 0)** (a star pod, not a rotor),
+  `beyond_rotor_side` (48x32, 8 frames `w0..w3 e0..e3`, 8 fps, anchor (45, 15); without it the
+  renderer would fall back to `fplat_rotor_side`'s propellers), `beyond_module` (16x16, 4 frames,
+  6 fps, `"icon": [4, 6]`, as `world_module`), `beyond_dock`, `beyond_hopper` (32x32, 3 frames,
+  3 fps), `beyond_bay` (32x32, 5 frames `empty stage1 stage2 run1 run2`, 6 fps: an armillary
+  sphere). Beyond's backdrop is the code's: night (`ink` to `ink1`, stars), no cloud sea.
+- `courier`: 16x12, 4 frames (wing up, level, down, level), 8 fps, anchor (8, 11), facing right
+  (flip it for leftward legs, as the skiff).
+- `lastfold`: 128x72, 16 frames, `fps` 0 with per-frame `durations` (ms, 5.4 s in all), `names`
+  (`world audit fold1..fold6 tile flash dawn fall1 fall2 land seed1 seed2`), `loop` [14, 15] (hold
+  until the cut to the new Workshop), `events` (audit 1, folds 2-7, tile 8, flash 9, fall 11, land
+  13: for sound and shake), `seedAt` [56, 39]. Drawn full-screen at a whole-number cover scale.
+- Skins (every tenth Ledger order): `skin_gilded_miner`, `skin_candy_press`,
+  `skin_candy_press_mk2`, `skin_starlit_assembler`, `skin_starlit_assembler_mk2`: the base
+  sheet's exact layout, fps and `facings`, plus `"skin"` and `"base"` in the sidecar; skin ids
+  `gilded`, `candy`, `starlit`. Draw `skin_<id>_<kind>` in place of `<kind>` when it exists.
+- UI icons `kernel` 39, `beyond` 40, `lastFold` 41, `ledger` 42 in `ui_icons` and `ui_icons_small`.
+
 ## Milestone 11: the long tail
 150+ trophies with small specific bonuses (generated tiers over deliveries and counters, plus
 hidden ones); the Codex completed with lore pages and Unit 7's ending; challenges to 15 and

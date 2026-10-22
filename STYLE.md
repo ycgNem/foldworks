@@ -243,7 +243,33 @@ the end and nothing moves. `ui_icons` / `ui_icons_small` 29–33: patents (a sea
 (a plan on blue), reset (a turning violet arrow), overnight (a moon and a lantern), bearings (the
 Committee's Raccoon Bearings, a steel ring with balls). 34-35 (Act III): district, chute. 36-38
 (Act IV): world (a sky globe of green islands on a brass stand), legacy (a gold medal in a laurel
-wreath, a red ribbon), relocate (an island flying to another along a dashed arrow).
+wreath, a red ribbon), relocate (an island flying to another along a dashed arrow). 39-42 (Act
+V): kernel (a violet seed folded down its middle, a gold heart), beyond (a roundel of night, a
+crescent moon, a tiny platform on its star), lastFold (a square folded in from its corners, a
+burst where the creases cross), ledger (a leather ledger with a gold infinity).
+
+## Act V: the Seed, Beyond, the Last Fold (`pixel-art/act5/`, `python build.py`)
+
+- **The Seed** is a floating island the size of a tile (a grass top lit from the left, a rock
+  cone, a gilded square where the World is folded up) over a brass dish on the skid, a pool of
+  lantern light between them; four ore lamps on the dish (iron, copper, coal, sand). It hums: the
+  island bobs a pixel, the light breathes.
+- **Beyond is night**: the District's geometry in deep blue plate (`iron0`, lit `iron1`) sown with
+  tiny stars, a gold star where the plaza's inlays cross, silver trim (the steel ramp's top) where
+  the World has gold, warm lamp caps the only warm light, skylights onto black, a slate build floor
+  (`steel1`) with no stars so modules and couriers win. It floats on **star pods** (a silver can,
+  a caged star, a ring with gold beads orbiting it), not rotors. The **courier** is a bone paper
+  crane carrying a strapped crate; the Beyond module has brass columns (the module cue) under a
+  night-glass dome with stars and a silver ring; the Bay builds an armillary sphere.
+- **The Last Fold** sequence runs day, night, flash, dawn: the World's edges lift (gilded undersides,
+  bright free edges) and fold in six times while the plate warms to gold and the sky darkens, one
+  tile of light, a flash, then dawn on a new island where the tile falls and lands as the Seed.
+- **Tier 5 icons** (`items5`): impossible things by silhouette (a bottle on the diagonal, a scroll,
+  a rayed sun, a floating island, an engine in a tea cosy, a dog-eared square of night, a sandwich
+  under a halo, stairs dissolving into stars); every dark body has a lit rim.
+- **Skins** recolour a machine's body by ramp and never its skid, lamps, ink or workpieces: gilded
+  (gold body, silver drill), candy (red and bone diagonal stripes, mint trim), starlit (night-blue
+  body with stars, kept out of the pip corner).
 
 ## Act IV: the islands, the World, the exotics (`pixel-art/act4/`, `python build.py`)
 
