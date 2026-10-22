@@ -71,7 +71,7 @@ export interface SoundReq { id: string; v: number; p: number }
 export class Renderer {
   /** which floor is drawn; each floor keeps its own camera */
   floor: Floor = 'workshop';
-  cams: Record<Floor, Camera> = { workshop: new Camera(), factory: new Camera() };
+  cams: Record<Floor, Camera> = { workshop: new Camera(), factory: new Camera(), district: new Camera(), world: new Camera() };
   get cam(): Camera {
     return this.cams[this.floor];
   }

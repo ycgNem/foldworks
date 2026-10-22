@@ -24,9 +24,10 @@ import { MEGA, megaStage, type MegaStage } from '../../data/megaprojects';
 import { DX, DY, ccw, cw, newFEnt, opposite, type Dir, type FEnt, type ModuleDesign } from '../world';
 import { entsIn, inBox, gradedAudit } from './audits';
 import { claimRefusal, oresOf, placeClaimRefusal } from './claims';
-import { hopperWantsSlag } from '../transfer';
+import { hopperWantsWaste } from '../transfer';
 import { fauditFlow, fauditLock } from './nested';
 import { prules } from '../patents';
+import { hunfold, hunfoldRefusal } from './high';
 
 const DT = 1 / TICK_RATE;
 
@@ -132,9 +133,18 @@ export function stampCost(g: Game, d: ModuleDesign): Num {
 
 /** Does the design hold an Act II building (directly, or in a module it was folded from)? */
 export function holdsAct2(g: Game, d: ModuleDesign, depth = 0): boolean {
-  if (depth > 3) return false;
-  if (d.fparts) return d.fparts.some((p) => p.kind === 'module' && !!g.design(p.design) && holdsAct2(g, g.design(p.design)!, depth + 1));
+  if (depth > 4) return false;
+  const sub = subDesigns(g, d);
+  if (sub) return sub.some((c) => holdsAct2(g, c, depth + 1));
   return d.parts.some((p) => !!BUILD[p.kind].act2);
+}
+
+/** The designs a folded group was made of (a depth-2 design's modules, a depth-3's groups), one
+ * entry per copy inside; null for a Workshop line. */
+export function subDesigns(g: Game, d: ModuleDesign): ModuleDesign[] | null {
+  if (d.fparts) return d.fparts.filter((p) => p.kind === 'module').map((p) => g.design(p.design)).filter((c): c is ModuleDesign => !!c);
+  if (d.hparts) return d.hparts.map((p) => g.design(p.design)).filter((c): c is ModuleDesign => !!c);
+  return null;
 }
 
 /** Machine Kits a copy of this design takes (DESIGN.md §18): 1 + floor(bill / 1,500), or none for
@@ -186,6 +196,7 @@ export function renameDesign(g: Game, id: number, name: string): ActResult {
 export function unfoldRefusal(g: Game, d: ModuleDesign): string | null {
   if (d.spare < 1) return 'No spare copy: take one off the Factory floor or stamp one';
   if (d.fparts) return funfoldRefusal(g, d);
+  if (d.hparts) return hunfoldRefusal(g, d);
   for (let y = d.box.y; y < d.box.y + d.box.h; y++)
     for (let x = d.box.x; x < d.box.x + d.box.w; x++) {
       if (!g.inb(x, y) || !g.owned(x, y)) return 'Its land is not yours any more';
@@ -218,6 +229,11 @@ export function unfold(g: Game, id: number): ActResult {
   if (!d) return no('No such module');
   const why = unfoldRefusal(g, d);
   if (why) return no(why);
+  if (d.hparts) {
+    hunfold(g, d);
+    d.spare--;
+    return OK;
+  }
   if (d.fparts) {
     const f = g.s.factory;
     for (const p of d.fparts) {
@@ -248,7 +264,7 @@ export function factoryOpen(g: Game) {
   return g.flag('factoryOpen');
 }
 
-export function fplaceRefusal(g: Game, kind: 'module' | 'trunk', x: number, y: number, design?: number): string | null {
+export function fplaceRefusal(g: Game, kind: 'module' | 'trunk' | 'chute', x: number, y: number, design?: number): string | null {
   if (!factoryOpen(g)) return 'The Factory floor opens with your first fold';
   if (!finb(g, x, y)) return x >= g.fw && x < FACTORY.w + ANNEX.blocks * ANNEX.cols && y >= 0 && y < g.fh ? `Buy this annex block first (Upgrades: ${annexPrice(g)?.format() ?? ''} coin)` : 'off the floor';
   const lock = fauditLock(g, x, y);
@@ -261,11 +277,16 @@ export function fplaceRefusal(g: Game, kind: 'module' | 'trunk', x: number, y: n
     if (d.spare < 1) return `No spare ${d.name}: stamp a copy`;
     const claim = placeClaimRefusal(g, d);
     if (claim) return claim;
+  } else if (kind === 'chute') {
+    // the Factory Chute (DESIGN.md §21): one on the floor; it drops to the Workshop's Chute Mouths
+    if (!g.done('chutes')) return 'Research Chutes first';
+    if (g.s.factory.ents.some((q) => q.kind === 'fchute')) return 'The Factory has its Chute already: run more trunks into it';
+    if (g.s.coin.lt(FACTORY.chuteCost)) return `Needs ${Num.of(FACTORY.chuteCost).format()} coin`;
   } else if (g.s.coin.lt(FACTORY.trunkCost)) return `Needs ${FACTORY.trunkCost} coin`;
   return null;
 }
 
-export function fplace(g: Game, kind: 'module' | 'trunk', x: number, y: number, rot: Dir, design = 0): ActResult {
+export function fplace(g: Game, kind: 'module' | 'trunk' | 'chute', x: number, y: number, rot: Dir, design = 0): ActResult {
   const ex = g.fentAt(x, y);
   if (kind === 'trunk' && ex?.kind === 'trunk') {
     if (ex.rot === rot) return no('already a trunk facing that way');
@@ -282,6 +303,9 @@ export function fplace(g: Game, kind: 'module' | 'trunk', x: number, y: number, 
     d.spare--;
     f.ents.push(newFEnt(f.nextId++, 'module', x, y, rot, d.id));
     g.bump('modulesPlaced');
+  } else if (kind === 'chute') {
+    g.s.coin = g.s.coin.sub(FACTORY.chuteCost);
+    f.ents.push(newFEnt(f.nextId++, 'fchute', x, y, rot));
   } else {
     g.s.coin = g.s.coin.sub(FACTORY.trunkCost);
     f.ents.push(newFEnt(f.nextId++, 'trunk', x, y, rot));
@@ -300,7 +324,8 @@ export function fremove(g: Game, x: number, y: number): ActResult {
   if (e.kind === 'module') {
     const d = g.s.designs.find((q) => q.id === e.design);
     if (d) d.spare++;
-  } else g.s.coin = g.s.coin.add(FACTORY.trunkCost);
+  } else if (e.kind === 'fchute') g.s.coin = g.s.coin.add(FACTORY.chuteCost);
+  else g.s.coin = g.s.coin.add(FACTORY.trunkCost);
   g.s.factory.ents = g.s.factory.ents.filter((q) => q !== e);
   g.factoryDirty = true;
   g.emit({ type: 'remove', x, y, id: e.kind, floor: 'factory' });
@@ -324,6 +349,7 @@ export function fname(g: Game, e: FEnt): string {
   if (e.kind === 'fhopper') return 'Factory Hopper';
   if (e.kind === 'trunk') return 'Trunk belt';
   if (e.kind === 'fbay') return 'Megaproject Bay';
+  if (e.kind === 'fchute') return 'Factory Chute';
   return g.s.designs.find((d) => d.id === e.design)?.name ?? 'Module';
 }
 
@@ -421,6 +447,108 @@ export function feedsDock(g: Game, m: FEnt, depth = 0): boolean {
 
 // ------------------------------------------------------------------ the tick
 
+/** A module's speed this tick: the Great Drill's boost for one with miners inside, and Overdrive,
+ * neither while it is audited. */
+export function moduleBoost(g: Game, m: FEnt, d: ModuleDesign, drill: number, audited: boolean): number {
+  return (drill > 1 && !audited && Object.keys(oresOf(g, d)).length ? drill : 1) * ((m.od ?? 0) > 0 && !audited ? RULES.overdriveMult.value : 1);
+}
+
+/** What the Chute's stock holds of each item: 20, or 60 with Unit 7's Specimen Jars (rep 4). */
+export function chuteCap(g: Game): number {
+  return g.s.orders.rep.unit7 >= 4 ? RULES.unit7ChuteStock.value : RULES.chuteStock.value;
+}
+
+/** What a byproduct sells for once the Scrap Transmuter's stage 1 stands (DESIGN.md §21): a share of
+ * the cheapest main output a recipe makes it beside; 0 before. */
+export function wastePrice(g: Game, item: string): number {
+  if ((g.s.megas?.transmuter?.stage ?? 0) < 1) return 0;
+  let best = Infinity;
+  for (const r of RECIPES) if (r.byproduct?.item === item) best = Math.min(best, ITEMS[r.outputs[0].item].value);
+  return Number.isFinite(best) ? best * RULES.transmuteShare.value : 0;
+}
+
+/** One module's tick as a rate function (DESIGN.md §11), on any floor of modules: it takes its
+ * inputs at rate x k from its buffer and makes its outputs into it, starved or blocked in
+ * proportion. A byproduct with nowhere to go blocks it, unless the Scrap Transmuter's stage 2
+ * stands, when the excess sells where it stands (§21). Overdrive counts down here. */
+export function stepModule(g: Game, m: FEnt, d: ModuleDesign, k: number, buf: number, coolSec: number) {
+  if (m.od) { m.od--; if (!m.od) m.cool = Math.round(coolSec * TICK_RATE); } else if (m.cool) m.cool--;
+  // stopped by the player (DESIGN.md §20): runs at 0, takes nothing, holds its buffers
+  if (m.paused) {
+    m.f = 0;
+    m.fAvg *= 0.98;
+    m.spill = null;
+    m.state = 'idle';
+    m.why = 'paused';
+    return;
+  }
+  const transmute = (g.s.megas?.transmuter?.stage ?? 0) >= 2;
+  let frac = 1;
+  let why: string | null = null;
+  let kind: 'starved' | 'blocked' | null = null;
+  for (const [i, r0] of Object.entries(d.ins) as [ItemId, number][]) {
+    const r = r0 * k;
+    const need = r * DT;
+    if (need <= 0) continue;
+    const fi = (m.inBuf[i] ?? 0) / need;
+    if (fi < frac) { frac = fi; why = i; kind = 'starved'; }
+  }
+  // a byproduct with nowhere to go blocks the module (the slag lesson, §11); of its products, it
+  // runs while any one has room, and a full one spills (a module making glass and plastic for a
+  // consumer that takes them in another ratio would otherwise stop for good: Act II's bot)
+  let bestMain = -1, fullMain: string | null = null;
+  for (const [o, r0] of Object.entries(d.outs) as [ItemId, number][]) {
+    const r = r0 * k;
+    const need = r * DT;
+    if (need <= 0) continue;
+    const room = r * buf - (m.outBuf[o] ?? 0);
+    const fo = Math.max(0, room / need);
+    if (BYPRODUCTS.has(o)) {
+      if (fo < frac && !transmute) { frac = fo; why = o; kind = 'blocked'; }
+    } else {
+      if (fo > bestMain) bestMain = fo;
+      if (fo < 1e-9) fullMain = o;
+    }
+  }
+  if (bestMain >= 0 && bestMain < frac) { frac = bestMain; why = fullMain ?? why; kind = 'blocked'; }
+  frac = Math.max(0, Math.min(1, frac));
+  m.spill = null;
+  for (const [i, r] of Object.entries(d.ins) as [ItemId, number][]) m.inBuf[i] = Math.max(0, (m.inBuf[i] ?? 0) - r * k * DT * frac);
+  for (const [o, r] of Object.entries(d.outs) as [ItemId, number][]) {
+    const cap = r * k * buf;
+    const v = (m.outBuf[o] ?? 0) + r * k * DT * frac;
+    if (!BYPRODUCTS.has(o) && v > cap && frac > 0) m.spill = o;
+    if (BYPRODUCTS.has(o) && transmute && v > cap) {
+      // the Transmuter's stage 2: what has nowhere to go sells where it stands
+      const n = Math.floor(v - cap + 1e-9);
+      m.outBuf[o] = v - n;
+      const p = wastePrice(g, o);
+      if (n > 0 && p > 0) g.earn(Num.of(n * p));
+      continue;
+    }
+    m.outBuf[o] = BYPRODUCTS.has(o) ? v : Math.min(Math.max(cap, m.outBuf[o] ?? 0), v);
+  }
+  m.f = frac;
+  m.fsum = (m.fsum ?? 0) + frac;
+  m.fAvg = m.fAvg * 0.98 + frac * 0.02;
+  m.state = frac >= 0.98 ? 'work' : (kind ?? 'idle');
+  m.why = frac >= 0.98 ? null : why;
+  m.sec[m.state === 'work' ? 0 : m.state === 'starved' ? 1 : 2]++;
+}
+
+/** Once a second: a module's pip history, its seconds at half speed or better, its bills work. */
+export function moduleSecond(m: FEnt) {
+  const [w, s, b] = m.sec;
+  const top = Math.max(w, s, b);
+  m.hist = (m.hist + (top === 0 ? 'i' : top === w ? 'w' : top === b ? 'b' : 's')).slice(-60);
+  m.sec = [0, 0, 0, 0];
+  // seconds in a row at half speed or better
+  m.ok = (m.fsum ?? 0) / TICK_RATE >= 0.5 ? (m.ok ?? 0) + 1 : 0;
+  // the bills term (§19) counts a module by its run fraction
+  m.wkAcc = (m.wkAcc ?? 0) + (m.fsum ?? 0);
+  m.fsum = 0;
+}
+
 export function runModules(g: Game) {
   const f = g.s.factory;
   if (!f.ents.length || !factoryOpen(g)) return;
@@ -440,60 +568,7 @@ export function runModules(g: Game) {
     // Overdrive likewise never reaches an audited module (the final round: an overdriven group
     // folded 3x into the nested window)
     const audited = !!g.s.faudit && !g.s.faudit.result && g.s.faudit.ids.includes(m.id);
-    const k = (drill > 1 && !audited && Object.keys(oresOf(g, d)).length ? drill : 1) * ((m.od ?? 0) > 0 && !audited ? RULES.overdriveMult.value : 1);
-    if (m.od) { m.od--; if (!m.od) m.cool = Math.round(pr.overdriveCool * TICK_RATE); } else if (m.cool) m.cool--;
-    // stopped by the player (DESIGN.md §20): runs at 0, takes nothing, holds its buffers
-    if (m.paused) {
-      m.f = 0;
-      m.fAvg *= 0.98;
-      m.spill = null;
-      m.state = 'idle';
-      m.why = 'paused';
-      continue;
-    }
-    let frac = 1;
-    let why: string | null = null;
-    let kind: 'starved' | 'blocked' | null = null;
-    for (const [i, r0] of Object.entries(d.ins) as [ItemId, number][]) {
-      const r = r0 * k;
-      const need = r * DT;
-      if (need <= 0) continue;
-      const fi = (m.inBuf[i] ?? 0) / need;
-      if (fi < frac) { frac = fi; why = i; kind = 'starved'; }
-    }
-    // a byproduct with nowhere to go blocks the module (the slag lesson, §11); of its products, it
-    // runs while any one has room, and a full one spills (a module making glass and plastic for a
-    // consumer that takes them in another ratio would otherwise stop for good: Act II's bot)
-    let bestMain = -1, fullMain: string | null = null;
-    for (const [o, r0] of Object.entries(d.outs) as [ItemId, number][]) {
-      const r = r0 * k;
-      const need = r * DT;
-      if (need <= 0) continue;
-      const room = r * buf - (m.outBuf[o] ?? 0);
-      const fo = Math.max(0, room / need);
-      if (BYPRODUCTS.has(o)) {
-        if (fo < frac) { frac = fo; why = o; kind = 'blocked'; }
-      } else {
-        if (fo > bestMain) bestMain = fo;
-        if (fo < 1e-9) fullMain = o;
-      }
-    }
-    if (bestMain >= 0 && bestMain < frac) { frac = bestMain; why = fullMain ?? why; kind = 'blocked'; }
-    frac = Math.max(0, Math.min(1, frac));
-    m.spill = null;
-    for (const [i, r] of Object.entries(d.ins) as [ItemId, number][]) m.inBuf[i] = Math.max(0, (m.inBuf[i] ?? 0) - r * k * DT * frac);
-    for (const [o, r] of Object.entries(d.outs) as [ItemId, number][]) {
-      const cap = r * k * buf;
-      const v = (m.outBuf[o] ?? 0) + r * k * DT * frac;
-      if (!BYPRODUCTS.has(o) && v > cap && frac > 0) m.spill = o;
-      m.outBuf[o] = BYPRODUCTS.has(o) ? v : Math.min(Math.max(cap, m.outBuf[o] ?? 0), v);
-    }
-    m.f = frac;
-    m.fsum = (m.fsum ?? 0) + frac;
-    m.fAvg = m.fAvg * 0.98 + frac * 0.02;
-    m.state = frac >= 0.98 ? 'work' : (kind ?? 'idle');
-    m.why = frac >= 0.98 ? null : why;
-    m.sec[m.state === 'work' ? 0 : m.state === 'starved' ? 1 : 2]++;
+    stepModule(g, m, d, moduleBoost(g, m, d, drill, audited), buf, pr.overdriveCool);
   }
   // 2. trunks carry outputs onward, 8 items/s per tile shared by every route through it
   const cap = FACTORY.trunkSpeed * DT;
@@ -539,6 +614,17 @@ export function runModules(g: Game) {
   // 3. whole items reaching the Factory Dock and Hopper are paid out by the docks system; the
   // Megaproject Bay counts them toward its stage
   for (const e of f.ents) {
+    if (e.kind === 'fchute') {
+      // the Chute drops what it was given to the Workshop's stock (fractions too: the Chute Mouths
+      // push out whole items), DESIGN.md §21
+      const st = (g.s.chute ??= {});
+      for (const k of Object.keys(e.inBuf)) {
+        if (e.inBuf[k] <= 0) continue;
+        st[k as ItemId] = (st[k as ItemId] ?? 0) + e.inBuf[k];
+        e.inBuf[k] = 0;
+      }
+      continue;
+    }
     if (e.kind !== 'fdock' && e.kind !== 'fhopper' && e.kind !== 'fbay') continue;
     for (const k of Object.keys(e.inBuf)) {
       const n = Math.floor(e.inBuf[k] + 1e-9);
@@ -555,18 +641,7 @@ export function runModules(g: Game) {
   }
   // 4. once a second: statistics, the slice's end, and the Megaproject Bay arriving
   if (g.s.tick % TICK_RATE === 0) {
-    for (const m of f.ents) {
-      if (m.kind !== 'module') continue;
-      const [w, s, b] = m.sec;
-      const top = Math.max(w, s, b);
-      m.hist = (m.hist + (top === 0 ? 'i' : top === w ? 'w' : top === b ? 'b' : 's')).slice(-60);
-      m.sec = [0, 0, 0, 0];
-      // seconds in a row at half speed or better
-      m.ok = (m.fsum ?? 0) / TICK_RATE >= 0.5 ? (m.ok ?? 0) + 1 : 0;
-      // the bills term (§19) counts a module by its run fraction
-      m.wkAcc = (m.wkAcc ?? 0) + (m.fsum ?? 0);
-      m.fsum = 0;
-    }
+    for (const m of f.ents) if (m.kind === 'module') moduleSecond(m);
     sliceEndCheck(g);
     if (g.done('greatDrill') && !f.ents.some((e) => e.kind === 'fbay')) placeBay(g);
   }
@@ -654,8 +729,8 @@ function megaCheck(g: Game, bay: FEnt) {
 export function acceptRoom(g: Game, to: FEnt, item: string): number {
   // the Factory Dock scraps slag for nothing and refuses what the Dock refuses (Machine Kits,
   // Drill Bits); the Factory Hopper takes slag only while research wants it (DECISIONS.md)
-  if (to.kind === 'fdock') return item === 'slag' || !ITEMS[item as ItemId]?.refused ? Infinity : 0;
-  if (to.kind === 'fhopper') return item !== 'slag' || hopperWantsSlag(g) ? Infinity : 0;
+  if (to.kind === 'fdock') return !!ITEMS[item as ItemId]?.waste || !ITEMS[item as ItemId]?.refused ? Infinity : 0;
+  if (to.kind === 'fhopper') return (item !== 'slag' && item !== 'sludge') || hopperWantsWaste(g, item) ? Infinity : 0;
   if (to.kind === 'fbay') {
     // the Bay takes whatever some stage of the Drill is built from, always: what the stage now
     // open can't count goes on to the Dock (megaGive), so the Bay floor never jams while a stage
@@ -663,6 +738,7 @@ export function acceptRoom(g: Game, to: FEnt, item: string): number {
     if (!MEGA_ITEMS.has(item)) return 0;
     return Infinity;
   }
+  if (to.kind === 'fchute') return Math.max(0, chuteCap(g) - (g.s.chute?.[item as ItemId] ?? 0) - (to.inBuf[item] ?? 0));
   if (to.kind !== 'module' || to.paused) return 0;
   const d = g.design(to.design);
   const r = d?.ins[item as ItemId];

@@ -90,7 +90,9 @@ export const FACTORY = {
   /** trunk belts: 8 items/s, 2 coin a tile */
   trunkSpeed: 8,
   trunkCost: 2,
-  derivation: '§11 12x8; trunk belts 8 items/s (480/min), 2 coin per tile',
+  /** the Factory Chute (DESIGN.md §21): one a floor */
+  chuteCost: 5000,
+  derivation: '§11 12x8; trunk belts 8 items/s (480/min), 2 coin per tile; §21 the Factory Chute 5,000 (a token, refunded when lifted: it routes, it makes nothing)',
 };
 
 /** The Factory annex (DESIGN.md §19): blocks of floor bought with coin east of the 12x8, beside

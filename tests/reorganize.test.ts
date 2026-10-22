@@ -353,9 +353,9 @@ describe('the reset (DESIGN.md §19)', () => {
 });
 
 describe('the Patent tree (DESIGN.md §19)', () => {
-  it('has 29 nodes, 40 Patents in all at flat prices, bought with prerequisites first', () => {
-    expect(PATENT_IDS.length).toBe(29);
-    expect(PATENT_LIST.reduce((t, d) => t + d.cost, 0)).toBe(40);
+  it('has 39 nodes, 63 Patents in all at flat prices, bought with prerequisites first', () => {
+    expect(PATENT_IDS.length).toBe(39);
+    expect(PATENT_LIST.reduce((t, d) => t + d.cost, 0)).toBe(63);
     const g = sandbox();
     expect(patentRefusal(g, 'starterLine')).toMatch(/Needs Bellows/);
     expect(patentRefusal(g, 'bellows')).toMatch(/Costs 1 Patent/);

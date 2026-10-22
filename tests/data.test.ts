@@ -9,7 +9,10 @@ import { BUILD, UPGRADES } from '../src/data/machines';
 import { RESEARCH, RESEARCH_IDS } from '../src/data/research';
 import { ORDERS, CUSTOMERS } from '../src/data/orders';
 import { CHUNKS, PATCHES, WORKSHOP, FACTORY, CLAIM_PRICE } from '../src/data/land';
-import { MEGA } from '../src/data/megaprojects';
+import { MEGA, MEGAS } from '../src/data/megaprojects';
+import { HIGH } from '../src/data/floors';
+import { CHALLENGES } from '../src/data/challenges';
+import { SCENARIOS } from '../src/data/scenarios';
 import { RULES, GRADES, SCORE_WEIGHTS } from '../src/data/rules';
 import { SPARKS } from '../src/data/sparks';
 import { TROPHIES } from '../src/data/trophies';
@@ -40,6 +43,11 @@ function records(): [string, { derivation?: string } & Record<string, unknown>][
     ...TROPHIES.map((d) => ['trophy ' + d.id, d] as [string, any]),
     ...CLAIM_PRICE.map((d) => ['claim price ' + d.item, d] as [string, any]),
     ...MEGA.map((d) => ['megaproject stage ' + d.stage, d] as [string, any]),
+    // Act III (DESIGN.md §21)
+    ...Object.values(MEGAS).flatMap((p) => [['megaproject ' + p.id, p] as [string, any], ...p.stages.map((d) => [`megaproject ${p.id} stage ${d.stage}`, d] as [string, any])]),
+    ...Object.values(HIGH).map((d) => ['high floor ' + d.id, d] as [string, any]),
+    ...Object.values(CHALLENGES).map((d) => ['challenge ' + d.id, d] as [string, any]),
+    ...Object.values(SCENARIOS).map((d) => ['scenario ' + d.id, d] as [string, any]),
     // Milestone 6: idle and offline
     ...Object.entries(IDLE).map(([k, d]) => ['idle rule ' + k, d] as [string, any]),
     ...IDLE_UPGRADES.map((d) => ['night shift ' + d.id, d] as [string, any]),

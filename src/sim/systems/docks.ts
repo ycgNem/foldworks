@@ -9,21 +9,25 @@ import { ITEMS, type ItemId } from '../../data/items';
 import { ORDER } from '../../data/orders';
 import { RULES } from '../../data/rules';
 import { creditResearch } from './research';
+import { wastePrice } from './modules';
+import { dockTally } from '../offline';
 
 /** What one item sells for at the Dock right now. */
 export function saleValue(g: Game, item: ItemId): number {
   let v = ITEMS[item].value;
+  // the Scrap Transmuter's stage 1 (DESIGN.md §21): waste sells at a share of what made it
+  if (ITEMS[item].waste) v = Math.max(v, wastePrice(g, item));
   if (item === 'ironPlate' && g.s.orders.rep.bramble >= 1) v *= 1 + RULES.repPlateBonus.value;
   return v;
 }
 
 /** Fill the active order with what was delivered, if it wants it; returns what is left to sell.
  * An order for the Factory Dock only counts deliveries made there. */
-export function fillOrder(g: Game, item: ItemId, n: Num, floor?: 'factory'): Num {
+export function fillOrder(g: Game, item: ItemId, n: Num, floor?: 'factory' | 'district' | 'world'): Num {
   const o = g.s.orders;
   if (!o.active) return n;
   const d = ORDER[o.active];
-  if (d.at === 'factory' && floor !== 'factory') return n;
+  if (d.at && floor !== d.at) return n;
   const want = d.wants[item];
   if (!want) return n;
   const prog = (o.progress[o.active] ??= {});
@@ -42,8 +46,8 @@ export function runDocks(g: Game) {
     const floor = it.floor;
     g.s.delivered[it.item] = (g.s.delivered[it.item] ?? Num.ZERO).add(n);
     if (g.tally) {
-      // the Factory Dock apart, so offline progress fills Factory-only orders from it (§12)
-      const t = g.tally[it.to === 'dock' && floor === 'factory' ? 'fdock' : it.to];
+      // each floor's Dock apart, so offline progress fills one floor's orders from it (§12)
+      const t = g.tally[it.to === 'dock' ? dockTally(floor) : it.to];
       t[it.item] = (t[it.item] ?? Num.ZERO).add(n);
     }
     if (it.to === 'dock') {
@@ -69,7 +73,7 @@ export function runDocks(g: Game) {
 }
 
 /** The Codex (Unit 7's rep 1): the first delivery of each item pays 30x its value, once. */
-function codex(g: Game, item: ItemId, x: number, y: number, floor?: 'factory') {
+function codex(g: Game, item: ItemId, x: number, y: number, floor?: 'factory' | 'district' | 'world') {
   if (g.s.orders.rep.unit7 < 1 || g.s.codex.includes(item)) return;
   const v = ITEMS[item].value;
   if (v <= 0) return;

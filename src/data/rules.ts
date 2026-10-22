@@ -110,6 +110,20 @@ export const RULES = {
   nightCrewSeconds: r(10, '§19 The Committee rep 2: while you are away (the tab hidden or the game closed), each Slag Heap loses one slag every 10 s (a smelter makes one every 8 s: a heap fed by one smelter fills at a fifth of the speed overnight); never while you play, so Act I\'s slag lesson stands'),
   /** the Committee rep 3: Machine Kits a stamp needs fewer */
   pocketedKits: r(1, '§19 The Committee rep 4: every stamp needs 1 Machine Kit fewer (never below none; §18 Machine Kits)'),
+  // ---- Act III (DESIGN.md §21)
+  /** Recycling and Byproduct modes: speed (the byproduct cadence is halved or doubled in byEvery) */
+  modeRecyclingSpeed: r(0.9, '§21 Modes: Recycling makes half the byproduct at 0.9x speed: less waste costs a little time, as Precision\'s extra yield does (§18)'),
+  modeByproductSpeed: r(1.1, '§21 Modes: Byproduct makes twice the byproduct at 1.1x speed: for a line whose waste is another\'s input (fertilizer from sludge, gravel from slag)'),
+  /** the Chute: items of each kind the dropped stock holds at most */
+  chuteStock: r(20, '§21 The Chute: 20 of each item between the Factory Chute and the Chute Mouths, 10 s of a full belt: enough to ride out a module\'s round-robin, small enough that a full stock backs the trunk up at once (the pip says so)'),
+  /** the Scrap Transmuter: what a byproduct sells for, as a share of its cheapest recipe's main output */
+  transmuteShare: r(0.25, '§21 Megaprojects: the Scrap Transmuter, byproducts sell at 25% of the item that made them (§15), the cheapest such item (slag 0.75, under gravel\'s 1 a slag, so crushing still pays; oil 6; sludge 7.5)'),
+  /** reputation rewards of Act III (DESIGN.md §21 Orders): rules a player plans around */
+  brambleSkiffLoad: r(1, '§21 Orders: Bramble rep 4, the Skiff Club: a skiff carries one more a trip (5, was 4): every route a quarter more, so a far feeder needs a skiff fewer'),
+  unit7ChuteStock: r(60, '§21 Orders: Unit 7 rep 4, Specimen Jars: the Chute holds 60 of each item, was 20 (30 s of a full belt): one Chute feeds three Chute Mouths of an item without the trunk backing up'),
+  voltaireChemPower: r(0.5, '§21 Orders: Dame Voltaire rep 4: Chem Vats and Greenhouses draw half their kW, so a tier 3 line folds with a smaller power plant inside its box'),
+  /** skiff routes a floor holds at most (a readable floor: DESIGN.md §17) */
+  maxRoutes: r(120, '§21 Skiff routes: at most 120 a floor, one for each tile of the District\'s first 12x10, so the floor stays readable (PLAN.md not-list: logistics readable on one screen)'),
 };
 
 export type RuleId = keyof typeof RULES;

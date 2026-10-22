@@ -10,6 +10,7 @@ import { note } from './stats';
 import { odBoost, overdriveTick, veinBoost } from './machines';
 import { isAudited } from './audits';
 import { prules } from '../patents';
+import { scenarioMiners } from '../scenario';
 
 export function runMiners(g: Game) {
   const cap = RULES.outputCap.value;
@@ -29,6 +30,8 @@ export function runMiners(g: Game) {
     // a Lucky Vein and Overdrive boost its line (never while audited, or they would be folded in)
     const speed = veinBoost(g, m)
       * odBoost(g, m)
+      // Rich Ore (a Scenario's twist, DESIGN.md §21)
+      * scenarioMiners(g)
       // the Great Drill never reaches a miner being audited (a folded rate would count it twice)
       * (g.s.mega.stage >= 1 && !isAudited(g, m.id) ? 1 + RULES.drillBoost.value : 1);
     if (m.out < cap) {

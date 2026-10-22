@@ -17,6 +17,7 @@ import { ITEMS, itemName, type ItemId } from '../../data/items';
 import { DX, DY, opposite, type AuditResult, type AuditState, type Box, type Dir, type Ent, type KeptDesign, type Port } from '../world';
 import { entName, feeders } from '../analysis';
 import { powerFactor } from './power';
+import { byEvery } from './machines';
 
 export const inBox = (b: Box, x: number, y: number) => x >= b.x && y >= b.y && x < b.x + b.w && y < b.y + b.h;
 const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -48,6 +49,9 @@ export function foldRefusal(g: Game, b: Box): string | null {
   const ents = entsIn(g, b);
   for (const e of ents) {
     if (e.kind === 'dock' || e.kind === 'hopper' || e.kind === 'furnace') return `The box holds the ${BUILD[e.kind].name}, which stays on the floor`;
+    // a Chute Mouth makes items out of nothing as far as the box can see: feed the line from one
+    // outside it, through a port (DESIGN.md §21 The Chute)
+    if (e.kind === 'chuteMouth') return 'A Chute Mouth stays out of the box: let it feed the line through a port';
     if (e.x < b.x || e.y < b.y || e.x + e.w > b.x + b.w || e.y + e.h > b.y + b.h) return `${BUILD[e.kind].name} is only partly in the box`;
   }
   const ms = ents.filter((e) => isMachine(e.kind));
@@ -334,9 +338,9 @@ export function gradeAudit(g: Game, a: AuditState): AuditResult {
     const crafts = m.crafts - (a.crafts0[m.id] ?? m.crafts);
     if (r.byproduct) {
       byItems.add(r.byproduct.item);
-      byMade += Math.floor(crafts / r.byproduct.every);
+      byMade += Math.floor(crafts / byEvery(m, r));
       const jammed = a.stall?.[m.id]?.[`blocked:${r.byproduct.item}`] ?? 0;
-      byMade += Math.floor(jammed / (r.time * TICK_RATE) / r.byproduct.every);
+      byMade += Math.floor(jammed / (r.time * TICK_RATE) / byEvery(m, r));
     }
   }
   for (const m of ms) {

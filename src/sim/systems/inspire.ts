@@ -27,7 +27,7 @@ export function inspiredFrac(g: Game, id: ResearchId): number {
 }
 
 /** One Inspiration click on a Hopper at (x, y) (for the pop). */
-export function inspire(g: Game, x: number, y: number, floor?: 'factory'): ActResult {
+export function inspire(g: Game, x: number, y: number, floor?: 'factory' | 'district' | 'world'): ActResult {
   if (!inspireUnlocked(g)) return { ok: false, why: 'nothing to click' };
   const r = g.s.research;
   const sel = r.selected;

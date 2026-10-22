@@ -68,8 +68,8 @@ const pm = (n: number) => plain(n, n < 10 ? 1 : 0);
 const lc = (id: string | null | undefined) => (id ? itemName(id).toLowerCase() : 'input');
 const icon = (id: string | null | undefined) => (id && id in ITEMS ? `{i:${id}}` : '');
 
-export const MODE_NAME: Record<Mode, string> = { normal: 'Normal', efficient: 'Efficient', overclock: 'Overclocked', precision: 'Precision' };
-const MODE_SHORT: Record<Mode, string> = { normal: 'Norm', efficient: 'Eff', overclock: 'Over', precision: 'Prec' };
+export const MODE_NAME: Record<Mode, string> = { normal: 'Normal', efficient: 'Efficient', overclock: 'Overclocked', precision: 'Precision', recycling: 'Recycling', byproduct: 'Byproduct' };
+const MODE_SHORT: Record<Mode, string> = { normal: 'Norm', efficient: 'Eff', overclock: 'Over', precision: 'Prec', recycling: 'Recy', byproduct: 'Byp' };
 
 // ------------------------------------------------------------------ the Workshop's machines
 

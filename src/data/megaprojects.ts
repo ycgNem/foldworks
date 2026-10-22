@@ -53,3 +53,57 @@ export const MEGA: MegaStage[] = [
 export function megaStage(done: number): MegaStage | null {
   return MEGA.find((m) => m.stage === done + 1) ?? null;
 }
+
+// ---- Megaprojects #2-#5 (DESIGN.md §21, §22): each its own project with stages, kept through every
+// reset like the Great Drill (`s.megas[id]`), built at the Bay of a higher floor. One Bay may hold
+// several projects: what it is given goes to the first open project that still wants it.
+
+export type MegaId = 'city' | 'transmuter';
+
+export interface MegaProjectDef {
+  id: MegaId;
+  name: string;
+  /** the floor whose Bay builds it */
+  floor: 'district' | 'world';
+  /** the research that opens it */
+  opens: string;
+  stages: MegaStage[];
+  derivation: string;
+}
+
+export const MEGAS: Record<MegaId, MegaProjectDef> = {
+  city: {
+    id: 'city', name: 'The Floating City', floor: 'district', opens: 'floatingCity',
+    stages: [
+      {
+        stage: 1, name: 'The Floating City, stage 1: the Platform', wants: { liftRotor: 120, concrete: 4000 },
+        reward: 'the Factory floor gains its ninth row · for good', patents: 6,
+        derivation: '§21 Megaprojects: 120 lift rotors and 4,000 concrete, about an hour of one Lift Rotor group and a Concrete group at the District Bay; the Factory\'s ninth row (FACTORY_MAX_H) for good; worth 6 Patents',
+      },
+      {
+        stage: 2, name: 'The Floating City, stage 2: the Spires', wants: { liftRotor: 200, sandwich: 1000, glass: 6000 },
+        reward: 'the District gains a fourth lot · for good', patents: 8,
+        derivation: '§21 Megaprojects: 200 rotors, 1,000 sandwiches (the citizens), 6,000 glass, about 1.5 h of the Bay floor in a later run; a fourth District lot (18x10) for good; worth 8 Patents',
+      },
+    ],
+    derivation: '§21 Megaproject #2 (PLAN.md): the Floating City, +1 Factory floor row (§15)',
+  },
+  transmuter: {
+    id: 'transmuter', name: 'The Scrap Transmuter', floor: 'district', opens: 'scrapTransmuter',
+    stages: [
+      {
+        stage: 1, name: 'The Scrap Transmuter, stage 1', wants: { transmuterCoil: 100, steel: 8000 },
+        reward: 'every Dock buys {i:slag} {i:oil} {i:sludge} at {coinc:25%} of what made them · for good', patents: 8,
+        derivation: '§21 Megaprojects: 100 coils and 8,000 steel, about an hour of a Coil group and two Steel copies; byproducts sell at 25% of their recipe\'s main output (§15: the Scrap Transmuter); worth 8 Patents',
+      },
+      {
+        stage: 2, name: 'The Scrap Transmuter, stage 2', wants: { transmuterCoil: 200, processor: 300 },
+        reward: 'a module whose byproduct has nowhere to go sells it at that price instead of stopping · for good', patents: 10,
+        derivation: '§21 Megaprojects: 200 coils and 300 processors, about 1.5 h; the byproduct lesson is finished, so waste never stops a module again; worth 10 Patents',
+      },
+    ],
+    derivation: '§21 Megaproject #3 (PLAN.md): the Scrap Transmuter, byproducts sell at 25% of the item that made them (§15)',
+  },
+};
+
+export const MEGA_IDS = Object.keys(MEGAS) as MegaId[];

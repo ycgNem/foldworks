@@ -16,6 +16,9 @@ export const PATENT_IDS = [
   'shovelFrog', 'labAssistant', 'orderClerk', 'stampPress', 'draughtsman', 'drawerSpace',
   // offline
   'nightShift', 'nightWatch', 'lightsOn',
+  // Act III (DESIGN.md §21)
+  'zoningCharter', 'districtDeeds', 'chemNotes', 'bearingPatent', 'senseNotes', 'roboticsPatent',
+  'longSkiffs', 'biggerNest', 'wideDistrictBox', 'dispatcher',
 ] as const;
 export type PatentId = (typeof PATENT_IDS)[number];
 
@@ -24,7 +27,7 @@ export type PatentBranch = 'head' | 'rule' | 'auto' | 'offline';
 /** What a node does. Head starts apply to the run they are bought in, at once, and at the start of
  * every run after; rules, automation and offline apply at once. */
 export type PatentEffect =
-  | { k: 'head'; upgrades?: UpgradeId[]; research?: ResearchId[]; land?: string[]; coin?: number; place?: { kind: 'miner'; x: number; y: number; rot: 0 | 1 | 2 | 3 }[] }
+  | { k: 'head'; upgrades?: UpgradeId[]; research?: ResearchId[]; land?: string[]; coin?: number; place?: { kind: 'miner'; x: number; y: number; rot: 0 | 1 | 2 | 3 }[]; lots?: number }
   | { k: 'foldMax'; value: number }
   | { k: 'audit'; warmup: number; span: number }
   | { k: 'maxAudits'; value: number }
@@ -38,7 +41,11 @@ export type PatentEffect =
   | { k: 'stampPress'; every: number }
   | { k: 'draughtsman'; every: number }
   | { k: 'drawer'; add: number }
-  | { k: 'offline'; add: number };
+  | { k: 'offline'; add: number }
+  // Act III (DESIGN.md §21)
+  | { k: 'skiffSpeed'; add: number }
+  | { k: 'highFoldMax'; value: number }
+  | { k: 'dispatcher'; every: number };
 
 export interface PatentDef {
   id: PatentId;
@@ -250,6 +257,79 @@ export const PATENTS: Record<PatentId, PatentDef> = {
     text: '{u:blueprint} Patent Drawer 8 → {good:12} designs',
     flavor: 'It sticks. Jiggle it.',
     derivation: '§19 The Patent Drawer, 1 Patent (was 2): 8 -> 12 kept designs, room for every Act II product line (the Act II bot folds nine products)',
+  }),
+  // ---------------------------------------------------------------- Act III (DESIGN.md §21 Patents)
+  // Head starts for the District's research, and the rules and automation of composing groups.
+  // Priced as Act II's: about a Patent per 10-15 min of a run the node saves (§19).
+  zoningCharter: P({
+    id: 'zoningCharter', name: 'Zoning Charter', branch: 'head', cost: 2, requires: ['circuitPatent'], pos: [6, 1],
+    effect: { k: 'head', research: ['zoning', 'chutes'] },
+    text: '{u:reset} start knowing {research:Zoning} · {research:Chutes} · the District open from the first minute',
+    flavor: 'Stamped by a frog, countersigned by three raccoons.',
+    derivation: '§21 Patents: head starts, 2; Zoning and Chutes are about 25-30 min of a run\'s Act II goods into the Hopper (§21 Research)',
+  }),
+  districtDeeds: P({
+    id: 'districtDeeds', name: 'District Deeds', branch: 'head', cost: 2, requires: ['zoningCharter'], pos: [6, 2],
+    effect: { k: 'head', lots: 1 },
+    text: '{u:reset} the District opens with its first lot · 14×10',
+    flavor: 'The ink was still wet. It is always still wet.',
+    derivation: '§21 Patents: head starts, 2; the first lot is 2M coin, about 10-15 min of the Act III factory',
+  }),
+  chemNotes: P({
+    id: 'chemNotes', name: 'Chemistry Notes', branch: 'head', cost: 2, requires: ['zoningCharter'], pos: [7, 1],
+    effect: { k: 'head', research: ['chemistry', 'vulcanizing', 'batteries'] },
+    text: '{u:reset} start knowing {research:Chemistry} · {research:Vulcanizing} · {research:Batteries}',
+    flavor: 'Stained, smoking slightly, legible in places.',
+    derivation: '§21 Patents: head starts, 2; three nodes, about 20-25 min of oil, plastic and solvent into the Hopper',
+  }),
+  bearingPatent: P({
+    id: 'bearingPatent', name: 'The Bearing Patent', branch: 'head', cost: 2, requires: ['zoningCharter'], pos: [7, 2],
+    effect: { k: 'head', research: ['bearings', 'servos'] },
+    text: '{u:reset} start knowing {research:Bearings} · {research:Servos}',
+    flavor: 'Round, smooth, and legally yours.',
+    derivation: '§21 Patents: head starts, 2; two nodes, about 20 min of steel, gears, gearboxes and motors',
+  }),
+  senseNotes: P({
+    id: 'senseNotes', name: 'Sense and Logic', branch: 'head', cost: 3, requires: ['chemNotes'], pos: [8, 1],
+    effect: { k: 'head', research: ['sensors', 'processors', 'recycling', 'hydroponics'] },
+    text: '{u:reset} start knowing {research:Sensors} · {research:Processors} · {research:Recycling} · {research:Hydroponics}',
+    flavor: 'Half of it is diagrams of eyes. The other half is diagrams of thinking.',
+    derivation: '§21 Patents: head starts, 3; four nodes, about 35-45 min of a run',
+  }),
+  roboticsPatent: P({
+    id: 'roboticsPatent', name: 'The Robotics Patent', branch: 'head', cost: 3, requires: ['senseNotes', 'bearingPatent'], pos: [9, 1],
+    effect: { k: 'head', research: ['robotics', 'sandwiches'] },
+    text: '{u:reset} start knowing {research:Robotics} · {research:Sandwiches}',
+    flavor: 'It reaches for the pen and signs itself.',
+    derivation: '§21 Patents: head starts, 3; the act\'s deepest nodes before the Engineer, about 40 min of servos, sensors, processors and produce',
+  }),
+  longSkiffs: P({
+    id: 'longSkiffs', name: 'Long Skiffs', branch: 'rule', cost: 2, requires: [], pos: [3, 0],
+    effect: { k: 'skiffSpeed', add: 1 },
+    text: '{u:district} skiffs fly {good:3} tiles/s, was 2 · a far feeder needs fewer',
+    flavor: 'Longer rotors, louder hum.',
+    derivation: '§21 Patents: rules, 2; skiffs 2 -> 3 tiles/s: a route five tiles long carries 0.92 a skiff, was 0.67; a rule about distance, not a multiplier on output (the dwell is unchanged, so a route beside its consumer gains little)',
+  }),
+  biggerNest: P({
+    id: 'biggerNest', name: 'The Bigger Nest', branch: 'rule', cost: 2, requires: ['nestedBoxes'], pos: [3, 1],
+    effect: { k: 'nestedMax', value: 10 },
+    text: '{u:fold} nested fold box 8×8 → {good:10×10}',
+    flavor: 'Boxes all the way up.',
+    derivation: '§21 Patents: rules, 2; a tier 3 group with its feeders (four modules and the trunks between) folds whole: a deeper fold files more steps (§19)',
+  }),
+  wideDistrictBox: P({
+    id: 'wideDistrictBox', name: 'Ward Boundaries', branch: 'rule', cost: 2, requires: ['biggerNest'], pos: [3, 2],
+    effect: { k: 'highFoldMax', value: 10 },
+    text: '{u:fold} District fold box 8×8 → {good:10×10}',
+    flavor: 'The surveyor moved the fence. Nobody minded.',
+    derivation: '§21 Patents: rules, 2; a District group of a dozen groups folds whole',
+  }),
+  dispatcher: P({
+    id: 'dispatcher', name: 'The Dispatcher', branch: 'auto', cost: 3, requires: [], pos: [3, 0],
+    effect: { k: 'dispatcher', every: 10 },
+    text: '{u:district} adds a skiff to the route furthest short of what it is wanted · every 10 s · while a skiff is under 5% of your coin',
+    flavor: 'A gull with a whistle. Nobody argues with the gull.',
+    derivation: '§21 Patents: automation, 3 (pillar 2: placing skiffs, the act\'s chore, becomes a machine\'s); one skiff every 10 s at most, at its full price, only on a route running under 90% of its want, and only while a skiff costs under 5% of the coin on hand, so it never spends a save',
   }),
   // ---------------------------------------------------------------- offline (DESIGN.md §12, §20)
   nightShift: P({

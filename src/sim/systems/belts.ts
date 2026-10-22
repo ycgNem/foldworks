@@ -65,5 +65,25 @@ function handOn(g: Game, e: Ent) {
       // a heap empties out of its front into whatever takes slag (a belt leading on, a brick press)
       if (e.count > 0 && tryOut(g, e, e.rot, 'slag')) e.count--;
       return;
+    case 'chuteMouth': {
+      // a Chute Mouth pushes its item out of its front from what the Factory Chute dropped
+      // (DESIGN.md §21), one at a time, as fast as the belt takes them
+      const it = e.recipe;
+      const st = g.s.chute;
+      if (!it || !st || (st[it as keyof typeof st] ?? 0) < 1 - 1e-9) {
+        e.state = it ? 'starved' : 'idle';
+        e.why = it;
+        return;
+      }
+      if (tryOut(g, e, e.rot, it)) {
+        st[it as keyof typeof st] = (st[it as keyof typeof st] ?? 0) - 1;
+        e.state = 'work';
+        e.why = null;
+      } else {
+        e.state = 'blocked';
+        e.why = it;
+      }
+      return;
+    }
   }
 }

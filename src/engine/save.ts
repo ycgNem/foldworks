@@ -5,7 +5,7 @@
 // snapshot and the commands since it (src/sim/snapshot.ts).
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -104,6 +104,11 @@ export const MIGRATIONS: Record<number, Migration> = {
     const log = Array.isArray(d.log) ? d.log.filter((l: { c?: { k?: string } }) => !gone.has(l?.c?.k ?? '')) : d.log;
     return { ...d, snap: JSON.stringify(st), log, v: 7 };
   },
+  // v8 (Milestone 7, Act III, DESIGN.md §21): the District and World floors, their audit, the Chute
+  // stock, Megaprojects #2 and on, a Challenge (and those won), a Scenario. Every one is absent
+  // until it happens, so an old save needs nothing; the bump keeps an older build from loading a
+  // save whose District it would silently drop.
+  7: (d) => ({ ...d, v: 8 }),
 };
 
 /** Bring any older save up to SAVE_VERSION; throws on a gap in the chain or a newer save. */

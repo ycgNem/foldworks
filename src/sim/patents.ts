@@ -14,6 +14,7 @@ import type { State } from './world';
 import { applyHeadStarts } from './reorganize';
 import { offlineEfficiency } from './offline';
 import { IDLE } from '../data/idle';
+import { CHALLENGES } from '../data/challenges';
 
 export interface PatentRules {
   foldMax: number;
@@ -41,6 +42,10 @@ export interface PatentRules {
   /** the Committee's rewards (reputation, kept across runs) */
   nightCrew: boolean;
   kitsOff: number;
+  /** Act III (DESIGN.md §21): skiff speed added, the District's fold box, the Dispatcher's seconds */
+  skiffSpeed: number;
+  highFoldMax: number;
+  dispatcherEvery: number;
 }
 
 const cache = new WeakMap<State, { key: string; r: PatentRules }>();
@@ -49,7 +54,7 @@ const cache = new WeakMap<State, { key: string; r: PatentRules }>();
 export function prules(g: Game): PatentRules {
   const s = g.s;
   const rep = s.orders.rep.committee ?? 0;
-  const key = s.meta.nodes.length + ':' + rep;
+  const key = s.meta.nodes.length + ':' + rep + ':' + (s.challenge ?? '') + ':' + (s.meta.challenges?.length ?? 0);
   const hit = cache.get(s);
   if (hit && hit.key === key) return hit.r;
   const r: PatentRules = {
@@ -73,6 +78,9 @@ export function prules(g: Game): PatentRules {
     offline: RULES.offlineEff.value,
     nightCrew: rep >= 2,
     kitsOff: rep >= 4 ? RULES.pocketedKits.value : 0,
+    skiffSpeed: 0,
+    highFoldMax: 0,
+    dispatcherEvery: 0,
   };
   for (const id of s.meta.nodes) {
     const e: PatentEffect | undefined = PATENTS[id]?.effect;
@@ -92,9 +100,15 @@ export function prules(g: Game): PatentRules {
       case 'draughtsman': r.draughtsmanEvery = r.draughtsmanEvery ? Math.min(r.draughtsmanEvery, e.every) : e.every; break;
       case 'drawer': r.drawerSlots += e.add; break;
       case 'offline': r.offline += e.add; break;
+      case 'skiffSpeed': r.skiffSpeed += e.add; break;
+      case 'highFoldMax': r.highFoldMax = Math.max(r.highFoldMax, e.value); break;
+      case 'dispatcher': r.dispatcherEvery = r.dispatcherEvery ? Math.min(r.dispatcherEvery, e.every) : e.every; break;
       case 'head': break;
     }
   }
+  // Small Boxes (a Challenge, DESIGN.md §21): 4x4 while it is taken; a tile more each way once won
+  if (s.meta.challenges?.includes('smallBoxes')) r.foldMax += 1;
+  if (s.challenge === 'smallBoxes') r.foldMax = Math.min(r.foldMax, CHALLENGES.smallBoxes.value ?? 4);
   // the ceiling of ROADMAP Milestone 5 (rounding: 0.5 + 0.05 x 3; the Night Shift's 0.1 is added
   // in offlineEfficiency, src/sim/offline.ts, which caps the sum at 0.75)
   r.offline = Math.min(0.75, Math.round(r.offline * 1000) / 1000);

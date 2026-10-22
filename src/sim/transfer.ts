@@ -11,13 +11,14 @@ import { RULES } from '../data/rules';
 import { RESEARCH } from '../data/research';
 import { ORDER } from '../data/orders';
 import { prules } from './patents';
+import { wastePrice } from './systems/modules';
 
 /** Does the active special order still want this item at the Workshop Dock? */
 export function orderWants(g: Game, item: string): boolean {
   const id = g.s.orders.active;
   if (!id) return false;
   const d = ORDER[id];
-  if (d.at === 'factory') return false;
+  if (d.at) return false;
   const want = d.wants[item as ItemId];
   if (!want) return false;
   return (g.s.orders.progress[id]?.[item as ItemId]?.toNumber() ?? 0) < want;
@@ -32,11 +33,12 @@ export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
       return to.item === null && to.rot !== opposite(dir);
     case 'dock':
       // what the Dock refuses it takes while the active order wants it (the Committee's slag)
-      return !(ITEMS as Record<string, { refused?: boolean }>)[item]?.refused || orderWants(g, item);
+      // and waste once the Scrap Transmuter buys it (DESIGN.md §21)
+      return !(ITEMS as Record<string, { refused?: boolean }>)[item]?.refused || orderWants(g, item) || (!!ITEMS[item as ItemId]?.waste && wastePrice(g, item) > 0);
     case 'hopper':
       // slag only while the selected research still wants it (else a heap draining into the
       // Hopper would never fill, and banked slag would pay for Slag Bricks: DECISIONS.md)
-      return item !== 'slag' || hopperWantsSlag(g);
+      return (item !== 'slag' && item !== 'sludge') || hopperWantsWaste(g, item);
     case 'heap':
       return item === 'slag' && to.count < prules(g).heapCap;
     case 'crate':
@@ -62,6 +64,17 @@ export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
       if (enterSide === to.rot) return false; // the front is the output
       return machineTakes(g, to, item);
   }
+}
+
+/** Does a Hopper take this byproduct now? Slag and sludge only while the selected research still
+ * wants them (the slag rule: DECISIONS.md, Milestone 1); anything else always. */
+export function hopperWantsWaste(g: Game, item: string): boolean {
+  if (item !== 'slag' && item !== 'sludge') return true;
+  const sel = g.s.research.selected;
+  if (!sel) return false;
+  const need = RESEARCH[sel].cost[item as ItemId];
+  if (!need) return false;
+  return (g.s.research.progress[sel]?.[item as ItemId]?.toNumber() ?? 0) < need;
 }
 
 export function hopperWantsSlag(g: Game): boolean {
@@ -117,7 +130,7 @@ export function offer(g: Game, x: number, y: number, dir: Dir, item: string, car
 export function machineRecipes(g: Game, m: Ent): RecipeDef[] {
   const fam = BUILD[m.kind].machine;
   if (!fam) return [];
-  return recipesFor(fam).filter((r) => recipeKnown(g, r) && (m.kind !== 'furnace' || r.id === 'smeltIron'));
+  return recipesFor(fam).filter((r) => recipeKnown(g, r) && (m.kind !== 'furnace' || r.id === 'smeltIron') && (!r.mk2 || (BUILD[m.kind].speed ?? 1) > 1));
 }
 
 /** Researched, and taught (an alternate recipe needs its customer's reputation, §18). */

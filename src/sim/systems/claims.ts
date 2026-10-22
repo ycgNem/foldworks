@@ -14,18 +14,16 @@ import { RECIPE } from '../../data/recipes';
 import { RULES } from '../../data/rules';
 import { itemName, type ItemId } from '../../data/items';
 import type { ModuleDesign } from '../world';
+import { subDesigns } from './modules';
+import { highModules } from './high';
 
 /** The ores a copy of this design digs (a depth-2 design: its modules' ores, once each). */
 export function oresOf(g: Game, d: ModuleDesign, depth = 0): Partial<Record<ItemId, number>> {
   const out: Partial<Record<ItemId, number>> = {};
-  if (depth > 3) return out;
-  if (d.fparts) {
-    for (const p of d.fparts) {
-      if (p.kind !== 'module') continue;
-      const c = g.design(p.design);
-      if (!c) continue;
-      for (const [k, n] of Object.entries(oresOf(g, c, depth + 1)) as [ItemId, number][]) out[k] = (out[k] ?? 0) + n;
-    }
+  if (depth > 4) return out;
+  const sub = subDesigns(g, d);
+  if (sub) {
+    for (const c of sub) for (const [k, n] of Object.entries(oresOf(g, c, depth + 1)) as [ItemId, number][]) out[k] = (out[k] ?? 0) + n;
     return out;
   }
   for (const p of d.parts) {
@@ -41,14 +39,10 @@ export function oresOf(g: Game, d: ModuleDesign, depth = 0): Partial<Record<Item
  * line folded that well digs its deposit cleanly). A depth-2 design holds its modules' claims. */
 export function claimLoad(g: Game, d: ModuleDesign, depth = 0): Partial<Record<ItemId, number>> {
   const out: Partial<Record<ItemId, number>> = {};
-  if (depth > 3) return out;
-  if (d.fparts) {
-    for (const p of d.fparts) {
-      if (p.kind !== 'module') continue;
-      const c = g.design(p.design);
-      if (!c) continue;
-      for (const [k, n] of Object.entries(claimLoad(g, c, depth + 1)) as [ItemId, number][]) out[k] = (out[k] ?? 0) + n;
-    }
+  if (depth > 4) return out;
+  const sub = subDesigns(g, d);
+  if (sub) {
+    for (const c of sub) for (const [k, n] of Object.entries(claimLoad(g, c, depth + 1)) as [ItemId, number][]) out[k] = (out[k] ?? 0) + n;
     return out;
   }
   const w = prules(g).halfClaims && d.grade.mult >= RULES.halfClaimMult.value ? 0.5 : 1;
@@ -61,6 +55,7 @@ export function claimLoad(g: Game, d: ModuleDesign, depth = 0): Partial<Record<I
 export function copiesOf(g: Game, d: ModuleDesign): number {
   let n = d.spare;
   for (const e of g.s.factory.ents) if (e.kind === 'module' && e.design === d.id) n++;
+  for (const e of highModules(g)) if (e.design === d.id) n++;
   return n;
 }
 
@@ -98,7 +93,7 @@ export function claimRefusal(g: Game, d: ModuleDesign): string | null {
 /** Claims the modules placed on the Factory floor dig with. */
 export function placedClaims(g: Game, ore: ItemId): number {
   let n = 0;
-  for (const e of g.s.factory.ents) {
+  for (const e of [...g.s.factory.ents, ...highModules(g)]) {
     if (e.kind !== 'module') continue;
     const d = g.design(e.design);
     if (d) n += claimLoad(g, d)[ore] ?? 0;

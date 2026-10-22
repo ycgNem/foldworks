@@ -311,6 +311,14 @@ const TREE: Record<ResearchId, [number, number, number?]> = {
   circuits: [4, 1.0], concrete: [4, 2.6, 1],
   heavyMachines: [5, 0.2], motors: [5, 1.3, 1], nestedFolds: [5, 2.6],
   tuning: [6, 0.2, 1], greatDrill: [6, 1.9],
+  // Act III's page (columns 0-6)
+  zoning: [0, 1.5],
+  chutes: [1, 1.5, 1],
+  chemistry: [2, 0.6], bearings: [2, 2.6, 1],
+  vulcanizing: [3, 0], batteries: [3, 1.1, 1], processors: [3, 2.2], hydroponics: [3, 3.3, 1],
+  sensors: [4, 0], recycling: [4, 1.1, 1], servos: [4, 2.4], sandwiches: [4, 3.3, 1],
+  robotics: [5, 1.0], floatingCity: [5, 2.4, 1],
+  districtFolds: [6, 0.2, 1], sandwichEngineering: [6, 1.6], scrapTransmuter: [6, 3.0, 1],
 };
 
 const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
@@ -319,6 +327,9 @@ const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
   coalSeams: 'coal', steelmaking: 'steel', overdrive: 'overdrive', steamPower: 'power', surveying: 'survey', glassworks: 'glass',
   crushing: 'gravel', concrete: 'concrete', refining: 'plastic', machineKits: 'machineKit', circuits: 'circuit',
   heavyMachines: 'heavy', tuning: 'mode', motors: 'motor', nestedFolds: 'fold', greatDrill: 'mega',
+  zoning: 'factory', chutes: 'flow', chemistry: 'solvent', bearings: 'bearing', vulcanizing: 'rubber', batteries: 'battery',
+  servos: 'servo', sensors: 'sensor', processors: 'processor', recycling: 'mode', hydroponics: 'produce', sandwiches: 'sandwich',
+  robotics: 'robotArm', floatingCity: 'mega', scrapTransmuter: 'mega', sandwichEngineering: 'sandwichEngineer', districtFolds: 'fold',
 };
 
 /** nodes with their own drawing in ui_research (the art director's), by frame */

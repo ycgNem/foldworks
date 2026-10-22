@@ -9,7 +9,7 @@ import type { ItemId } from '../../data/items';
 /** Can this node be selected (requirements done, not done itself)? */
 export function available(g: Game, id: ResearchId): boolean {
   const d = RESEARCH[id];
-  return !g.done(id) && d.requires.every((r) => g.done(r));
+  return !g.done(id) && d.requires.every((r) => g.done(r)) && (g.s.mega.stage ?? 0) >= (d.drill ?? 0);
 }
 
 export function availableNodes(g: Game) {

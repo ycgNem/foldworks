@@ -16,7 +16,7 @@ export interface GameEvent {
   id?: string;
   value?: number;
   /** the floor it happened on, when not the Workshop */
-  floor?: 'factory';
+  floor?: 'factory' | 'district' | 'world';
 }
 
 export class EventQueue {

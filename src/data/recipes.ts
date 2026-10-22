@@ -3,7 +3,9 @@ import type { ItemId } from './items';
 import type { ResearchId } from './research';
 import type { CustomerId } from './orders';
 
-export type MachineKind = 'miner' | 'smelter' | 'press' | 'assembler' | 'kiln' | 'mixer' | 'refinery';
+export type MachineKind = 'miner' | 'smelter' | 'press' | 'assembler' | 'kiln' | 'mixer' | 'refinery'
+  // Act III (DESIGN.md §21)
+  | 'chemVat' | 'greenhouse';
 
 export interface Stack { item: ItemId; n: number }
 
@@ -20,6 +22,9 @@ export interface RecipeDef {
   unlock: ResearchId | null;
   /** an alternate recipe a customer teaches at this reputation (DESIGN.md §18 Customers) */
   rep?: { customer: CustomerId; level: number };
+  /** only a Mk2 machine of its family crafts it (the Autonomous Sandwich Engineer's four inputs and
+   * ten sandwiches need a 2x2's faces and buffer: DESIGN.md §21) */
+  mk2?: boolean;
   derivation: string;
 }
 
@@ -46,6 +51,25 @@ export const RECIPES: RecipeDef[] = [
   { id: 'packKit', name: 'Machine Kit', machine: 'assembler', inputs: [{ item: 'steel', n: 2 }, { item: 'gear', n: 2 }], outputs: [{ item: 'machineKit', n: 1 }], time: 4.0, unlock: 'machineKits', derivation: '§18 Machine Kits: 2 steel + 2 gears, 4.0 s' },
   { id: 'buildMotor', name: 'Motor', machine: 'assembler', inputs: [{ item: 'steel', n: 1 }, { item: 'copperWire', n: 4 }, { item: 'circuit', n: 1 }], outputs: [{ item: 'motor', n: 1 }], time: 8.0, unlock: 'motors', derivation: '§18 Items: steel + 4 copper wire (the windings) + circuit -> motor, 8.0 s; re-derived from 2 steel + gear + circuit, which was close to the engine unit of Factorio (the gate review); inputs 133 -> 420, 3.2x' },
   { id: 'forgeDrillBit', name: 'Drill Bit', machine: 'assembler', inputs: [{ item: 'steel', n: 4 }, { item: 'motor', n: 1 }, { item: 'concrete', n: 2 }], outputs: [{ item: 'drillBit', n: 1 }], time: 12.0, unlock: 'greatDrill', derivation: '§18 Megaproject: 4 steel + motor + 2 concrete -> drill bit, 12 s' },
+  // Act III (DESIGN.md §21 Tier 3)
+  { id: 'mixSolvent', name: 'Solvent', machine: 'chemVat', inputs: [{ item: 'oil', n: 2 }, { item: 'sand', n: 1 }], outputs: [{ item: 'solvent', n: 1 }], byproduct: { item: 'sludge', every: 2 }, time: 2.0, unlock: 'chemistry', derivation: '§21 Tier 3: 2 oil + sand -> solvent, 2.0 s, sludge per 2: oil, the refinery\'s waste, is the input (one refinery\'s 7.5 oil/min feeds an eighth of a vat)' },
+  { id: 'cureRubber', name: 'Rubber', machine: 'chemVat', inputs: [{ item: 'plastic', n: 1 }, { item: 'solvent', n: 1 }], outputs: [{ item: 'rubber', n: 2 }], time: 3.0, unlock: 'vulcanizing', derivation: '§21 Tier 3: plastic + solvent -> 2 rubber, 3.0 s' },
+  { id: 'cellBattery', name: 'Battery', machine: 'chemVat', inputs: [{ item: 'copperIngot', n: 2 }, { item: 'solvent', n: 1 }, { item: 'plastic', n: 1 }], outputs: [{ item: 'battery', n: 1 }], time: 5.0, unlock: 'batteries', derivation: '§21 Tier 3: 2 copper ingots + solvent + plastic -> battery, 5.0 s' },
+  { id: 'brewFertilizer', name: 'Fertilizer', machine: 'chemVat', inputs: [{ item: 'sludge', n: 2 }, { item: 'gravel', n: 1 }], outputs: [{ item: 'fertilizer', n: 1 }], time: 2.0, unlock: 'hydroponics', derivation: '§21 Tier 3: 2 sludge + gravel -> fertilizer, 2.0 s: the vat\'s waste and the smelter\'s together (§4 Byproducts)' },
+  { id: 'pressBearing', name: 'Bearing', machine: 'press', inputs: [{ item: 'steel', n: 1 }], outputs: [{ item: 'bearing', n: 2 }], time: 2.0, unlock: 'bearings', derivation: '§21 Tier 3: steel -> 2 bearings, 2.0 s on the Press' },
+  { id: 'buildGearbox', name: 'Gearbox', machine: 'assembler', inputs: [{ item: 'gear', n: 2 }, { item: 'bearing', n: 2 }, { item: 'steel', n: 1 }], outputs: [{ item: 'gearbox', n: 1 }], time: 6.0, unlock: 'bearings', derivation: '§21 Tier 3: 2 gears + 2 bearings + steel -> gearbox, 6.0 s' },
+  { id: 'growProduce', name: 'Produce', machine: 'greenhouse', inputs: [{ item: 'fertilizer', n: 1 }], outputs: [{ item: 'produce', n: 3 }], time: 6.0, unlock: 'hydroponics', derivation: '§21 Tier 3: fertilizer -> 3 produce, 6.0 s in the Greenhouse' },
+  { id: 'buildSensor', name: 'Sensor', machine: 'assembler', inputs: [{ item: 'glass', n: 2 }, { item: 'circuit', n: 1 }, { item: 'rubber', n: 1 }], outputs: [{ item: 'sensor', n: 1 }], time: 6.0, unlock: 'sensors', derivation: '§21 Tier 3: 2 glass + circuit + rubber -> sensor, 6.0 s' },
+  { id: 'etchProcessor', name: 'Processor', machine: 'assembler', inputs: [{ item: 'circuit', n: 3 }, { item: 'solvent', n: 2 }], outputs: [{ item: 'processor', n: 1 }], time: 8.0, unlock: 'processors', derivation: '§21 Tier 3: 3 circuits + 2 solvent -> processor, 8.0 s' },
+  { id: 'buildServo', name: 'Servo', machine: 'assembler', inputs: [{ item: 'motor', n: 1 }, { item: 'gearbox', n: 1 }, { item: 'circuit', n: 1 }], outputs: [{ item: 'servo', n: 1 }], time: 10.0, unlock: 'servos', derivation: '§21 Tier 3: motor + gearbox + circuit -> servo, 10 s' },
+  { id: 'makeSandwich', name: 'Sandwich', machine: 'assembler', inputs: [{ item: 'produce', n: 3 }, { item: 'plastic', n: 1 }], outputs: [{ item: 'sandwich', n: 1 }], time: 4.0, unlock: 'sandwiches', derivation: '§21 Tier 3: 3 produce + plastic -> sandwich, 4.0 s' },
+  { id: 'windFrog', name: 'Clockwork Frog', machine: 'assembler', inputs: [{ item: 'gearbox', n: 1 }, { item: 'bearing', n: 2 }, { item: 'rubber', n: 1 }], outputs: [{ item: 'clockworkFrog', n: 1 }], time: 8.0, unlock: 'servos', derivation: '§21 Tier 3: gearbox + 2 bearings + rubber -> clockwork frog, 8.0 s' },
+  { id: 'rigBalloon', name: 'Weather Balloon', machine: 'assembler', inputs: [{ item: 'rubber', n: 3 }, { item: 'sensor', n: 1 }, { item: 'battery', n: 1 }], outputs: [{ item: 'weatherBalloon', n: 1 }], time: 10.0, unlock: 'sensors', derivation: '§21 Tier 3: 3 rubber + sensor + battery -> weather balloon, 10 s' },
+  { id: 'foldUmbrella', name: 'Self-Folding Umbrella', machine: 'assembler', inputs: [{ item: 'servo', n: 1 }, { item: 'rubber', n: 2 }, { item: 'plastic', n: 1 }, { item: 'steel', n: 1 }], outputs: [{ item: 'umbrella', n: 1 }], time: 12.0, unlock: 'robotics', derivation: '§21 Tier 3: servo + 2 rubber + plastic + steel -> umbrella, 12 s' },
+  { id: 'buildArm', name: 'Robot Arm', machine: 'assembler', inputs: [{ item: 'servo', n: 2 }, { item: 'sensor', n: 1 }, { item: 'steel', n: 2 }], outputs: [{ item: 'robotArm', n: 1 }], time: 16.0, unlock: 'robotics', derivation: '§21 Tier 3: 2 servos + sensor + 2 steel -> robot arm, 16 s' },
+  { id: 'buildLiftRotor', name: 'Lift Rotor', machine: 'assembler', inputs: [{ item: 'motor', n: 2 }, { item: 'gearbox', n: 2 }, { item: 'steel', n: 4 }], outputs: [{ item: 'liftRotor', n: 1 }], time: 12.0, unlock: 'floatingCity', derivation: '§21 Megaprojects: 2 motors + 2 gearboxes + 4 steel -> lift rotor, 12 s' },
+  { id: 'windCoil', name: 'Transmuter Coil', machine: 'assembler', inputs: [{ item: 'processor', n: 1 }, { item: 'battery', n: 2 }, { item: 'rubber', n: 4 }], outputs: [{ item: 'transmuterCoil', n: 1 }], time: 14.0, unlock: 'scrapTransmuter', derivation: '§21 Megaprojects: processor + 2 batteries + 4 rubber -> transmuter coil, 14 s' },
+  { id: 'buildEngineer', name: 'Autonomous Sandwich Engineer', machine: 'assembler', mk2: true, inputs: [{ item: 'robotArm', n: 1 }, { item: 'processor', n: 1 }, { item: 'sandwich', n: 10 }, { item: 'battery', n: 1 }], outputs: [{ item: 'sandwichEngineer', n: 1 }], time: 30.0, unlock: 'sandwichEngineering', derivation: '§21 Tier 3: robot arm + processor + 10 sandwiches + battery -> the Engineer, 30 s, Assembler Mk2 only (7.5 s at its 4x)' },
 ];
 
 export const RECIPE: Record<string, RecipeDef> = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
