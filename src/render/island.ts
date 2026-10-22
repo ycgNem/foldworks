@@ -19,12 +19,20 @@
 // - a cushion of cloud under the point with the island's shadow on it, rim props by hash (never on
 //   the plot or where the town stands). Waterfalls pour from springs on the south lip; they animate
 //   live on top of the bake (spring, the bow over the lip, the fall tiled down, foam on the cloud).
+// Act IV (DESIGN.md §22): each island has its own look, `isle_<world>_*` sheet by sheet (Home's
+// where an island has none; Cinder's and Rime's falls are their own: lava and meltwater), its veins
+// include its exotic, and the plot need not be a rectangle: Pebble Isle's chunks C, D and F are
+// sky, so the land is the rows of A, B and E (and F's when Sky Moorings moors it), each row's plot
+// from its own west to east, the coasts drawn round that.
 // Presentation only.
-import { PATCHES } from '../data/land';
 import { C } from '../data/palette';
 import { TILE } from './ground';
-import { art, named, artSig, canvas, hh, type Art } from './skyart';
+import { art, named, artSig, canvas, hh, isle, type Art } from './skyart';
 import { townZones } from './town';
+
+/** What an island is baked from besides the floor's size: its look, the plot's extent on each row
+ *  (west x inclusive, east x exclusive; a rectangle when left out) and the ores in its veins. */
+export interface IsleOpts { world?: string; rows?: [number, number][]; ores?: string[] }
 
 /** the rim in tiles beyond the plot, at its widest (north holds the town's rows) */
 export const RIM = { n: 6, s: 3, w: 4, e: 4 };
@@ -34,7 +42,8 @@ export const CLIFF = 4;
 const DEPTH = 9;
 
 const ART = ['tile_grass', 'tile_grass_deco', 'isle_edge', 'isle_cliff', 'isle_vein', 'isle_under', 'isle_under_deco', 'isle_tip', 'prop_tree', 'prop_bush', 'prop_fence'] as const;
-const VEIN: Record<string, string> = { ironOre: 'iron', copperOre: 'copper', coal: 'coal', sand: 'sand' };
+const VEIN: Record<string, string> = { ironOre: 'iron', copperOre: 'copper', coal: 'coal', sand: 'sand', skyglass: 'skyglass', cinderite: 'cinderite', rimeCrystal: 'rime', relic: 'relic' };
+const FALLS = ['isle_fall', 'isle_fall_top', 'isle_fall_head', 'isle_fall_foam'] as const;
 const UNDER = { fill: 0, bottom: 1, left: 2, right: 3 } as const;
 
 interface Fall { x: number; y: number; y1: number; seed: number }
@@ -49,6 +58,8 @@ export class Island {
   private ox = 0;
   private oy = 0;
   private falls: Fall[] = [];
+  /** the island whose look the bake used (its falls are drawn live in the same look) */
+  private world = 'home';
   private b = { x0: 0, y0: 0, x1: 0, y1: 0 };
   /** world px under the floor's south edge the camera may show: the south rim and the cliff */
   readonly below = (RIM.s + CLIFF) * TILE;
@@ -59,14 +70,17 @@ export class Island {
   }
 
   /** Draw the island under a floor fw x fh (world transform set), its waterfalls live. */
-  draw(ctx: CanvasRenderingContext2D, fw: number, fh: number, time: number) {
-    const key = `${fw}x${fh}:${artSig(ART)}:${artSig(['isle_fall', 'isle_fall_top', 'isle_fall_head', 'isle_fall_foam'])}`;
+  draw(ctx: CanvasRenderingContext2D, fw: number, fh: number, time: number, o: IsleOpts = {}) {
+    const w = o.world ?? 'home';
+    const key = `${fw}x${fh}:${w}:${o.rows?.map((r) => r.join('-')).join(',') ?? ''}:${o.ores?.join(',') ?? ''}:${artSig(ART.map((n) => isle(n, w)))}:${artSig(FALLS.map((n) => isle(n, w)))}`;
     if (!this.c || key !== this.key) {
-      this.bake(fw, fh);
+      this.world = w;
+      this.bake(fw, fh, o);
       this.key = key;
     }
     ctx.drawImage(this.c!, this.ox, this.oy);
-    const top = art('isle_fall_top'), head = art('isle_fall_head'), fall = art('isle_fall'), foam = art('isle_fall_foam');
+    const I = (n: string) => art(isle(n, this.world));
+    const top = I('isle_fall_top'), head = I('isle_fall_head'), fall = I('isle_fall'), foam = I('isle_fall_foam');
     const at = (a: Art, seed: number) => a.frames[(Math.floor(time * (a.fps || 8)) + seed) % a.frames.length];
     for (const f of this.falls) {
       ctx.drawImage(at(top, f.seed), f.x, f.y);
@@ -81,8 +95,12 @@ export class Island {
     }
   }
 
-  private bake(fw: number, fh: number) {
-    // ---- the land: one run per row from L to R, coasts monotone
+  private bake(fw: number, fh: number, o: IsleOpts) {
+    const A = (n: string) => art(isle(n, this.world));
+    // the plot's west and east (exclusive) on each of its rows: a rectangle unless the island says
+    const plotRow = (y: number): [number, number] => o.rows?.[Math.max(0, Math.min(fh - 1, y))] ?? [0, fw];
+    // ---- the land: one run per row from L to R, coasts monotone (rowsL holds how far west the
+    // row's land runs, as -x, and rowsR its east x: bigger is wider either way)
     const Y0 = -RIM.n, Y1 = fh + RIM.s - 1;
     const zones = townZones(fw, fh);
     const sn = (i: number, seed: number) => hh(i, seed, 401);
@@ -105,15 +123,16 @@ export class Island {
         mw = d === 1 ? 2 : d === 2 ? 1 : -2 - Math.floor(sn(d, 5) * 2);
         me = d === 1 ? 2 : d === 2 ? 1 : -2 - Math.floor(sn(d, 6) * 2);
       }
-      rowsL.set(y, mw);
-      rowsR.set(y, me);
+      const [pa, pb] = plotRow(y);
+      rowsL.set(y, mw - pa);
+      rowsR.set(y, pb - 1 + me);
     }
     // the town's rows are land (its footings), whatever the wander says
     for (const z of zones)
       for (let y = Math.max(z.y0, z.y1 - 3); y < z.y1; y++) {
         if (y < Y0 || y > Y1) continue;
         rowsL.set(y, Math.max(rowsL.get(y)!, -z.x0));
-        rowsR.set(y, Math.max(rowsR.get(y)!, z.x1 - fw));
+        rowsR.set(y, Math.max(rowsR.get(y)!, z.x1 - 1));
       }
     // monotone: prefix max down to the widest row, suffix max up from the bottom
     const hull = (m: Map<number, number>) => {
@@ -130,9 +149,9 @@ export class Island {
     const idx = (x: number, y: number) => (y - Y0) * cols + (x - X0);
     const inG = (x: number, y: number) => x >= X0 && x < X1 && y >= Y0 && y <= Y1;
     const L = (x: number, y: number) => inG(x, y) && land[idx(x, y)] === 1;
-    const inPlot = (x: number, y: number) => x >= 0 && y >= 0 && x < fw && y < fh;
+    const inPlot = (x: number, y: number) => { if (y < 0 || y >= fh) return false; const [pa, pb] = plotRow(y); return x >= pa && x < pb; };
     for (let y = Y0; y <= Y1; y++)
-      for (let x = -rowsL.get(y)!; x <= fw - 1 + rowsR.get(y)!; x++) if (inG(x, y)) land[idx(x, y)] = 1;
+      for (let x = -rowsL.get(y)!; x <= rowsR.get(y)!; x++) if (inG(x, y)) land[idx(x, y)] = 1;
     // the last row: lobes, never a single tile (the falls start on them)
     for (let x = X0; x < X1; x++) if (L(x, Y1) && hh(Math.floor((x + 40) / 3), 0, 402) < 0.3) land[idx(x, Y1)] = 0;
     for (let x = X0; x < X1; x++) if (L(x, Y1) && !L(x - 1, Y1) && !L(x + 1, Y1)) land[idx(x, Y1)] = 0;
@@ -190,7 +209,7 @@ export class Island {
     const T = (x: number, y: number) => [x * TILE - ox, y * TILE - oy] as const;
 
     // ---- the top surface's silhouette (the plot is solid; edge tiles by their art's alpha)
-    const edge = art('isle_edge'), grass = art('tile_grass'), deco = art('tile_grass_deco');
+    const edge = A('isle_edge'), grass = A('tile_grass'), deco = A('tile_grass_deco');
     const sil = canvas(W, H);
     const sctx = sil.getContext('2d')!;
     for (let y = Y0; y <= Y1; y++)
@@ -208,7 +227,7 @@ export class Island {
     const body = canvas(W, H);
     const bctx = body.getContext('2d')!;
     bctx.imageSmoothingEnabled = false;
-    const cliff = art('isle_cliff');
+    const cliff = A('isle_cliff');
     const strip = canvas(64, 48);
     {
       const s = strip.getContext('2d')!;
@@ -249,8 +268,8 @@ export class Island {
       }
     }
     // veins: the floor's ores on the first mid row of a column's face, only where there is rock
-    const vein = art('isle_vein');
-    const ores = [...new Set(PATCHES.map((p) => VEIN[p.item]).filter(Boolean))];
+    const vein = A('isle_vein');
+    const ores = [...new Set((o.ores ?? ['ironOre', 'copperOre', 'coal', 'sand']).map((it) => VEIN[it]).filter(Boolean))];
     if (ores.length) {
       bctx.globalCompositeOperation = 'source-atop';
       for (let x = xl; x <= xr; x++) {
@@ -262,7 +281,7 @@ export class Island {
       bctx.globalCompositeOperation = 'source-over';
     }
     // the underside
-    const under = art('isle_under'), udeco = art('isle_under_deco');
+    const under = A('isle_under'), udeco = A('isle_under_deco');
     const cell = (x: number, r: number) => x >= xl && x <= xr && r >= ub.get(x)! && r < ubot.get(x)!;
     for (let x = xl; x <= xr; x++)
       for (let r = ub.get(x)!; r < ubot.get(x)!; r++) {
@@ -275,7 +294,7 @@ export class Island {
         bctx.drawImage(under.frames[(kind * 4 + mod(x, 4)) % under.frames.length], px, py);
         if (kind === UNDER.fill && udeco.real && hh(x, r, 330) < 0.3) bctx.drawImage(udeco.frames[Math.floor(hh(x, r, 331) * udeco.frames.length)], px, py);
       }
-    const tip = art('isle_tip');
+    const tip = A('isle_tip');
     bctx.drawImage(tip.frames[0], Math.round(mid * TILE - ox - (tip.real ? tip.ax : tip.w / 2)), deep * TILE - oy - (tip.real ? tip.ay : 6));
     outlineCanvas(body, C.ink);
 
@@ -294,15 +313,15 @@ export class Island {
         if (m === 15) {
           put(grass.frames[Math.floor(hh(x, y, 317) * grass.frames.length)], x, y);
           if (hh(x, y, 318) < 0.13) put(deco.frames[Math.floor(hh(x, y, 319) * deco.frames.length)], x, y);
-        } else if (!falls.has(`${x},${y}`) || !art('isle_fall_top').real) put(edge.frames[m % edge.frames.length], x, y);
+        } else if (!falls.has(`${x},${y}`) || !A('isle_fall_top').real) put(edge.frames[m % edge.frames.length], x, y);
       }
     // the code-drawn springs (the art's isle_fall_top is drawn live)
-    if (!art('isle_fall_top').real) for (const x of fallX) { const [px, py] = T(x, bottom(x)); spring(ctx, px, py); }
+    if (!A('isle_fall_top').real) for (const x of fallX) { const [px, py] = T(x, bottom(x)); spring(ctx, px, py); }
 
     // ---- props: trees off the plot's edge, bushes, fences along straight stretches of the south lip
     const props: Prop[] = [];
     const taken = new Set<string>();
-    const nearPlot = (x: number, y: number) => x >= -1 && x <= fw && y >= -1 && y <= fh;
+    const nearPlot = (x: number, y: number) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (inPlot(x + dx, y + dy)) return true; return false; };
     const nearFall = (x: number, y: number) => fallX.some((f) => Math.abs(f - x) <= 1 && y >= bottom(f) - 1);
     for (let y = Y0; y <= Y1; y++)
       for (let x = X0; x < X1; x++) {
@@ -326,7 +345,7 @@ export class Island {
         }
         if (m === 15 && !nearPlot(x, y) && hh(x, y, 324) < 0.08) props.push({ kind: 'bush', x, y, f: Math.floor(hh(x, y, 325) * 4) });
       }
-    const tree = art('prop_tree'), bush = art('prop_bush'), fence = art('prop_fence');
+    const tree = A('prop_tree'), bush = A('prop_bush'), fence = A('prop_fence');
     props.sort((a, b) => a.y - b.y || a.x - b.x);
     for (const p of props) {
       const [px, py] = T(p.x, p.y);

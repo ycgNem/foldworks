@@ -9,18 +9,25 @@
 // puts a few pebbles, stains, cracks or drift on the tiles beside it (never on another patch). A
 // chunk is baked both ways (paved and meadow) on demand, so buying it can pave it in a wave;
 // re-baked when the Great Drill opens the deep deposits or new art appears.
-import { PATCHES, patchOpen } from '../data/land';
+import { patchOpen } from '../data/land';
 import { C } from '../data/palette';
 import { CHUNKS } from '../data/land';
 import type { Game } from '../sim/Game';
+import { isSky, worldOf } from '../sim/systems/islands';
 import { sheet, hasArt } from './sprites';
-import { art, artSig } from './skyart';
+import { art, artSig, isle } from './skyart';
 
 export const TILE = 16;
 
-/** each ore's deposit art (a 2x2 deposit in four quadrants) */
-const ORE_ART: Record<string, string> = { ironOre: 'tile_ore_iron', copperOre: 'tile_ore_copper', coal: 'tile_ore_coal', sand: 'tile_ore_sand' };
-const ART = ['tile_pave', 'tile_pave_seam', 'tile_pave_edge', 'tile_grass', 'tile_grass_deco', 'tile_plot', 'tile_ore_iron', 'tile_ore_copper', 'tile_ore_coal', 'tile_ore_sand'] as const;
+/** each ore's deposit art (a 2x2 deposit in four quadrants): the Workshop's four (each island has
+ *  its own look of them, `isle()`), and Act IV's exotic deposits, one an island (DESIGN.md §22) */
+export const ORE_ART: Record<string, string> = {
+  ironOre: 'tile_ore_iron', copperOre: 'tile_ore_copper', coal: 'tile_ore_coal', sand: 'tile_ore_sand',
+  skyglass: 'ore_skyglass', cinderite: 'ore_cinderite', rimeCrystal: 'ore_rime', relic: 'ore_relic',
+};
+const ART = ['tile_pave', 'tile_pave_seam', 'tile_pave_edge', 'tile_grass', 'tile_grass_deco', 'tile_plot', 'tile_ore_iron', 'tile_ore_copper', 'tile_ore_coal', 'tile_ore_sand', 'ore_skyglass', 'ore_cinderite', 'ore_rime', 'ore_relic'] as const;
+/** a deposit's sheet on this island (its own look of the Workshop's ores) */
+export const oreSheet = (item: string, world: string) => isle(ORE_ART[item] ?? 'tile_ore_copper', world);
 
 /** Small deterministic hash in [0, 1). */
 export function hash2(x: number, y: number, s = 0): number {
@@ -45,8 +52,7 @@ export class Ground {
 
   /** Is (x, y) on a land chunk you own? */
   private ownedAt(x: number, y: number) {
-    const ch = CHUNKS.find((c) => x >= c.x && y >= c.y && x < c.x + c.w && y < c.y + c.h);
-    return !!ch && this.game.s.land.includes(ch.id);
+    return this.game.inb(x, y) && this.game.owned(x, y);
   }
 
   /** A land chunk baked paved (owned) or as meadow (for sale), cached both ways (and by which of
@@ -55,22 +61,25 @@ export class Ground {
   bake(id: string, owned: boolean): HTMLCanvasElement {
     const ch = CHUNKS.find((c) => c.id === id)!;
     const stage = this.game.s.mega?.stage ?? 0;
-    const sig = artSig(ART);
+    // the island's own look of every sheet (Act IV), Home's where it has none
+    const isl = worldOf(this.game);
+    const A = (n: string) => art(isle(n, isl));
+    const sig = artSig(ART.map((n) => isle(n, isl)));
     // which sides border owned land, sampled at the side's middle (chunks line up edge to edge)
     const mx = ch.x + (ch.w >> 1), my = ch.y + (ch.h >> 1);
     const nb = (this.ownedAt(mx, ch.y - 1) ? 1 : 0) | (this.ownedAt(ch.x + ch.w, my) ? 2 : 0) | (this.ownedAt(mx, ch.y + ch.h) ? 4 : 0) | (this.ownedAt(ch.x - 1, my) ? 8 : 0);
-    const key = owned ? `${id}+${nb}` : id + '-';
+    const key = `${isl}:` + (owned ? `${id}+${nb}` : id + '-');
     let e = this.chunks.get(key);
     if (e && e.stage === stage && e.sig === sig) return e.c;
     const c = document.createElement('canvas');
     c.width = ch.w * TILE;
     c.height = ch.h * TILE;
     const ctx = c.getContext('2d')!;
-    const seam = art('tile_pave_seam'), edge = art('tile_pave_edge'), plot = art('tile_plot');
+    const seam = A('tile_pave_seam'), edge = A('tile_pave_edge'), plot = A('tile_plot');
     for (let ty = 0; ty < ch.h; ty++)
       for (let tx = 0; tx < ch.w; tx++) {
         const px = tx * TILE, py = ty * TILE;
-        this.tile(ctx, ch.x + tx, ch.y + ty, px, py, owned);
+        this.tile(ctx, ch.x + tx, ch.y + ty, px, py, owned, A, isl);
         // the lot's border: a bolted strip on paving against owned land, grass in the grout
         // against land you don't own; the plot's stakes and dashes on meadow
         const n = ty === 0, s = ty === ch.h - 1, w = tx === 0, e2 = tx === ch.w - 1;
@@ -97,22 +106,22 @@ export class Ground {
     return c;
   }
 
-  private tile(ctx: CanvasRenderingContext2D, x: number, y: number, px: number, py: number, owned: boolean) {
+  private tile(ctx: CanvasRenderingContext2D, x: number, y: number, px: number, py: number, owned: boolean, A: (n: string) => ReturnType<typeof art>, w: string) {
     const g = this.game;
     const f = (c: string, a: number, b: number, w: number, h: number) => { ctx.fillStyle = c; ctx.fillRect(px + a, py + b, w, h); };
     const ore = g.oreAt(x, y);
     // the floor: paving you own, meadow for sale (a flower or a tuft now and then)
-    const floor = art(owned ? 'tile_pave' : 'tile_grass');
+    const floor = A(owned ? 'tile_pave' : 'tile_grass');
     ctx.drawImage(floor.frames[Math.floor(hash2(x, y, 91) * floor.frames.length) % floor.frames.length], px, py);
     if (!owned && !ore && hash2(x, y, 93) < 0.09) {
-      const deco = art('tile_grass_deco');
+      const deco = A('tile_grass_deco');
       ctx.drawImage(deco.frames[Math.floor(hash2(x, y, 94) * deco.frames.length) % deco.frames.length], px, py);
     }
-    const oreArt = ore ? ORE_ART[ore] ?? 'tile_ore_copper' : null;
+    const oreArt = ore ? oreSheet(ore, w) : null;
     if (ore && oreArt && hasArt(oreArt)) {
       // the outcrop is one 32x32 in four quadrants (TL, TR, BL, BR) after frame 0 (the whole
       // outcrop at 16x16, for the Survey Office): pick by place in the patch
-      const p = PATCHES[g.patchOf[y * g.W + x]];
+      const p = g.patches[g.patchOf[y * g.W + x]];
       const s = sheet(oreArt);
       // frames 1-4 sit the outcrop on paving, 5-8 (when the sheet has them) on the meadow
       const seat = !owned && s.frames.length >= 9 ? 4 : 0;
@@ -133,10 +142,13 @@ export class Ground {
     } else {
       // scatter from any open patch whose 4x4 apron holds this tile
       const stage = g.s.mega?.stage ?? 0;
-      for (const p of PATCHES) {
+      for (const p of g.patches) {
         const dx = x - p.x, dy = y - p.y;
         if (dx < -1 || dy < -1 || dx > 2 || dy > 2 || !patchOpen(p, stage)) continue;
-        const sp = (ORE_ART[p.item] ?? 'tile_ore_copper') + '_spill';
+        // no deposit in the sky (Pebble Isle's C, D and F): no spill from one either
+        const pc = g.chunkAt(p.x, p.y);
+        if (pc && isSky(g, pc.id)) continue;
+        const sp = isle((ORE_ART[p.item] ?? 'tile_ore_copper') + '_spill', w);
         if (!hasArt(sp)) continue;
         const ss = sheet(sp);
         // frames 0-15 on paving, 16-31 (when the sheet has them) on the meadow

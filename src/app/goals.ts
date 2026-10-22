@@ -45,6 +45,7 @@ import { Num } from '../engine/num';
 import { BUILD, UPGRADES } from '../data/machines';
 import { RESEARCH, type ResearchId } from '../data/research';
 import { CHUNKS, FACTORY } from '../data/land';
+import { isSky } from '../sim/systems/islands';
 import { RULES } from '../data/rules';
 import { RECIPE } from '../data/recipes';
 import { prules } from '../sim/patents'; // Milestone 5: the Patent rules (More Auditors, Quick Audits)
@@ -185,7 +186,7 @@ function act2Goal(g: Game): Goal | null {
   if (s.district) return act3Goal(g) ?? ordersGoal(g) ?? drillGoal(g) ?? researchToward(g, 'floatingCity');
   const count = (k: string) => s.ents.filter((e) => e.kind === k).length;
   const chunkGoal = (id: string): Goal | null => {
-    if (s.land.includes(id)) return null;
+    if (s.land.includes(id) || isSky(g, id)) return null;
     const c = CHUNKS.find((q) => q.id === id);
     if (!c || (c.requires && !g.done(c.requires))) return null;
     const at = { tile: { x: c.x + 3, y: c.y + 3 }, ui: 'land' };
@@ -524,7 +525,7 @@ export function nextGoal(g: Game, floor?: string): Goal | null {
   const offered = offeredOrders(g);
   if (!s.orders.active && offered.length && !s.flags.includes('ordersSeen'))
     return say(offered[0].customer, HELLO[offered[0].customer], { chips: [offered[0].name], ui: 'orders' });
-  const buyable = CHUNKS.find((c) => !s.land.includes(c.id) && (!c.requires || g.done(c.requires)));
+  const buyable = CHUNKS.find((c) => !s.land.includes(c.id) && !isSky(g, c.id) && (!c.requires || g.done(c.requires)));
   if (buyable && s.coin.gte(buyable.cost))
     return say('bramble', `${buyable.name} is for sale! Click it on the map.`, { chips: [`{coin:${big(buyable.cost)}}`], tile: { x: buyable.x + 3, y: buyable.y + 3 }, ui: 'land' });
   if (sel) return researchLine(g, sel, null);

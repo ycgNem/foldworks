@@ -741,6 +741,114 @@ export const ACT3_M5 = {
 };
 // ---------------------------------------------------------------- (end of Act III's states)
 
+/** Act IV's islands (DESIGN.md §22), each a fresh run's Workshop on its island with everything
+ * researched: Pebble Isle's half land (a skyglass Miner and a Kiln cutting lenses, pinned), Cinder
+ * Isle's vents (a vented Kiln pinned; a belt refused beside a vent), Rime (a Heater warming a
+ * cluster, a lone Kiln cold and pinned; the Heater hovered), the Old Works (rubble, the ruined
+ * lines, a ruined Smelter Mk2 pinned with its Repair button; rubble hovered), a lesson card and the
+ * Heater on the wheel. */
+export async function isleSetup(state) {
+  const a = window.__app;
+  const mod = async (p) => { for (const c of ['/src/app/hud.ts', '/src/app/screens.ts', '/src/app/app.ts', '/src/render/renderer.ts']) { const m = (await (await fetch(c)).text()).match(new RegExp(`["'](${p.replace(/\./g, '\\.')}\\?[^"']*)["']`)); if (m) return import(m[1]); } return import(p); };
+  const world = state.startsWith('islePebble') ? 'pebble' : state.startsWith('isleCinder') ? 'cinder' : state.startsWith('isleRime') ? 'rime' : 'oldworks';
+  // the state before may have left the wheel open
+  (await mod('/src/app/wheel.ts')).closeWheel(a);
+  a.newGame(31);
+  a.freeze();
+  const g = a.game;
+  const N = g.s.coin.constructor;
+  const isl = await mod('/src/sim/systems/islands.ts');
+  g.s.meta.world = world;
+  if (!g.s.meta.visited.includes(world)) g.s.meta.visited.push(world);
+  g.s.meta.runs = 4;
+  isl.setupIsland(g);
+  g.rebuild();
+  g.s.coin = N.of(world === 'oldworks' ? 3400 : 2.4e6);
+  g.s.earned = N.of(6.1e7);
+  const land = { pebble: ['A', 'B', 'E'], cinder: ['A', 'B'], rime: ['A', 'B'], oldworks: ['A', 'B', 'C'] }[world];
+  g.s.land = land;
+  g.s.upgrades.push('bellows');
+  const { RESEARCH_LIST } = await import('/src/data/research.ts');
+  g.s.research.done = RESEARCH_LIST.filter((d) => (d.act ?? 1) < 4 || d.world === world).map((d) => d.id);
+  g.s.flags.push('factoryOpen', 'factorySeen', 'sliceEnd', 'ordersSeen');
+  g.s.mega = { stage: 3, progress: {} };
+  g.s.orders.rep = { bramble: 5, unit7: 5, voltaire: 4, committee: 5 };
+  g.s.orders.active = null;
+  g.s.income = Array(60).fill(380000);
+  a.renderer.ground = null;
+  g.rebuild();
+  const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
+  const place = (kind, x, y, rot = 0, recipe = null) => { act({ k: 'place', kind, x, y, rot }); if (recipe) act({ k: 'recipe', x, y, recipe }); return g.entAt(x, y); };
+  let pin = null, hover = null;
+  if (world === 'pebble') {
+    // two Miners on the skyglass in chunk B, a Kiln cutting lenses (glass by hand), a Pole and a
+    // Generator to run it
+    place('miner', 9, 5, 0);
+    place('miner', 9, 6, 0);
+    const k = place('kiln', 10, 5, 0, 'cutLens');
+    place('generator', 12, 5, 0);
+    place('pole', 11, 4, 0);
+    place('belt', 10, 6, 3);
+    const feed = () => { Object.assign(k.inBuf, { skyglass: 4, glass: 2 }); g.entAt(12, 5).inBuf.coal = 6; };
+    feed(); a.step(20 * 4); feed(); a.step(4);
+    pin = k;
+  } else if (world === 'cinder') {
+    // a Kiln beside each of chunk A's vents, run with no Pole at all; a Generator beside one burns
+    // nothing
+    const k1 = place('kiln', 2, 6, 0, 'fireGlass');
+    const k2 = place('kiln', 4, 6, 2, 'fireGlass');
+    place('generator', 5, 7, 0);
+    place('heap', 2, 7, 0);
+    const feed = () => { k1.inBuf.sand = 6; k2.inBuf.sand = 6; };
+    feed(); a.step(20 * 3); feed(); a.step(4);
+    pin = k1;
+    if (state === 'isleCinderBelt') { pin = null; a.setMode({ k: 'build', kind: 'belt' }); hover = [5, 5]; a.refuse(g.canPlace('belt', 5, 5)); }
+  } else if (world === 'rime') {
+    // two Generators and a Pole in chunk B; three Kilns side by side with a Heater under them
+    // (warm), and a fourth on its own (cold: half speed, frost on it)
+    place('generator', 14, 3, 0);
+    place('generator', 15, 3, 0);
+    place('pole', 13, 4, 0);
+    const ks = [place('kiln', 10, 6, 0, 'fireGlass'), place('kiln', 11, 6, 0, 'fireGlass'), place('kiln', 12, 6, 0, 'fireGlass')];
+    const h = place('heater', 11, 7, 0);
+    const lone = place('kiln', 15, 6, 0, 'fireGlass');
+    const feed = () => { for (const k of [...ks, lone]) { k.inBuf.sand = 8; k.out = 0; } h.inBuf.coal = 4; g.entAt(14, 3).inBuf.coal = 8; g.entAt(15, 3).inBuf.coal = 8; };
+    feed(); a.step(20 * 3); feed(); a.step(20); feed(); a.step(2);
+    pin = lone;
+    if (state === 'isleRimeHeater') { pin = null; hover = [11, 7]; }
+  } else {
+    // the Old Works as a run finds it: rubble, the two ruined lines (C and B), the loose ruins; the
+    // ruined Smelter Mk2 in chunk A pinned with its Repair button
+    pin = g.entAt(1, 5);
+    if (state === 'isleOldworksRubble') {
+      pin = null;
+      const i = g.s.rubble.find((t) => g.owned(t % g.W, Math.floor(t / g.W)) && t % g.W >= 1 && t % g.W <= 5 && Math.floor(t / g.W) >= 5);
+      hover = [i % g.W, Math.floor(i / g.W)];
+    }
+  }
+  g.events.drain();
+  a.hud.celebs = [];
+  a.hud.rain = [];
+  a.toasts = [];
+  a.trophyPops = [];
+  if (state !== 'isleCinderBelt') a.refusal = null;
+  a.panel = null;
+  a.renderer.fx.flyers = [];
+  a.renderer.fx.pops = [];
+  a.renderer.fx.parts = [];
+  a.fitCamera(true);
+  // close enough to read the machines, far enough to see the island's ground round them
+  a.renderer.cam.zoom = 2;
+  const look = { pebble: [11, 4], cinder: [4, 5], rime: [11, 5], oldworks: [5, 8] }[world];
+  a.lookAt(look[0], look[1]);
+  a.selected = pin ? pin.id : null;
+  if (state === 'isleCinderLesson') { a.selected = null; a.onboarding.lessons.show(a, 'isleCinder'); }
+  if (state === 'isleRimeWheel') { a.selected = null; a.openWheelAt(); return { hoverIds: ['wheel_heavy', 'wheel_item_heater'] }; }
+  return hover ? { hover } : null;
+}
+
+export const ISLES = ['islePebble', 'isleCinder', 'isleCinderBelt', 'isleCinderLesson', 'isleRime', 'isleRimeHeater', 'isleOldworks', 'isleOldworksRubble', 'isleRimeWheel'];
+
 const SIZES = [[1280, 720], [1920, 1080], [1024, 640]];
 // each state: a function run in the page that puts the app there (frozen); it may return
 // { hover: [x, y] } to put the mouse over that tile instead of the board's top edge
@@ -904,6 +1012,7 @@ for (const s of M5) STATES[s] = { m5: s };
 for (const s of DISTRICT) STATES[s] = { d: s };
 for (const s of ACT3) STATES[s] = { a3: s }; // Act III
 Object.assign(STATES, ACT3_M5); // Act III
+for (const s of ISLES) STATES[s] = { isle: s }; // Act IV
 
 async function main() {
   const only = process.argv.slice(2);
@@ -921,7 +1030,7 @@ async function main() {
     for (const [state, fn] of Object.entries(STATES)) {
       if (only.length && !only.includes(state)) continue;
       const name = `${w}x${h}-${state}`;
-      const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.d ? await page.evaluate(districtSetup, f.d) : f.a3 ? await page.evaluate(act3Setup, f.a3) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post)) : await page.evaluate(f));
+      const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.d ? await page.evaluate(districtSetup, f.d) : f.a3 ? await page.evaluate(act3Setup, f.a3) : f.isle ? await page.evaluate(isleSetup, f.isle) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post)) : await page.evaluate(f));
       // Milestone 13: lesson cards held off (a state asks for its own), the keys and the UI scale
       // as they came (the states that change them come last in a size's run, or put them back here)
       await page.evaluate(() => { const o = window.__app.onboarding; o.lessons.hold(true); o.keys.reset(window.__app); let st = {}; try { st = JSON.parse(localStorage.getItem('foldworks_settings') || '{}'); } catch {} if (st.uiScale) o.setUiScale(0); });

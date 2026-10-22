@@ -12,6 +12,7 @@ import { C, rgba } from '../data/palette';
 import { BUILD, UPGRADES, STORE_TABS, type BuildKind } from '../data/machines';
 import { RESEARCH } from '../data/research';
 import { ANNEX, CHUNKS, PATCHES, FACTORY, type ChunkDef } from '../data/land';
+import { isSky } from '../sim/systems/islands';
 import { type ItemId } from '../data/items';
 import { annexPrice } from '../sim/systems/annex';
 import { prules } from '../sim/patents';
@@ -233,7 +234,7 @@ function bookkeeping(app: App) {
       if (tabFresh && !hs.tabRung.has(ring)) { hs.tabRung.add(ring); app.audio.sfx('tab'); }
       fresh ||= tabFresh || open.some((k) => isFreshKind(app, k));
     }
-    fresh ||= CHUNKS.some((c) => c.cost && !g.s.land.includes(c.id) && (!c.requires || g.done(c.requires)) && g.s.coin.gte(c.cost));
+    fresh ||= CHUNKS.some((c) => c.cost && !g.s.land.includes(c.id) && !isSky(g, c.id) && (!c.requires || g.done(c.requires)) && g.s.coin.gte(c.cost));
   }
   W.fresh = fresh;
   // the Build button glows for a goal inside this floor's wheel (a Workshop building, the Bellows
@@ -369,12 +370,13 @@ function landTile(app: App, c: ChunkDef, x: number, y: number, k: number) {
   ui.ctx.fillStyle = C.ground2; ui.ctx.fillRect(x, y, size, k);
   ui.ctx.fillStyle = C.ground0;
   for (let i = 4; i < 16; i += 4) { ui.ctx.fillRect(x + i * k, y, Math.max(1, k / 2), size); ui.ctx.fillRect(x, y + i * k, size, Math.max(1, k / 2)); }
-  const ores = chunkOres(c);
+  const ores = chunkOres(c, app.game.patches);
   ores.slice(0, 2).forEach((it, i) => ui.ctx.drawImage(itemIcon(it), x + (ores.length > 1 ? (2 + i * 6) * k : 4 * k), y + (ores.length > 1 ? (2 + i * 6) * k : 4 * k), 8 * k, 8 * k));
 }
 
-function chunkOres(c: ChunkDef): ItemId[] {
-  return [...new Set(PATCHES.filter((p) => p.x >= c.x && p.x < c.x + c.w && p.y >= c.y && p.y < c.y + c.h).map((p) => p.item))] as ItemId[];
+/** The ores a chunk's deposits hold (on this island: its exotic too, Act IV). */
+function chunkOres(c: ChunkDef, patches = PATCHES): ItemId[] {
+  return [...new Set(patches.filter((p) => p.x >= c.x && p.x < c.x + c.w && p.y >= c.y && p.y < c.y + c.h).map((p) => p.item))] as ItemId[];
 }
 
 /** Upgrades: the Bellows until it is bought, the land still for sale, the Factory annex. */
@@ -396,10 +398,11 @@ function upgradeItems(app: App): Item[] {
     });
   }
   for (const c of CHUNKS) {
-    if (!c.cost || g.s.land.includes(c.id)) continue;
+    // Pebble Isle's sky (Act IV) is not for sale
+    if (!c.cost || g.s.land.includes(c.id) || isSky(g, c.id)) continue;
     const ready = !c.requires || g.done(c.requires);
     const afford = g.s.coin.gte(c.cost);
-    const ores = chunkOres(c);
+    const ores = chunkOres(c, g.patches);
     out.push({
       id: 'wheel_item_land_' + c.id, name: c.name.replace(/^Chunk [A-Z] · /, '') || c.name,
       draw: (x, y, k) => { app.ui.ctx.globalAlpha = ready ? 1 : 0.45; landTile(app, c, x, y, k); app.ui.ctx.globalAlpha = 1; },

@@ -5,7 +5,8 @@
 // Once per save (by its seed, kept with the settings, never in the sim's state: a Reorganize clears
 // the sim's flags); queued, one at a time, never over a celebration, a page or the wheel; Options
 // turns them off. Triggers are the sim's events (src/engine/events.ts) and a look at the state
-// twice a second; nothing here writes the game.
+// twice a second; nothing here writes the game. Act IV adds one card an island (DESIGN.md §22),
+// the first time the town stands on it: its rule in two lines.
 import { C } from '../data/palette';
 import type { GameEvent } from '../engine/events';
 import { bigWidth, BIG_LINE_H } from '../ui/font';
@@ -16,6 +17,7 @@ import { drawPipShape, PIP_MEANING, type PipShape } from '../render/pips';
 import { routeCap, routeWant } from '../sim/systems/high';
 import { FACTORY } from '../data/land';
 import type { Game } from '../sim/Game';
+import { worldOf } from '../sim/systems/islands';
 import { button, tag, tagPad, tagSize, uiIcon, type UIconName } from './chrome';
 import { zones } from './tags';
 import { lessonsOn, lessonsSeen, saveLessonsSeen } from './settings';
@@ -24,7 +26,8 @@ import type { Rect } from '../ui/ui';
 import type { Layout } from './layout';
 import type { App } from './app';
 
-export type LessonId = 'starved' | 'slag' | 'fold' | 'factory' | 'trunk' | 'brownout' | 'reorganize' | 'route' | 'shortRoute';
+export type LessonId = 'starved' | 'slag' | 'fold' | 'factory' | 'trunk' | 'brownout' | 'reorganize' | 'route' | 'shortRoute'
+  | 'islePebble' | 'isleCinder' | 'isleRime' | 'isleOldworks';
 
 interface LessonDef {
   title: string;
@@ -32,6 +35,8 @@ interface LessonDef {
   lines: string[];
   /** the picture: a sprite sheet (drawn at 2x), or a UI icon */
   art?: string;
+  /** the sheet's frame to show (still), when not its animation */
+  frame?: number;
   icon?: UIconName;
   /** a status pip drawn on the picture's corner */
   pip?: PipShape;
@@ -74,7 +79,26 @@ export const LESSONS: Record<LessonId, LessonDef> = {
     title: 'A short route', art: 'skiff', pip: 'starved',
     lines: ['less than its group makes {pip:starved}', '+ skiff on its card', 'or move the two groups closer'],
   },
+  // Act IV: an island's rule, the first time the town stands on it
+  islePebble: {
+    title: 'Pebble Isle', art: 'ore_skyglass', frame: 0,
+    lines: ['half the land is sky: A, B and E', 'Miners dig {good:1.5×} · two fill three Smelters'],
+  },
+  isleCinder: {
+    title: 'Cinder Isle', art: 'vent',
+    lines: ['beside a vent: {good:no power, no fuel}', 'no belt beside one · feed face to face'],
+  },
+  isleRime: {
+    title: 'Rime', art: 'heater', pip: 'work',
+    lines: ['powered machines run at {bad:half} speed', 'warm: a Heater within 2, or 2 working neighbours'],
+  },
+  isleOldworks: {
+    title: 'The Old Works', art: 'rubble', frame: 5,
+    lines: ['{k:LMB} rubble: Clear it for coin', 'ruins repair for {good:a quarter} · pin one, Repair'],
+  },
 };
+
+const ISLE_LESSON: Record<string, LessonId> = { pebble: 'islePebble', cinder: 'isleCinder', rime: 'isleRime', oldworks: 'isleOldworks' };
 
 /** the order they are checked in (a queue keeps them in the order they happened) */
 const ORDER = Object.keys(LESSONS) as LessonId[];
@@ -158,6 +182,9 @@ function poll(app: App) {
   if (g.grids.some((gr) => gr.demand > 0 && gr.sat > 0 && gr.sat < 0.999)) teach(app, 'brownout');
   const d = g.s.district;
   if (d && d.routes.some((r) => r.skiffs > 0 && routeCap(g, 'district', r) < 0.9 * routeWant(g, 'district', r))) teach(app, 'shortRoute');
+  // Act IV: the island the town is on, seen from its Workshop
+  const isle = ISLE_LESSON[worldOf(g)];
+  if (isle && app.floor === 'workshop') teach(app, isle);
 }
 
 /** A card may show now: in play, no page, no wheel, no celebration, no offline run. */
@@ -225,7 +252,7 @@ function drawCard(app: App, L: Layout, id: LessonId) {
   if (d.art && hasArt(d.art)) {
     const s = sheet(d.art);
     const kk = Math.max(1, Math.min(2, Math.floor((ART - 2) / Math.max(s.w, s.h))));
-    ui.ctx.drawImage(s.frames[frameAt(s, ui.time)], ax + Math.floor((ART - s.w * kk) / 2), ay + Math.floor((ART - s.h * kk) / 2), s.w * kk, s.h * kk);
+    ui.ctx.drawImage(s.frames[d.frame ?? frameAt(s, ui.time)], ax + Math.floor((ART - s.w * kk) / 2), ay + Math.floor((ART - s.h * kk) / 2), s.w * kk, s.h * kk);
   } else uiIcon(ui, d.icon ?? 'star', ax + Math.floor((ART - 16) / 2), ay + Math.floor((ART - 16) / 2));
   if (d.pip) drawPipShape(ui.ctx, ax + ART - 8, ay + 3, d.pip, PIP_MEANING.find((p) => p[0] === d.pip)![2]);
   // the title and the lines

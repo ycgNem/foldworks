@@ -23,6 +23,7 @@ import { nominal, feeders, entName, endsAtSink, outLinks, lineOf } from '../sim/
 import { shares } from '../sim/systems/stats';
 import { powerFactor, poleReach, drawKw } from '../sim/systems/power';
 import { modeSpeed, baseSpeed, veinBoost, byEvery } from '../sim/systems/machines';
+import { islandDef, islandMiners, isWarm, heaterLit, repairPrice, softened, workingNeighbours, coldFactor } from '../sim/systems/islands';
 import { fname, feedsDock, mainItem, chuteCap, BYPRODUCTS } from '../sim/systems/modules';
 import { megaFrac, mainOutput } from '../render/factory';
 import { ITEM_IDS } from '../data/items';
@@ -62,6 +63,8 @@ export interface Report {
   modeList?: Mode[];
   /** a Chute Mouth: the items it can be set to, as buttons under the rows (pinned) */
   picker?: { e: Ent; items: ItemId[] };
+  /** a ruin of the Old Works: its Repair button under the rows (pinned; Act IV, DESIGN.md §22) */
+  repair?: Ent;
 }
 
 const rich = (s: string, opt = false): Row => ({ t: 'rich', s, opt });
@@ -141,9 +144,63 @@ function powerRows(app: App, e: Ent): { rows: Row[]; none: 'pole' | 'fuel' | nul
   return { rows: out, none: null, sat: gr.sat };
 }
 
+/** The island's rule on this machine (DESIGN.md §22), as rows: on Cinder a vent beside it (no power,
+ * no fuel), on Rime cold or warm and why. `cause` rows are the hover's; the rest pinned. */
+function isleRows(app: App, e: Ent): { cause: Row[]; more: Row[] } {
+  const g = app.game;
+  const d = islandDef(g);
+  const out = { cause: [] as Row[], more: [] as Row[] };
+  if (g.vented.has(e.id)) out.cause.push(rich(isPower(e.kind) ? '{good:vented}: burns no fuel · a vent beside it' : '{good:vented}: no power, no fuel'));
+  if (d.cold && powered(e.kind) && !e.ruined && !g.vented.has(e.id)) {
+    const reach = RULES.heaterReach.value;
+    const need = softened(g, 'rime') ? 1 : RULES.rimeTouch.value;
+    const two = need === 1 ? 'one working neighbour' : `${need === 2 ? 'two' : need} working neighbours`;
+    if (e.cold || !isWarm(g, e)) out.cause.push(rich(`{warn:cold: ${RULES.rimeCold.value}x} · a Heater within ${reach} tiles or ${two}`));
+    else {
+      const heater = g.heaters.some((h) => heaterLit(h) && Math.max(Math.max(h.x - (e.x + e.w - 1), e.x - h.x, 0), Math.max(h.y - (e.y + e.h - 1), e.y - h.y, 0)) <= reach);
+      const n = workingNeighbours(g, e);
+      out.more.push(rich(`{good:warm} · ${heater ? 'a lit Heater in reach' : `${n} working neighbour${n === 1 ? '' : 's'}`}`));
+    }
+  }
+  return out;
+}
+
+/** A ruin of the Old Works: what it is, what repairing it costs, and (pinned) the Repair button. */
+function ruinReport(app: App, e: Ent): Report {
+  const g = app.game;
+  const r = e.recipe ? RECIPE[e.recipe] : null;
+  const main = r?.outputs[0]?.item ?? null;
+  const price = repairPrice(g, e);
+  const rows: Row[] = [rich('{chip:bad:RUINED} takes nothing · makes nothing')];
+  rows.push(rich(`{warn:repair} ${price ? `{coin:${price.toLocaleString('en-US')}}` : '{good:free}'} · a quarter of its price`));
+  const more: Row[] = [];
+  if (r) more.push(rich(`set for ${r.inputs.map((i) => icon(i.item)).join(' ')}${r.inputs.length ? ' → ' : ''}${icon(main)} · no research needed`));
+  more.push(rich('{soft:removed: no refund}'));
+  return { title: `Ruined ${BUILD[e.kind].name}`, item: main, rows, more, repair: e, verbs: '{k:LMB} pin  {k:X} remove' };
+}
+
+/** A Heater (Rime, DESIGN.md §22): whether it warms, its coal, what is in its reach. */
+function heaterReport(app: App, e: Ent): Report {
+  const g = app.game;
+  const rows: Row[] = [];
+  const more: Row[] = [];
+  const reach = RULES.heaterReach.value;
+  const near = g.machines.filter((m) => powered(m.kind) && !m.ruined && Math.max(Math.max(e.x - (m.x + m.w - 1), m.x - e.x, 0), Math.max(e.y - (m.y + m.h - 1), m.y - e.y, 0)) <= reach);
+  const coal = e.inBuf.coal ?? 0;
+  if (!islandDef(g).cold) rows.push(rich('{chip:soft:STANDBY} nothing is cold here: Heaters warm on Rime'));
+  else if (e.state === 'work') rows.push(rich(`{chip:good:WARMING} ${near.length} machine${near.length === 1 ? '' : 's'} within ${reach}`));
+  else if (!heaterLit(e)) rows.push(rich('{chip:warn:NO COAL} belt {i:coal} into it'));
+  else rows.push(rich(`{chip:soft:STANDBY} ${near.length ? 'nothing in reach is running' : `no powered machine within ${reach}`}`));
+  rows.push(rich(`fuel ${coal > 0 || e.prog > 0 ? coal : `{warn:${coal}}`} {i:coal} waiting${e.prog > 0 ? ` · ${(e.prog / TICK_RATE).toFixed(1)}s burning` : ''}`));
+  more.push(rich(`1 {i:coal} per ${BUILD.heater.fuel?.seconds ?? 10}s while a machine in reach runs`));
+  more.push(rich(`reach ${reach} tiles · ${reach * 2 + 1}x${reach * 2 + 1} · warms every powered machine in it`));
+  return { title: 'Heater', item: 'coal', rows, more, verbs: '{k:LMB} pin  {k:X} remove' };
+}
+
 /** A Workshop machine's report. */
 function machineReport(app: App, e: Ent): Report {
   const g = app.game;
+  if (e.ruined) return ruinReport(app, e);
   const r = e.recipe ? RECIPE[e.recipe] : null;
   const rows: Row[] = [];
   const more: Row[] = [];
@@ -167,7 +224,8 @@ function machineReport(app: App, e: Ent): Report {
   const frontless = e.kind !== 'miner' && !g.entAt(e.x + DX[e.rot], e.y + DY[e.rot]);
   const left = e.state === 'work' && (unfed || frontless) ? runLeft(app, e, r, unfed, frontless) : null;
   const share = (v: number) => (sh.n && Math.round(v * 100) > 0 ? ` · ${pct(v)}` : '');
-  const pw = powerRows(app, e);
+  const pw = g.vented.has(e.id) ? { rows: [] as Row[], none: null, sat: 1 } : powerRows(app, e);
+  const isl = isleRows(app, e);
   // ---- the status chip and its cause
   if (e.paused) rows.push(rich('{chip:soft:STOPPED} by you · makes nothing'));
   else if (e.state === 'work' && left) {
@@ -182,8 +240,13 @@ function machineReport(app: App, e: Ent): Report {
     if (e.why && e.why === e.byItem) rows.push(rich(`{chip:bad:CHOKED} ${icon(e.why)} has no way out${share(sh.byBlocked)}`));
     else rows.push(rich(`{chip:bad:${frontless ? 'BLOCKED' : 'FULL'}} ${icon(e.why ?? main)} ${frontless ? 'front leads nowhere' : 'front takes no more'}${share(sh.blocked)}`));
   } else rows.push(rich('{chip:soft:IDLE}'));
-  const pf = Math.min(1, powerFactor(g, e));
-  if (pf < 0.999 && e.why !== 'power') rows.push(rich(`{chip:warn:BROWNOUT ${Math.round(pf * 100)}%} its speed`));
+  // Rime: a cold machine runs at half its speed (counted in its rate below)
+  const pf = Math.min(1, powerFactor(g, e)) * (e.cold ? coldFactor(e) : 1);
+  const pfPower = Math.min(1, powerFactor(g, e));
+  if (pfPower < 0.999 && e.why !== 'power') rows.push(rich(`{chip:warn:BROWNOUT ${Math.round(pfPower * 100)}%} its speed`));
+  // ---- the island's rule on it
+  rows.push(...isl.cause);
+  more.push(...isl.more);
   // ---- Overdrive
   const odOn = g.done('overdrive') && !firstMin;
   const od = e.od ?? 0, cool = e.cool ?? 0;
@@ -192,7 +255,8 @@ function machineReport(app: App, e: Ent): Report {
   // ---- the recipe, the rate now, a bar against its rate when busy
   if (nom.outs.length) {
     // Milestone 13: at its recipe and its mode (Tuning's speeds), and what it makes now
-    const busy = nom.outs[0].perMin * (powered(e.kind) ? modeSpeed(e) : 1);
+    // Pebble Isle's Miners dig 1.5x (Act IV)
+    const busy = nom.outs[0].perMin * (powered(e.kind) ? modeSpeed(e) : 1) * (e.kind === 'miner' ? islandMiners(g) : 1);
     const now = busy * sh.work * pf;
     const ins = nom.ins.map((i) => icon(i.item)).join(' ');
     const outs = nom.outs.map((o) => icon(o.item)).join(' ');
@@ -440,6 +504,7 @@ function powerReport(app: App, e: Ent): Report {
   }
   if (BUILD[e.kind].power) more.unshift(rich(`{soft:up to} {power:${BUILD[e.kind].power} kW}`));
   else if (sub) more.unshift(rich(`{soft:${sub}}`));
+  if (g.vented.has(e.id)) rows.splice(1, 0, rich('{good:vented}: burns no fuel · a vent beside it'));
   return { title: entName(g, e), uicon: 'power', rows, more, verbs: '{k:LMB} pin  {k:R} turn  {k:X} remove' };
 }
 
@@ -583,6 +648,7 @@ interface Laid { rep: Report; rows: { row: Row; h: number }[]; cw: number; w: nu
 const ROW_GAP = 1;
 const BAR_H = 9;
 const MODES_H = 15;
+const REPAIR_H = 17;
 const MIN_CW = 116;
 /** the brief hover's narrowest content and most rows */
 const BRIEF_CW = 64;
@@ -618,7 +684,7 @@ function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: 
   const natural = Math.max(...rows.map((r) => (r.t === 'rich' ? richWidth(r.s) : r.t === 'bar' ? 150 : 0)), rep.verbs ? richWidth(rep.verbs) : 0);
   const cw = Math.min(maxCw, Math.max(brief ? BRIEF_CW : MIN_CW, titleW, natural));
   const modesH = full && rep.modes ? modeGrid(rep.modeList?.length ?? 4).rows * MODES_H + ROW_GAP : 0;
-  const pickH = full && rep.picker ? pickGrid(rep.picker.items.length, cw).h + ROW_GAP : 0;
+  const pickH = (full && rep.picker ? pickGrid(rep.picker.items.length, cw).h + ROW_GAP : 0) + (full && rep.repair ? REPAIR_H + ROW_GAP : 0);
   const verbsH = rep.verbs ? layoutRich(rep.verbs, cw).h + 4 : 0;
   const measure = (rs: Row[]) => {
     const hs = rs.map((row) => ({ row, h: rowH(row, cw) }));
@@ -682,6 +748,16 @@ function drawLaid(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: nu
   if (L.pickH && rep.picker) {
     drawPicker(app, rep.picker.e, rep.picker.items, r.x, yy, L.cw);
     yy += L.pickH;
+  }
+  if (L.pickH && rep.repair) {
+    // the Old Works: a labelled Repair button (the owner: core actions get a visible button)
+    const e = rep.repair;
+    const p = repairPrice(app.game, e);
+    const afford = app.game.s.coin.gte(p);
+    const label = p ? `Repair · {coin:${p.toLocaleString('en-US')}}` : 'Repair · free';
+    const tip = [{ text: `{big:Repair}` }, { text: `${p ? `{coin:${p.toLocaleString('en-US')}}` : 'free'} · a quarter of a new one` }, { text: afford ? '{k:LMB} it runs as it was set' : '{bad:not enough coin yet}' }];
+    if (button(ui, 'repairRuin', r.x, yy, L.cw, REPAIR_H - 1, label, { gold: afford, tip })) app.act({ k: 'repair', x: e.x, y: e.y });
+    yy += REPAIR_H + ROW_GAP;
   }
   if (rep.verbs) {
     rule(ui, r.x, yy, L.cw);
@@ -773,6 +849,7 @@ export function place(app: App, near: Rect, w: number, h: number, also: Rect[] =
 /** The report for a Workshop entity (machines and power buildings), or null. */
 export function entReport(app: App, e: Ent): Report | null {
   if (e.kind === 'chuteMouth') return chuteMouthReport(app, e);
+  if (e.kind === 'heater') return heaterReport(app, e);
   if (isPower(e.kind)) return powerReport(app, e);
   if (isMachine(e.kind)) return machineReport(app, e);
   return null;
