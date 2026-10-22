@@ -58,6 +58,10 @@ import { ORDER, type CustomerId, type OrderDef } from '../data/orders';
 import type { FEnt } from '../sim/world';
 import { claimRefusal, claimLoad, claimsHeld, claimsUsed } from '../sim/systems/claims';
 import { DX, DY } from '../sim/world';
+// Act III (DESIGN.md §21): the District's goals
+import { HIGH } from '../data/floors';
+import { MEGAS } from '../data/megaprojects';
+import { hent, megaStageOf, routeCap, routeWant } from '../sim/systems/high';
 
 /** Who says a goal: the corner shows their portrait and the bubble's tail points at them. */
 export type Speaker = 'bramble' | 'unit7' | 'voltaire' | 'committee' | 'inspector';
@@ -241,6 +245,9 @@ function act2Goal(g: Game): Goal | null {
     if (st.stage > 1) return say('committee', fed ? '"the drill." "feed it." "it\'s hungry. like us."' : '"psst." "the bay." "trunk the bits in. quietly."', o);
     return say('bramble', fed ? 'Feed the Great Drill! Bits, steel, more bits!' : 'Trunk Drill Bits and steel into the Megaproject Bay!', o);
   }
+  // Act III (DESIGN.md §21): the District, its routes and the Floating City
+  const a3 = act3Goal(g);
+  if (a3) return a3;
   // the Drill runs: the act's last steps are the customers' orders
   if (!s.orders.active) {
     const o = offeredOrders(g)[0];
@@ -248,6 +255,52 @@ function act2Goal(g: Game): Goal | null {
   } else {
     const d = ORDER[s.orders.active];
     return say(d.customer, WAITING[d.customer](d.name, d.at === 'factory'), { ...orderChips(g, d, true), ui: 'orders' });
+  }
+  // nothing on order: the next Act III node on the road to the Floating City
+  if (s.mega.stage >= 3 && s.district) return researchToward(g, 'floatingCity');
+  return null;
+}
+
+/** The District's chain (DESIGN.md §21): Zoning, the first group up, the first route, something
+ * flown to the District Dock, a route short of skiffs, the Floating City's stages at the Bay.
+ * Null when none of it is the next thing (orders come next). */
+function act3Goal(g: Game): Goal | null {
+  const s = g.s;
+  if (s.mega.stage < 3) return null;
+  const st = s.district;
+  if (!st) return researchToward(g, 'zoning');
+  const skiff = `a skiff {coin:${big(HIGH.district.skiffCost)}}`;
+  const mods = st.ents.filter((e) => e.kind === 'module');
+  if (!mods.length) {
+    if (!s.designs.some((d) => d.depth === 2 && d.spare > 0)) return say('inspector', 'Only nested groups go up there. Fold one on the Factory. {k:F}', { chips: ['{u:fold} depth 2 → the District'], ui: 'factory' });
+    return say('bramble', 'The District is open! Put a group up there, from its tool strip.', { chips: ['{u:fold} depth-2 groups', '{k:Tab} the lift'], ui: 'district' });
+  }
+  if (!st.routes.length) return say('bramble', 'Now join them by skiff! Route, a source, then where it goes.', { chips: [skiff, `${HIGH.district.speed} tiles/s · ${HIGH.district.load} a trip`], ui: 'route' });
+  const toDock = st.routes.some((r) => hent(g, 'district', r.to)?.kind === 'fdock');
+  if (!toDock) return say('bramble', 'Fly something to the District Dock! It pays up here too.', { chips: [skiff], ui: 'route' });
+  // a route short of skiffs: the act's bottleneck (rule 5: where a group stands is the decision)
+  const short = st.routes.find((r) => { const w = routeWant(g, 'district', r); return w > 1e-9 && routeCap(g, 'district', r) < w * 0.9; });
+  if (short) {
+    const w = routeWant(g, 'district', short), c = routeCap(g, 'district', short);
+    return say('bramble', 'A route is short of skiffs! Click its orange line, then + skiff.', { bar: frac(c, w), chips: [`{i:${short.item}} ${c.toFixed(1)}/s of ${w.toFixed(1)}/s`, skiff], ui: 'district' });
+  }
+  // the Floating City at the District Bay
+  const city = g.done('floatingCity') ? megaStageOf(g, 'city') : null;
+  if (city) {
+    const bay = st.ents.find((e) => e.kind === 'fbay');
+    if (!bay) return say('bramble', "Clear the District's south-west corner! The Bay lands there.", { chips: [`{u:mega} tiles ${HIGH.district.bay.x}-${HIGH.district.bay.x + 1}, ${HIGH.district.bay.y}-${HIGH.district.bay.y + 1}`], ui: 'district' });
+    const prog = s.megas?.city?.progress ?? {};
+    let have = 0, need = 0;
+    const chips = (Object.entries(city.wants) as [ItemId, number][]).map(([k, n]) => {
+      const got = Math.min(n, prog[k]?.toNumber() ?? 0);
+      have += got;
+      need += n;
+      return `{i:${k}} ${fmt(got)}/${fmt(n)}`;
+    });
+    const fed = st.routes.some((r) => r.to === bay.id);
+    const o = { bar: frac(have, need), chips, ui: 'district' };
+    if (city.stage > 1) return say('bramble', fed ? 'The Spires! Rotors, sandwiches, glass, up they go!' : 'Fly rotors, sandwiches and glass to the Bay for the Spires!', o);
+    return say('bramble', fed ? `${MEGAS.city.name}! Keep the rotors flying in!` : 'Fly Lift Rotors and concrete to the District Bay! A whole city!', o);
   }
   return null;
 }
@@ -388,7 +441,7 @@ export function nextGoal(g: Game): Goal | null {
     const box = prules(g).foldMax;
     if (!s.designs.length) return say('inspector', 'Folding is ready. Box a line that runs well. {k:F}', { chips: [`{u:fold} up to ${box}×${box}`], ui: 'fold' });
     const mods = s.factory.ents.filter((e) => e.kind === 'module');
-    if (!mods.length) return say('bramble', 'Your first module! Put it on the Factory floor. {k:Tab}', { chips: ['gold front → a trunk to the Factory Dock'], ui: 'factory' });
+    if (!mods.length && !s.district?.ents.some((e) => e.kind === 'module')) return say('bramble', 'Your first module! Put it on the Factory floor. {k:Tab}', { chips: ['gold front → a trunk to the Factory Dock'], ui: 'factory' });
     const alert = act2Alerts(g);
     const after = g.flag('sliceEnd');
     // before the slice end an alert beats the chain; after it, the Act II chain leads and the
