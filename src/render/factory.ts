@@ -20,6 +20,7 @@ import { onPaper } from '../ui/theme';
 import { TICK_RATE } from '../engine/time';
 import { sheet, drawRot, frameAt, itemIcon, hasArt } from './sprites';
 import { TILE } from './ground';
+import { drawPip, type PipShape } from './pips';
 import { art, artSig, canvas, hh, named } from './skyart';
 
 const PIP: Record<string, string> = { work: C.pipGreen, starved: C.pipYellow, blocked: C.pipRed, idle: C.pipGrey };
@@ -339,7 +340,7 @@ export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number
     // Overdrive (DESIGN.md §18): running hot, then a cooling arc
     if ((e.od ?? 0) > 0) moduleHot(ctx, e, time);
     else if ((e.cool ?? 0) > 0) coolArc(ctx, x, y, e.cool ?? 0);
-    pip(ctx, x, y, PIP[e.state], e.state === 'blocked', time);
+    pip(ctx, x, y, PIP[e.state], e.state === 'blocked', time, e.paused ? 'paused' : undefined);
   }
   fauditBox(ctx, g, time);
   overlays(ctx, g, ov, time);
@@ -519,14 +520,8 @@ function trunkItems(ctx: CanvasRenderingContext2D, g: Game, t: FEnt, time: numbe
   }
 }
 
-function pip(ctx: CanvasRenderingContext2D, x: number, y: number, col: string, blink: boolean, time: number) {
-  if (blink && Math.floor(time * 3) % 2) col = C.rust;
-  ctx.fillStyle = C.ink;
-  ctx.fillRect(x + 11, y, 5, 5);
-  ctx.fillStyle = col;
-  ctx.fillRect(x + 12, y + 1, 3, 3);
-  ctx.fillStyle = rgba(C.bone, 0.6);
-  ctx.fillRect(x + 12, y + 1, 1, 1);
+function pip(ctx: CanvasRenderingContext2D, x: number, y: number, col: string, blink: boolean, time: number, shape?: PipShape) {
+  drawPip(ctx, x, y, col, blink, time, shape);
 }
 
 function outline(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, col: string) {

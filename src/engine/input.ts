@@ -5,6 +5,8 @@ export const ACTIONS = [
   'panUp', 'panDown', 'panLeft', 'panRight', 'zoomIn', 'zoomOut',
   'slot1', 'slot2', 'slot3', 'slot4', 'slot5', 'slot6', 'slot7', 'slot8', 'slot9',
   'wheel', 'rotate', 'remove', 'fold', 'floor', 'research', 'orders', 'modules', 'cancel', 'pause', 'help', 'mute', 'hud', 'flow', 'debug',
+  // Milestone 13: "where am I stuck?"
+  'stuck',
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -19,7 +21,7 @@ export const ACTION_LABELS: Record<Action, string> = {
   slot6: 'Wheel pick 6', slot7: 'Wheel pick 7', slot8: 'Wheel pick 8', slot9: 'Wheel pick 9',
   wheel: 'Workbench Wheel', rotate: 'Rotate', remove: 'Remove tool', fold: 'Fold tool', floor: 'Switch floor', research: 'Research',
   orders: 'Orders', modules: 'Modules', cancel: 'Cancel', pause: 'Pause', help: 'Options and keys', mute: 'Sound on or off',
-  hud: 'HUD on/off', flow: 'Flow overlay', debug: 'Debug readout',
+  hud: 'HUD on/off', flow: 'Flow overlay', debug: 'Debug readout', stuck: 'Where am I stuck?',
 };
 
 export const DEFAULT_BINDS: Record<Action, string[]> = {
@@ -30,7 +32,81 @@ export const DEFAULT_BINDS: Record<Action, string[]> = {
   slot6: ['Digit6'], slot7: ['Digit7'], slot8: ['Digit8'], slot9: ['Digit9'],
   wheel: ['KeyQ', 'Space'], rotate: ['KeyR'], remove: ['KeyX'], fold: ['KeyF'], floor: ['Tab'], research: ['KeyT'], orders: ['KeyO'], modules: ['KeyI'],
   cancel: ['Escape'], pause: ['KeyP'], help: ['Slash', 'F1'], mute: ['KeyM'], hud: ['KeyH'], flow: ['KeyL'], debug: ['Backquote'],
+  stuck: ['KeyG'],
 };
+
+// ---- rebinding (Milestone 13): the Keys page moves an action's key by click-then-press
+
+export type Binds = Record<Action, string[]>;
+
+/** Key codes a player may not bind (the browser's or the OS's own, or nothing at all). */
+const UNBINDABLE = new Set(['', 'Unidentified', 'MetaLeft', 'MetaRight', 'ContextMenu', 'F5', 'F11', 'F12']);
+export const bindable = (code: string) => typeof code === 'string' && code.length > 0 && code.length <= 24 && /^[A-Za-z0-9]+$/.test(code) && !UNBINDABLE.has(code);
+
+/** A copy of the default bindings. */
+export function defaultBinds(): Binds {
+  return structuredClone(DEFAULT_BINDS);
+}
+
+/** Stored bindings made safe: every action present (a missing or damaged one takes its defaults,
+ * less any key another action already holds), no key on two actions, at most three keys an action.
+ * A new action added since the save gets its default key unless the player moved another action
+ * onto it. */
+export function cleanBinds(raw: unknown): Binds {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const out = {} as Binds;
+  const taken = new Set<string>();
+  const stored = (a: Action) => (Array.isArray(o[a]) ? (o[a] as unknown[]).filter((c): c is string => typeof c === 'string' && bindable(c)) : null);
+  // the stored ones first, in action order, so they keep their keys
+  for (const a of ACTIONS) {
+    const s = stored(a);
+    if (!s) continue;
+    out[a] = [...new Set(s)].filter((c) => !taken.has(c)).slice(0, 3);
+    for (const c of out[a]) taken.add(c);
+  }
+  for (const a of ACTIONS) {
+    if (out[a]) continue;
+    out[a] = DEFAULT_BINDS[a].filter((c) => !taken.has(c));
+    for (const c of out[a]) taken.add(c);
+  }
+  return out;
+}
+
+/** Bind `code` to `action` in place of its key `old` (null: as another key, or in place of its
+ * second). The action that held `code` takes `old` in its place (a swap), so a key never does two
+ * things and an action never loses its only key to a swap. Returns the new bindings and the
+ * action the key came from, if any. */
+export function rebind(b: Binds, action: Action, old: string | null, code: string): { binds: Binds; from: Action | null } {
+  const out = structuredClone(b);
+  const keys = out[action];
+  if (!bindable(code) || code === old || keys.includes(code)) return { binds: out, from: null };
+  const from = ACTIONS.find((a) => a !== action && out[a].includes(code)) ?? null;
+  const at = old !== null ? keys.indexOf(old) : -1;
+  if (at >= 0) keys[at] = code;
+  else if (keys.length < 2) keys.push(code);
+  else keys[1] = code;
+  if (from) {
+    const fk = out[from];
+    const j = fk.indexOf(code);
+    if (at >= 0 && old !== null) fk[j] = old;
+    else fk.splice(j, 1);
+  }
+  return { binds: out, from };
+}
+
+/** Which default key labels now draw as other keys: for each action whose key moved, its default
+ * key's label -> the label of the key in that place now. Keycaps in every string follow it. */
+export function keyAliases(b: Binds): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const a of ACTIONS) {
+    DEFAULT_BINDS[a].forEach((code, i) => {
+      const now = b[a][i] ?? b[a][0];
+      if (now && now !== code) m.set(keyLabel(code), keyLabel(now));
+      else if (!now) m.set(keyLabel(code), '?');
+    });
+  }
+  return m;
+}
 
 export function keyLabel(code: string): string {
   if (code.startsWith('Key')) return code.slice(3);
@@ -39,8 +115,14 @@ export function keyLabel(code: string): string {
     ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', ShiftLeft: 'LShift',
     ShiftRight: 'RShift', ControlLeft: 'LCtrl', Escape: 'Esc', Backquote: '`', Equal: '=', Minus: '-',
     Space: 'Space', Tab: 'Tab', Enter: 'Enter', NumpadAdd: 'Num+', NumpadSubtract: 'Num-', Backspace: 'Bksp', Slash: '/',
+    // Milestone 13 (rebinding): every key a player may pick has a short name the keycap font has
+    ControlRight: 'RCtrl', AltLeft: 'Alt', AltRight: 'AltGr', CapsLock: 'Caps', Delete: 'Del', Insert: 'Ins', Home: 'Home', End: 'End',
+    PageUp: 'PgUp', PageDown: 'PgDn', Comma: 'Comma', Period: 'Dot', Semicolon: 'Semi', Quote: 'Quote', BracketLeft: 'LBrkt',
+    BracketRight: 'RBrkt', Backslash: 'BkSl', NumpadMultiply: 'Num*', NumpadDivide: 'Num/', NumpadEnter: 'NumEnt', NumpadDecimal: 'Num.',
   };
-  return map[code] ?? code;
+  if (map[code]) return map[code];
+  if (code.startsWith('Numpad')) return 'Num' + code.slice(6);
+  return code;
 }
 
 export class Input {
@@ -118,6 +200,12 @@ export class Input {
       this.mouse.wheel += Math.sign(e.deltaY);
       e.preventDefault();
     }, { passive: false });
+  }
+
+  /** Use these bindings (the Keys page's, as stored with the settings: src/app/settings.ts). */
+  setBinds(b: Binds) {
+    this.binds = b;
+    this.pressed.clear();
   }
 
   isDown(a: Action): boolean {

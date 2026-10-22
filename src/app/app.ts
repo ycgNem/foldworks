@@ -54,6 +54,12 @@ import { saveScenario } from './scenarios';
 // Milestone 12 (sound and juice): the ambience mixer, and the sound and motion settings
 import { ambience } from './ambience';
 import { initSound } from './soundopts';
+// Milestone 13 (onboarding, UX and accessibility): keys, UI scale, lesson cards, "where am I stuck?"
+import { initKeys, keysDebug } from './keys';
+import { uiScaleFor } from './settings';
+import { lessonEvents, lessonDebug } from './lessons';
+import { whereStuck, findStuck } from './stuck';
+import { setUiScale } from './access';
 
 export type Mode =
   | { k: 'idle' }
@@ -168,6 +174,7 @@ export class App {
     window.addEventListener('pagehide', () => { if (this.screen === 'play') this.save(); });
     loadSettings();
     initSound(this); // Milestone 12: volumes, mute and reduced motion, kept
+    initKeys(this); // Milestone 13: the Keys page's bindings, kept
     this.resize();
     const r = this.readSlot();
     this.hasSave = !!r.data;
@@ -441,6 +448,7 @@ export class App {
     const evs = this.game.events.drain();
     if (!evs.length) return;
     this.renderer.consume(evs, this.game);
+    lessonEvents(this, evs); // Milestone 13: lesson cards on firsts
     const a = this.audio;
     for (const e of evs) {
       switch (e.type) {
@@ -702,6 +710,7 @@ export class App {
     if (inp.wasPressed('help')) this.togglePanel('options');
     if (inp.wasPressed('flow')) this.flowOverlay = !this.flowOverlay;
     if (inp.wasPressed('mute')) { this.muted = !this.muted; this.audio.setMuted(this.muted); }
+    if (inp.wasPressed('stuck') && !this.panel) whereStuck(this); // Milestone 13
     if (inp.wasPressed('cancel')) {
       if (this.panel) this.panel = null;
       else if (this.floor === 'district' && districtCancel()) this.audio.sfx('close');
@@ -1177,7 +1186,8 @@ export class App {
     this.canvas.width = Math.floor(window.innerWidth * dpr);
     this.canvas.height = Math.floor(window.innerHeight * dpr);
     this.ctx.imageSmoothingEnabled = false;
-    this.uiScale = Math.max(1, Math.floor(Math.min(this.canvas.width / 480, this.canvas.height / 300)));
+    // Milestone 13: Auto (the largest whole scale with 480x300 UI px) or the Options page's pick
+    this.uiScale = uiScaleFor(this.canvas.width, this.canvas.height);
     this.layout = layout(Math.floor(this.canvas.width / this.uiScale), Math.floor(this.canvas.height / this.uiScale));
     const c = this.layout.center, k = this.uiScale;
     this.renderer.resize(this.canvas.width, this.canvas.height, { x: c.x * k, y: c.y * k, w: c.w * k, h: c.h * k });
@@ -1232,4 +1242,6 @@ export class App {
   get hasSaveSlot() { return this.hasSave; }
   /** the District's UI state (src/app/district.ts DS): e2e opens a route card or the item list */
   get districtUI() { return DS; }
+  /** Milestone 13, for e2e: lesson cards, the stuck-finder, the UI scale */
+  get onboarding() { return { lessons: lessonDebug, keys: keysDebug, whereStuck: () => whereStuck(this), findStuck: () => findStuck(this.game, this.floor), setUiScale: (v: number) => setUiScale(this, v) }; }
 }

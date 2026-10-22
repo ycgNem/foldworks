@@ -1911,3 +1911,69 @@ The idle-critic's UI findings on the District, fixed in `src/app/district.ts`, `
   while it is open.
 - **Depth-3 District folds are on the strip's groups list** after the groups, marked with a teal
   rim and a "3" tab, and go into the hand on the District (`app.pickModule`).
+
+## Milestone 13: onboarding, UX and accessibility (2026-10-22)
+
+Built in a worktree off `m9-worlds` beside Act IV and the District UI fixes: app and render code
+only (no sim, data or save change; no number on CLAUDE.md's ask-before list moved: the tile size,
+palette, tick rate, currencies, floors, resets and milestone order stand). Pillars: 3 (a bottleneck
+is never hidden: the stuck-finder and the pips' shapes) and DESIGN.md §17 (readability).
+
+- **Lesson cards are the app's, not the sim's.** The sim's one-time flags are cleared by a
+  Reorganize (only `trophy:`, `ordersSeen`, `factorySeen` are kept), and `src/sim` is not this
+  milestone's to change, so what a save has been taught is kept with the settings by the save's
+  seed (the last eight saves). A save that predates the cards is read for what it has already done
+  (`pastLessons`: a Reorganize behind it, designs, poles, routes), so nobody 20 hours in is taught a
+  belt. Nine lessons, the ones the roadmap and `docs/endgame.md` name (a Relocate's waits for Act
+  IV's events). Triggers: the sim's events (`firstSlagJam`, `firstFold`, `reorganize`,
+  `firstRoute`) and a look at the state twice a second (a machine starved three seconds, the
+  Factory on screen, a trunk, a grid between 0 and 100%, a route under 90% of its want).
+- **A card is pinned at the top centre**, under anything the HUD holds there (the District's tool
+  strip), its rect a zone the floor's tags keep off. It never shows over a celebration, a page, the
+  wheel or an offline run, and is put away (not lost) while one comes. Not modal: the game and every
+  click go on around it. One at a time, 1.5 s apart. Options → Lesson cards turns them off.
+- **"Where am I stuck?" is a labelled button, `Stuck?`, beside the trouble bell** (the owner's
+  "visible, not hidden"), and the `G` key. The bell cycles every problem worst-first; the button
+  names one: every stopped thing on the floor on screen is traced to its cause (a starved machine
+  to a stopped feeder, a blocked one to a stopped or slower machine after it; slag with no way out,
+  a front leading nowhere, no Pole, no fuel; on the Factory along trunk routes; on the District
+  along skiff routes), each cause is charged the coin a minute lost at everything traced to it, and
+  a brownout is charged what it slows. The dearest is the answer: the camera pans there, its report
+  is pinned, and **the Inspector** (the game's line-checker) says in one line what to do, with the
+  coin a minute it costs. Nothing stuck: "Nothing stuck on this floor. Next:" and the goal.
+- **Rates**: the brief hover keeps its one rate row, now "24/min of 30" (what it makes now, of
+  what it makes at its recipe and mode, Tuning's speeds included); the pinned report's bar lost its
+  "of 30/min" note (the row says it). The wheel's item card gets one rate chip (the first known
+  recipe at the building's speed, or a power building's kW). Research and orders say how long the
+  rest takes **at what is delivered now** (the Purse's Shipping rates: what reaches a Dock or a
+  Hopper), per item in the hover and in total under the node; "not arriving yet" when an item is
+  not.
+- **Rebinding is click a key, press its new key, on the drawn keyboard** (the Keys page moved from
+  `screens.ts` to `src/app/keys.ts`, registered as an extra screen). The action that held the new
+  key takes the old one (a swap), so no key does two things and nothing is left unbound; Esc keeps
+  a key where it was; Reset keys puts them all back. Stored in `foldworks_settings` and cleaned on
+  load (`cleanBinds`: at most three keys an action, no key twice, a new action keeps its default
+  unless the player moved another onto it). **Every keycap in every string follows the bindings**:
+  `{k:R}` names the default key of an action and draws as the key bound now (`setKeyAliases`), so
+  no file had to change its strings; a keycap meant literally is `{k:=R}` (the Keys page, and the
+  Options page's keys read from the bindings).
+- **UI scale**: Auto stays the largest whole scale with 480x300 UI px (unchanged at every size);
+  a picked scale may go up to the largest leaving 480x270 UI px, the narrowest the HUD is checked
+  at (4x at 1920x1080, where Auto is 3x; at 1024x640 and 1280x720 Auto's 2x is already the most),
+  or down to 1x. The floor's zoom is apart from it.
+- **Pips have shapes** (STYLE.md, Palette): a round dot, a funnel, a square, two bars, a bolt, a
+  ring, 5x5 in an ink outline at the tile's top-right, two pixels wider and taller than the old 3x3
+  square (the corner the art keeps calm took the old one; the shape needs the room). One drawer
+  (`src/render/pips.ts`) for the Workshop, the Factory, the District and the Chute Mouths: the
+  District renderer's own `pip()` now calls it (a three-line change in `src/render/district.ts`,
+  kept small because the District UI is being fixed elsewhere). Status chips (WORKING, STARVED,
+  BLOCKED, NO POWER, IDLE, STOPPED and their kin) carry the same shape, in `rich.ts`, so every
+  report on every floor has it without its strings changing.
+
+### Flagged as derivative (owner to decide)
+- **Tip cards on first events** are the genre's tutorials (Factorio's tips and tricks, Oxygen Not
+  Included's notifications). Ours are the game's own lines and pictures, one card a first.
+- **A bottleneck finder** has cousins in Factorio's alerts and rate-calculator mods; ours is one
+  button that names one cause by the coin it costs, in the Inspector's voice.
+- **Status icons with shapes** are the accessibility convention (Factorio's entity status icons
+  among many). Generic.

@@ -557,7 +557,9 @@ If any answer is no, change the model here before building more.
 At 1× zoom, a player must tell apart within a second:
 - An ore patch versus bare ground versus land not owned.
 - A working, starved, blocked or unpowered machine (the pip plus a motion cue: working
-  machines animate, stopped ones don't).
+  machines animate, stopped ones don't). Since Milestone 13 each pip has a shape as well as a
+  colour (a dot, a funnel, a square, two bars, a bolt, a ring), so a colourblind player tells them
+  apart by the outline (STYLE.md, Palette).
 - What item is on a belt (8×8 icons with distinct silhouettes, not only colours).
 - A module versus a machine (modules are framed and show their main output's icon).
 - The fold box and its ports (in = arrows pointing inward, out = outward).

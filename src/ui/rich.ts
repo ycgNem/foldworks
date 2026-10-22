@@ -5,7 +5,12 @@
 //   {coin:25}     a coin chip                {coin}        the coin alone
 //   {good:..} {bad:..} {warn:..} {coinc:..} {research:..} {power:..} {reset:..} {soft:..}  ink spans
 //   {big:..}      a span in the display face (Bullfrog)
-//   {chip:bad:CHOKED}  a status chip inline (role, then its words; an extension for report rows)
+//   {chip:bad:CHOKED}  a status chip inline (role, then its words; an extension for report rows);
+//                 a status chip's words (WORKING, STARVED, BLOCKED, NO POWER, IDLE...) carry their
+//                 pip's shape at its left (Milestone 13, colourblind-safe pips: src/render/pips.ts)
+//   {pip:starved} a status pip's shape inline (work starved blocked paused power idle)
+//   {k:=X}        a keycap drawn as written; {k:X} names the default key of an action and draws
+//                 as the key that action is bound to now (setKeyAliases, from the Keys page)
 //
 // No nesting. Plain strings (no '{') lay out and draw exactly as `wrapText` + `ui.text`. Unknown
 // tokens degrade to text: `{foo:bar}` draws "bar", `{i:nope}` draws "nope", an unclosed '{'
@@ -16,6 +21,7 @@ import { textWidth, wrapText, LINE_H, FONT_H, bigWidth, BIG_H, BIG_LINE_H, drawT
 import { T, roleInk, roleFloor, type Role } from './theme';
 import { keycapRaw, keycapWidth, KEY_H, coinRaw, COIN_W, chipRaw, chipText, outlinedText } from './paper';
 import type { UI } from './ui';
+import { drawPipShape, PIP_MEANING, type PipShape } from '../render/pips';
 
 // ---------------------------------------------------------------- the icon registry
 
@@ -49,7 +55,8 @@ export type RichAtom =
   | { t: 'ui'; name: string }
   | { t: 'key'; k: string }
   | { t: 'coin'; n: string | null }
-  | { t: 'chip'; role: Role; s: string };
+  | { t: 'chip'; role: Role; s: string }
+  | { t: 'pip'; shape: PipShape };
 
 const SPANS: Record<string, Role> = {
   good: 'good', bad: 'bad', warn: 'warn', coinc: 'coin', research: 'research', power: 'power', reset: 'reset', soft: 'soft', ink: 'ink',
@@ -58,6 +65,41 @@ const CHIP_ROLES = new Set<string>(['ink', 'soft', 'good', 'bad', 'warn', 'coin'
 
 const parsed = new Map<string, RichAtom[]>();
 const CACHE_MAX = 4000;
+
+// ---------------------------------------------------------------- keycaps follow the bindings
+
+/** default key label -> the label of the key bound now (only the keys a player has moved) */
+let keyAlias = new Map<string, string>();
+
+/** Say which keycaps now draw as another key (the Keys page rebinds: src/app/keys.ts). Clears the
+ * caches, since keycaps change width. */
+export function setKeyAliases(m: Map<string, string>) {
+  keyAlias = m;
+  parsed.clear();
+  layouts.clear();
+}
+
+// ---------------------------------------------------------------- status chips carry their pip
+
+const PIP_SHAPES = new Set<string>(PIP_MEANING.map((p) => p[0]));
+/** a status chip's first words -> its pip's shape (the floor pip it stands for) */
+const CHIP_PIP: [RegExp, PipShape][] = [
+  [/^(WORKING|MAKING|BURNING|PUSHING|TAKING)\b/, 'work'],
+  [/^(STARVED|WAITING|EMPTY|SHORT|NO FUEL|NO ITEM|NOT ALL ARRIVING)\b/, 'starved'],
+  [/^(BLOCKED|FULL|CHOKED)\b/, 'blocked'],
+  [/^(NO POWER|BROWNOUT)\b/, 'power'],
+  [/^STOPPED\b/, 'paused'],
+  [/^(IDLE|STANDBY|UNLINKED)\b/, 'idle'],
+];
+/** The pip shape a status chip's words carry, or null for other chips. */
+export function chipPip(s: string): PipShape | null {
+  for (const [re, sh] of CHIP_PIP) if (re.test(s)) return sh;
+  return null;
+}
+/** px a chip's pip takes before its words */
+const CHIP_PIP_W = 8;
+/** the colour a shape is drawn in (a brownout's bolt is amber, as on the floor) */
+const pipCol = (sh: PipShape, s = '') => (s.startsWith('BROWNOUT') ? PIP_MEANING[1][2] : PIP_MEANING.find((p) => p[0] === sh)![2]);
 
 /** Does this string carry markup? (Plain strings take the old path, untouched.) */
 export const isRich = (s: string) => s.indexOf('{') >= 0;
@@ -99,7 +141,8 @@ export function parseRich(s: string): RichAtom[] {
     } else if (name === 'u' && arg !== undefined) {
       if (!icons.ui || icons.ui.has(arg)) out.push({ t: 'ui', name: arg });
       else pushText(out, arg, null, false);
-    } else if (name === 'k' && arg) out.push({ t: 'key', k: arg });
+    } else if (name === 'k' && arg) out.push({ t: 'key', k: arg.length > 1 && arg[0] === '=' ? arg.slice(1) : keyAlias.get(arg) ?? arg });
+    else if (name === 'pip' && arg && PIP_SHAPES.has(arg)) out.push({ t: 'pip', shape: arg as PipShape });
     else if (name === 'coin') out.push({ t: 'coin', n: arg ? arg : null });
     else if (name === 'big' && arg !== undefined) pushText(out, arg, null, true);
     else if (name === 'chip' && arg !== undefined) {
@@ -129,7 +172,7 @@ export const CHIP_H = FONT_H + 3;
 const CHIP_PAD = 4;
 
 /** Atoms that glue to the word after them (and get a pixel more room either side). */
-const glyphLike = (a: RichAtom) => a.t === 'item' || a.t === 'ui' || a.t === 'key' || a.t === 'coin' || a.t === 'chip';
+const glyphLike = (a: RichAtom) => a.t === 'item' || a.t === 'ui' || a.t === 'key' || a.t === 'coin' || a.t === 'chip' || a.t === 'pip';
 
 function atomWidth(a: RichAtom): number {
   switch (a.t) {
@@ -139,13 +182,14 @@ function atomWidth(a: RichAtom): number {
     case 'key': return keycapWidth(a.k);
     case 'coin': return a.n === null ? COIN_W : COIN_W + 2 + textWidth(a.n);
     case 'chip': return chipWidthOf(a.s);
+    case 'pip': return 7;
     default: return 0;
   }
 }
 
 /** A chip's width for its words (they may carry icons). */
 export function chipWidthOf(s: string): number {
-  return richWidth(s) + CHIP_PAD * 2;
+  return richWidth(s) + CHIP_PAD * 2 + (chipPip(s) ? CHIP_PIP_W : 0);
 }
 
 /** The gap between two atoms on a line: 1 px (the font's own letter gap), 2 beside an icon. */
@@ -158,7 +202,8 @@ export type RichItem =
   | { t: 'item' | 'ui'; name: string; x: number; dy: number; w: number }
   | { t: 'key'; k: string; x: number; dy: number; w: number }
   | { t: 'coin'; n: string | null; x: number; dy: number; w: number }
-  | { t: 'chip'; role: Role; s: string; x: number; dy: number; w: number };
+  | { t: 'chip'; role: Role; s: string; x: number; dy: number; w: number }
+  | { t: 'pip'; shape: PipShape; x: number; dy: number; w: number };
 
 /** One laid-out line: its top `y` from the block's top, height, width and items (x from its left). */
 export interface RichLine { y: number; h: number; w: number; items: RichItem[]; /** the line as markup */ src: string }
@@ -273,6 +318,7 @@ function layoutAtoms(atoms: RichAtom[], maxW: number, lineH: number): RichLayout
       else if (a.t === 'key') items.push({ t: 'key', k: a.k, x, dy, w: atomWidth(a) });
       else if (a.t === 'coin') items.push({ t: 'coin', n: a.n, x, dy: bodyDy, w: atomWidth(a) });
       else if (a.t === 'chip') items.push({ t: 'chip', role: a.role, s: a.s, x, dy: bodyDy - 2, w: atomWidth(a) });
+      else if (a.t === 'pip') items.push({ t: 'pip', shape: a.shape, x, dy, w: 7 });
     }
     // a run that ends in spaces (before an icon) keeps its width honest
     for (const it of items) if (it.t === 'text') it.w = it.big ? bigWidth(it.s) : textWidth(it.s);
@@ -323,6 +369,7 @@ function serialize(atoms: RichAtom[]): string {
     else if (a.t === 'key') s += `{k:${a.k}}`;
     else if (a.t === 'coin') s += a.n === null ? '{coin}' : `{coin:${a.n}}`;
     else if (a.t === 'chip') s += `{chip:${a.role}:${a.s}}`;
+    else if (a.t === 'pip') s += `{pip:${a.shape}}`;
   }
   flush();
   return s;
@@ -390,9 +437,15 @@ export function drawLayout(ui: UI, L: RichLayout, x: number, y: number, color: s
         case 'chip': {
           ui.record('text', ix, iy, it.w, CHIP_H, `{chip:${it.role}:${it.s}}`);
           chipRaw(ctx, ix, iy, it.w, CHIP_H, it.role, false);
-          drawRichRaw(ui, it.s, ix + CHIP_PAD, iy + 2, chipText(it.role, false));
+          const sh = chipPip(it.s);
+          if (sh) drawPipShape(ctx, ix + CHIP_PAD, iy + 3, sh, pipCol(sh, it.s));
+          drawRichRaw(ui, it.s, ix + CHIP_PAD + (sh ? CHIP_PIP_W : 0), iy + 2, chipText(it.role, false));
           break;
         }
+        case 'pip':
+          ui.record('text', ix, iy, 7, 7, `{pip:${it.shape}}`);
+          drawPipShape(ctx, ix + 1, iy + 1, it.shape, pipCol(it.shape));
+          break;
       }
     }
   }

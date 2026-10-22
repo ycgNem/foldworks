@@ -20,6 +20,7 @@ import { richWidth } from '../ui/rich';
 import { T } from '../ui/theme';
 import { sheet, drawRot, itemIcon } from '../render/sprites';
 import { TILE } from '../render/ground';
+import { drawPip } from '../render/pips';
 import { handChute } from '../render/factory';
 import { fplaceRefusal } from '../sim/systems/modules';
 import { scenarioOf } from '../sim/scenario';
@@ -82,13 +83,7 @@ function mouths(app: App) {
 
 /** The status pip, as the Renderer draws every machine's (top-right 4x4; blocked blinks). */
 function pip(ctx: CanvasRenderingContext2D, x: number, y: number, col: string, blink: boolean, time: number) {
-  if (blink && Math.floor(time * 3) % 2) col = C.rust;
-  ctx.fillStyle = C.ink;
-  ctx.fillRect(x + 11, y, 5, 5);
-  ctx.fillStyle = col;
-  ctx.fillRect(x + 12, y + 1, 3, 3);
-  ctx.fillStyle = rgba(C.bone, 0.6);
-  ctx.fillRect(x + 12, y + 1, 1, 1);
+  drawPip(ctx, x, y, col, blink, time);
 }
 
 // ------------------------------------------------------------------ the Factory Chute in hand

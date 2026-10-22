@@ -34,6 +34,9 @@ import { nextGoal } from './goals';
 import { getHoverTags } from './settings';
 import { calm } from './soundopts';
 import { districtHud, districtHover, districtHoverKey, districtZones } from './district';
+import { lessonFrame, lessonZones } from './lessons';
+import { stuckButton } from './stuck';
+import { keysFrame } from './keys';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
 
@@ -142,7 +145,7 @@ export function drawHud(app: App, dt: number) {
   zones.length = 0;
   zones.push(...cornerZones(app, L, app.hud.purseBottom));
   if (app.hud.cornerRect) zones.push(app.hud.cornerRect);
-  zones.push(...districtZones(app, L));
+  zones.push(...districtZones(app, L), ...lessonZones());
   if (!app.panel) {
     // the floor's own markers first (under every piece of the HUD)
     floorTags(app, L);
@@ -168,6 +171,8 @@ export function drawHud(app: App, dt: number) {
   }
   slips(app, L, dt);
   if (!app.panel) hoverReport(app);
+  lessonFrame(app, L); // Milestone 13: lesson cards on firsts (src/app/lessons.ts)
+  keysFrame(app);
   refusal(app, dt);
   celebrations(app, L, dt);
   drawWheel(app, L);
@@ -191,7 +196,7 @@ function corners(app: App, L: Layout, dt: number) {
   const ui = app.ui;
   rail(app, L);
   const pb = purse(app, L, dt);
-  const bb = bell(app, L, pb);
+  const bb = stuckButton(app, L, pb, bell(app, L, pb)); // Milestone 13: "Stuck?" beside the bell
   app.hud.purseBottom = counters(app, L, bb);
   lift(app, L, dt);
   notebook(app, L);

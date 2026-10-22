@@ -12,7 +12,7 @@ import { TROPHIES, type TrophyDef } from '../data/trophies';
 import { BUILD_BAR } from '../data/machines';
 import { IDLE } from '../data/idle';
 import { ICON, textWidth, smallWidth, bigWidth, ellipsize, hasSmallGlyph, LINE_H } from '../ui/font';
-import { ACTION_LABELS, SHOWN_ACTIONS, keyLabel } from '../engine/input';
+import { keyLabel } from '../engine/input';
 import { itemIcon, sheet, hasArt } from '../render/sprites';
 import { available, researchFrac } from '../sim/systems/research';
 import { inspireUnlocked, inspiredFrac } from '../sim/systems/inspire';
@@ -32,6 +32,8 @@ import { offlineReportCard } from './offlinereport';
 import { overnightScreen } from './overnight';
 import { cycleNotation, NOTATION_LABEL, cycleHoverTags, getHoverTags, HOVER_LABEL } from './settings';
 import { setMute, setCalm, volumeRows } from './soundopts';
+import { accessRows } from './access';
+import { researchEta, itemEta } from './rates';
 import { getNotation } from '../engine/num';
 // Milestone 5: Reorganize, the Patent Office and the Patent Drawer
 import { reorganizeCard } from './reorganize';
@@ -77,7 +79,6 @@ export function drawScreen(app: App, L: Layout) {
     case 'stats': return statsScreen(app, r);
     case 'trophies': return trophyPage(app, r);
     case 'options': return optionsScreen(app, r);
-    case 'keys': return keysScreen(app, r);
     case 'modules': return modulesScreen(app, r);
     case 'grade': return gradeCard(app, L);
     case 'offline': return offlineReportCard(app, L); // Milestone 6 (was fold.ts offlineCard)
@@ -281,13 +282,13 @@ export function flowRow(ui: UI, parts: string[], x: number, y: number, w: number
 }
 
 /** The tabs of the notebook's back pages: Stats, Trophies, Options and Keys. */
-function backTabs(app: App): MenuTab[] {
+export function backTabs(app: App): MenuTab[] {
   const help = app.input.binds.help?.[0];
   const all: { id: 'stats' | 'trophies' | 'options' | 'keys'; label: string; icon?: IconName; tip: string }[] = [
     { id: 'stats', label: 'Stats', icon: 'stats', tip: '{u:stats} the books' },
     { id: 'trophies', label: 'Trophies', icon: 'trophies', tip: '{u:trophies} the shelf' },
     { id: 'options', label: 'Options', icon: 'options', tip: '{u:options} sound · numbers · saves' },
-    { id: 'keys', label: 'Keys', tip: help ? `{k:${keyLabel(help)}} every key` : 'every key' },
+    { id: 'keys', label: 'Keys', tip: help ? `{k:=${keyLabel(help)}} every key` : 'every key' },
   ];
   return all.map((t) => ({ id: 'nav:' + t.id, label: t.label, icon: t.icon, tip: t.tip, active: app.panel === t.id, onClick: () => { if (app.panel !== t.id) { app.panel = t.id; app.audio.sfx('open'); } } }));
 }
@@ -620,9 +621,12 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
         ctx.drawImage(itemIcon(item), x, y + 1);
         meter(ui, x + 11, y + 2, w - 11 - sw - 6, 6, have / n, { role: have >= n ? 'good' : 'research', glint: false });
         ui.text(s, x + w, y, have >= n ? T.good : T.ink, { align: 'right' });
-        ui.hint(x, y, w, 10, [{ text: `{i:${item}} {big:${ITEMS[item].name}}` }, { text: `${fmt(have)} of ${fmt(n)} {soft:delivered to the Hopper}` }], 170);
+        ui.hint(x, y, w, 10, [{ text: `{i:${item}} {big:${ITEMS[item].name}}` }, { text: `${fmt(have)} of ${fmt(n)} {soft:delivered to the Hopper}` }, ...(done ? [] : [{ text: itemEta(app, item, n - have) }])], 170);
         y += 11;
       }
+      // Milestone 13: how long the rest takes at what arrives now (src/app/rates.ts)
+      const eta = researchEta(app, show);
+      if (eta && y + 10 <= end) y += drawRich(ui, `{u:clock} {soft:${eta} at what is delivered now}`, x, y, w, T.inkSoft) + 1;
     }
     // Inspiration: clicks on the Hopper give the selected node a share, up to its cap
     if (!done && inspireUnlocked(g) && y + 12 <= end) {
@@ -1000,7 +1004,7 @@ function optionsScreen(app: App, r: Rect) {
     if (button(ui, id, bx, by, 50, 17, on ? 'on' : 'off', { active: on, tip: on ? '{k:LMB} off' : '{k:LMB} on' })) click();
   };
   const mute = app.input.binds.mute?.[0];
-  row('{u:heart}', `Sound${mute ? `  {k:${keyLabel(mute)}}` : ''}`, toggle('opt:Sound', !app.muted, () => setMute(app, !app.muted)));
+  row('{u:heart}', `Sound${mute ? `  {k:=${keyLabel(mute)}}` : ''}`, toggle('opt:Sound', !app.muted, () => setMute(app, !app.muted)));
   // Milestone 12: the four buses' volumes (src/app/soundopts.ts)
   y += volumeRows(app, x, y - 2, w) + 2;
   rule(ui, x, y - 4, w);
@@ -1019,10 +1023,11 @@ function optionsScreen(app: App, r: Rect) {
     const cur = HOVER_LABEL[getHoverTags()];
     if (button(ui, 'opt:hover', bx, by, hw, 17, cur, { tip: [{ text: '{big:Hover tags}' }, { text: hovers.map((n) => (n === cur ? `{ink:${n}}` : `{soft:${n}}`)).join(' · ') }, { text: '{k:LMB} next · {k:LMB} a machine pins every row' }] })) cycleHoverTags();
   }, hw);
+  y += accessRows(app, x, y, w); // Milestone 13: UI scale, lesson cards (src/app/access.ts)
   // the drawn keyboard lives on its own page
   y += 6;
   const help = app.input.binds.help?.[0];
-  if (button(ui, 'openKeys', x, y, Math.min(w, 140), 17, `Keys${help ? `  {k:${keyLabel(help)}}` : ''}`, { tip: '{k:LMB} the drawn keyboard' })) { app.panel = 'keys'; app.audio.sfx('open'); }
+  if (button(ui, 'openKeys', x, y, Math.min(w, 140), 17, `Keys${help ? `  {k:=${keyLabel(help)}}` : ''}`, { tip: '{k:LMB} the drawn keyboard' })) { app.panel = 'keys'; app.audio.sfx('open'); }
   // Act III: the Scenario boards, other games beside the town (after the first Reorganize)
   if (scenariosOpen(app) && y + 21 + 26 <= body.y + body.h) {
     y += 21;
@@ -1050,224 +1055,6 @@ function optionsScreen(app: App, r: Rect) {
   if (bad) btn('copyBad', 'Copy the damaged save', [{ text: '{bad:a save that would not load}' }, { text: '{k:LMB} copy it · send it in' }], () => { void navigator.clipboard?.writeText(bad); });
   dy += 4;
   btn('title', 'Back to the title', '{u:clock} saves first', () => { app.save(); app.toTitle(); });
-}
-
-// ================================================================== the drawn keyboard
-
-/** A bound key's short word on its face (Pip, five letters at most), by action. */
-const KEY_WORD: Record<string, string> = {
-  zoomIn: 'IN', zoomOut: 'OUT',
-  rotate: 'TURN', remove: 'SELL', fold: 'FOLD', floor: 'LIFT', research: 'LAB', orders: 'DOCK', modules: 'MODS',
-  cancel: 'BACK', pause: 'STOP', help: 'HELP', mute: 'MUTE', hud: 'HUD', flow: 'FLOW', debug: 'DBG', wheel: 'WHEEL',
-};
-/** The pan keys draw an arrow (Reed's) instead of a word. */
-const KEY_ARROW: Record<string, string> = { panUp: ICON.up, panDown: ICON.down, panLeft: ICON.left, panRight: ICON.right };
-/** A mark for a narrow key whose word does not fit and that has no icon. */
-const KEY_MARK: Record<string, string> = { help: '?', cancel: ICON.cross };
-/** A bound key's icon (8x8), where the action has one. */
-const KEY_ICON: Record<string, UIconName> = {
-  rotate: 'rotate', remove: 'remove', fold: 'fold', flow: 'flow', research: 'research', orders: 'orders', modules: 'kit',
-  floor: 'factory', pause: 'pause', mute: 'heart', wheel: 'build',
-};
-/** What kind of thing an action does: the key's ink. */
-function keyRole(act: string): Role {
-  if (act.startsWith('pan') || act.startsWith('zoom')) return 'power';
-  if (act.startsWith('slot') || ['rotate', 'remove', 'fold', 'flow', 'wheel', 'build'].includes(act)) return 'coin';
-  if (['research', 'orders', 'modules', 'help', 'codex', 'patents', 'drawer', 'stats', 'keys'].includes(act)) return 'research';
-  return 'good';
-}
-const ROLE_NAME: [Role, string][] = [['power', 'camera'], ['coin', 'building'], ['research', 'pages'], ['good', 'the game']];
-
-/** The keyboard's rows: [code, label, width in key units]; null codes are gaps. */
-const ROWS: [string | null, string, number][][] = [
-  [['Escape', 'Esc', 1.25], [null, '', 0.75], ['F1', 'F1', 1], ['F2', 'F2', 1], ['F3', 'F3', 1], ['F4', 'F4', 1]],
-  [['Backquote', '`', 1], ['Digit1', '1', 1], ['Digit2', '2', 1], ['Digit3', '3', 1], ['Digit4', '4', 1], ['Digit5', '5', 1], ['Digit6', '6', 1], ['Digit7', '7', 1], ['Digit8', '8', 1], ['Digit9', '9', 1], ['Digit0', '0', 1], ['Minus', '-', 1], ['Equal', '=', 1], ['Backspace', 'Bksp', 1.75]],
-  [['Tab', 'Tab', 1.5], ['KeyQ', 'Q', 1], ['KeyW', 'W', 1], ['KeyE', 'E', 1], ['KeyR', 'R', 1], ['KeyT', 'T', 1], ['KeyY', 'Y', 1], ['KeyU', 'U', 1], ['KeyI', 'I', 1], ['KeyO', 'O', 1], ['KeyP', 'P', 1], ['BracketLeft', '[', 1], ['BracketRight', ']', 1], ['Backslash', '\\', 1.25]],
-  [['CapsLock', 'Caps', 1.75], ['KeyA', 'A', 1], ['KeyS', 'S', 1], ['KeyD', 'D', 1], ['KeyF', 'F', 1], ['KeyG', 'G', 1], ['KeyH', 'H', 1], ['KeyJ', 'J', 1], ['KeyK', 'K', 1], ['KeyL', 'L', 1], ['Semicolon', ';', 1], ['Quote', "'", 1], ['Enter', 'Enter', 2]],
-  [['ShiftLeft', 'Shift', 2.25], ['KeyZ', 'Z', 1], ['KeyX', 'X', 1], ['KeyC', 'C', 1], ['KeyV', 'V', 1], ['KeyB', 'B', 1], ['KeyN', 'N', 1], ['KeyM', 'M', 1], ['Comma', ',', 1], ['Period', '.', 1], ['Slash', '/', 1], ['ShiftRight', 'Shift', 2.5]],
-  [['ControlLeft', 'Ctrl', 1.5], ['AltLeft', 'Alt', 1.5], ['Space', 'Space', 8.75], ['AltRight', 'Alt', 1.5], ['ControlRight', 'Ctrl', 1.5]],
-];
-/** the arrow keys, beside the board: [code, label, column, row] */
-const ARROWS: [string, string, number, number][] = [['ArrowUp', 'Up', 1, 4], ['ArrowLeft', 'Left', 0, 5], ['ArrowDown', 'Down', 1, 5], ['ArrowRight', 'Right', 2, 5]];
-const DRAWN = new Set<string>([...ROWS.flat().map((k) => k[0]).filter((c): c is string => !!c), ...ARROWS.map((a) => a[0])]);
-
-/** One key of the drawn keyboard: a paper key with an ink line and a lip. A bound key is inked:
- * its letter, its icon, its word in the role's ink; a free key is faint pencil. Pressed keys go
- * down. Returns true while hovered. */
-function bigKey(app: App, code: string, lab: string, x: number, y: number, w: number, h: number, acts: string[]): boolean {
-  const ui = app.ui;
-  const ctx = ui.ctx;
-  const bound = acts.length > 0;
-  const hov = ui.hover(x, y, w, h);
-  const down = app.input.down.has(code) || (hov && bound && ui.input.mouse.down[0]);
-  const dy = down ? 1 : 0;
-  const role = bound ? keyRole(acts[0]) : 'soft';
-  ui.region(x, y, w, h, bound ? 'button' : 'panel', false);
-  if (bound) ui.mark('key:' + code, x, y, w, h);
-  // the key: ink line, face, lip (a free key sits flatter, in pencil)
-  if (bound) {
-    ctx.fillStyle = rgba(T.shadow, 0.3);
-    ctx.fillRect(x + 1, y + h, w - 1, 1);
-    ctx.fillStyle = C.ink;
-    ctx.fillRect(x + 1, y + dy, w - 2, h - dy);
-    ctx.fillRect(x, y + 1 + dy, w, h - 2 - dy);
-    ctx.fillStyle = hov ? C.lamp3 : T.paperHi;
-    ctx.fillRect(x + 1, y + 1 + dy, w - 2, h - 5);
-    ctx.fillStyle = T.paperLo;
-    ctx.fillRect(x + 1, y + h - 4, w - 2, down ? 2 : 1);
-    if (!down) { ctx.fillStyle = C.wood4; ctx.fillRect(x + 1, y + h - 3, w - 2, 2); }
-    // the role's colour along the face's foot, a strip of ink
-    ctx.fillStyle = rgba(roleInk(role), 0.85);
-    ctx.fillRect(x + 2, y + h - 6 + dy, w - 4, 1);
-  } else {
-    // a free key: flat, dim paper, its name in faint pencil
-    ctx.fillStyle = C.wood1;
-    ctx.fillRect(x + 1, y + 1, w - 2, h - 1);
-    ctx.fillRect(x, y + 2, w, h - 3);
-    ctx.fillStyle = hov ? C.wood5 : C.wood4;
-    ctx.fillRect(x + 1, y + 2, w - 2, h - 4);
-  }
-  // the key's own name, top-left
-  const name = lab.toUpperCase();
-  const nameCol = bound ? T.ink : C.wood2;
-  // Pip has no brackets or quotes: those keys' names go in Reed
-  if ([...name].every((ch) => hasSmallGlyph(ch))) { if (smallWidth(name) <= w - 4) ui.small(name, x + 3, y + 3 + dy, nameCol); }
-  else if (textWidth(lab) <= w - 4) ui.text(lab, x + 3, y + 1 + dy, nameCol);
-  if (!bound) return hov;
-  const ic = KEY_ICON[acts[0]] ?? (acts[0].startsWith('slot') ? 'build' : undefined);
-  const arrow = KEY_ARROW[acts[0]];
-  let word = KEY_WORD[acts[0]] ?? (acts[0].startsWith('slot') ? 'PICK' : (ACTION_LABELS[acts[0] as keyof typeof ACTION_LABELS] ?? acts[0]).split(' ')[0].toUpperCase());
-  const fits = smallWidth(word) <= w - 4;
-  const mark = arrow ?? (!fits && !ic ? KEY_MARK[acts[0]] : undefined);
-  // the mark sits under the key's name, never on it (a short key at 1024x640 had them touch)
-  const markY = y + Math.max(h - 15, 9) + dy;
-  if (mark) ui.text(mark, x + Math.floor(w / 2), markY, roleInk(role), { align: 'center' });
-  else if (fits || !ic) {
-    // the word along the foot, the icon in the top-right corner when there is room for both
-    if (ic && w >= 22 && smallWidth(name) + 12 <= w - 2) uiIcon(ui, ic, x + w - 10, y + 2 + dy, 1);
-    while (word.length > 1 && smallWidth(word) > w - 4) word = word.slice(0, -1);
-    ui.small(word, x + Math.floor(w / 2), y + h - 12 + dy, roleInk(role), { align: 'center' });
-  } else uiIcon(ui, ic, x + Math.floor(w / 2) - 4, markY, 1); // a narrow key: the icon alone
-  if (hov) {
-    ui.tip([{ text: `{k:${keyLabel(code)}}  {big:${ACTION_LABELS[acts[0] as keyof typeof ACTION_LABELS] ?? acts[0]}}` }, ...acts.slice(1).map((a) => ({ text: `{soft:and} ${ACTION_LABELS[a as keyof typeof ACTION_LABELS] ?? a}` }))], 180);
-  }
-  return hov;
-}
-
-/** The mouse, drawn large: a paper mouse with its two buttons and the wheel, the part in use
- * inked red; returns the three parts' centres for the labels. */
-function bigMouse(app: App, x: number, y: number, s: number) {
-  const ui = app.ui;
-  const ctx = ui.ctx;
-  const w = 10 * s, h = 15 * s;
-  const m = ui.input.mouse;
-  ctx.fillStyle = rgba(T.shadow, 0.3);
-  ctx.beginPath(); ctx.ellipse(x + w / 2 + 1, y + h / 2 + 2, w / 2, h / 2, 0, 0, Math.PI * 2); ctx.fill();
-  // the body: an ink oval with a paper face, split into buttons at the top third
-  for (let j = 0; j < h; j++) {
-    const t = (j + 0.5) / h * 2 - 1;
-    const half = Math.round((w / 2) * Math.sqrt(Math.max(0, 1 - t * t * (t < 0 ? 0.55 : 0.85))));
-    if (half <= 0) continue;
-    ctx.fillStyle = C.ink;
-    ctx.fillRect(x + w / 2 - half, y + j, half * 2, 1);
-    const face = j < h * 0.4 ? null : j > h - 3 ? T.paperLo : T.paper;
-    if (half > 1 && j > 0 && j < h - 1) {
-      if (face) { ctx.fillStyle = face; ctx.fillRect(x + w / 2 - half + 1, y + j, half * 2 - 2, 1); }
-      else {
-        ctx.fillStyle = m.down[0] ? T.badFill : T.paperHi;
-        ctx.fillRect(x + w / 2 - half + 1, y + j, half - 2, 1);
-        ctx.fillStyle = m.down[2] ? T.badFill : T.paperHi;
-        ctx.fillRect(x + w / 2 + 1, y + j, half - 2, 1);
-      }
-    }
-  }
-  ctx.fillStyle = C.ink;
-  ctx.fillRect(x, y + Math.round(h * 0.4), w, 1);
-  // the wheel
-  const wy = y + Math.round(h * 0.12), wh = Math.round(h * 0.22);
-  ctx.fillRect(x + w / 2 - 2, wy, 4, wh);
-  ctx.fillStyle = C.copper2;
-  ctx.fillRect(x + w / 2 - 1, wy + 1, 2, wh - 2);
-  ctx.fillStyle = C.ink;
-  const turn = Math.floor(ui.time * 3) % 3;
-  for (let k = turn; k < wh - 2; k += 3) ctx.fillRect(x + w / 2 - 1, wy + 1 + k, 2, 1);
-  return { lmb: { x: x + w * 0.25, y: y + h * 0.2 }, rmb: { x: x + w * 0.75, y: y + h * 0.2 }, wheel: { x: x + w / 2, y: wy + wh / 2 } };
-}
-
-function keysScreen(app: App, r: Rect) {
-  const ui = app.ui;
-  const { body } = menuTemplate(app, r, { title: 'Keys', accent: T.ink, icon: 'options', tabs: backTabs(app) });
-  // which actions each key does, read from the bindings now (they can change)
-  const byCode = new Map<string, string[]>();
-  for (const act of SHOWN_ACTIONS) for (const code of app.input.binds[act] ?? []) {
-    const l = byCode.get(code) ?? [];
-    l.push(act);
-    byCode.set(code, l);
-  }
-  // the board's size: 14.75 units of keys, a gap and three for the arrows
-  const units = 14.75 + 0.6 + 3;
-  const u = Math.max(18, Math.min(32, Math.floor((body.w - 8) / units)));
-  const kh = Math.max(18, Math.min(26, Math.round(u * 0.86)));
-  const gap = 2;
-  const boardW = Math.round(units * u);
-  const bx = body.x + Math.floor((body.w - boardW) / 2), by = body.y + 6;
-  // the keyboard's case: a wooden tray under the keys
-  const caseH = ROWS.length * (kh + gap) + 8;
-  ui.ctx.fillStyle = rgba(T.shadow, 0.3);
-  ui.ctx.fillRect(bx - 4, by - 1, boardW + 9, caseH + 2);
-  ui.fill(bx - 5, by - 3, boardW + 8, caseH, T.woodLo);
-  ui.fill(bx - 4, by - 2, boardW + 6, caseH - 2, T.wood);
-  ui.fill(bx - 4, by - 2, boardW + 6, 1, T.woodHi);
-  ROWS.forEach((row, j) => {
-    let kx = bx;
-    const ky = by + j * (kh + gap);
-    for (const [code, lab, wu] of row) {
-      const kw = Math.round(wu * u) - gap;
-      if (code) bigKey(app, code, lab, kx, ky, kw, kh, byCode.get(code) ?? []);
-      kx += Math.round(wu * u);
-    }
-  });
-  const ax0 = bx + Math.round((14.75 + 0.6) * u);
-  for (const [code, lab, c, rr] of ARROWS) bigKey(app, code, lab, ax0 + c * u, by + rr * (kh + gap), u - gap, kh, byCode.get(code) ?? []);
-  let y = by + caseH + 6;
-  // what the inks mean, as chips
-  let cx = body.x + 4;
-  for (const [role, name] of ROLE_NAME) cx += chip(ui, cx, y, name, { role }) + 6;
-  // bound keys the drawing has no place for (the numpad and the like)
-  const extra = [...byCode.entries()].filter(([code]) => !DRAWN.has(code));
-  if (extra.length) {
-    cx += 8;
-    cx += ui.text('also', cx, y + 2, T.inkSoft) + 6;
-    for (const [code, acts] of extra) {
-      const s = `{k:${keyLabel(code)}} ${(ACTION_LABELS[acts[0] as keyof typeof ACTION_LABELS] ?? acts[0]).toLowerCase()}`;
-      const sw = richWidth(s);
-      if (cx + sw > body.x + body.w) break;
-      drawRich(ui, s, cx, y + 2, Infinity, roleInk(keyRole(acts[0])));
-      cx += sw + 8;
-    }
-  }
-  y += CHIP_H + 8;
-  // the mouse, large, with what each part does on pencil leaders
-  const room = body.y + body.h - y;
-  const s = Math.max(2, Math.min(4, Math.floor((room - 4) / 15)));
-  if (room >= 32) {
-    const mx = body.x + 10;
-    const parts = bigMouse(app, mx, y, s);
-    const lx = mx + 10 * s + 26;
-    const lines: [{ x: number; y: number }, string][] = [
-      [parts.lmb, '{k:LMB}  use · place · shovel · drag a belt'],
-      [parts.wheel, '{k:WHEEL}  zoom'],
-      [parts.rmb, '{k:RMB}  tap for the wheel · drag to pan'],
-    ];
-    const step = Math.max(12, Math.min(16, Math.floor((15 * s) / 3)));
-    lines.forEach(([p, text], i) => {
-      const ty = y + 2 + i * step;
-      pencilLine(ui, p.x, p.y, lx - 4, ty + 4, T.inkSoft, 0.8);
-      ui.ctx.fillStyle = T.inkSoft;
-      ui.ctx.fillRect(Math.round(p.x) - 1, Math.round(p.y) - 1, 2, 2);
-      drawRich(ui, text, lx, ty, body.x + body.w - lx, T.ink);
-    });
-  }
 }
 
 void BIG_CAP_H; void CAP_H;

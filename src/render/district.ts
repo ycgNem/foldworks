@@ -27,6 +27,7 @@ import { onPaper } from '../ui/theme';
 import { sheet, itemIcon, hasArt, drawSprite } from './sprites';
 import { mainOutput } from './factory';
 import { TILE } from './ground';
+import { drawPip } from './pips'; // Milestone 13: pips with shapes
 import { art, artSig, canvas, hh, named } from './skyart';
 
 const PIP: Record<string, string> = { work: C.pipGreen, starved: C.pipYellow, blocked: C.pipRed, idle: C.pipGrey };
@@ -450,13 +451,7 @@ function coolArc(ctx: CanvasRenderingContext2D, x: number, y: number, cool: numb
 }
 
 function pip(ctx: CanvasRenderingContext2D, x: number, y: number, col: string, blink: boolean, time: number) {
-  if (blink && Math.floor(time * 3) % 2) col = C.rust;
-  ctx.fillStyle = C.ink;
-  ctx.fillRect(x + 11, y, 5, 5);
-  ctx.fillStyle = col;
-  ctx.fillRect(x + 12, y + 1, 3, 3);
-  ctx.fillStyle = rgba(C.bone, 0.6);
-  ctx.fillRect(x + 12, y + 1, 1, 1);
+  drawPip(ctx, x, y, col, blink, time);
 }
 
 function outline(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, col: string) {

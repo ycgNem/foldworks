@@ -19,7 +19,8 @@ import { poleReach } from '../sim/systems/power';
 import { stampCost, stampRefusal, kitsFor } from '../sim/systems/modules';
 import { claimLoad, claimsHeld, claimsUsed } from '../sim/systems/claims';
 import { Num } from '../engine/num';
-import { perMin } from '../engine/fmt';
+import { perMin, plain } from '../engine/fmt';
+import { kindRate } from './rates'; // Milestone 13: rates on the wheel's item cards
 import { bigWidth, smallWidth, drawSmall, SMALL_H } from '../ui/font';
 import { richWidth, layoutRich, drawLayout } from '../ui/rich';
 import { art, buttonRaw } from '../ui/paper';
@@ -328,6 +329,10 @@ function storeItems(app: App, tabId: 'build' | 'power' | 'heavy'): Item[] {
       if (d.kw) rows.push(`{u:power} a Pole within ${poleReach(g)} tiles`);
       if (d.w > 1) rows.push(`${d.w}×${d.h} · placed by its top-left tile`);
       chips.push(free ? { text: `free ×${g.s.freeCrates}`, o: { role: 'good' } } : { text: Num.of(d.cost).format() + ' each', o: { role: afford ? 'coin' : 'bad', icon: 'coin' } });
+      // Milestone 13: its rate at its first recipe known (or a power building's kW)
+      const rate = kindRate(g, kind);
+      if (rate) chips.push({ text: `${plain(rate.perMin, rate.perMin < 10 ? 1 : 0)}/min`, o: { role: 'ink', item: rate.item } });
+      else if (d.power) chips.push({ text: `${d.power} kW`, o: { role: 'power', icon: 'power' } });
       chips.push({ text: `×${owned} built`, o: { role: 'soft' } });
       verbs = kind === 'belt' ? '{k:LMB} drag to lay  {k:R} turn  {k:RMB} drop' : '{k:LMB} place  {k:R} turn  {k:RMB} drop';
     } else {

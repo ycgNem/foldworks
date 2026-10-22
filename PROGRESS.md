@@ -2,6 +2,59 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
+## Status (2026-10-22, later): Milestone 13, onboarding, UX and accessibility, built
+
+Built in a worktree off `m9-worlds` while Act IV's sim and the District's UI were worked on
+elsewhere: app and render code only, no sim, data or save change. DECISIONS.md "Milestone 13".
+
+### What exists
+
+- **Lesson cards on firsts** (`src/app/lessons.ts`): nine (a starved machine, a slag jam, the first
+  fold, the Factory floor, a trunk, a brownout, a Reorganize, a District route, a short route), a
+  card pinned at the top centre with the thing's sprite, two or three lines and OK. From the sim's
+  events and a look at the state twice a second; once per save (by seed, with the settings); queued;
+  never over a celebration, a page, the wheel or an offline run; an old save is read for what it has
+  already learnt (`pastLessons`). **Options → Lesson cards** turns them off.
+- **"Where am I stuck?"** (`src/app/stuck.ts`): a **Stuck?** button beside the trouble bell (and
+  `G`). `findStuck` traces every stopped thing on the floor on screen to its cause (a starved machine
+  to the stopped feeder, a blocked one to the slower machine after it; slag, fronts, power; Factory
+  trunk routes; District routes under 90% of their want) and charges each cause the output lost;
+  the dearest wins. The camera pans there, its report is pinned, the Inspector says in one line what
+  to do (and the coin a minute it costs). Nothing stuck: what the next goal needs.
+- **Rates in tooltips** (`src/app/rates.ts`): the wheel's item cards carry the rate at the first
+  known recipe (or a power building's kW); a machine's hover reads its rate now "of" its rate at its
+  recipe and mode; research nodes say how long the rest takes at what is delivered now, per item and
+  in total; an order's items and its % say the same.
+- **Keys** (`src/app/keys.ts`, moved from `screens.ts`; `src/engine/input.ts` `cleanBinds`,
+  `rebind`, `keyAliases`): click a key on the drawn keyboard, press its new key (Esc keeps it); the
+  action holding that key takes the old one (a swap); Reset keys; kept in `foldworks_settings`; every
+  `{k:X}` keycap in every string draws as the key now bound (`{k:=X}` draws literally).
+- **UI scale** (`src/app/access.ts`, `settings.ts` `uiScaleFor`): Options → UI scale: Auto (the
+  largest whole scale with 480x300 UI px, as before) or 1x up to the largest leaving 480x270 (4x at
+  1920x1080; 2x at 1024x640 and 1280x720), independent of the floor's zoom.
+- **Pips with shapes** (`src/render/pips.ts`): working a round dot, starved a funnel, blocked a
+  square (blinking), stopped two bars, no power a bolt, idle a ring, 5x5 in an ink outline, on the
+  Workshop, the Factory, the District and the Chute Mouths; status chips in every report carry the
+  same shape; `{pip:x}` in rich text; a legend on the Keys page.
+
+### Measured
+
+`npm run typecheck` clean; `npx vitest run --exclude "tests/pace-*"` green with
+`tests/onboarding.test.ts` (bindings cleaned, swapped, kept and aliased; the UI scale; the
+stuck-finder's choice on sandbox states: a slag-choked furnace named over the press it starves, a
+short District route, nothing stuck; lessons' memory). `npm run screens` clean at three sizes with
+new states (`lessonCard`, `lessonStart`, `lessonDistrict`, `stuckAnswer`, `stuckFactory`,
+`stuckDistrict`, `keysRebind`, `keysMoved`, `keysMovedHud`, `uiScaleMax`, `uiScaleOptions`,
+`uiScaleSmall`); `npm run smoke` green.
+
+### Open
+
+- The District's pinned report (`src/app/district.ts` `pinned`) does not keep off the lot's Buy
+  button: a group pinned at the floor's east edge covers it (the `stuckDistrict` state buys every lot
+  to show the answer clean). For the District UI's owner.
+- The wheel's 1-9 slot numbers are drawn as digits, not through the keycap aliases.
+- The owner's look at the lesson cards' words and the pip shapes at 1x.
+
 ## Status (2026-10-22): Milestone 7, Act III (the District), built
 
 The owner: *"finish the rest of the milestones/game run autonomously, no itch.io page, use up to
