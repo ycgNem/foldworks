@@ -13,6 +13,8 @@ import { DX, DY, type Ent, type FEnt } from '../sim/world';
 import { researchFrac, available } from '../sim/systems/research';
 import { offeredOrders, orderFrac } from '../sim/systems/orders';
 import { megaFrac } from '../render/factory';
+import { districtMegaFrac } from '../render/district';
+import { megaStageOf } from '../sim/systems/high';
 import { capacity, kw } from '../render/powerview';
 import { LINE_H } from '../ui/font';
 import { layoutRich, drawLayout, richWidth, CHIP_H } from '../ui/rich';
@@ -45,6 +47,8 @@ export function floorTags(app: App, L: Layout) {
   const g = app.game;
   if (app.panel) return;
   const fac = app.floor === 'factory';
+  // the District (DESIGN.md §21): its Dock, Hopper and Bay, what the skiffs bring them
+  const dist = app.floor === 'district';
   const tileUi = (16 * app.renderer.cam.zoom) / ui.scale;
   const compact = tileUi < 12;
   const tags: FloorTag[] = [];
@@ -54,7 +58,14 @@ export function floorTags(app: App, L: Layout) {
   // ---- what the lines bring: each item a minute into the Dock and into the Hopper, one row on
   // that destination's own tag (a tag per belt crowded a busy Dock under eight labels)
   const inflow = { dock: new Map<string, number>(), hopper: new Map<string, number>() };
-  if (!fac && !compact) {
+  if (dist && !compact) {
+    for (const r of g.s.district?.routes ?? []) {
+      const to = g.s.district!.ents.find((e) => e.id === r.to);
+      if (!to || (to.kind !== 'fdock' && to.kind !== 'fhopper')) continue;
+      const m = inflow[to.kind === 'fdock' ? 'dock' : 'hopper'];
+      m.set(r.item, (m.get(r.item) ?? 0) + r.flow * 60);
+    }
+  } else if (!fac && !compact) {
     const rates = shipRates(app);
     const entries: { dest: 'dock' | 'hopper'; item: string }[] = [];
     for (const b of g.belts) {
@@ -76,7 +87,7 @@ export function floorTags(app: App, L: Layout) {
     [...m.entries()].sort((p, q) => q[1] - p[1]).slice(0, 4).map(([it, pm]) => `{i:${it}} ${pm > 0 ? fmtRate(pm) : '{warn:0}'}`).join('  ') + (m.size ? ' {soft:/min}' : '');
 
   // ---- the Dock: coin a minute; the active order's portrait and bars; orders waiting
-  const dock: Ent | FEnt | undefined = fac ? g.s.factory.ents.find((e) => e.kind === 'fdock') : g.s.ents.find((e) => e.kind === 'dock');
+  const dock: Ent | FEnt | undefined = dist ? g.s.district?.ents.find((e) => e.kind === 'fdock') : fac ? g.s.factory.ents.find((e) => e.kind === 'fdock') : g.s.ents.find((e) => e.kind === 'dock');
   const selling = g.incomePerMin() > 0 || !!g.s.orders.active || offeredOrders(g).length > 0;
   if (dock && selling) {
     const r = near(dock);
@@ -85,7 +96,7 @@ export function floorTags(app: App, L: Layout) {
       const head = rate > 0 ? `{coin} {coinc:+${fmtRate(rate)}/min}` : '{coin} {soft:0/min}';
       const o = g.s.orders;
       const d = o.active ? ORDER[o.active] : null;
-      const here = d && (fac || d.at !== 'factory') ? d : null;
+      const here = d && (dist ? !d.at || d.at === 'district' : fac || (d.at !== 'factory' && d.at !== 'district')) ? d : null;
       const offered = !o.active ? offeredOrders(g).length : 0;
       const hl = layoutRich(head);
       let cw = hl.w, ch = LINE_H - 2;
@@ -127,7 +138,7 @@ export function floorTags(app: App, L: Layout) {
   }
 
   // ---- the Hopper: the research node, its name and %; a nudge to pick one
-  const hop: Ent | FEnt | undefined = fac ? g.s.factory.ents.find((e) => e.kind === 'fhopper') : g.s.ents.find((e) => e.kind === 'hopper');
+  const hop: Ent | FEnt | undefined = dist ? g.s.district?.ents.find((e) => e.kind === 'fhopper') : fac ? g.s.factory.ents.find((e) => e.kind === 'fhopper') : g.s.ents.find((e) => e.kind === 'hopper');
   const sel = g.s.research.selected;
   if (hop) {
     const r = near(hop);
@@ -148,7 +159,7 @@ export function floorTags(app: App, L: Layout) {
             if (il) drawLayout(ui, il, x, y + LINE_H + 7, T.inkSoft);
           },
         });
-      } else if (!fac && g.s.research.done.length < Object.keys(RESEARCH).length && g.has('bellows') && Object.keys(RESEARCH).some((id) => available(g, id as ResearchId))) {
+      } else if (!fac && !dist && g.s.research.done.length < Object.keys(RESEARCH).length && g.has('bellows') && Object.keys(RESEARCH).some((id) => available(g, id as ResearchId))) {
         const t = textTag(app, compact ? '{chip:warn:pick} {k:T}' : '{u:research} {chip:warn:pick research} {k:T}');
         tags.push({ id: 'hopper', near: r, cw: t.cw, ch: CHIP_H, draw: t.draw });
       }
@@ -156,7 +167,7 @@ export function floorTags(app: App, L: Layout) {
   }
 
   // ---- power grids (Act II): over each grid's first producer, how much of what it wants it gets
-  if (!fac)
+  if (!fac && !dist)
     g.grids.forEach((gr, i) => {
       const at = gr.producers[0] ?? gr.poles[0];
       if (!at || (gr.demand <= 0 && !gr.producers.length)) return;
@@ -188,6 +199,20 @@ export function floorTags(app: App, L: Layout) {
         const f = megaFrac(g);
         const t = textTag(app, `{u:mega} ${compact ? '' : `stage ${st.stage} `}{research:${Math.floor(f * 100)}%}`);
         tags.push({ id: 'bay', near: r, cw: Math.max(t.cw, 40), ch: t.ch + (compact ? 0 : 8), draw: (x, y) => { t.draw(x, y); if (!compact) meter(ui, x, y + LINE_H, Math.max(t.cw, 40), 5, f, { role: 'research', glint: false }); } });
+      }
+    }
+  }
+
+  // ---- the District's Bay: the open project's stage and its %
+  if (dist) {
+    const bay = g.s.district?.ents.find((e) => e.kind === 'fbay');
+    const mf = districtMegaFrac(g);
+    if (bay && mf) {
+      const r = near(bay);
+      if (onScreen(r)) {
+        const st = megaStageOf(g, mf.id);
+        const t = textTag(app, `{u:mega} ${compact ? '' : `stage ${st?.stage ?? 1} `}{research:${Math.floor(mf.frac * 100)}%}`);
+        tags.push({ id: 'bay', near: r, cw: Math.max(t.cw, 40), ch: t.ch + (compact ? 0 : 8), draw: (x, y) => { t.draw(x, y); if (!compact) meter(ui, x, y + LINE_H, Math.max(t.cw, 40), 5, mf.frac, { role: 'research', glint: false }); } });
       }
     }
   }

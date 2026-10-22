@@ -4,6 +4,7 @@
 // Modules join the measurement when the Factory floor exists. Needs the dev server.
 // Usage: npm run perf [-- minutes=50]
 import { launch, openGame } from './launch.mjs';
+import { districtSetup } from './screens.mjs';
 
 const [minutes = '50'] = process.argv.slice(2);
 const { browser, gpu } = await launch();
@@ -64,7 +65,30 @@ const report = [
   `sim: ${tick.toFixed(3)} ms per tick (worst sample ${worst('perTick').toFixed(3)}), so <= ${tick.toFixed(3)} ms of sim in any frame: budget 4 ms ${tick < 4 ? 'PASS' : 'FAIL'}`,
   `loop timers: tick ${avg('tickMs').toFixed(3)} ms, frame (render + HUD) ${avg('frameMs').toFixed(2)} ms, ${avg('fps').toFixed(0)} fps`,
 ];
+// the District (Milestone 7): every free tile a group, each flying its output to the Dock or the
+// Hopper by skiff (the dense case: the groups' rate functions, the routes and the skiffs drawn)
+await page.evaluate(districtSetup, 'districtPerf');
+await page.evaluate(() => { window.__app.unfreeze(); });
+await page.waitForTimeout(1500);
+const dsamples = [];
+for (let i = 0; i < 10; i++) {
+  await page.waitForTimeout(300);
+  dsamples.push(await page.evaluate(() => {
+    const a = window.__app;
+    const L = a.loop;
+    const t0 = performance.now();
+    for (let k = 0; k < 20; k++) a.game.tick();
+    return { frameMs: L.frameMs, fps: L.fps, perTick: (performance.now() - t0) / 20 };
+  }));
+}
+const dinfo = await page.evaluate(() => { const st = window.__app.game.s.district; return { mods: st.ents.filter((e) => e.kind === 'module').length, routes: st.routes.length, skiffs: st.routes.reduce((n, r) => n + r.skiffs, 0) }; });
+const davg = (k) => dsamples.reduce((s, x) => s + x[k], 0) / dsamples.length;
+const dtick = davg('perTick');
+report.push(
+  `District: ${dinfo.mods} groups, ${dinfo.routes} routes, ${dinfo.skiffs} skiffs`,
+  `sim: ${dtick.toFixed(3)} ms per tick (worst sample ${Math.max(...dsamples.map((x) => x.perTick)).toFixed(3)}): budget 4 ms ${dtick < 4 ? 'PASS' : 'FAIL'} · frame (render + HUD) ${davg('frameMs').toFixed(2)} ms, ${davg('fps').toFixed(0)} fps`,
+);
 console.log(report.join('\n'));
 if (errors.length) console.log(errors.join('\n'));
 await browser.close();
-process.exit(tick < 4 ? 0 : 1);
+process.exit(tick < 4 && dtick < 4 ? 0 : 1);

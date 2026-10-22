@@ -399,6 +399,173 @@ export async function m5Setup(state) {
 
 export const M5 = ['reorg', 'patents', 'patentsHover', 'drawer', 'annex', 'committee', 'mega2'];
 
+/** Runs in the page (Milestone 7, DESIGN.md §21): an Act III game on the District. 23 groups
+ * (depth-2 designs pushed into g.s.designs) placed and joined by 20-odd skiff routes into the
+ * District Dock, the Hopper and the Floating City's Bay, some of them short of skiffs (the far
+ * Lift Rotor route and the Sensor route), run for half a minute so the routes carry. States:
+ * district (the floor at rest), districtRoute (a short route's card open), districtHover (a
+ * starved group hovered), districtPick (the Route tool's item list), districtBox (a fold box
+ * dragged with the real mouse), districtAudit (an audit under way, its clipboard), districtGrade
+ * (the District fold's grade card), districtOpen (the floor just opened, empty, a group in hand),
+ * districtPerf (the dense floor alone, for e2e/perf.mjs). */
+export async function districtSetup(state) {
+  const a = window.__app;
+  a.newGame(21);
+  a.freeze();
+  a.toasts = [];
+  a.trophyPops = [];
+  const g = a.game;
+  const N = g.s.coin.constructor;
+  g.s.coin = N.of(4.8e7);
+  g.s.earned = N.of(3.1e8);
+  g.s.land = ['A', 'B', 'C', 'D', 'E', 'F'];
+  g.s.upgrades.push('bellows');
+  const act1 = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding'];
+  const act2 = ['coalSeams', 'steelmaking', 'overdrive', 'steamPower', 'surveying', 'glassworks', 'crushing', 'concrete', 'refining', 'machineKits', 'circuits', 'heavyMachines', 'tuning', 'motors', 'nestedFolds', 'greatDrill'];
+  const act3 = ['zoning', 'chutes', 'chemistry', 'bearings', 'vulcanizing', 'batteries', 'servos', 'sensors', 'processors', 'recycling', 'hydroponics', 'sandwiches', 'robotics', 'floatingCity', 'districtFolds'];
+  g.s.research.done = [...act1, ...act2, ...(state === 'districtOpen' ? ['zoning'] : act3)];
+  g.s.research.selected = state === 'districtOpen' ? null : 'scrapTransmuter';
+  g.s.mega = { stage: 3, progress: {} };
+  g.s.flags.push('factoryOpen', 'factorySeen', 'sliceEnd', 'ordersSeen');
+  g.s.orders.done = ['boardwalk', 'lampPosts', 'gizmoFestival', 'calibration', 'streetlamps', 'lensArray'];
+  g.s.orders.rep = { bramble: 3, unit7: 2, voltaire: 2, committee: 5 };
+  g.s.income = Array(60).fill(52000);
+  g.s.ents = g.s.ents.filter((e) => e.kind === 'dock' || e.kind === 'hopper' || e.kind === 'furnace');
+  g.rebuild();
+  // Act II's spine stands (so the goal speaks of the District): power lit, a Mk2, its products sold
+  for (const [k, v] of Object.entries({ steel: 9000, glass: 4000, circuit: 900, motor: 400, concrete: 3000 })) g.s.delivered[k] = N.of(v);
+  for (const c of [{ k: 'place', kind: 'boiler', x: 16, y: 4, rot: 0 }, { k: 'place', kind: 'steamEngine', x: 17, y: 4, rot: 0 }, { k: 'place', kind: 'pole', x: 18, y: 3, rot: 0 }, { k: 'place', kind: 'kiln', x: 19, y: 1, rot: 3 }, { k: 'place', kind: 'smelterMk2', x: 20, y: 6, rot: 0 }]) a.act(c);
+  a.act({ k: 'recipe', x: 19, y: 1, recipe: 'fireGlass' });
+  const boiler = g.entAt(16, 4), kiln = g.entAt(19, 1);
+  if (boiler) boiler.inBuf.coal = 4000;
+  if (kiln) kiln.inBuf.sand = 400;
+  const gr = (letter, mult) => ({ letter, score: 0.8, u: 0.9, w: 1, c: 0.8, mult });
+  let nid = 1;
+  const D = (name, ins, outs, letter = 'A', mult = 1.1) => ({ id: nid++, name, box: { x: 2, y: 1, w: 4, h: 3 }, parts: [], ins, outs, grade: gr(letter, mult), bill: 40000, stamped: 0, spare: 6, depth: 2, fparts: [] });
+  const T = {
+    steel: D('Steel works II', {}, { steel: 2.0 }, 'S', 1.25),
+    bearing: D('Bearings II', { steel: 0.8 }, { bearing: 1.6 }),
+    gear: D('Gear cutters II', {}, { gear: 1.4 }, 'S', 1.25),
+    gearbox: D('Gearboxes II', { gear: 0.5, bearing: 0.5, steel: 0.25 }, { gearbox: 0.25 }),
+    motor: D('Motors II', {}, { motor: 0.4 }, 'B', 1),
+    rotor: D('Lift Rotors II', { motor: 0.2, gearbox: 0.2, steel: 0.4 }, { liftRotor: 0.1 }),
+    concrete: D('Concrete II', {}, { concrete: 1.2 }, 'A', 1.1),
+    glass: D('Glass II', {}, { glass: 1.5 }, 'S', 1.25),
+    circuit: D('Circuits II', { glass: 0.6 }, { circuit: 0.4 }),
+    plastic: D('Plastic and oil II', {}, { plastic: 1.0, oil: 0.3 }, 'B', 1),
+    rubber: D('Rubber II', { plastic: 0.5 }, { rubber: 0.8 }, 'C', 0.9),
+    sensor: D('Sensors II', { glass: 0.4, circuit: 0.2, rubber: 0.2 }, { sensor: 0.1 }),
+  };
+  g.s.designs = Object.values(T);
+  g.s.nextDesign = nid;
+  // the Factory floor has its groups too (they are what goes up)
+  a.act({ k: 'fplace', design: T.steel.id, x: 2, y: 1, rot: 0 });
+  a.act({ k: 'fplace', design: T.glass.id, x: 2, y: 3, rot: 0 });
+  if (state === 'districtOpen') {
+    a.step(2);
+    g.events.drain();
+    a.setFloor('district', true);
+    a.fitCamera(true);
+    a.toasts = [];
+    a.hud.celebs = [];
+    const DS = a.districtUI;
+    DS.game = g;
+    DS.route = null; DS.pick = null; DS.from = null; DS.sel = null; DS.hoverRoute = null; DS.page = 0;
+    a.pickModule(T.gearbox.id);
+    return { hover: [5, 4] };
+  }
+  a.step(2); // Zoning done: the District opens; the Floating City's research brings the Bay
+  a.step(20);
+  const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
+  const put = (d, x, y) => act({ k: 'hplace', floor: 'district', design: d.id, x, y });
+  const fly = (fx, fy, tx, ty, item, skiffs = 1) => {
+    act({ k: 'route', floor: 'district', fx, fy, tx, ty, item });
+    const st = g.s.district;
+    const r = st.routes[st.routes.length - 1];
+    for (let i = 1; i < skiffs; i++) act({ k: 'skiff', floor: 'district', id: r.id, n: 1 });
+  };
+  // the north: steel, bearings, gears into gearboxes; motors; lift rotors to the Bay, far off
+  put(T.steel, 1, 1); put(T.bearing, 2, 1); put(T.gear, 3, 2); put(T.steel, 1, 3); put(T.gearbox, 4, 1);
+  put(T.motor, 5, 3); put(T.rotor, 6, 2);
+  fly(1, 1, 2, 1, 'steel'); fly(2, 1, 4, 1, 'bearing'); fly(3, 2, 4, 1, 'gear'); fly(1, 3, 4, 1, 'steel');
+  fly(4, 1, 6, 2, 'gearbox'); fly(5, 3, 6, 2, 'motor'); fly(1, 3, 6, 2, 'steel');
+  fly(6, 2, 0, 8, 'liftRotor'); // across the floor: one skiff is short (the warning colour)
+  // concrete beside the Bay
+  put(T.concrete, 2, 8); put(T.concrete, 2, 9);
+  fly(2, 8, 0, 8, 'concrete'); fly(2, 9, 0, 8, 'concrete');
+  // the south: glass into circuits, plastic into rubber, all three into sensors, sensors to the Hopper
+  put(T.glass, 5, 7); put(T.glass, 6, 8); put(T.circuit, 6, 7); put(T.plastic, 4, 6); put(T.rubber, 5, 6); put(T.sensor, 7, 6);
+  fly(5, 7, 6, 7, 'glass'); fly(6, 8, 7, 6, 'glass'); fly(6, 7, 7, 6, 'circuit'); fly(4, 6, 5, 6, 'plastic'); fly(5, 6, 7, 6, 'rubber');
+  fly(4, 6, 10, 1, 'oil'); // the plastic's oil, sold at the Dock (a byproduct with no route blocks it)
+  fly(7, 6, 10, 5, 'sensor');
+  // sellers beside the Dock and Hopper
+  put(T.steel, 9, 1); put(T.bearing, 9, 2); put(T.gear, 8, 3); put(T.glass, 9, 4); put(T.circuit, 9, 6); put(T.glass, 8, 7);
+  fly(9, 1, 10, 1, 'steel', 2); fly(9, 2, 10, 2, 'bearing'); fly(8, 3, 10, 2, 'gear'); fly(9, 4, 10, 5, 'glass'); fly(8, 7, 9, 6, 'glass'); fly(9, 6, 10, 6, 'circuit');
+  // gears from across the floor to the Dock on one skiff: short of skiffs (the bottleneck, orange)
+  fly(3, 2, 10, 1, 'gear');
+  // a group joined to nothing (it backs up: the red pip)
+  put(T.motor, 3, 4);
+  if (state === 'districtPerf') {
+    // fill the rest of the floor with sellers into the Dock and Hopper (the dense case)
+    for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) {
+      if (g.s.district.ents.some((e) => x >= e.x && x < e.x + e.w && y >= e.y && y < e.y + e.h)) continue;
+      const d = (x + y) % 2 ? T.glass : T.steel;
+      if (d.spare < 1) d.spare = 6;
+      put(d, x, y);
+      fly(x, y, y < 5 ? 10 : 10, y < 5 ? 1 : 5, (x + y) % 2 ? 'glass' : 'steel');
+    }
+  }
+  a.step(20 * 30);
+  // the Workshop's kiln keeps the grid lit (its glass has nowhere to go in this setup: emptied)
+  const kl = g.entAt(19, 1);
+  if (kl) { kl.out = 0; kl.inBuf.sand = 400; }
+  a.step(3);
+  g.events.drain();
+  a.toasts = [];
+  a.trophyPops = [];
+  a.refusal = null;
+  // the setup's own firsts (the District opening, Codex entries) are not part of these screens
+  a.hud.celebs = [];
+  a.hud.rain = [];
+  a.setFloor('district', true);
+  a.fitCamera(true);
+  a.renderer.fx.flyers = [];
+  a.renderer.fx.pops = [];
+  const DS = a.districtUI;
+  // the District's UI state belongs to this game (else its first frame lets it go)
+  DS.game = g;
+  DS.route = null; DS.pick = null; DS.from = null; DS.sel = null; DS.hoverRoute = null; DS.page = 0;
+  const find = (fx, fy, item) => { const st = g.s.district; const from = st.ents.find((e) => e.x === fx && e.y === fy); return st.routes.filter((r) => r.from === from.id && r.item === item).pop(); };
+  if (state === 'districtRoute') DS.route = find(3, 2, 'gear').id;
+  // the group joined to nothing: blocked, and its tag says no route takes its motors
+  if (state === 'districtHover') return { hover: [3, 4] };
+  if (state === 'districtPick') {
+    a.setMode({ k: 'route' });
+    DS.pick = { fx: 4, fy: 6, tx: 10, ty: 1, items: ['plastic', 'oil'] };
+    DS.from = { x: 4, y: 6 };
+  }
+  if (state === 'districtBox') { a.setMode({ k: 'fold' }); return { drag: [[4, 6], [7, 8]] }; }
+  if (state === 'districtAudit' || state === 'districtGrade') {
+    act({ k: 'haudit', floor: 'district', x: 4, y: 6, w: 4, h: 3 });
+    a.step(state === 'districtGrade' ? 20 * 72 : 20 * 40);
+    // keep the Workshop's grid lit through the wait (the setup's kiln has nowhere to send glass)
+    const k2 = g.entAt(19, 1);
+    if (k2) { k2.out = 0; k2.inBuf.sand = 400; }
+    if (boiler) boiler.inBuf.coal = 400;
+    a.step(3);
+    g.events.drain();
+    a.toasts = [];
+    a.hud.celebs = [];
+    a.renderer.fx.flyers = [];
+    a.renderer.fx.pops = [];
+    a.renderer.fx.parts = [];
+    if (state === 'districtGrade') { a.panel = 'fgrade'; a.gradeAt = a.ui.time - 1; a.hud.stamped = true; a.nameDraft = null; a.hud.confetti = 0; }
+  }
+  return null;
+}
+
+export const DISTRICT = ['district', 'districtRoute', 'districtHover', 'districtPick', 'districtBox', 'districtAudit', 'districtGrade', 'districtOpen'];
+
 const SIZES = [[1280, 720], [1920, 1080], [1024, 640]];
 // each state: a function run in the page that puts the app there (frozen); it may return
 // { hover: [x, y] } to put the mouse over that tile instead of the board's top edge
@@ -542,6 +709,7 @@ STATES.act2hover = { base: 'act2power', post: () => { const a = window.__app; a.
 for (const s of ACT2) STATES[s] = s;
 for (const s of WORKSHOP) STATES[s] = { ws: s };
 for (const s of M5) STATES[s] = { m5: s };
+for (const s of DISTRICT) STATES[s] = { d: s };
 
 async function main() {
   const only = process.argv.slice(2);
@@ -559,7 +727,7 @@ async function main() {
     for (const [state, fn] of Object.entries(STATES)) {
       if (only.length && !only.includes(state)) continue;
       const name = `${w}x${h}-${state}`;
-      const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post)) : await page.evaluate(f));
+      const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.d ? await page.evaluate(districtSetup, f.d) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post)) : await page.evaluate(f));
       const r = await run(fn);
       // the goal card slides in when its goal changes: a state set from scratch shows it at rest
       await page.evaluate(() => { window.__app.hud.goalKey = null; });
