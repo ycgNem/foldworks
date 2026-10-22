@@ -40,10 +40,10 @@ describe(`Act III pacing to 40 h (seed ${SEED})`, () => {
     const stage = r.stages[0];
     console.log(
       `[pace] seed ${SEED}: runs ${r.logs.map((l) => `${l.run} ${hmm(l.start)}-${hmm(l.end)} (+${l.patents}P${l.act3 >= 0 ? `, Act III ${hmm(l.start + l.act3)}` : ''})`).join('; ')}\n` +
-      `[pace] District open ${hmm(r.districtAt)} (target ~15 h); Megaproject stages ${r.stages.map((s) => `${s.id}${s.stage} ${hmm(s.at)}`).join(', ') || 'none'} (first by 25 h)\n` +
+      `[pace] District open ${hmm(r.districtAt)} (target ~11 h); Megaproject stages ${r.stages.map((s) => `${s.id}${s.stage} ${hmm(s.at)}`).join(', ') || 'none'} (first by 25 h)\n` +
       `[pace] rule 1 over Act III: longest goal gap ${(g1.gap / 60).toFixed(1)} min at ${hmm(g1.at)} (whole campaign ${(whole1.gap / 60).toFixed(1)} at ${hmm(whole1.at)})\n` +
       `[pace] rule 2 over Act III: longest gap between decisions ${(g2.gap / 60).toFixed(1)} min at ${hmm(g2.at)} (whole campaign ${(whole2.gap / 60).toFixed(1)} at ${hmm(whole2.at)})\n` +
-      `[pace] District modules at 40 h ${r.modulesAt40} (most ${r.maxModules}); clicks/s max ${r.clicksPerSecMax}; wall ${(r.wallMs / 1000).toFixed(0)} s`,
+      `[pace] District modules at 40 h ${r.modulesAt40} (most ${r.maxModules}); District folds ${r.districtFolds} (depth-3 standing at 40 h ${r.foldsAt40}); clicks/s max ${r.clicksPerSecMax}; wall ${(r.wallMs / 1000).toFixed(0)} s`,
     );
     expect(r.logs[r.logs.length - 1].end).toBeGreaterThanOrEqual(HORIZON - 1);
     expect(r.districtAt).not.toBeNull();
@@ -62,13 +62,13 @@ describe(`Act III pacing to 40 h (seed ${SEED})`, () => {
     expect(r.stages[0].at).toBeLessThan(25 * H);
   }, T);
 
-  // OPEN (measured and printed, not asserted yet; DESIGN.md §21 Pacing): rules 1 and 2 hold through
-  // the first Act III stretches, but the fifth run runs out of things to do once the District is
-  // full and the Floating City's first stage stands (about 21.5 h): its next goals are chemistry's
-  // (Chemistry, then sludge for Hydroponics, sandwiches for the City's second stage), which this
-  // player does not build yet, and with nothing new to patent the Reorganize is refused, so the run
-  // idles to 40 h. Rule 5's skiffs: every route carries its want with one skiff (feeders stand
-  // beside what they feed), so no route has needed a second yet.
+  // Measured and printed, not asserted (DESIGN.md §21 Pacing): rules 1 and 2 hold while the
+  // District grows, a copy every few minutes and a lot as the routes or the tiles run out; once the
+  // floor is full (about 140 groups on 180 routes, every lot) this player has nothing left to
+  // build, because every goal after the City's stage 1 is chemistry's (Chemistry, sludge for
+  // Hydroponics, sandwiches for the City's stage 2, the Transmuter), which it does not build, and
+  // District Folds is behind Robotics. It then resets (src/sim/campaign.ts ACT3_FULL), so the worst
+  // wait is about the reset's 10 minutes; OPEN: run 5's 20.1 min just after its hand-over.
   it('rules 1 and 2 over Act III (logged; OPEN past the first megaproject stage)', () => {
     const r = act3Campaign(SEED);
     const goals = r.decisions.filter((_, i) => GOAL.test(r.what[i]));
@@ -83,22 +83,35 @@ describe(`Act III pacing to 40 h (seed ${SEED})`, () => {
     expect(goals.length).toBeGreaterThan(0);
   }, T);
 
-  it('rule 5: Act III adds composing modules (routes between District modules)', () => {
+  // Rule 5's new problem is composing: where a group stands decides how many skiffs its route
+  // takes (1 a trip, DESIGN.md §21), so the skiff count is the layout's bill.
+  it('rule 5: Act III adds composing modules (routes between District modules, skiffs by distance)', () => {
     const r = act3Campaign(SEED);
     const most = r.districtByMin.reduce((m, s) => (s.between > m.between ? s : m), r.districtByMin[0]);
-    console.log(`[pace] rule 5: most routes between District modules ${most?.between} (of ${most?.routes}, ${most?.skiffs} skiffs) at ${hmm(most?.t)}`);
+    const busy = r.districtByMin.reduce((m, s) => (s.skiffs - s.routes > m.skiffs - m.routes ? s : m), r.districtByMin[0]);
+    const deep = r.districtByMin.reduce((m, s) => (s.most > m.most ? s : m), r.districtByMin[0]);
+    const lots = Math.max(0, ...r.districtByMin.map((s) => s.lots));
+    const short = r.districtByMin.filter((s) => s.modules > 0 && s.short > 0).length / Math.max(1, r.districtByMin.filter((s) => s.modules > 0).length);
+    console.log(
+      `[pace] rule 5: most routes between District modules ${most?.between} (of ${most?.routes}) at ${hmm(most?.t)}; ` +
+      `most skiffs over routes ${busy.skiffs} on ${busy.routes} (${(busy.skiffs / Math.max(1, busy.routes)).toFixed(2)} a route) at ${hmm(busy.t)}; ` +
+      `most on one route ${deep.most} at ${hmm(deep.t)}; lots bought ${lots}; minutes with a short route ${(short * 100).toFixed(0)}%`,
+    );
     expect(most.between).toBeGreaterThanOrEqual(2);
-    if (!r.districtByMin.some((s) => s.skiffs > s.routes)) console.log('[pace] OPEN rule 5: no route ever needed a second skiff (the placer stands every feeder beside what it feeds)');
+    expect(r.districtByMin.some((s) => s.skiffs > s.routes)).toBe(true);
+    if (r.districtFolds === 0) console.log('[pace] OPEN District folds: none made (District Folds is research behind Robotics, which wants sensors and processors: chemistry, which this player does not build)');
   }, T);
 
-  it('holds 20+ modules on the District at 40 h', () => {
-    expect(act3Campaign(SEED).modulesAt40).toBeGreaterThanOrEqual(20);
+  // (the campaign now resets once a District is full, so 40 h can fall early in a run: the test
+  // holds the most the District stood on, and the perf case ticks that state)
+  it('holds 20+ modules on the District', () => {
+    expect(act3Campaign(SEED).maxModules).toBeGreaterThanOrEqual(20);
   }, T);
 
   it('ticks a 20+ module District inside the frame budget (e2e/perf.mjs: 4 ms a tick)', () => {
     const r = act3Campaign(SEED);
     const ms = tickCost(r);
-    console.log(`[pace] tick cost at 40 h: ${ms.toFixed(3)} ms (${r.modulesAt40} District modules)`);
+    console.log(`[pace] tick cost with the biggest District: ${ms.toFixed(3)} ms (${r.maxModules} District modules)`);
     expect(ms).toBeLessThan(4);
   }, T);
 });

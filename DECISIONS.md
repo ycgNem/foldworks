@@ -1817,3 +1817,24 @@ has measured is committed, and any target it hasn't shown holding is listed as o
   the City's stage 2 and the Transmuter); run 4 waits 42.5 min on Servos research; no route ever
   needed a second skiff with this bot's placement (rule 5's skiff decision); seed 8919 not run.
   The bot's limits, not the model's, as far as the arithmetic shows; the gate review weighs in.
+- **The Act III bot under the second gate's rules** (2026-10-22, DESIGN.md §21 Pacing): it routes
+  no waste (the waste chute takes it), buys a lot when the routes or the tiles run out, adds a skiff
+  every 5 s to the route furthest under 90% of its want, skips a refused route instead of holding
+  its hands on it, lets a copy it can't have go (a want left standing had held every later copy on
+  18M coin), and stops growing designs whose product nobody takes (Rotors once the City has its
+  rotors). It builds no chemistry: solvent needs sand, and the map's only sand patch is the lab's
+  (chunk E) while a lone sand miner may not fold, so no Chute can carry sand to a Workshop line;
+  a player belts it there by hand, the bot doesn't yet. So District Folds (behind Robotics) and the
+  City's stage 2 stay out of its reach.
+- **A District module counts in the Patents bills term as a Factory module does** (its stamp bill
+  times its measured work; `src/sim/reorganize.ts`, `src/sim/systems/stats.ts`). Why: with only
+  the Workshop and the Factory counted, every run after the one that filed Act III's designs
+  previewed under 1 Patent on a full District, so the Reorganize was refused and the campaign idled
+  5 h to its horizon; the act's composing work now files Patents the way Act II's floor does
+  (log-damped: a full District of about 140 groups is about +5).
+- **Its copies stop when the routes do**: with every lot bought and the routes at the cap, the bot
+  places no copy it could not route (it had placed 20 more that stood blocked).
+- **The campaign's Act III player resets when the District is full** (`ACT3_FULL`: the plan
+  through, nothing placed and no lot bought for 10 min, the floor full or 10M coin unspent), not
+  on the preview's stall: a District grows the preview a copy at a time, slower and slower, while
+  there is still floor to build.

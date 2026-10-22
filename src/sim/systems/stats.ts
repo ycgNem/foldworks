@@ -39,6 +39,8 @@ export function runStats(g: Game) {
     const n = RULES.billsWindow.value;
     for (const list of [g.miners, g.machines, g.power]) for (const m of list) rollWork(m, n);
     for (const m of g.s.factory.ents) if (m.kind === 'module') rollWork(m, n);
+    // the high floors' modules too (they count in the bills term as the Factory's do: §21 Pacing)
+    for (const id of ['district', 'world'] as const) for (const m of g.s[id]?.ents ?? []) if (m.kind === 'module') rollWork(m, n);
   }
   checkTrophies(g);
   g.s.income.push(g.s.incomeSec);
