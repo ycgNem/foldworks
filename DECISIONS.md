@@ -1744,3 +1744,19 @@ bottleneck is never hidden: every route says what it carries of what it is wante
 - **Challenges, and the Dispatcher as an autobuyer**, are Antimatter Dimensions conventions
   (flagged since `PLAN.md`); goals are factory goals, rewards small rules.
 - **A chute dropping items to the floor below** is generic (every multi-level factory game).
+
+### The District's screen
+- **A labelled tool strip across the top** (Route, Remove, Fold, then the depth-2 groups with
+  spares) instead of the Workbench Wheel: the District has three tools and an inventory, and every
+  one is a visible button (the owner's "visible, not hidden").
+- **The District's floor button is a "D" on a wing of the lift**; Tab cycles the open floors.
+- **A route is short when it carries under 90% of its want** (the Dispatcher's test), drawn bold
+  orange, with the readout `1 skiff · 0.47/s of 1.4 wanted · 7.5 tiles` and how many more skiffs
+  carry it all (pillar 3).
+- **A click on a group overdrives it and its route group**; while Overdrive isn't ready the click
+  pins its report instead.
+- **District rates read per second** (routes are per second in the design); the grade card stays
+  per minute, the Factory's card, shared.
+- **No pause on the District yet**: the pause command takes the Factory only (to add with the
+  World, Milestone 9).
+- **`- skiff` uses an ASCII hyphen**: the bitmap font has no minus sign.
