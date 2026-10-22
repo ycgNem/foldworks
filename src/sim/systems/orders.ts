@@ -10,6 +10,7 @@ import { TICK_RATE } from '../../engine/time';
 import { customerMet } from '../reorganize';
 import { lrules } from '../legacy';
 import { orderQueue } from '../transfer';
+import { runLedger } from './ledger';
 
 /** Special orders on offer right now (requirements met, not done). */
 export function offeredOrders(g: Game) {
@@ -47,6 +48,8 @@ export function runOrders(g: Game) {
     // reputation can change the rules the layout runs by (Voltaire's rep 3 extends pole reach)
     g.layoutDirty = true;
   }
+  // the Endless Ledger's open order (DESIGN.md §23), with the special orders (offline pays through here too)
+  runLedger(g);
   if (o.rep.bramble >= 2) {
     if (g.s.freeCrateIn > 0) g.s.freeCrateIn--;
     else if (g.s.freeCrates < RULES.repCrateMax.value) {

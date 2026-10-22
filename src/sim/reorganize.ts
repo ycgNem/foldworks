@@ -44,6 +44,7 @@ import { isSky, setupIsland } from './systems/islands';
 import { lrules } from './legacy';
 import { megaDone } from './systems/high';
 import { noteBests } from './relocate';
+import { clearSeedTile, placeSeed } from './lastfold';
 import { BYPRODUCTS, mainItem, megaOpen } from './systems/modules';
 import { recipeKnown } from './transfer';
 import { workShare } from './systems/stats';
@@ -84,9 +85,10 @@ export function chainSteps(item: ItemId): number {
   if (!depthCache) {
     const d: Partial<Record<ItemId, number>> = {};
     for (const r of RECIPES) if (r.machine === 'miner') for (const o of r.outputs) d[o.item] = 0;
+    // (the Second Cookbook's alternate recipes never count: filing is the same in every universe, §23)
     for (let pass = 0; pass < 20; pass++)
       for (const r of RECIPES) {
-        if (r.machine === 'miner') continue;
+        if (r.machine === 'miner' || r.alt) continue;
         if (!r.inputs.every((s) => d[s.item] !== undefined)) continue;
         const v = 1 + Math.max(0, ...r.inputs.map((s) => d[s.item]!));
         for (const o of [...r.outputs.map((q) => q.item), ...(r.byproduct ? [r.byproduct.item] : [])]) if (d[o] === undefined || v < d[o]!) d[o] = v;
@@ -111,7 +113,7 @@ export function stepsFolded(d: Pick<ModuleDesign, 'ins'>, item: ItemId): number 
 /** A design's scale: its product per second (before the grade) in Mk1 machines' worth of the
  * product's last recipe (the shallowest recipe making it). */
 export function designScale(d: Pick<ModuleDesign, 'outs' | 'grade'>, item: ItemId): number {
-  const r = RECIPES.filter((q) => q.machine !== 'miner' && q.outputs.some((o) => o.item === item)).sort((a, b) => a.time - b.time)[0];
+  const r = RECIPES.filter((q) => q.machine !== 'miner' && !q.alt && q.outputs.some((o) => o.item === item)).sort((a, b) => a.time - b.time)[0];
   if (!r) return 0;
   const n = r.outputs.find((o) => o.item === item)!.n;
   return ((d.outs[item] ?? 0) / Math.max(0.01, d.grade.mult)) * r.time / n;
@@ -383,11 +385,11 @@ export function reorganize(g: Game, challenge?: ChallengeId): ActResult {
 
 /** Close the run: its record, the lifetime statistics, and this world's best folds (Reorganize and
  * Relocate both call it before the reset). */
-export function endRun(g: Game, rec: { patents: number; relocate?: RunRecord['relocate']; legacy?: number }) {
+export function endRun(g: Game, rec: { patents: number; relocate?: RunRecord['relocate']; legacy?: number; lastFold?: number }) {
   const s = g.s;
   const m = s.meta;
   noteBests(g);
-  m.history.push({ run: m.runs + 1, ticks: s.tick - m.runStart, patents: rec.patents, earned: s.earned, peakPerMin: m.peakPerMin, ...(rec.relocate ? { relocate: rec.relocate, legacy: rec.legacy } : {}) });
+  m.history.push({ run: m.runs + 1, ticks: s.tick - m.runStart, patents: rec.patents, earned: s.earned, peakPerMin: m.peakPerMin, ...(rec.relocate ? { relocate: rec.relocate, legacy: rec.legacy } : {}), ...(rec.lastFold !== undefined ? { lastFold: rec.lastFold } : {}) });
   m.runs++;
   m.lifetime.earned = m.lifetime.earned.add(s.earned);
   for (const [it, n] of Object.entries(s.delivered) as [ItemId, Num][]) m.lifetime.delivered[it] = (m.lifetime.delivered[it] ?? Num.ZERO).add(n);
@@ -414,7 +416,10 @@ export function startRun(g: Game) {
   g.rebuildFactory();
   g.intake.length = 0;
   for (const b of START_LAYOUT) g.addPart(b.kind, b.x, b.y, b.rot);
+  // the Seed, in every Workshop after a Last Fold (DESIGN.md §23)
+  placeSeed(g);
   setupIsland(g);
+  clearSeedTile(g);
   fresh.nextSpark = g.sparkDelay();
   fresh.annex = Math.min(ANNEX.blocks, fresh.meta.keptRoom?.annex ?? 0);
   applyHeadStarts(g);

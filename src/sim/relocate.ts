@@ -25,6 +25,7 @@ import { itemName } from '../data/items';
 import { newWorldRun, type FloorBest, type LegacyFloor, type MegaState, type ModuleDesign } from './world';
 import { designValue, endRun, startRun } from './reorganize';
 import { lrules } from './legacy';
+import { krules } from './kernels';
 import { worldOf } from './systems/islands';
 import { megaDone, megaStageOf, projectOpen } from './systems/high';
 
@@ -80,11 +81,11 @@ export function bestsThisRun(g: Game): Partial<Record<LegacyFloor, FloorBest>> {
 export function floorBests(g: Game): Record<LegacyFloor, FloorBest | null> {
   const kept = g.s.meta.here?.best ?? {};
   const now = bestsThisRun(g);
+  // Kept Islands (a Kernel node, DESIGN.md §23): the island's record stands as this world's best
+  const rec = krules(g).keptIslands ? g.s.meta.worldRecords?.[worldOf(g)] ?? {} : {};
   const out = {} as Record<LegacyFloor, FloorBest | null>;
-  for (const f of LEGACY_FLOORS) {
-    const a = kept[f], b = now[f];
-    out[f] = a && b ? (b.value > a.value ? b : a) : a ?? b ?? null;
-  }
+  const better = (a: FloorBest | null | undefined, b: FloorBest | null | undefined) => (a && b ? (b.value > a.value ? b : a) : a ?? b ?? null);
+  for (const f of LEGACY_FLOORS) out[f] = better(better(kept[f], now[f]), rec[f]);
   return out;
 }
 

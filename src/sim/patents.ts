@@ -12,9 +12,10 @@ import { BUILD } from '../data/machines';
 import { PATENTS, PATENT_IDS, type PatentEffect, type PatentId } from '../data/patents';
 import type { State } from './world';
 import { applyHeadStarts } from './reorganize';
-import { offlineEfficiency } from './offline';
+import { offlineCeiling, offlineEfficiency } from './offline';
 import { IDLE } from '../data/idle';
 import { CHALLENGES } from '../data/challenges';
+import { krules } from './kernels';
 
 export interface PatentRules {
   foldMax: number;
@@ -54,7 +55,7 @@ const cache = new WeakMap<State, { key: string; r: PatentRules }>();
 export function prules(g: Game): PatentRules {
   const s = g.s;
   const rep = s.orders.rep.committee ?? 0;
-  const key = s.meta.nodes.length + ':' + rep + ':' + (s.challenge ?? '') + ':' + (s.meta.challenges?.length ?? 0);
+  const key = s.meta.nodes.length + ':' + rep + ':' + (s.challenge ?? '') + ':' + (s.meta.challenges?.length ?? 0) + ':' + (s.meta.kernelNodes?.length ?? 0);
   const hit = cache.get(s);
   if (hit && hit.key === key) return hit.r;
   const r: PatentRules = {
@@ -114,6 +115,8 @@ export function prules(g: Game): PatentRules {
     r.highFoldMax = Math.max(r.highFoldMax, 8) + 1;
   }
   if (s.meta.challenges?.includes('handsOff')) r.dispatcherEvery = r.dispatcherEvery || 10;
+  // the Bigger Box (a Kernel node, DESIGN.md §23): 12x12 (a Challenge's small box still holds)
+  r.foldMax = Math.max(r.foldMax, krules(g).foldMax);
   if (s.challenge === 'smallBoxes') r.foldMax = Math.min(r.foldMax, CHALLENGES.smallBoxes.value ?? 4);
   // the ceiling of ROADMAP Milestone 5 (rounding: 0.5 + 0.05 x 3; the Night Shift's 0.1 is added
   // in offlineEfficiency, src/sim/offline.ts, which caps the sum at 0.75)
@@ -137,7 +140,7 @@ export function patentRefusal(g: Game, id: PatentId): string | null {
   const missing = d.requires.filter((q) => !hasPatent(g, q));
   if (missing.length) return `Needs ${missing.map((q) => PATENTS[q].name).join(' and ')} first`;
   // an offline node past the 0.75 ceiling would buy nothing (the coin Night Shift may have got there)
-  if (d.effect.k === 'offline' && offlineEfficiency(g) >= IDLE.offlineEffMax.value - 1e-9) return `Offline efficiency is at its ${Math.round(IDLE.offlineEffMax.value * 100)}% ceiling already`;
+  if (d.effect.k === 'offline' && offlineEfficiency(g) >= offlineCeiling(g) - 1e-9) return `Offline efficiency is at its ${Math.round(offlineCeiling(g) * 100)}% ceiling already`;
   if (g.s.meta.patents.lt(d.cost)) return `Costs ${d.cost} Patent${d.cost > 1 ? 's' : ''}: you have ${g.s.meta.patents.format()}`;
   return null;
 }

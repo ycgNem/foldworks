@@ -334,6 +334,9 @@ const TREE: Record<ResearchId, [number, number, number?]> = {
   cinderSmelting: [0, 1.6], sunsetDyes: [1, 1.6], sunsetEngineering: [2, 1.6, 1],
   frostWorks: [0, 2.4, 1], stormCells: [1, 2.4, 1], pocketWeathers: [2, 2.4, 1], thermals: [3, 2.4, 1],
   relicStudy: [0, 3.2, 1],
+  // Act V's page (placeholder positions from the sim agent: the Last Fold, then each island's tier 5
+  // node a row under it)
+  lastFold: [0, 1.6], cartography: [1, 0.4], starForging: [1, 1.2, 1], weatherBottling: [1, 2.0], relicEngines: [1, 2.8, 1],
 };
 
 const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
@@ -350,6 +353,8 @@ const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
   cinderSmelting: 'cinderAlloy', sunsetDyes: 'sunsetDye', sunsetEngineering: 'sunsetGenerator',
   frostWorks: 'frostAlloy', stormCells: 'stormCell', pocketWeathers: 'pocketWeather', relicStudy: 'relicGear',
   lighthouse: 'mega', skyAnchor: 'mega', relocation: 'mega',
+  // Act V (placeholders until the art director's lastFold and items5 icons)
+  lastFold: 'fold', cartography: 'mapOfEverywhere', starForging: 'verySmallSun', weatherBottling: 'bottledTuesday', relicEngines: 'quietEngine',
 };
 
 /** nodes with their own drawing in ui_research (the art director's), by frame */

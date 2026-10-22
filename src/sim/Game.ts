@@ -1,6 +1,7 @@
 // The game: state, the command log, and the fixed system order (CLAUDE.md):
 // input commands -> automation (the Patent tree's helpers: the Draughtsman, the Shovel Frog..., §19) ->
-// miners -> belts -> machines -> modules (the Factory, then the high floors, §21) -> docks and hoppers -> orders -> research -> sparks ->
+// miners (and the Seed, §23) -> belts -> machines -> modules (the Factory, then the high floors, §21) -> docks and hoppers ->
+// orders (and the Endless Ledger, §23) -> research -> sparks ->
 // audits -> stats.
 // Pure (tests/purity.test.ts): time comes in as ticks; presentation effects go out as events on
 // `events`, drained by the renderer and audio.
@@ -55,6 +56,11 @@ import { runIslands, islandCaches, islandPatches, islandTileRefusal, isSky, clea
 import { relocate } from './relocate';
 import { buyLegacy, setHabit, setStanding, keepPlan, forgetPlan } from './legacy';
 import { runWorlds } from './systems/worlds';
+// Act V (DESIGN.md §23): the Last Fold (layer 3), the Kernel tree, the Seed
+import type { KernelId } from '../data/kernels';
+import { buyKernel, setKeptLegacy } from './kernels';
+import { lastFold, startLastFoldAudit } from './lastfold';
+import { runSeed } from './systems/seed';
 import type { PatchDef } from '../data/land';
 
 export interface Intake {
@@ -65,7 +71,7 @@ export interface Intake {
   y: number;
   /** how many (1 when absent: the Workshop hands over one item at a time) */
   n?: Num;
-  floor?: 'factory' | 'district' | 'world';
+  floor?: 'factory' | HighFloorId;
 }
 
 /** Everything a player (or a bot) can do. Each is validated and logged with the tick it applied at. */
@@ -142,7 +148,13 @@ export type Cmd =
   | { k: 'keepPlan'; name?: string }
   | { k: 'forgetPlan'; id: number }
   | { k: 'clear'; x: number; y: number }
-  | { k: 'repair'; x: number; y: number };
+  | { k: 'repair'; x: number; y: number }
+  // Act V (DESIGN.md §23): audit the whole World, take the Last Fold (layer 3), buy a Kernel node,
+  // and Kept Legacy's choice of a Legacy node to keep through the next Last Fold
+  | { k: 'lastFoldAudit' }
+  | { k: 'lastFold' }
+  | { k: 'kernel'; id: KernelId }
+  | { k: 'keepLegacy'; id: LegacyId };
 
 export interface Logged { t: number; c: Cmd }
 
@@ -210,6 +222,8 @@ export class Game {
   vented = new Set<number>();
   /** Rime's Heaters */
   heaters: Ent[] = [];
+  /** the Seed (DESIGN.md §23), once a Last Fold has planted it */
+  seeds: Ent[] = [];
 
   constructor(seed: number, opts: { keepHistory?: boolean; empty?: boolean; scenario?: ScenarioId } = {}) {
     this.s = newState(seed);
@@ -377,6 +391,7 @@ export class Game {
     this.logistics = [];
     this.power = [];
     this.heaters = [];
+    this.seeds = [];
     const belts: Ent[] = [];
     for (const e of this.s.ents) {
       this.byId.set(e.id, e);
@@ -387,6 +402,7 @@ export class Game {
       else if (e.kind === 'splitter' || e.kind === 'merger' || e.kind === 'crate' || e.kind === 'heap' || e.kind === 'chuteMouth') this.logistics.push(e);
       else if (isPower(e.kind)) this.power.push(e);
       else if (e.kind === 'heater') this.heaters.push(e);
+      else if (e.kind === 'seed') this.seeds.push(e);
     }
     islandCaches(this);
     this.belts = this.orderBelts(belts);
@@ -498,6 +514,10 @@ export class Game {
       case 'forgetPlan': return forgetPlan(this, c.id);
       case 'clear': return clearRubble(this, c.x, c.y);
       case 'repair': return repair(this, c.x, c.y);
+      case 'lastFoldAudit': return startLastFoldAudit(this);
+      case 'lastFold': return lastFold(this);
+      case 'kernel': return buyKernel(this, c.id);
+      case 'keepLegacy': return setKeptLegacy(this, c.id);
       default: return no('unknown command');
     }
   }
@@ -571,7 +591,7 @@ export class Game {
   private remove(x: number, y: number): ActResult {
     const e = this.entAt(x, y);
     if (!e) return no('nothing here');
-    if (e.kind === 'dock' || e.kind === 'hopper' || e.kind === 'furnace') return no(`The ${BUILD[e.kind].name} stays`);
+    if (e.kind === 'dock' || e.kind === 'hopper' || e.kind === 'furnace' || e.kind === 'seed') return no(`The ${BUILD[e.kind].name} stays`);
     const lock = auditLock(this, x, y);
     if (lock) return no(lock);
     // a heap with slag in it can't be lifted (removing it would empty it for free)
@@ -761,7 +781,7 @@ export class Game {
       if (!r || r.machine !== BUILD[e.kind].machine) return no('that machine cannot make it');
       if (r.mk2 && (BUILD[e.kind].speed ?? 1) <= 1) return no(`Only a Mk2 makes ${r.name}`);
       if (r.unlock && !this.done(r.unlock)) return no(`Needs research: ${RESEARCH[r.unlock].name}`);
-      if (!recipeKnown(this, r)) return no(`${CUSTOMERS[r.rep!.customer].name} teaches it at reputation ${r.rep!.level}`);
+      if (!recipeKnown(this, r)) return no(r.rep ? `${CUSTOMERS[r.rep.customer].name} teaches it at reputation ${r.rep.level}` : 'The Second Cookbook (a Kernel node) teaches it');
     }
     if (e.recipe === recipe) return OK;
     e.recipe = recipe;
@@ -785,6 +805,7 @@ export class Game {
     runAutomation(this);
     if (this.layoutDirty) this.rebuild();
     runMiners(this);
+    runSeed(this);
     runBelts(this);
     runPower(this);
     runIslands(this);

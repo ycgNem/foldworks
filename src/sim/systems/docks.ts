@@ -14,6 +14,8 @@ import { dockTally } from '../offline';
 import { lrules } from '../legacy';
 import { orderQueue } from '../transfer';
 import { ISLAND_GOODS, worldOf } from './islands';
+import { ledgerTake } from './ledger';
+import type { HighFloorId } from '../../data/floors';
 
 /** What one item sells for at the Dock right now. */
 export function saleValue(g: Game, item: ItemId): number {
@@ -26,7 +28,7 @@ export function saleValue(g: Game, item: ItemId): number {
 
 /** Fill the active order with what was delivered, if it wants it; returns what is left to sell.
  * An order for the Factory Dock only counts deliveries made there. */
-export function fillOrder(g: Game, item: ItemId, n: Num, floor?: 'factory' | 'district' | 'world'): Num {
+export function fillOrder(g: Game, item: ItemId, n: Num, floor?: 'factory' | HighFloorId): Num {
   const o = g.s.orders;
   const runners = lrules(g).runners;
   // Contract Runners (a Legacy node, DESIGN.md §22): every order on offer, from any floor's Dock
@@ -44,7 +46,8 @@ export function fillOrder(g: Game, item: ItemId, n: Num, floor?: 'factory' | 'di
     prog[item] = have.add(take);
     n = n.sub(take);
   }
-  return n;
+  // the Endless Ledger (a Kernel node, DESIGN.md §23) takes what its open order wants, from any Dock
+  return ledgerTake(g, item, n);
 }
 
 export function runDocks(g: Game) {
@@ -83,7 +86,7 @@ export function runDocks(g: Game) {
 /** The Codex (Unit 7's rep 1): the first delivery of each item pays 30x its value, once. Field
  * Notes (Unit 7's rep 5, DESIGN.md §22): an island's exotic and tier 4 goods pay it again on each
  * island they are first delivered on. */
-function codex(g: Game, item: ItemId, x: number, y: number, floor?: 'factory' | 'district' | 'world') {
+function codex(g: Game, item: ItemId, x: number, y: number, floor?: 'factory' | HighFloorId) {
   if (g.s.orders.rep.unit7 < 1) return;
   const v = ITEMS[item].value;
   if (v <= 0) return;

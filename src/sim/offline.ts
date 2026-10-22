@@ -39,17 +39,23 @@ import { prules } from './patents';
 import type { Ent, FEnt } from './world';
 import { HIGH, type HighFloorId } from '../data/floors';
 import { HIGH_IDS, bayProjects, megaStageOf, megaGiveX } from './systems/high';
+import { krules } from './kernels';
 
 /** The offline efficiency now (DESIGN.md §12, §20): the base 0.5 plus the Patent tree's offline
  * nodes (§19) plus the Night Shift bought with coin, capped at 0.75. The one function every
  * caller reads (the run, the forecast, the overnight screen, the Night Shift's refusal). */
 export function offlineEfficiency(g: Game): number {
-  return Math.min(IDLE.offlineEffMax.value, offlineEfficiencyUncapped(g));
+  return Math.min(offlineCeiling(g), offlineEfficiencyUncapped(g));
+}
+
+/** The ceiling offline efficiency stops at: 0.75 (§20), 0.85 with Long Nights (a Kernel node, §23). */
+export function offlineCeiling(g: Game): number {
+  return krules(g).offlineCeiling ?? IDLE.offlineEffMax.value;
 }
 
 /** The sources summed before the cap (what a purchase would add is judged against the cap). */
 export function offlineEfficiencyUncapped(g: Game): number {
-  let e = prules(g).offline;
+  let e = prules(g).offline + krules(g).offlineAdd;
   for (const u of IDLE_UPGRADES) if (g.has(u.id)) e += u.eff;
   return Math.round(e * 1e6) / 1e6;
 }
@@ -141,27 +147,31 @@ export interface Tally {
   fdock: Partial<Record<ItemId, Num>>;
   ddock: Partial<Record<ItemId, Num>>;
   wdock: Partial<Record<ItemId, Num>>;
+  /** Beyond's Dock (DESIGN.md §23) */
+  bdock: Partial<Record<ItemId, Num>>;
   hopper: Partial<Record<ItemId, Num>>;
   /** the Factory's Bay (the Great Drill), and the District's and World's (Megaprojects #2 on) */
   bay: Partial<Record<ItemId, Num>>;
   dbay: Partial<Record<ItemId, Num>>;
   wbay: Partial<Record<ItemId, Num>>;
+  /** Beyond's Bay (no project builds there yet; tallied like the others) */
+  bbay: Partial<Record<ItemId, Num>>;
 }
 
 type Kind = keyof Tally;
 /** Delivery rates, items a second, by destination (rates may be plain numbers). */
 type Rates = Record<Kind, Partial<Record<ItemId, number>>>;
 
-const KINDS = ['dock', 'fdock', 'ddock', 'wdock', 'hopper', 'bay', 'dbay', 'wbay'] as const;
-const DOCKS = ['dock', 'fdock', 'ddock', 'wdock'] as const;
+const KINDS = ['dock', 'fdock', 'ddock', 'wdock', 'bdock', 'hopper', 'bay', 'dbay', 'wbay', 'bbay'] as const;
+const DOCKS = ['dock', 'fdock', 'ddock', 'wdock', 'bdock'] as const;
 /** the floor an order must be for to fill from this Dock (undefined: the Workshop's) */
-const DOCK_FLOOR = { dock: undefined, fdock: 'factory', ddock: 'district', wdock: 'world' } as const;
-const HBAYS = { district: 'dbay', world: 'wbay' } as const;
-const newTally = (): Tally => ({ dock: {}, fdock: {}, ddock: {}, wdock: {}, hopper: {}, bay: {}, dbay: {}, wbay: {} });
+const DOCK_FLOOR = { dock: undefined, fdock: 'factory', ddock: 'district', wdock: 'world', bdock: 'beyond' } as const;
+const HBAYS = { district: 'dbay', world: 'wbay', beyond: 'bbay' } as const;
+const newTally = (): Tally => ({ dock: {}, fdock: {}, ddock: {}, wdock: {}, bdock: {}, hopper: {}, bay: {}, dbay: {}, wbay: {}, bbay: {} });
 const copyTally = (t: Tally): Tally => Object.fromEntries(KINDS.map((k) => [k, { ...t[k] }])) as unknown as Tally;
 /** The tally a delivery to a floor's Dock goes into. */
-export const dockTally = (floor: 'factory' | 'district' | 'world' | undefined): 'dock' | 'fdock' | 'ddock' | 'wdock' =>
-  floor === 'factory' ? 'fdock' : floor === 'district' ? 'ddock' : floor === 'world' ? 'wdock' : 'dock';
+export const dockTally = (floor: 'factory' | HighFloorId | undefined): (typeof DOCKS)[number] =>
+  floor === 'factory' ? 'fdock' : floor === 'district' ? 'ddock' : floor === 'world' ? 'wdock' : floor === 'beyond' ? 'bdock' : 'dock';
 const addTo = (rec: Partial<Record<ItemId, Num>>, item: ItemId, n: Num | number) => { rec[item] = (rec[item] ?? Num.ZERO).add(n); };
 
 /** Blocked `n` seconds straight, by the per-second history ('b' output, 'x' byproduct). */
@@ -377,7 +387,7 @@ export class OfflineRun {
 
   /** Delivery rates per second over the last measuring window. */
   private rates(): Rates {
-    const out: Rates = { dock: {}, fdock: {}, ddock: {}, wdock: {}, hopper: {}, bay: {}, dbay: {}, wbay: {} };
+    const out: Rates = { dock: {}, fdock: {}, ddock: {}, wdock: {}, bdock: {}, hopper: {}, bay: {}, dbay: {}, wbay: {}, bbay: {} };
     if (!this.mark || this.measureSecs <= 0) return out;
     for (const k of KINDS)
       for (const [item, n] of Object.entries(this.tally[k]) as [ItemId, Num][]) {
@@ -731,7 +741,7 @@ export class OfflineRun {
         if (n.gt(0)) addTo(sold, item, n);
       }
     for (const item of items('hopper')) hopper = hopper.add(sum('hopper', item).round());
-    for (const kind of ['bay', 'dbay', 'wbay'] as const)
+    for (const kind of ['bay', 'dbay', 'wbay', 'bbay'] as const)
       for (const item of items(kind)) {
         const n = sum(kind, item).round();
         if (n.gt(0)) addTo(given, item, n);

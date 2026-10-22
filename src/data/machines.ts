@@ -12,7 +12,9 @@ export type BuildKind = 'belt' | 'miner' | 'smelter' | 'press' | 'assembler' | '
   | 'chemVat' | 'greenhouse' | 'chuteMouth'
   // Act IV (DESIGN.md §22): Rime's Heater
   | 'heater';
-export type FixedKind = 'furnace' | 'dock' | 'hopper';
+export type FixedKind = 'furnace' | 'dock' | 'hopper'
+  // Act V (DESIGN.md §23): the Seed, the World folded into one tile, in every Workshop after a Last Fold
+  | 'seed';
 export type EntKind = BuildKind | FixedKind;
 
 export interface BuildDef {
@@ -55,6 +57,7 @@ export const BUILD: Record<EntKind, BuildDef> = {
   furnace: { kind: 'furnace', name: 'Hand Furnace', cost: 0, w: 1, h: 1, unlock: null, machine: 'smelter', blurb: '{k:LMB} crank · 0.25 s of smelting a click · the Bellows runs it for you', derivation: '§4 Hand Furnace; §6 Cranking' },
   dock: { kind: 'dock', name: 'Dock', cost: 0, w: 2, h: 2, unlock: null, blurb: '{coin} buys all but {i:slag} · fills the active order first', derivation: '§4 Dock; §7' },
   hopper: { kind: 'hopper', name: 'Hopper', cost: 0, w: 2, h: 2, unlock: null, blurb: 'takes anything · pays into the selected {research:research}', derivation: '§4 Hopper; §8' },
+  seed: { kind: 'seed', name: 'The Seed', cost: 0, w: 1, h: 1, unlock: null, blurb: 'digs {i:ironOre} {i:copperOre} {i:coal} {i:sand} · one out of each side · 15/min each · {k:R} turns which side gets which', derivation: '§23 The Seed: the folded World, 1x1, not removable; one of each raw ore out of its four sides every 4 s (half a Miner\'s pace, §4), so a new universe\'s chunk A holds all four ores' },
   // Act II: power (DESIGN.md §18 Power)
   boiler: { kind: 'boiler', name: 'Boiler', cost: 1200, w: 1, h: 1, unlock: 'steamPower', fuel: { items: ['coal', 'oil'], seconds: 4 }, act2: true, blurb: 'burns {i:coal} or {i:oil} · 1 per 4 s at full load · steams the Engine at its front', derivation: '§18 Power: boiler 120, 1 fuel per 4 s; cost 1,200: priced against Act II income, not Mk1 prices (the Milestone 4 review: Act II coin piled up unspent), about 6 s of the 12,000/min factory, a plant of boiler, engine and poles about half a minute' },
   steamEngine: { kind: 'steamEngine', name: 'Steam Engine', cost: 2000, w: 1, h: 1, unlock: 'steamPower', power: 300, act2: true, blurb: '{power:300 kW} while a Boiler faces it · a Pole within 2 tiles joins it to a grid', derivation: '§18 Power: 300 kW; 1,200 kJ per coal with its boiler; cost 2,000: priced against Act II income, not Mk1 prices (the Milestone 4 review: Act II coin piled up unspent)' },
