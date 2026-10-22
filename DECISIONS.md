@@ -1874,6 +1874,8 @@ Act III bot's research retune was merged. Fixed in d9b33dc (sim and data) and tw
 
 The gate is marked **passed with conditions** in ROADMAP.md once the District UI and the Act III
 bot's re-measure land: the owner's play from the 15 h checkpoint is owed, as at the first gate.
+**Marked 2026-10-22**, after the re-measure ran again on the merged build (Acts IV-V's sim and
+screens in; `tests/pace-act3.test.ts` 7/7, the same timeline): see ROADMAP.md for what stays open.
 
 ## Milestone 12: sound and juice (2026-10-22, built alongside Act IV)
 

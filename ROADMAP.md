@@ -222,7 +222,17 @@ inside the performance budget.
 reset 3 feel different from reset 1? `pacing-auditor` runs the 40-hour pace sim. The owner
 plays from the 15 h checkpoint. Mark it passed here, or change the model.
 
-**Gate status: not reached.**
+**Gate status: passed with conditions, 2026-10-22 (the owner's play from the 15 h checkpoint still
+owed: `e2e/out/checkpoints/seed1000-15h.txt`).** The idle-critic failed Act III and the
+pacing-auditor found its bills 3-10x their derivations; the model changed (skiffs ship value, not
+bulk; routes grow with lots; the waste chute; the District takes its own folds; bills cut to their
+derivations; Challenges re-goaled) and the Act III bot re-measured it under the new rules: the
+District at 10:01, the Floating City's stage 1 at 11:30, rules 1 and 2 within 10.4 min in three of
+four Act III stretches, every lot bought, up to 139 District modules at 1.2 ms a tick (DECISIONS.md,
+"The second gate"; DESIGN.md §21 Pacing). Open: one 20.1-min wait at 28:29; the bot builds no
+chemistry yet, so District folds, the City's stage 2 and the Transmuter go unmeasured (the Act IV
+bot's first job); Act II's Bay-floor wait (39.5 min at 2:48). Milestones 9-13 were built alongside
+the gate's fixes on the owner's instruction to keep moving.
 
 ## Milestone 9 — Act IV: Worlds and Relocate, layer 2 (40–80 h)
 
