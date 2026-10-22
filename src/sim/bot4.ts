@@ -69,6 +69,11 @@ export const HABITS: PatentId[] = ['zoningCharter', 'bearingPatent', 'districtDe
 /** Minutes the World stands without growing before a Relocate that is allowed and pays is taken. */
 export const ACT4_FULL = 10;
 
+/** Minutes the Relocate preview stands without rising (its "raises it" goals no longer paying: the
+ * World's kinds at work, the floors' bests, the stages) before a Relocate that is allowed and pays
+ * is taken (the fourth pass took the first at a flat 20 Legacy, the World barely built). */
+export const RELOCATE_FLAT = 45;
+
 /** The next Legacy node to buy (prerequisites and Legacy allowing), or null: the softener of the
  * island the town flies to next goes first when the town is about to go there. */
 export function nextLegacy(g: Game, next?: WorldId): LegacyId | null {
@@ -102,7 +107,7 @@ export class Act4Bot {
     this.a3 = new Act3Bot(g, b);
     // (Act III's batteries and Hydroponics after Charting, the World first, and before the Sky Anchor,
     // whose 800 bearings nothing here makes yet: measured, the third pass)
-    const late: ResearchId[] = ['batteries', 'recycling', 'hydroponics', 'sandwiches', 'sandwichEngineering'];
+    const late: ResearchId[] = ['batteries', 'recycling', 'hydroponics', 'sandwiches', 'sandwichEngineering', 'scrapTransmuter'];
     this.a3.wish = [...WISH3.filter((r) => !late.includes(r)), 'charting', ...late, 'skyAnchor', 'lighthouse', 'relocation', ...ISLAND_WISH[worldOf(g)]];
     this.grewAt = g.seconds;
   }
@@ -168,24 +173,26 @@ export class Act4Bot {
   }
 
   /** The island to Relocate to now, or null (read each minute by the campaign): allowed, the
-   * preview worth a Legacy node (4 or more; 20 on the first move, when Home's seven stages stand),
-   * and the World full for ACT4_FULL minutes, or two hours past Relocation with the preview there,
-   * or the run at its cap (`atCap`: a Relocate that pays rather than the cap's Reorganize). */
+   * preview worth a Legacy node (4 or more), and its goals no longer paying: the World full for
+   * ACT4_FULL minutes, or the preview not risen for RELOCATE_FLAT minutes, or the run at its cap
+   * (`atCap`: a Relocate that pays rather than the cap's Reorganize). */
   relocateTo(atCap = false): WorldId | null {
     const g = this.g;
     if (!g.done('relocation')) return null;
     const to = nextIsland(g);
     if (relocateRefusal(g, to)) return null;
-    const p = previewLegacy(g, to).now;
-    const first = (g.s.meta.relocations ?? 0) === 0;
-    if (p < (first ? 20 : 4)) return null;
+    const pv = previewLegacy(g, to);
+    // the preview read as it rises (the card's "raises it" goals paying): a quarter Legacy past
+    // the best seen is a rise
+    if (this.pvBest === undefined || pv.total > this.pvBest + 0.25) { this.pvBest = pv.total; this.pvRose = g.seconds; }
+    if (pv.now < 4) return null;
     // (at the run's cap the move pays as it stands: src/sim/campaign.ts)
     if (atCap) return to;
     if (this.fullAgo() >= ACT4_FULL * 60) return to;
-    this.relocAt ??= g.seconds;
-    return g.seconds - this.relocAt >= 2 * 3600 ? to : null;
+    return g.seconds - (this.pvRose ?? g.seconds) >= RELOCATE_FLAT * 60 ? to : null;
   }
-  private relocAt: number | undefined;
+  private pvBest: number | undefined;
+  private pvRose: number | undefined;
 
   /** Old Habits: the Patent nodes to keep through the move, chosen just before it (one command a
    * node, as the habit screen takes them). */

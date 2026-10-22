@@ -2943,3 +2943,87 @@ corner's machine states. **No data or sim number moved.**
 - **The bot's Relocate waits for the preview's "raises it" goals to stop paying** (its threshold
   of 20 Legacy took a move that would have banked ~35 with the World built): a bot policy, not a
   number. Relocation's price stays.
+
+### The fifth pass: Act III's Megaprojects before the World (2026-10-22)
+Built in a worktree off `m9-worlds` (5405898), time-boxed (3 h). The decided data change is in
+(Charting's `megas`), and the bot was taught to build both of Act III's Megaprojects; each step was a
+measured stall, read with a scratch log of the bot's waiting step, the Bay's progress, the Chute's
+stock, the Factory floor and the corner's machine states. **No other data or sim number moved.**
+- **Charting needs the Floating City and the Scrap Transmuter complete** (`megas: ['city',
+  'transmuter']`, the decision above; DESIGN.md §22 Research, page 4). The tests and the e2e setups
+  that stand on Charting set both projects complete already (screens.mjs `worldSetup`, `act5Setup`,
+  perf and save-size from `act5Setup`); none needed a change.
+- **Glass for the City's Spires: a Glassworks** (`CORNER.glassF`): the corner's sand Miner into a
+  Kiln with its own oil-fired plant (a Pole 7 tiles from the lab's, so the grids never join), folded
+  at once (0.25 glass a second for 0.025 oil). **A Glass copy alone can never join a group**: it takes
+  nothing in, so no trunk inside a box reaches it; the kiln's boiler takes oil, but a Plastic copy's
+  oil is a byproduct and a nested fold wants a main route inside ("Box a group that works together",
+  measured), so **Glass II** is the Glassworks, a Rubber copy and two Plastic copies (one sends its
+  plastic to the Rubber and its oil to the kiln). Measured: three Glass II copies took the City's
+  2,500 glass in about 40 minutes (12:10-12:50, run 3).
+- **The bench was walled off from the Dock** by then: the servos feed's trunks (x 6-9) closed every
+  path from the bench to the Dock and the Hopper (Glass II "no room" three times on an empty bench;
+  the Factory Bay beside it takes only the Drill's goods). The plan lifts the servos feed (and its
+  stray trunks) while it nests each Megaproject group and lays it again after (`servos2`-`servos4`). A
+  feed may stand on the empty bench only when the plan lifts that same feed before its next group
+  (`feedStep`; the oil2 copies laid there walled Sandwiches II off, "no room", measured).
+- **Sandwiches for the Spires: a Sandwich works** (`CORNER.sandwichF`): the standing Sandwiches line
+  laid so every Chute Mouth stands outside the box, with two oil Boilers for its 350 kW; **Sandwiches
+  II** (the works, a Plastic copy, an Iron ingots copy for the gravel's slag; a second Plastic copy
+  found no room on the bench), nested as soon as
+  it folds. It runs after the standing Sandwiches line (Sandwich Engineering's 150): laid first, in
+  its place, it never ran a third of the time on the Chute's oil and never folded (3.7 h, measured);
+  after the standing line it folded in 11 minutes. Measured once (run 4 of a scratch campaign): five
+  Sandwiches II copies took the City's 300 sandwiches in about an hour.
+- **The Transmuter**: Scrap Transmuter research added to the bot's page (after Sandwich
+  Engineering); its 100 batteries from the Batteries line again, standing (`batteriesB`: the Hopper
+  banked 8 in four hours, the Batteries copies feeding the Chute making 0.02 a second); its steel from
+  the Concrete II copies (3,000 in minutes); the coils from a **Coils** corner line (`CORNER.coils`:
+  the solvent vat into a battery vat into a coil Assembler, the lab's oil splitter a plain belt while
+  it runs, `OIL_W`) and **Coils II** (Plastic and Copper ingots copies, Processors II and Rubber II
+  outside), routed to the Bay with Processors II's processors for stage 2.
+- **Oil is the wall again for the vats**: the Chute's oil stood at 0 (the oil2 feed's Plastic copies
+  find no room), so the battery vat made 63 batteries in an hour. The battery feed is lifted and four
+  Plastic copies laid in its room before the battery vat runs (`oil3`): the Transmuter's 100
+  batteries then came in minutes and its research at 15:40 (a scratch campaign, run 3), and the Coils
+  line folded at once (0.068 coils a second). Both oil feeds are lifted before the coils group so the
+  bench is free; Coils II holds one Plastic copy (a second found no room).
+- **The Engineer and the umbrellas come after the Megaprojects**: Relocation waits on Charting, which
+  waits on the projects, so Relocation's price is made last.
+- **A full District that is still delivering to its Bay is not reset** (`grownAgo`: the Bay's count
+  rose in the last 10 minutes), and **a plan with Act III's projects unbuilt is not through**
+  (`done()`): run 3 reset at 18:47 with the Transmuter's research half paid. The stuck rule (an hour
+  on one step) and the run's cap still bound both. A copy the Bay wants on a full floor lifts a copy
+  of a design that only sells (Gizmo works II, Gears II; `sellOnly`).
+- **The Sky Anchor's bearings**: the umbrellas' slot becomes a standing bearing press on the Chute's
+  steel once Relocation's umbrellas are made (`LINES.bearings`, the `stop` step).
+- **The Relocate waits for the preview to stop rising** (`relocateTo`, `RELOCATE_FLAT` 45 minutes; the
+  decision above): allowed, worth a node (4 Legacy), and the preview (unrounded) not risen by a
+  quarter Legacy for 45 minutes, or the World full for 10, or the run's cap. The flat 20 and the
+  2-hour rule are gone.
+- **A slot line is folded only while its Chute inputs are in stock** (`stocked`; the fourth pass's
+  open item): in runs 4 and 5 the Servos line was folded on its buffers with the Chute's circuits at 0
+  (a "Servos" design taking nothing in, or no circuits), so Servos II took no circuits and the
+  Floating City waited on servos. The runs after a reset reach the Servos line minutes after the
+  Circuits II feeder is laid, before its circuits are in. (Not the corner lines: a vat draws the
+  Chute's oil as it comes, so its stock stands at 0 while the line runs well.)
+- **Tried and dropped**: the District growing after 7 minutes of a plan step's wait (was 20: pace-act3's
+  19.9-minute waits are that threshold's length). The earlier growth spent the coin the chemistry
+  corner's lines wanted and the Processors line folded on its buffered solvent, measured with no
+  oil in ("Processors" taking circuits only), so Processors II could not be laid and Robotics ended
+  the plan at 12:42. Kept at 20; the waits stay open.
+- **Measured** (seed 1000; pace-act3 and pace-act4 at 40 h, both passing with rules logged OPEN):
+  the City's stage 1 10:57, its Spires' 150 rotors and 2,500 glass by about 12:50, the Transmuter's
+  research about 15:40 and its stage 1's 3,000 steel soon after; **no sandwiches and no coils reach the
+  Bay, so neither project stands and Charting, the World and every Relocate are gone from the 40 h
+  campaign** (all six runs on Home; 45, 9 and 5 Patents from runs 3-5). Rules 1-2: pace-act4 40.5 /
+  30.5 min from 15:59 (run 3: the late groups' retries and the coils line), 32.4 min from 25:45, 10.4;
+  pace-act3 19.1, 13.7, 18.1 and 14.3 min (were 10.9, 19.9, 19.9, 10.3). DESIGN.md §21 and §22 Pacing.
+- **The next blocker: room on the Factory bench for the late groups.** Sandwiches II (a Plastic
+  copy) and Coils II (a Plastic copy, the Rubber II feeder outside the box) are not laid; in one
+  scratch run Sandwiches II was (five copies took the 300 sandwiches in an hour) and in another the
+  Coils line folded at 0.068 a second, so both chains work when they fit. Next: lift more of the
+  Chute's feeds (or the Act II chains in the annex) before those two groups, then re-measure; the
+  Coils line's rubber starvation in the measured runs (the Chute held 80 rubber) is not read yet.
+- **For the owner (no number changed)**: with the gate, the first Relocate's 40-45 h target is no
+  longer early by construction; it now waits on the bot finishing the two projects.

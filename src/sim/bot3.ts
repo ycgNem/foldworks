@@ -26,7 +26,7 @@ import { ITEMS, type ItemId } from '../data/items';
 import { RECIPE } from '../data/recipes';
 import { HIGH, type HighFloorId } from '../data/floors';
 import { TICK_RATE } from '../engine/time';
-import { available } from './systems/research';
+import { available, megaComplete } from './systems/research';
 import { BYPRODUCTS, mainItem, stampCost, stampRefusal } from './systems/modules';
 import { hent, hentAt, hfloor, hfoldRefusal, HIGH_IDS, highW, routeCap, routeWant, bayWants, lotPrice, hplaceRefusal, maxRoutes, routeRefusal } from './systems/high';
 import { claimLoad, claimPrice, claimsHeld, placedClaims } from './systems/claims';
@@ -40,7 +40,7 @@ const E: Dir = 0, S: Dir = 1, W: Dir = 2, N: Dir = 3;
 
 /** Act III research, in the order this player takes it (a node whose cost the bank already holds
  * goes first, as in bot2). */
-export const WISH3: ResearchId[] = ['zoning', 'chutes', 'bearings', 'servos', 'floatingCity', 'chemistry', 'vulcanizing', 'processors', 'sensors', 'robotics', 'districtFolds', 'batteries', 'recycling', 'hydroponics', 'sandwiches', 'sandwichEngineering'];
+export const WISH3: ResearchId[] = ['zoning', 'chutes', 'bearings', 'servos', 'floatingCity', 'chemistry', 'vulcanizing', 'processors', 'sensors', 'robotics', 'districtFolds', 'batteries', 'recycling', 'hydroponics', 'sandwiches', 'sandwichEngineering', 'scrapTransmuter'];
 
 // ------------------------------------------------------------------ Workshop lines
 
@@ -88,6 +88,10 @@ export const LINES: Record<string, LineSpec> = {
   // three faces, so the steel and the plastic share its back belt (`mix`); one machine is not a line,
   // so it stands, feeding the Hopper (Relocation wants 20)
   umbrellas: { name: 'Umbrellas', product: 'umbrella', w: 'steel', mix: 'plastic', needs: ['robotics'], stand: true, ms: [{ kind: 'assembler', recipe: 'foldUmbrella', n: 'servo', s: 'rubber' }] },
+  // bearings for the Sky Anchor (800): a press on the Chute's steel, standing in the umbrellas' slot
+  // once the Mk2 has made Relocation's umbrellas (a lone press is not a line, so it never folds; the
+  // Gearboxes line's press feeds its own assembler), feeding the Hopper
+  bearings: { name: 'Bearings', product: 'bearing', w: 'steel', needs: ['bearings'], stand: true, ms: [{ kind: 'press', recipe: 'pressBearing' }] },
 };
 
 /** The chemistry corner (chunk E's south-east, x 17-23, y 6-9, once the lab's concrete plant, its
@@ -269,6 +273,85 @@ CORNER.umbrellas2 = {
   ],
 };
 
+// ---- Act III's Megaprojects (the fifth pass): the City's stage 2 wants glass and sandwiches at the
+// District Bay, the Transmuter coils, so each is a corner line folded with its own power plant
+// (power never crosses a fold box: a Pole at y 9, 7 tiles from E's at (19,2), so the grids never
+// join; every Chute Mouth outside the box), nested on the bench with the copies that feed it, and
+// copies stood on the District, routed to the Bay while it wants their goods. A Glass copy alone
+// can't join a group (it takes nothing in, so no trunk inside the box reaches it), which is why
+// the glass is fired in a kiln that burns a Plastic copy's oil.
+
+/** Glass for the City's Spires (2,500): the sand Miner (21,6) into a Kiln (21,7) facing west, its
+ * glass west along row 7 into the loop; its plant a Pole (21,9), an Engine (21,10) and an oil Boiler
+ * (22,10) fed from a Chute Mouth at (23,10). Its design takes oil (the boiler's) and makes glass. */
+CORNER.glassF = {
+  name: 'Glassworks', product: 'glass', needs: ['glassworks'], box: { x: 20, y: 6, w: 3, h: 5 }, last: { x: 21, y: 7 },
+  parts: [
+    { kind: 'miner', x: 21, y: 6, rot: S },
+    { kind: 'kiln', x: 21, y: 7, rot: W, recipe: 'fireGlass' },
+    ...[20, 19, 18, 17].map((x): Pl => ({ kind: 'belt', x, y: 7, rot: W })),
+    { kind: 'pole', x: 21, y: 9, rot: E },
+    { kind: 'steamEngine', x: 21, y: 10, rot: E },
+    { kind: 'boiler', x: 22, y: 10, rot: W }, { kind: 'chuteMouth', x: 23, y: 10, rot: W, recipe: 'oil' },
+  ],
+};
+
+/** Sandwiches for the City's Spires (300), folded: the Sandwiches line (CORNER.sandwich) laid so
+ * every Chute Mouth stands outside the box (x 18-22, y 6-10): the solvent vat's oil belted in from
+ * (23,7), the gravel press (22,8) behind the fertilizer vat crushing slag from (23,8), the plastic
+ * from (17,8); a Pole (21,9), two Engines (21,10) and (20,10) on oil Boilers (22,10) and (19,10)
+ * (the two vats and the Greenhouse draw 350 kW). Solvent and sandwiches leave along row 7. */
+CORNER.sandwichF = {
+  name: 'Sandwich works', product: 'sandwich', needs: ['sandwiches'], box: { x: 18, y: 6, w: 5, h: 5 }, last: { x: 18, y: 8 },
+  parts: [
+    { kind: 'miner', x: 21, y: 6, rot: S },
+    { kind: 'chemVat', x: 21, y: 7, rot: W, recipe: 'mixSolvent' },
+    { kind: 'belt', x: 22, y: 7, rot: W }, { kind: 'chuteMouth', x: 23, y: 7, rot: W, recipe: 'oil' },
+    ...[20, 19, 18, 17].map((x): Pl => ({ kind: 'belt', x, y: 7, rot: W })),
+    { kind: 'chemVat', x: 21, y: 8, rot: W, recipe: 'brewFertilizer' },
+    { kind: 'press', x: 22, y: 8, rot: W, recipe: 'crushGravel' }, { kind: 'chuteMouth', x: 23, y: 8, rot: W, recipe: 'slag' },
+    { kind: 'greenhouse', x: 19, y: 8, rot: W, recipe: 'growProduce' },
+    { kind: 'assembler', x: 18, y: 8, rot: N, recipe: 'makeSandwich' }, { kind: 'chuteMouth', x: 17, y: 8, rot: E, recipe: 'plastic' },
+    { kind: 'pole', x: 21, y: 9, rot: E },
+    { kind: 'steamEngine', x: 21, y: 10, rot: E }, { kind: 'boiler', x: 22, y: 10, rot: W }, { kind: 'chuteMouth', x: 23, y: 10, rot: W, recipe: 'oil' },
+    { kind: 'steamEngine', x: 20, y: 10, rot: E }, { kind: 'boiler', x: 19, y: 10, rot: E }, { kind: 'chuteMouth', x: 19, y: 11, rot: N, recipe: 'oil' },
+  ],
+};
+
+/** Transmuter coils (processor + 2 batteries + 4 rubber): the solvent vat (21,7) into a battery vat
+ * (20,7) into a coil Assembler (19,7) facing west onto row 7: the battery vat's plastic from (20,5),
+ * its copper belted up column 20 from (20,12); the coil's processors side-loaded onto (19,6) from
+ * (18,6), its rubber up column 19 from (19,12); the solvent vat's sludge into two crates east of it
+ * (21,8)-(22,8); a Pole (21,9), an Engine (21,10) on an oil Boiler (21,11) fed from (22,11). The
+ * lab's oil splitter at (19,5) is a plain belt west while it runs (`OIL_W`: its south side would
+ * push oil onto the processor belt). */
+CORNER.coils = {
+  name: 'Coils', product: 'transmuterCoil', needs: ['scrapTransmuter'], box: { x: 19, y: 6, w: 3, h: 6 }, last: { x: 19, y: 7 },
+  parts: [
+    { kind: 'miner', x: 21, y: 6, rot: S },
+    { kind: 'chemVat', x: 21, y: 7, rot: W, recipe: 'mixSolvent' }, { kind: 'chuteMouth', x: 22, y: 7, rot: W, recipe: 'oil' },
+    { kind: 'crate', x: 21, y: 8, rot: E }, { kind: 'crate', x: 22, y: 8, rot: E },
+    { kind: 'chemVat', x: 20, y: 7, rot: W, recipe: 'cellBattery' },
+    { kind: 'belt', x: 20, y: 6, rot: S }, { kind: 'chuteMouth', x: 20, y: 5, rot: S, recipe: 'plastic' },
+    ...[8, 9, 10, 11].map((y): Pl => ({ kind: 'belt', x: 20, y, rot: N })), { kind: 'chuteMouth', x: 20, y: 12, rot: N, recipe: 'copperIngot' },
+    { kind: 'assembler', x: 19, y: 7, rot: W, recipe: 'windCoil' },
+    { kind: 'belt', x: 19, y: 6, rot: S }, { kind: 'chuteMouth', x: 18, y: 6, rot: E, recipe: 'processor' },
+    ...[8, 9, 10, 11].map((y): Pl => ({ kind: 'belt', x: 19, y, rot: N })), { kind: 'chuteMouth', x: 19, y: 12, rot: N, recipe: 'rubber' },
+    { kind: 'belt', x: 18, y: 7, rot: W }, { kind: 'belt', x: 17, y: 7, rot: W },
+    { kind: 'pole', x: 21, y: 9, rot: E },
+    { kind: 'steamEngine', x: 21, y: 10, rot: E }, { kind: 'boiler', x: 21, y: 11, rot: N }, { kind: 'chuteMouth', x: 22, y: 11, rot: W, recipe: 'oil' },
+  ],
+};
+
+/** The lab's oil at (19,5) while the coils line runs: a plain belt west into the loop, not the
+ * splitter (whose south side would push oil onto the coil line's processor belt at (19,6)). */
+export const OIL_W: Pl[] = [{ kind: 'belt', x: 19, y: 5, rot: W }, { kind: 'belt', x: 18, y: 5, rot: W }];
+
+/** The Batteries line again, unfolded, until the Scrap Transmuter has its 100 batteries (measured,
+ * the fifth pass: the Hopper banked 8 batteries in four hours; the Batteries copies feeding the
+ * Chute make 0.02 a second, short of oil, and the Engineer's vat keeps its own). */
+CORNER.batteriesB = { ...CORNER.batteries, name: 'Batteries (again)', stand: ['scrapTransmuter'] };
+
 /** Lines on an ore patch of their own (not a slot, not the corner). Copper ingots: the Great Drill's
  * second copper patch (chunk D, (13,13) 2x2) under a Miner facing north into a Smelter, the ingots
  * east onto the kit line's column 15 and so to the Hopper (batteries research wants 800), the slag
@@ -286,6 +369,15 @@ export const PATCH: Record<string, CornerSpec> = {
     ],
   },
 };
+
+/** Every Chute Mouth of a line has its item in the Chute's stock: a line is measured only while its
+ * Chute inputs are coming in (the fifth pass: in runs 4 and 5 the Servos line folded on its buffers
+ * with the Chute's circuits at 0, "Servos" taking nothing in, so Servos II took no circuits and the
+ * Floating City waited on servos). Slot lines only: a corner vat draws the Chute's oil as it comes, so
+ * its stock stands at 0 while the line runs well. */
+export function stocked(g: Game, parts: Pl[]): boolean {
+  return parts.every((p) => p.kind !== 'chuteMouth' || !p.recipe || (g.s.chute?.[p.recipe as ItemId] ?? 0) >= 1);
+}
 
 function chain(second: Pl, item: ItemId): Pl[] {
   const solvent = CORNER_SOLVENT.filter((p) => !(p.kind === 'belt' && p.y === 7 && p.x === 20));
@@ -305,6 +397,8 @@ export const FEEDS: Record<string, Feed[]> = {
   // oil: Plastic copies whose plastic sells at the Dock and whose oil goes down the Chute
   oil: [0, 1, 2, 3].map((): Feed => ({ design: 'Plastic', to: 'dock', by: 'chute' })),
   oil2: [0, 1, 2, 3].map((): Feed => ({ design: 'Plastic', to: 'dock', by: 'chute' })),
+  // (again for the coils line, once the battery feed is lifted: the oil2 copies found no room)
+  oil3: [0, 1, 2, 3].map((): Feed => ({ design: 'Plastic', to: 'dock', by: 'chute' })),
   // rubber: a Rubber II group (its own Plastic copies inside: it takes nothing) into the Chute (a
   // Rubber copy with its Plastic feeders found no room by the Chute, measured)
   rubber: [{ design: 'Rubber II', to: 'chute', by: 'dock' }],
@@ -325,11 +419,15 @@ export const FEEDS: Record<string, Feed[]> = {
   battery: [
     { design: 'Batteries', to: 'chute', by: 'dock' }, { design: 'Plastic', to: 0, by: 0 }, { design: 'Plastic', to: 'dock', by: 0 }, { design: 'Copper ingots', to: 0, by: 'dock' },
   ],
+  servos2: [] as Feed[],
   servos: [
     { design: 'Servos II', to: 'chute', by: 'dock' }, { design: 'Motors II', to: 0, by: 'dock' }, { design: 'Circuits II', to: 0, by: 'dock' },
     { design: 'Servos II', to: 'chute', by: 'dock' }, { design: 'Motors II', to: 3, by: 'dock' }, { design: 'Circuits II', to: 3, by: 'dock' },
   ],
 };
+FEEDS.servos2 = FEEDS.servos;
+FEEDS.servos3 = FEEDS.servos;
+FEEDS.servos4 = FEEDS.servos;
 
 /** The Workshop's line slots: machine rows in chunk D (x 8-15, y 7-15, free once Act II's lab is
  * built), the product belted up column 12 into the corridor (row 6) and so to the Hopper. */
@@ -446,7 +544,7 @@ const feedZone = (g: Game, bench = false): PlaceZone => ({ mods: { x: bench ? 0 
  * hub, whose product leaves the box for the Factory Dock or Hopper while it is audited; each member
  * names the member its product feeds (an index) or a sink, and where its byproduct goes. `ext` are
  * modules outside the box feeding the hub: the group's ins on the District. */
-interface Member { design: string; to: number | 'dock' | 'hopper'; by?: number | 'dock' }
+interface Member { design: string; to: number | 'dock' | 'hopper' | 'bay'; by?: number | 'dock' | 'bay' }
 export interface GroupSpec { name: string; members: Member[]; ext?: { design: string; by?: 'dock'; to?: number }[] }
 
 export const GROUPS: Record<string, GroupSpec> = {
@@ -501,6 +599,30 @@ export const GROUPS: Record<string, GroupSpec> = {
     members: [{ design: 'Robot arms', to: 'dock' }, { design: 'Steel', to: 0, by: 'dock' }, { design: 'Glass', to: 0 }],
     ext: [{ design: 'Servos II', by: 'dock' }, { design: 'Motors II', by: 'dock', to: 0 }, { design: 'Circuits II', by: 'dock', to: 0 }, { design: 'Circuits II', by: 'dock' }, { design: 'Rubber II', by: 'dock' }],
   },
+  // Act III's Megaprojects (the fifth pass, CORNER.glassF, sandwichF, coils): each corner design
+  // with the Plastic copies whose oil fires its boilers (and vats), joined to it by that oil. By
+  // then the servos feed's trunks wall the bench off from the Dock and the Hopper (measured: Glass
+  // II "no room" three times at 12:25 on an empty bench; the Factory Bay beside it takes only the
+  // Drill's goods), so the plan lifts that feed while it nests these and lays it again after
+  // (a nested fold wants a main route inside the box, and a Plastic copy's oil is a byproduct: the
+  // Plastic copy firing the kiln sends its plastic into a Rubber copy, whose oil a second Plastic
+  // copy sends, measured: "Box a group that works together" with the kiln and one Plastic copy; the
+  // Plastic copy feeding both placed after both, or it finds no room)
+  glassII: {
+    name: 'Glass II',
+    members: [{ design: 'Glassworks', to: 'dock' }, { design: 'Rubber', to: 'dock' }, { design: 'Plastic', to: 1, by: 0 }, { design: 'Plastic', to: 'dock', by: 1 }],
+  },
+  sandwichesII: {
+    name: 'Sandwiches II',
+    // (one Plastic copy: a second found no room on the bench, measured)
+    members: [{ design: 'Sandwich works', to: 'dock' }, { design: 'Plastic', to: 0, by: 0 }, { design: 'Iron ingots', to: 'dock', by: 0 }],
+  },
+  coilsII: {
+    name: 'Coils II',
+    // (one Plastic copy: a second found no room on the bench, measured)
+    members: [{ design: 'Coils', to: 'dock', by: 'dock' }, { design: 'Plastic', to: 0, by: 0 }, { design: 'Copper ingots', to: 0, by: 'dock' }],
+    ext: [{ design: 'Processors II', by: 'dock' }, { design: 'Rubber II', by: 'dock' }],
+  },
 };
 
 // ------------------------------------------------------------------ the plan
@@ -537,6 +659,8 @@ export type Step3 =
   | { k: 'unfeed'; feed: string }
   /** District folds (depth 3) made, at least n (blocking until made or given up) */
   | { k: 'dfold'; n: number }
+  /** a standing slot line lifted (its slot freed for the next) */
+  | { k: 'stop'; line: string }
   | { k: 'mark'; name: string };
 
 export const PLAN3: Step3[] = [
@@ -623,6 +747,15 @@ export const PLAN3: Step3[] = [
   { k: 'district', design: 'Sensors II', n: 5 },
   { k: 'need', r: 'districtFolds' },
   { k: 'dfold', n: 2 },
+  // the fifth pass: glass for the Floating City's Spires (2,500 at the District Bay): the corner's
+  // Kiln on its own plant, folded, nested with a Plastic copy for its boiler's oil (CORNER.glassF), while
+  // the bench is still free (the feeds after it may use it: feedStep)
+  { k: 'line', line: 'glassF' },
+  { k: 'lineDone', line: 'glassF' },
+  { k: 'unfeed', feed: 'servos' },
+  { k: 'group', group: 'glassII' },
+  { k: 'district', design: 'Glass II', n: 3 },
+  { k: 'feed', feed: 'servos2' },
   // Relocation's chain (the third pass): batteries (the Lighthouse wants 200, the Engineer one each)
   // and Hydroponics' sludge. Copper ingots fold on chunk D's second copper patch and feed the Chute;
   // Solvent copies send the Chute solvent and the Factory Hopper their sludge; the battery vat is the
@@ -651,23 +784,59 @@ export const PLAN3: Step3[] = [
   { k: 'need', r: 'sandwiches' },
   { k: 'line', line: 'sandwich' },
   { k: 'lineDone', line: 'sandwich' },
-  // the Engineer: processors down the Chute from a Processors II feeder, umbrellas from a slot, the
-  // Mk2 in the corner (CORNER.engineer)
+  // the fifth pass: sandwiches for the Spires (300): the Sandwiches line laid to fold (CORNER.sandwichF),
+  // nested at once (the servos feed lifted meanwhile: its trunks wall the bench off from the Dock)
+  { k: 'line', line: 'sandwichF' },
+  { k: 'lineDone', line: 'sandwichF' },
+  { k: 'unfeed', feed: 'servos2' },
+  { k: 'group', group: 'sandwichesII' },
+  { k: 'district', design: 'Sandwiches II', n: 3 },
+  { k: 'feed', feed: 'servos3' },
+  // processors down the Chute from a Processors II feeder (the coils line's, then the Engineer's)
   { k: 'feeder', design: 'Processors II', free: true },
+  // the Scrap Transmuter (40 processors, 100 batteries: the battery vat again, standing, feeding the
+  // Hopper), then its coils (CORNER.coils), nested with Plastic and Copper ingots copies and fed by
+  // Processors II and Rubber II groups. Oil first: the battery feed's copies (0.02 batteries a
+  // second) lifted and four Plastic copies sending their oil down the Chute in their room (measured:
+  // the Chute's oil at 0, the battery vat starved, 63 batteries in an hour)
+  { k: 'unfeed', feed: 'battery' },
+  { k: 'feed', feed: 'oil3' },
+  { k: 'line', line: 'batteriesB' },
+  { k: 'lineDone', line: 'batteriesB' },
+  { k: 'need', r: 'scrapTransmuter' },
+  { k: 'line', line: 'coils' },
+  { k: 'lineDone', line: 'coils' },
+  // the feeds on the bench lifted for the coils group, the servos feed laid again after
+  { k: 'unfeed', feed: 'oil2' },
+  { k: 'unfeed', feed: 'oil3' },
+  { k: 'unfeed', feed: 'servos3' },
+  { k: 'group', group: 'coilsII' },
+  { k: 'district', design: 'Coils II', n: 3 },
+  { k: 'district', design: 'Processors II', n: 6 },
+  { k: 'feed', feed: 'servos4' },
+  // the Engineer and the umbrellas (Relocation's price) after Act III's Megaprojects, since
+  // Relocation waits for Charting, which waits for them: umbrellas from a slot, the Mk2 in the
+  // corner (CORNER.engineer)
   { k: 'line', line: 'umbrellas' },
   { k: 'line', line: 'engineer' },
   { k: 'lineDone', line: 'engineer' },
   { k: 'line', line: 'umbrellas2' },
   { k: 'lineDone', line: 'umbrellas2' },
+  // the Sky Anchor's bearings (Act IV research): the umbrellas' slot becomes a bearing press
+  { k: 'stop', line: 'umbrellas' },
+  { k: 'line', line: 'bearings' },
   { k: 'mark', name: 'act3end' },
 ];
 
 /** After the plan, the District grows a copy at a time while the coin is there (a copy a few
  * minutes: what the floor's income buys), in this order round and round: each copy is placed
  * beside what it feeds and routed by the same rules. */
-export const GROW: string[] = ['Servos II', 'Motors II', 'Sensors II', 'Gearboxes II', 'Processors II', 'Concrete II', 'Arms II', 'Rotors II', 'Circuits II', 'Rubber II', 'Gizmo works II', 'Gears II'];
+export const GROW: string[] = ['Servos II', 'Motors II', 'Sensors II', 'Gearboxes II', 'Processors II', 'Concrete II', 'Arms II', 'Rotors II', 'Circuits II', 'Rubber II', 'Gizmo works II', 'Gears II', 'Glass II', 'Sandwiches II', 'Coils II'];
 
 const HOOK = 'act3:';
+
+/** Minutes the plan waits on one step before chemistry before the District grows anyway (`growing`). */
+export const GROW_WAIT = 20;
 
 // ------------------------------------------------------------------ the bot
 
@@ -733,7 +902,11 @@ export class Act3Bot {
     // run 4 waited on Floating City's servos (its Servos design folded without circuits) and a full
     // District idled 155 minutes to the run's cap, measured, the fourth pass)
     const stuck = this.step < this.plan.length && this.stepAt.step === this.step && this.g.seconds - this.stepAt.t > 3600;
-    const planDone = this.step >= this.plan.length || (chain >= 0 && this.step > chain) || stuck;
+    // (but Act III's Megaprojects are the act's end: while their steps are still ahead and the two
+    // projects not built, a full District is not a reason to reset (the fifth pass: run 3 reset at
+    // 18:47, its Transmuter research half paid); the stuck rule and the run's cap still bound it)
+    const megas = megaComplete(this.g, 'city') && megaComplete(this.g, 'transmuter');
+    const planDone = this.step >= this.plan.length || (chain >= 0 && this.step > chain && megas) || stuck;
     return planDone && this.b.step >= this.b.plan.length && !this.group && this.slots.every((q) => q === null || !!LINES[q]?.stand);
   }
 
@@ -746,6 +919,9 @@ export class Act3Bot {
 
   /** when the District last grew (a copy placed, a lot bought), seconds */
   private grewAt = 0;
+  /** the District Bay's count of Act III's projects, and when it last rose (observe) */
+  private baySeen = 0;
+  private bayRoseAt = -1e9;
 
   /** Seconds since the District last grew, once the plan is through and the floor is full (every
    * tile taken, every lot bought) or the coin piles up past 10M with nothing bought (0 otherwise):
@@ -756,6 +932,10 @@ export class Act3Bot {
     let free = false;
     for (let y = 0; y < HIGH.district.h && !free; y++) for (let x = 0; x < highW(g, 'district'); x++) if (!hentAt(g, 'district', x, y)) { free = true; break; }
     const full = (!free || this.routesFull()) && !lotPrice(g, 'district');
+    // (a District still delivering a Megaproject's goods to its Bay is building the act's end: the
+    // player lets the stage stand before resetting; the run's cap still bounds it)
+    // (while its Bay counts something every 10 minutes)
+    if (bayWants(g, 'district').size && g.seconds - this.bayRoseAt < 600) return 0;
     return full || g.s.coin.gte(10_000_000) ? g.seconds - this.grewAt : 0;
   }
 
@@ -800,7 +980,7 @@ export class Act3Bot {
    * sludge stands there (sludge, produce, sandwiches): one command, or false. */
   private modes(): boolean {
     const g = this.g;
-    if (!g.done('recycling') || !this.corner || !['sludge', 'produce', 'sandwich', 'engineer'].includes(this.corner)) return false;
+    if (!g.done('recycling') || !this.corner || !['sludge', 'produce', 'sandwich', 'sandwichF', 'engineer'].includes(this.corner)) return false;
     const e = g.entAt(21, 7);
     if (!e || e.kind !== 'chemVat' || e.recipe !== 'mixSolvent' || e.mode === 'byproduct') return false;
     return !!this.act({ k: 'mode', x: 21, y: 7, mode: 'byproduct' }, 'mode');
@@ -945,6 +1125,11 @@ export class Act3Bot {
     const g = this.g;
     if (g.s.tick % TICK_RATE !== 0) return;
     if (g.s.district) this.b.mark('district');
+    // the District Bay's count (the City's and the Transmuter's), read off the Bay as it rises
+    let bay = 0;
+    for (const id of ['city', 'transmuter'] as const) for (const v of Object.values(g.s.megas?.[id]?.progress ?? {})) bay += v?.toNumber() ?? 0;
+    if (bay > this.baySeen + 1e-9) { this.baySeen = bay; this.bayRoseAt = g.seconds; }
+    if (bay < this.baySeen) this.baySeen = bay;
     for (const id of ['city', 'transmuter'] as const) {
       const st = g.s.megas?.[id]?.stage ?? 0;
       if (st > (this.stageSeen[id] ?? 0)) {
@@ -1023,10 +1208,12 @@ export class Act3Bot {
    * player builds the floor that pays while waiting, rather than idle (measured, the third pass:
    * pace-act3's run 3 waited 68.7 min at 11:07 on the Floating City's servos with the District's
    * growth held until chemistry; the copies grown are routed to what wants them most, the Hopper
-   * among them). */
+   * among them). (7 minutes, was 20: the copy a growth round places comes up to 3 minutes later,
+   * and pace-act3's two 19.9-minute waits, runs 4 and 5, were this 20-minute threshold with the
+   * plan waiting on research: the fifth pass.) */
   get growing(): boolean {
     if (this.step >= this.chemStart) return true;
-    return this.step < this.plan.length && this.stepAt.step === this.step && this.g.seconds - this.stepAt.t > 20 * 60;
+    return this.step < this.plan.length && this.stepAt.step === this.step && this.g.seconds - this.stepAt.t > GROW_WAIT * 60;
   }
   /** the plan's first chemistry step: the District grows from here on (GROW) */
   get chemStart(): number {
@@ -1055,6 +1242,14 @@ export class Act3Bot {
       case 'mark':
         this.b.mark(s.name);
         return 'done';
+      case 'stop': {
+        const i = this.slots.indexOf(s.line);
+        if (i >= 0) {
+          this.slots[i] = null;
+          this.b.plan.push({ k: 'parts', parts: this.layoutNow() });
+        }
+        return 'done';
+      }
       case 'need':
         if (g.done(s.r)) return 'done';
         this.retryLine(s.r);
@@ -1182,6 +1377,14 @@ export class Act3Bot {
           const e = eid !== undefined ? g.s.factory.ents.find((q) => q.id === eid) : undefined;
           if (e) { this.act({ k: 'fremove', x: e.x, y: e.y }); return `lifting the ${s.feed} feed`; }
         }
+        // (and its trunks left leading nowhere on the 12x8, as a group's clean-up lifts them: the
+        // fifth pass lifts the servos feed so the bench reaches the Dock again)
+        if (s.feed.startsWith('servos')) {
+          const used = new Set<number>();
+          for (const r of g.routes) if (r.to) for (const t of r.tiles) used.add(t.id);
+          const stray = g.s.factory.ents.find((e) => e.kind === 'trunk' && e.x < FACTORY.w && !used.has(e.id));
+          if (stray) { this.act({ k: 'fremove', x: stray.x, y: stray.y }); return `lifting the ${s.feed} feed's trunks`; }
+        }
         return 'done';
       }
       case 'dfold':
@@ -1286,7 +1489,7 @@ export class Act3Bot {
     const pure = spec.ms.slice(0, -1).map((m) => RECIPE[m.recipe].outputs[0].item);
     this.b.plan.push({ k: 'parts', parts: this.layoutNow() });
     // folded once its last machine runs: the Chute feeds it at speed (a standing line is not)
-    if (!spec.stand) this.b.plan.push({ k: 'fold', box: lay.box, name: spec.name, bg: true, nokeep: true, pure, ready: (gg) => working(gg, lay.last.x, lay.last.y, 30, 0.5) });
+    if (!spec.stand) this.b.plan.push({ k: 'fold', box: lay.box, name: spec.name, bg: true, nokeep: true, pure, ready: (gg) => working(gg, lay.last.x, lay.last.y, 30, 0.5) && stocked(gg, lay.parts) });
     this.lineAt[line] = g.seconds;
     this.b.decide('line:' + spec.name);
     return 'done';
@@ -1339,7 +1542,13 @@ export class Act3Bot {
     // the Chute's oil goes to the corner's vats while it runs a line, else to the Hopper: a full oil
     // stock stops every Chute feeder whose waste is oil (Motors II, Circuits II), measured
     if (this.standing.includes(HOOK + 'drains')) this.b.found[HOOK + 'drains'] = this.corner ? DRAINS_C : DRAINS;
-    return [...this.lab, ...this.standing, ...this.slots.filter((q): q is string => !!q).map((q) => HOOK + q), ...(this.corner ? [HOOK + this.corner] : []), ...(this.patch ? [HOOK + this.patch] : [])];
+    // (the coils line takes (19,6): the lab's oil splitter is a plain belt west while it runs)
+    let lab = this.lab;
+    if (this.corner === 'coils' && lab.includes('oilSplitM')) {
+      this.b.found[HOOK + 'oilW'] = OIL_W;
+      lab = lab.map((p) => (p === 'oilSplitM' ? HOOK + 'oilW' : p));
+    }
+    return [...lab,...this.standing, ...this.slots.filter((q): q is string => !!q).map((q) => HOOK + q), ...(this.corner ? [HOOK + this.corner] : []), ...(this.patch ? [HOOK + this.patch] : [])];
   }
 
   /** the chemistry corner's line, or null */
@@ -1362,7 +1571,12 @@ export class Act3Bot {
     }
     // once the plan's last group is nested the bench stands empty: a feed may use it too (measured,
     // the fourth pass: the chem and battery feeds' copies were left out for "no room" east of it)
-    const bench = !this.group && !this.plan.slice(this.step).some((q) => q.k === 'group');
+    // (and before a group still to come when the plan lifts this feed first: the fifth pass's
+    // Megaproject groups come after the feeds on the bench are lifted; a feed lifted only later
+    // would stand in the next group's way, measured: Sandwiches II "no room" behind oil2)
+    const rest = this.plan.slice(this.step);
+    const nextGroup = rest.findIndex((q) => q.k === 'group'), nextUnfeed = rest.findIndex((q) => q.k === 'unfeed' && q.feed === name);
+    const bench = !this.group && (nextGroup < 0 || (nextUnfeed >= 0 && nextUnfeed < nextGroup));
     const steps = feed.map((f, i) => this.fmod(id(i), f.design, dest(f.to), feedZone(g, bench), f.by === undefined ? undefined : dest(f.by), feed.some((q) => q.to === i || q.by === i)));
     const r = this.viaB2('feed:' + name, steps);
     if (r !== 'done') return r;
@@ -1587,7 +1801,7 @@ export class Act3Bot {
 
   private groupSteps(gr: GroupRun): Step2[] {
     const hubId = HOOK + gr.ids[0];
-    const sink = (t: number | 'dock' | 'hopper'): Dest => (typeof t === 'number' ? { k: 'mod', id: HOOK + gr.ids[t] } : { k: t });
+    const sink = (t: number | 'dock' | 'hopper' | 'bay'): Dest => (typeof t === 'number' ? { k: 'mod', id: HOOK + gr.ids[t] } : { k: t });
     const ms = gr.spec.members;
     // a member that two or more routes feed keeps the tiles round its back open, like the hub
     const fed = (i: number) => ms.filter((m) => m.to === i || m.by === i).length + (i === 0 ? (gr.spec.ext ?? []).length : 0);
@@ -1646,6 +1860,22 @@ export class Act3Bot {
     return this.floorWork('district', this.want);
   }
 
+  /** A District copy of the most numerous design whose goods only sell (Gizmo works II, Gears II),
+   * four copies or more, to lift for a copy the Bay wants; its want drops by one. */
+  private sellOnly(id: HighFloorId): FEnt | null {
+    const st = hfloor(this.g, id);
+    if (!st) return null;
+    let best: { name: string; n: number } | null = null;
+    for (const name of ['Gizmo works II', 'Gears II']) {
+      const n = this.placed(name, id);
+      if (n >= 4 && (!best || n > best.n)) best = { name, n };
+    }
+    if (!best) return null;
+    const e = [...st.ents].reverse().find((q) => q.kind === 'module' && this.g.design(q.design)?.name === best!.name) ?? null;
+    if (e) this.want[best.name] = Math.min(this.want[best.name] ?? 0, best.n - 1);
+    return e;
+  }
+
   /** One command on a high floor (the District here, the World for bot4.ts): copies wanted stamped
    * and placed beside what they feed, a lot as the routes or tiles run out, routes, skiffs (barges
    * on the World). */
@@ -1670,6 +1900,13 @@ export class Act3Bot {
         return true;
       }
       if (this.buyClaims(d, true)) return true;
+      // a copy the Bay wants on a full floor (every tile or every route taken, every lot bought):
+      // a copy of a design that only sells is lifted to make room (the fifth pass: the District
+      // stood full at 15 h, before the City's glass and sandwiches and the Transmuter's coils came)
+      if (id === 'district' && Object.keys(d.outs).some((i) => bayWants(g, id).has(i as ItemId)) && !lotPrice(g, id) && (this.routesFull(id) || !this.tileFor(d, id))) {
+        const v = this.sellOnly(id);
+        if (v) { this.act({ k: 'hremove', floor: id, x: v.x, y: v.y }, 'clear'); return true; }
+      }
       const t = this.tileFor(d, id);
       if (!t) {
         // the floor is full: the next lot

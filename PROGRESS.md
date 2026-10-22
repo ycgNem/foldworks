@@ -109,6 +109,30 @@ and §20 "Save size"; DECISIONS.md "Milestone 14".
 Merge into `m9-worlds`; fix the sim hotspots after Milestone 11 lands; the pace sim to 100 h with
 the Act IV and V bots.
 
+## Status (2026-10-22, evening): the bots' fifth pass (Charting behind Act III's Megaprojects)
+
+Built in a worktree off `m9-worlds` (5405898), time-boxed (3 h). DECISIONS.md "The fifth pass";
+DESIGN.md §21 and §22 (Research, page 4; Pacing). Changed: `src/data/research.ts` (Charting's `megas`
+only), `src/sim/bot3.ts`, `src/sim/bot4.ts` and the docs; no other data or sim number.
+
+- **Charting needs the Floating City and the Scrap Transmuter complete** (decided): Act IV opens when
+  Act III's Megaprojects stand. Tests and e2e setups already set both projects complete.
+- **The bot builds toward both projects**: a Glassworks (Kiln on its own plant) and Glass II for the
+  City's glass, a foldable Sandwich works and Sandwiches II for its sandwiches, the Scrap Transmuter
+  research (batteries from the battery vat again, oil from a re-laid Plastic feed), a Coils corner line
+  and Coils II, the Concrete II steel and Processors II processors to the District Bay; a full
+  District still delivering to its Bay is not reset; a copy the Bay wants lifts a sell-only copy on a
+  full floor; the servos feed is lifted while the late groups nest (its trunks walled the bench off
+  from the Dock); slot lines fold only with their Chute inputs in stock (the circuit-less Servos
+  design); a bearing press for the Sky Anchor; the Engineer and umbrellas after the projects.
+- **The Relocate rule waits for the preview to stop rising** (45 minutes) or the World to stand full,
+  not a flat 20 Legacy (decided; not exercised: no Relocate is reached).
+- **Measured** (seed 1000, 40 h; pace-act3 7 passed, pace-act4 5 passed): the City's glass and rotors
+  and the Transmuter's steel are delivered; its sandwiches and coils are not, so **no World and no
+  Relocate by 40 h**. Rules 1-2 worse (pace-act4 up to 40.5 min, pace-act3 up to 19.1).
+- **Next**: room on the Factory bench for Sandwiches II and Coils II (both chains worked in scratch
+  runs when laid), the Coils line's rubber starvation, then re-measure the World and the first Relocate.
+
 ## Status (2026-10-22, afternoon): the bots' fourth pass (Relocation's chain; the first Relocate)
 
 Built in a worktree off `m9-worlds`, time-boxed (3 h). DECISIONS.md "The fourth pass"; DESIGN.md

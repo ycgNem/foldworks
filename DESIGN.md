@@ -1668,6 +1668,24 @@ min at worst (rules 1 and 2; were 10.2-10.8: open, the two 19.9-minute waits 30 
 and 5's Act III); its run 4 once folded a Servos design without circuits and waited on Floating
 City (the stuck-step reset bounds it).
 
+**Re-measured, the fifth pass** (DECISIONS.md "The fifth pass": Charting now waits for both Act III
+Megaprojects, and the bot builds them): Act III no longer ends at District Folds. The bot folds a
+Glassworks (a Kiln on its own plant), a Sandwich works and a Coils line in the chemistry corner,
+nests Glass II, Sandwiches II and Coils II, and routes them, the Rotors II and Processors II copies
+and the Concrete II copies' steel to the District Bay. Measured (seed 1000, 40 h, pace-act3 and
+pace-act4): the City's stage 1 10:57-11:05, its stage 2's rotors and **2,500 glass by about 12:50**
+(three to ten Glass II copies), the Transmuter researched about 15:40 (scratch runs of the same
+campaign) and its stage 1's **3,000 steel in minutes**; the City's 300 sandwiches and the Transmuter's coils not delivered in the final runs
+(Sandwiches II not laid on the bench, a Plastic copy short of room; the Coils line folded in one
+scratch run, 0.068 coils a second, but its group was not laid, and in the measured runs the line
+starved of rubber and was given up), so **neither project stands by 40 h and Charting never comes**.
+Runs (pace-act4): 1 0:00-4:22 (14 Patents), 2 4:22-7:24 (7), 3 7:24-16:40 (45), 4 16:40-26:18 (9), 5
+26:18-38:18 (5), 6 38:18-40:00, all on Home. Rules 1 and 2 got worse where the plan waits on the
+new groups: pace-act4 40.5 / 30.5 min from 15:59 (run 3, the Megaproject groups' retries and the
+coils line), 32.4 min from 25:45 (run 4), 10.4 in run 5; pace-act3 19.1, 13.7, 18.1 and 14.3 min (were
+10.9, 19.9, 19.9, 10.3). The District peaks at 157-160 groups (0.73-0.86 ms a tick). Pace-act3 7
+passed, pace-act4 5 passed.
+
 Lessons:
 - **The waste chute and 1 a trip halve the routes and make distance cost.** With waste going to
   the Dock on its own the bot flies one route a product (a second only for a second product), so
@@ -1811,7 +1829,11 @@ reset by every Reorganize and is offered only there).
 ### Research, page 4
 Fourteen nodes, `act: 4`, after the Great Drill's stage 3 like Act III's. **Charting** (30 robot
 arms, 150 sensors, 60 processors after District Folds: 20-30 min of the District that researched
-District Folds) opens the World floor. Each island has its chain, paid in its exotic (600 of it,
+District Folds) opens the World floor, and is offered only once **Act III's Megaprojects stand**
+(both stages of the Floating City and of the Scrap Transmuter, `megas`, as the Last Fold waits for
+the Lighthouse and the Anchor): Act III ends when its projects are built, however fast, and Act IV
+begins there (decided after the fourth bot pass, which opened the World at 11:46 and Relocated at
+18:00 with neither project finished, against the 40-45 h below; a content gate, not a price). Each island has its chain, paid in its exotic (600 of it,
 about 13 min of one Pebble Miner, 20 of a Home one): Skyglass Cutting and Horizon Optics on
 Pebble; Cinder Smelting, Sunset Dyes and Sunset Engineering on Cinder; Thermals (500 coal, 150
 steel, with Act II's first powered machines: the plant's warmth reaches 3 tiles, was 2),
@@ -1990,7 +2012,8 @@ the cold machines and the Town Plan's layouts.
   rule (Pebble keeps C and D as sky, Cinder's belts still melt, Rime's lone machine still wants its
   plant beside it, the Old Works' ruins still want repairing and its rubble is paid once a
   universe); a run on a fifth visit still plays differently from Home.
-- **Measured below** (the Act IV bot): the campaign does not reach the World yet.
+- **Measured below** (the Act IV bot): with Charting behind Act III's Megaprojects (the fifth pass)
+  the campaign does not reach the World by 40 h yet.
 ### Pacing (measured, the Act IV bot)
 Measured by the campaign bot with the Act IV policy (`src/sim/bot4.ts` over `src/sim/bot3.ts`,
 `tests/pace-act4.test.ts`, seed 1000, `FOLD_ACT4_HOURS` = 40 h of play, about 25 min of wall time;
@@ -2022,8 +2045,24 @@ Act IV from 12:09, Relocates to Rime: 20 Legacy), 4 18:00-29:18 on Rime (Act III
 World 22:36, Relocates to the Old Works: 8), 5 29:18-40:00 on the Old Works (its Act I never ends).
 No number moved.
 
+**Fifth pass** (DECISIONS.md "The fifth pass"; seed 1000, 40 h): Charting now waits for the Floating
+City and the Scrap Transmuter, so the table above is the fourth pass's, measured without that gate.
+With it: District 9:53, Chemistry 9:57, Robotics 11:28, District Folds 11:46, the City's stage 1
+10:57, its stage 2's rotors and glass by about 12:50, the Transmuter's research about 15:40 and its
+stage 1's steel soon after; **the City's sandwiches and the Transmuter's coils never arrive, so
+Charting, the World, Relocation and the first Relocate never come by 40 h** (every run stays on
+Home: 1 0:00-4:22, 2 4:22-7:24, 3 7:24-16:40 +45 Patents, 4 16:40-26:18 +9, 5 26:18-38:18 +5, 6 to
+40:00). Floor bests at 40 h: Workshop 3, Factory 4.4, District 6.25; the Patent preview 30-40 h
+3.5-5.5 (39 of 39 nodes); rules 1-2 per Act III stretch 40.5 / 30.5, 32.4 / 4.7 and 10.4 / 10.3 min;
+the biggest District 160 groups, 0.73 ms a tick. The Relocate rule now waits for the preview to stop
+rising (`RELOCATE_FLAT`, 45 minutes) or the World to stand full, not a flat 20 Legacy; it was not
+exercised.
+
 **Open** (`[pace4] OPEN` in the test):
-- **The first Relocate comes at 18 h, not 40-45 h.** The chain is about 4 h of the run that opens
+- **Act III's two Megaprojects are not finished by the bot** (the fifth pass), so nothing past
+  Charting is measured: Sandwiches II and Coils II are not laid on the Factory bench (a Plastic copy,
+  a Rubber II copy short of room), and the Coils line starved of rubber in the measured runs.
+- **The first Relocate came at 18 h, not 40-45 h** (the fourth pass, before the gate). The chain is about 4 h of the run that opens
   the World (Charting 12:09, Relocation 15:59), and the move is taken 2 h later (the World never
   stands full for 10 minutes; the 2-hour rule). §22's 40-45 h assumed the World played to its full
   floor first; at 18 h the floor bests are a third of the model's 7-10, so the move banks 20, not
