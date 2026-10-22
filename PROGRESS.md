@@ -2,7 +2,61 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
-## Status (2026-10-21, latest): after the owner's first play (building, hovers, the notebook)
+## Status (2026-10-22): Milestone 7, Act III (the District), built
+
+The owner: *"finish the rest of the milestones/game run autonomously, no itch.io page, use up to
+250 credits if needed"*, then *"make sure things get moving"*. The plan for Milestones 7-14 is
+`docs/endgame.md`. Built on branch `m7-district` (the lead's sim core, then four agents in
+worktrees: the art, the District's screen, Act III's other screens, the Act III bot), merged into
+`main`. DESIGN.md §21; DECISIONS.md "Milestone 7".
+
+### What exists
+
+- **The District** (`src/sim/systems/high.ts`, `src/data/floors.ts`): a third floor of depth-2
+  modules opened by research Zoning; 12x10 plus three 2-column lots (2M x n coin), its own Dock,
+  Hopper and the Bay for Megaprojects #2-#3. Modules run as on the Factory. **Skiff routes**
+  carry one item each, `skiffs x load / (2 x dist / speed + dwell)` (speed 2, load 4, dwell 1 s;
+  15,000 coin a skiff, refunded; 12 a route). **District folds** (depth 3, research District Folds).
+  The World floor's numbers are in the same data for Milestone 9.
+- **The Chute**: the Factory Chute (a trunk ends in it) fills `s.chute` (20 an item); the Workshop
+  Chute Mouth pushes a chosen item out (never inside a fold box). Tier 3 lines are designed on the
+  Workshop from Factory goods.
+- **Tier 3**: 19 items (solvent to the Autonomous Sandwich Engineer, an Assembler Mk2 recipe), the
+  Chem Vat and the Greenhouse, Recycling and Byproduct modes, 17 research nodes on page 3 (each
+  needs the Great Drill's stage 3), Act III orders and rewards (Bramble, Unit 7, Voltaire 4, the
+  Committee 6), ten Act III Patents (head starts, Long Skiffs, the Bigger Nest, Ward Boundaries,
+  the Dispatcher), 14 trophies.
+- **Megaprojects #2 and #3** (`MEGAS`): the Floating City (a ninth Factory row, a fourth District
+  lot) and the Scrap Transmuter (waste sells at 25%, then never blocks), kept through resets.
+- **Challenges v1** (5, `src/data/challenges.ts`): taken at a Reorganize from the second on; small
+  permanent rewards. **Scenarios v1** (3 boards, `src/data/scenarios.ts`): separate games, own
+  save slots, personal bests in local storage.
+- **Offline** tallies each floor's Dock and Bay apart; **SAVE_VERSION 8**.
+- **The screens**: the District renderer and tools (a labelled strip: Route, Remove, Fold, the
+  groups), flying skiffs, short routes in orange with a route card (`+ skiff`, `- skiff`), Buy lot,
+  the District fold's clipboard and grade card, Act III goals; the Chem Vat, Greenhouse, Chute
+  Mouth (report with item picker) and Factory Chute; research page 3; the Megaproject page's three
+  tabs; Challenges on the Reorganize card and a slip while one runs; Scenarios from Options.
+- **Art** (`pixel-art/act3/`): every Act III sprite, 0 PixelLab generations.
+
+### Measured
+
+`npm run typecheck` clean; `npx vitest run --exclude "tests/pace-*"` 734 passed (the full suite
+with the Act I-II pace tests passed 755 before the last sim batch; the long pace tests now run in
+the background so the work keeps moving, per the owner). `npm run screens` clean at three sizes
+after two HUD fixes (a goal chip wider than the bubble; the Gazette slip under a third clipboard).
+A District of 96 groups and 98 routes costs 0.11 ms of sim a tick (budget 4 ms). The Act III bot
+and its 40-hour pace test: see the next section when merged.
+
+### Open
+
+- The Act III bot's pacing numbers (District at ~15 h, rules 1, 2, 5 to 40 h): being finished.
+- No pause on the District (the pause command takes the Factory only; with the World).
+- The District's Scrap Transmuter and Dock tags crowd the Dock at 1280; dark tier 3 icons lose
+  contrast in module wells (a lighter well or rim would fix it).
+- The owner's look at Act III, and the derivative flags in DECISIONS.md.
+
+## Status (2026-10-21, later): after the owner's first play (building, hovers, the notebook)
 
 The owner: a right click to get the Miner is nobody's first guess; hover tags took too much room
 ("a lil overstimulating"); the notebook "with half the game in it" was too discreet.
