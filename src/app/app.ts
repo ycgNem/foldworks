@@ -51,6 +51,9 @@ import { MEGAS, type MegaId } from '../data/megaprojects';
 import { highW, lotPrice } from '../sim/systems/high';
 import { DS, districtInput, districtCancel } from './district';
 import { saveScenario } from './scenarios';
+// Milestone 12 (sound and juice): the ambience mixer, and the sound and motion settings
+import { ambience } from './ambience';
+import { initSound } from './soundopts';
 
 export type Mode =
   | { k: 'idle' }
@@ -164,6 +167,7 @@ export class App {
     // the last 30 s, and usually nothing (DESIGN.md §20)
     window.addEventListener('pagehide', () => { if (this.screen === 'play') this.save(); });
     loadSettings();
+    initSound(this); // Milestone 12: volumes, mute and reduced motion, kept
     this.resize();
     const r = this.readSlot();
     this.hasSave = !!r.data;
@@ -427,17 +431,8 @@ export class App {
     wheelFrameEnd(this);
     this.ui.end();
     this.worldInput();
-    this.audio.update(this.busyShare());
+    ambience(this, dt); // Milestone 12: the machines' voices (src/app/ambience.ts)
     this.input.endFrame();
-  }
-
-  private busyShare() {
-    const ms = this.game.machines.length + this.game.miners.length;
-    if (!ms) return 0;
-    let w = 0;
-    for (const m of this.game.machines) if (m.state === 'work') w++;
-    for (const m of this.game.miners) if (m.state === 'work') w++;
-    return Math.min(1, w / 12);
   }
 
   // ------------------------------------------------------------------ events -> sound, toasts
@@ -583,7 +578,7 @@ export class App {
           break;
         case 'megaGive': break;
         case 'megaDone': {
-          a.sfx('milestone');
+          a.sfx('megaStage');
           this.renderer.fx.kick(6);
           if (e.floor === 'district') {
             const m = MEGAS[e.id as MegaId];
@@ -600,7 +595,7 @@ export class App {
         case 'firstNested': this.toast('A module of modules', 'depth 2 · the group in one tile × its grade', C.gold, 'fold'); break;
         case 'inspectGift': break;
         case 'fold':
-          a.sfx('fold');
+          a.foldSound((e.floor ?? 'workshop') === 'workshop'); // timed to the fold animation there
           this.renderer.fx.kick(4);
           if (e.id === 'S+') {
             a.sfx('fanfare', 0.8);
@@ -614,6 +609,7 @@ export class App {
           break;
         case 'stamp': a.sfx('stamp'); break;
         case 'unfold': a.sfx('place'); break;
+        case 'challengeWon': a.sfx('challengeWon'); break; // Milestone 12 (act3.ts toasts it)
         case 'sliceEnd':
           a.sfx('milestone');
           this.renderer.fx.kick(5);

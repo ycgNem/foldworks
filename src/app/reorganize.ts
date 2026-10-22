@@ -325,7 +325,7 @@ export function afterReorganize(app: App, patents: number, challenge: ChallengeI
   // opens the Scenario boards (Options) and, from the next one, Challenges
   if (challenge) app.toast(`Challenge: ${CHALLENGES[challenge].name}`, `{bad:${CHALLENGES[challenge].rule}} · {good:goal} ${CHALLENGES[challenge].goalText}`, C.violet, 'star');
   else if (app.game.s.meta.runs === CHALLENGE_AFTER_RUNS && scenariosOpen(app)) app.toast('Scenarios open', '{u:options} Options → Scenarios · puzzle boards · Challenges at the next Reorganize', C.violet, 'trophies');
-  app.audio.sfx('milestone');
+  app.audio.resetSound(1); // Relocate and the Last Fold call it with 2 and 3
   app.save();
 }
 

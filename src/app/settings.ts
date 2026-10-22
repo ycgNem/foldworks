@@ -1,5 +1,5 @@
-// Player settings that are not part of the game (DESIGN.md §20): how big numbers are written, and
-// how much a hover over the floor shows.
+// Player settings that are not part of the game (DESIGN.md §20): how big numbers are written, how
+// much a hover over the floor shows, the sound's volumes and mute, and reduced motion.
 // Kept in localStorage apart from the save, so a notation follows the browser, not the factory,
 // and never touches the sim's state (an export string carries the game, not the reader's taste).
 import { NOTATIONS, getNotation, setNotation, type Notation } from '../engine/num';
@@ -13,7 +13,41 @@ export type HoverTags = 'brief' | 'full' | 'off';
 export const HOVER_TAGS: HoverTags[] = ['brief', 'full', 'off'];
 let hoverTags: HoverTags = 'brief';
 
-interface Settings { notation?: Notation; hover?: HoverTags }
+/** Milestone 12: the sound buses' volumes (0..1) and the mute, and reduced motion. */
+export interface SoundSettings { master: number; sfx: number; amb: number; ui: number; muted: boolean }
+export const SOUND_DEFAULT: SoundSettings = { master: 0.8, sfx: 0.8, amb: 0.6, ui: 0.7, muted: false };
+
+interface Settings { notation?: Notation; hover?: HoverTags; sound?: Partial<SoundSettings>; calm?: boolean }
+
+/** A stored sound setting made safe: every volume a number in 0..1 (to the nearest 5%), the
+ *  defaults for anything missing or damaged. */
+export function cleanSound(raw: unknown): SoundSettings {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const vol = (k: 'master' | 'sfx' | 'amb' | 'ui') => {
+    const v = o[k];
+    return typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.max(0, Math.min(1, v)) * 20) / 20 : SOUND_DEFAULT[k];
+  };
+  return { master: vol('master'), sfx: vol('sfx'), amb: vol('amb'), ui: vol('ui'), muted: o.muted === true };
+}
+
+/** The stored sound settings. */
+export function soundSettings(): SoundSettings {
+  return cleanSound(read().sound);
+}
+
+/** Remember the sound settings. */
+export function saveSound(s: SoundSettings) {
+  write({ ...read(), sound: cleanSound(s) });
+}
+
+/** Reduced motion as stored (off unless the player turned it on). */
+export function calmSetting(): boolean {
+  return read().calm === true;
+}
+
+export function saveCalm(on: boolean) {
+  write({ ...read(), calm: on });
+}
 
 function read(): Settings {
   try {
