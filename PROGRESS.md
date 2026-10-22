@@ -109,6 +109,29 @@ and §20 "Save size"; DECISIONS.md "Milestone 14".
 Merge into `m9-worlds`; fix the sim hotspots after Milestone 11 lands; the pace sim to 100 h with
 the Act IV and V bots.
 
+## Status (2026-10-22, afternoon): the bots' fourth pass (Relocation's chain; the first Relocate)
+
+Built in a worktree off `m9-worlds`, time-boxed (3 h). DECISIONS.md "The fourth pass"; DESIGN.md
+§21 and §22 Pacing (measured). Only `src/sim/bot2.ts` (a log), `bot3.ts`, `bot4.ts`, `campaign.ts`
+and the docs changed; no data or sim number.
+
+- **Relocation's whole chain is made, in the chemistry corner**: the corner's solvent vat keeps its
+  sludge (Byproduct mode once Recycling is known) for Hydroponics, then feeds a fertilizer vat, a
+  Greenhouse and a sandwich Assembler (Sandwiches, Sandwich Engineering), then an **Assembler Mk2
+  Engineer line** (its battery vat behind a Splitter, processors from a Processors II Chute feeder,
+  its own robot-arm chain), then umbrellas on a second Mk2. The third pass's "oil" was room: the
+  Factory feeds' copies were dropped for no route (now logged, `Act2Bot.dropped`).
+- **Measured** (seed 1000; pace-act4 40 h and once 60 h): Relocation researched **15:59**, the
+  **first Relocate 18:00** (Home to Rime, 20 Legacy: the Purse, the Archive, the Clerk), the climb
+  on Rime to its World in **4.6 h** (22:36), a second Relocate 29:18 (to the Old Works, 8 Legacy).
+  Rules 1-2 per stretch 7.1, 6.0 and 7.8 min (were up to 19.9). Pace-act3 (the Act III-only
+  campaign) got worse: 10.9, 19.9, 19.9 and 10.3 min (were 10.2-10.8), open.
+- **Open**: the Old Works stops the Act I planner (ruins and rubble in Home's layouts: run 5 never
+  reaches its slice end); the first Relocate is 22-27 h early against §22 and banks 20, not ~35
+  (for the owner: DECISIONS.md); pace-act3's run 4 folded a Servos design without circuits and
+  waited on Floating City (the full-floor reset now comes once a plan step has waited an hour; the
+  cause is not found); the Factory's battery feed finds no room (the Lighthouse waits); floor bests.
+
 ## Status (2026-10-22, morning): the Act III bot's third pass (the idle windows; batteries)
 
 Built in a worktree off `m9-worlds`, time-boxed (3 h). DECISIONS.md "The third pass"; DESIGN.md

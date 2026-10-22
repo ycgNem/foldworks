@@ -43,10 +43,12 @@ export const ISLAND_WISH: Record<WorldId, ResearchId[]> = {
   oldworks: ['relicStudy'],
 };
 
-/** The islands in the order this player visits them: the Old Works first (its ruins fold lines the
- * first hour has not reached, and its rule is a cost, not a new layout), then Rime (Home's dense
- * lines warm each other), Cinder (vents: compact clusters) and Pebble last (half the land). */
-export const ISLAND_ORDER: WorldId[] = ['oldworks', 'rime', 'cinder', 'pebble'];
+/** The islands in the order this player visits them: Rime first (Home's layouts all stand there:
+ * its rule slows a cold powered machine, and Home's dense lines warm each other; measured, the
+ * fourth pass: on the Old Works first the Act I planner, which lays Home's lines, never reached its
+ * slice end in 8 hours, its ruins and rubble in the way), then the Old Works (its ruins fold lines
+ * the first hour has not reached), Cinder (vents: compact clusters) and Pebble last (half the land). */
+export const ISLAND_ORDER: WorldId[] = ['rime', 'oldworks', 'cinder', 'pebble'];
 
 /** The Legacy tree in the order this player buys it: the head starts that skip Act I and the
  * Patents' chores first (the Purse, the Archive, the Clerk), the free skiff, the habits that keep
@@ -100,7 +102,7 @@ export class Act4Bot {
     this.a3 = new Act3Bot(g, b);
     // (Act III's batteries and Hydroponics after Charting, the World first, and before the Sky Anchor,
     // whose 800 bearings nothing here makes yet: measured, the third pass)
-    const late: ResearchId[] = ['batteries', 'hydroponics'];
+    const late: ResearchId[] = ['batteries', 'recycling', 'hydroponics', 'sandwiches', 'sandwichEngineering'];
     this.a3.wish = [...WISH3.filter((r) => !late.includes(r)), 'charting', ...late, 'skyAnchor', 'lighthouse', 'relocation', ...ISLAND_WISH[worldOf(g)]];
     this.grewAt = g.seconds;
   }
@@ -167,8 +169,9 @@ export class Act4Bot {
 
   /** The island to Relocate to now, or null (read each minute by the campaign): allowed, the
    * preview worth a Legacy node (4 or more; 20 on the first move, when Home's seven stages stand),
-   * and the World full for ACT4_FULL minutes, or two hours past Relocation with the preview there. */
-  relocateTo(): WorldId | null {
+   * and the World full for ACT4_FULL minutes, or two hours past Relocation with the preview there,
+   * or the run at its cap (`atCap`: a Relocate that pays rather than the cap's Reorganize). */
+  relocateTo(atCap = false): WorldId | null {
     const g = this.g;
     if (!g.done('relocation')) return null;
     const to = nextIsland(g);
@@ -176,6 +179,8 @@ export class Act4Bot {
     const p = previewLegacy(g, to).now;
     const first = (g.s.meta.relocations ?? 0) === 0;
     if (p < (first ? 20 : 4)) return null;
+    // (at the run's cap the move pays as it stands: src/sim/campaign.ts)
+    if (atCap) return to;
     if (this.fullAgo() >= ACT4_FULL * 60) return to;
     this.relocAt ??= g.seconds;
     return g.seconds - this.relocAt >= 2 * 3600 ? to : null;

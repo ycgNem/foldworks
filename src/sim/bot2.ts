@@ -838,6 +838,14 @@ export class Act2Bot {
     }
   }
 
+  /** Optional Factory copies left out, and why (the logs: the third pass found the oil feed's
+   * Plastic copies dropped without a word). */
+  dropped: string[] = [];
+  private drop(id: string, design: string, why: string): 'done' {
+    this.dropped.push(`${Math.floor(this.g.seconds / 60)}m ${id} (${design}): ${why}`);
+    return 'done';
+  }
+
   /** Optional steps waiting beside the plan (DEFER), in plan order. */
   later: Step[] = [];
   private laterAt = 0;
@@ -1302,7 +1310,7 @@ export class Act2Bot {
       // an optional copy short of claims waits for the coin to buy them (DEFER); one refused for
       // anything but coin (Machine Kits) is left out
       if (why && s.opt && c === 'short') return DEFER;
-      if (why && s.opt && !g.s.coin.lt(stampCost(g, d))) return 'done';
+      if (why && s.opt && !g.s.coin.lt(stampCost(g, d))) return this.drop(s.id, s.design, why);
       if (why) return `stamp ${s.design}: ${why}`;
       this.buy({ k: 'stamp', id: d.id }, 'stamp');
       return 'stamping';
@@ -1323,11 +1331,11 @@ export class Act2Bot {
       const dd = m && g.design(m.design);
       // (a destination copy still waiting beside the plan: this one waits with it)
       if (!dd && s.opt && this.later.some((q) => q.k === 'fmod' && q.id === dest.id)) return DEFER;
-      if (!dd || !items.every((i) => (dd.ins[i] ?? 0) > 0)) return s.opt ? 'done' : `${dest.id} does not take ${items.join(', ')}`;
+      if (!dd || !items.every((i) => (dd.ins[i] ?? 0) > 0)) return s.opt ? this.drop(s.id, s.design, `${dest.id} ${dd ? 'does not take' : 'not placed for'} ${items.join(', ')}`) : `${dest.id} does not take ${items.join(', ')}`;
     }
     const plan = placeModule(g, d, s.to, s.by, this.mods, s.hub, s.annex ? { x0: FACTORY.w + 2, tx0: FACTORY.w } : undefined, s.zone);
     // an annex copy with no room waits while a block is still to buy
-    if (!plan && s.opt) return s.annex && annexPrice(g) ? DEFER : 'done';
+    if (!plan && s.opt) return s.annex && annexPrice(g) ? DEFER : this.drop(s.id, s.design, 'no room');
     if (!plan) {
       // no room: clear the newest Act I chain (modules back to the inventory, trunks refunded)
       if (nextChainToClear(g, new Set(Object.values(this.mods)))) return this.clearChain(`room for ${s.id}`);

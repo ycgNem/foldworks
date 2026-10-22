@@ -2848,3 +2848,86 @@ number moved.**
   full floor's 10-minute reset; were 68.7 and 324), pace-act4's 7.1, 9.0 (Act IV), 6.4 and one 19.9 /
   19.2 min from 33:50 (run 5, 38 minutes after its hand-over; were 68.9, 13.5, 36.9 and 154). No
   Relocate: the next link is oil for the Factory's chemistry copies (above).
+
+### The fourth pass: oil, the corner chain, the Engineer and the first Relocate (2026-10-22)
+Built in a worktree off `m9-worlds` (1d9c5b1), time-boxed (3 h). Each step was a measured stall,
+read with a scratch log of the bot's waiting step, the Chute's stock, the Factory floor and the
+corner's machine states. **No data or sim number moved.**
+- **Optional members are logged when dropped** (`Act2Bot.dropped`): the third pass's oil was never
+  coal claims. The chem and battery feeds' Plastic copies, a Batteries copy and the `oil2` Plastic
+  copies were all left out for **no room**: the search placer finds no trunk route from a free tile
+  to the Solvent or Batteries copy in the annex, or to the Chute, on a Factory crossed by the servos
+  feed's trunks (an empty bench, x 0-5, helps nothing). A feed now saves for a member short of a
+  claim as a group does (`feedStep`: a block bought when the coin covers it once, the District
+  stamping nothing new, the missing copies tried each minute for 50 minutes at most) and a feed may
+  use the empty bench once the plan's last group is nested; neither placed the chem feed. **The
+  chem feed is out of the plan**: the Factory makes no sludge.
+- **Sludge from the Workshop.** The chemistry corner's solvent vat is kept with its sludge
+  (`CORNER.sludge`): the sludge belted round row 9 and up column 18 into the loop, so the Hopper takes
+  it while Hydroponics wants it. Its Pole joins the lab's grid (a standing line is never folded, so
+  its power may cross); an oil Boiler of its own burned the oil the vat wanted. Once **Recycling** is
+  researched (150 rubber, 60 gearboxes: put after Batteries) the vat runs in **Byproduct mode**,
+  twice the sludge for the oil (DESIGN.md §21 Modes names this use): Hydroponics came at 12:57
+  instead of 13:50.
+- **Sludge left on the belts jams the corridor.** The Hopper takes sludge only while research wants
+  it (the slag rule), and the loop and the corridor are the lab's too: once Hydroponics had its 300,
+  every lab machine stood blocked from 12:58 and the Produce line never ran. The player picks up each
+  belt holding sludge (`unjam`, a command every 2 s) and the layout puts it back.
+- **Produce, then sandwiches, as standing corner lines** (`CORNER.produce`, `CORNER.sandwich`): the
+  solvent vat's sludge goes straight into a fertilizer vat, whose gravel a press crushes from the
+  Chute's slag (every feeder's waste comes down with its goods), into a Greenhouse (powered, 2x2),
+  whose produce goes to the Hopper until Sandwiches has its 400; then an Assembler takes the
+  Greenhouse's produce and the Chute's plastic until Sandwich Engineering has its 150 sandwiches.
+  The plastic drain stays on for the Sandwiches line (a line drawing plastic turned it off; the
+  stock stood full, the Plastic feeders stopped and so did the oil: Sandwich Engineering an hour
+  later).
+- **The Engineer** (`CORNER.engineer`, Mk2 only, four inputs): an Assembler Mk2 at (16,9) facing the
+  kit line's column 15 (its Engineers ride up the corridor to the Hopper), the sandwich Assembler
+  into its east face, a battery vat into its north face (the solvent vat's front is a Splitter: one
+  side the battery vat, the other the rest of the solvent into the lab's loop: a battery takes one
+  solvent, an Engineer's ten sandwiches twenty of the vat's crafts, and without the overflow the
+  battery belt fills and the vat, the sludge and the sandwiches stop), processors from a Chute Mouth
+  fed by a **Processors II Chute feeder** (the group holds its own solvent vat, sand claim and
+  Plastic copies, so it needs no feed; the `feeder` step takes the first free slot and saves for
+  its coal claim), and its own robot arm chain (a sensor Assembler into an arm Assembler, Chute-fed,
+  as the arms line) into its south face. Three Engineers came in 35-40 minutes.
+- **Umbrellas** (four inputs; a 1x1 Assembler has three faces): a slot line sharing its back
+  between steel and plastic (a belt with a Mouth side-loading, then a Merger, which takes its inputs
+  in turn) jammed for good once the plastic stock stood at 0 (its steel buffer full, the next steel
+  held): 5-13 of 20 in two hours. **An Assembler Mk2 in the corner once the Engineers are in**
+  (`CORNER.umbrellas2`, each input its own Mouth, its own oil Boiler and Engine for 200 kW) made the
+  20. The slot line stays (it makes some while the Engineers are built).
+- **A Relocate at the run's cap** (`relocateTo(atCap)`, read by the campaign): at the cap with
+  Relocation known and the preview paying, the player moves rather than Reorganizes (Relocation
+  came 2 h 25 min before run 3's cap; the 2-hour rule takes it first now).
+- **Relocation's chain does not hold the full-floor reset** (`done()`): its standing lines wait up
+  to 150 minutes each, and a full District that waited on them held the reset off 99 minutes in
+  pace-act4's run 5. A floor still growing (the World's) keeps the run going while the chain runs.
+- **Rime is the first island** (`ISLAND_ORDER`): on the Old Works first the Act I planner, which
+  lays Home's lines, never reached its slice end in 8 hours (ruins and rubble in its way: the
+  islands' layouts are still open). Every Home layout stands on Rime: its rule halves a cold
+  powered machine, and Home's lines are dense.
+- **A free Chute slot only for the new feeder.** The `feeder` step first took the first slot no
+  feed's trunk or module stood on for every feeder; in pace-act3's run 4 that moved the early Circuits
+  II feeder, the Servos line folded without circuits ("Servos II does not take circuit"), Floating
+  City waited on servos and the run idled 155 minutes to its cap. Only the Processors II feeder
+  (`free`) looks for a free slot and saves for its claim now.
+- **For the owner (no number changed): the first Relocate comes at 18 h, not 40-45 h.** Relocation's
+  price (3 Engineers, 20 umbrellas) is about 4 hours of the run that opens the World, all of it made
+  on the Workshop and the Factory, none on the World; the bot takes the move 2 hours later (the World
+  never stands full 10 minutes) with floor bests at a third of §22's 7-10, so it banks 20 Legacy, not
+  ~35. Either Relocation should cost what an Act IV World group makes (so the World is played first),
+  or the Relocate rule should wait for floor bests; both are §22 decisions, not the bot's.
+- **Measured** (seed 1000; pace-act3 and pace-act4 at 40 h, pace-act4 once at 60 h): see DESIGN.md
+  §21 and §22 Pacing. The first Relocate 18:00 (Home to Rime, 20 Legacy: the Purse, the Archive and
+  the Clerk), the climb on Rime to the World in 4.6 h (22:36), Relocation again 27:17 and a second
+  Relocate 29:18 (to the Old Works, 8 Legacy: the Skiff Guild, Old Habits), where the Act I planner
+  stalls (open). Rules 1-2: pace-act4's stretches 7.1, 6.0 and 7.8 min at worst (were 7.1, 9.0, 6.4,
+  19.9); **pace-act3's 10.9, 19.9, 19.9 and 10.3 (were 10.2-10.8: worse, open)**: the 19.9-minute
+  waits come 30 minutes into runs 4 and 5's Act III (19:27, 29:20), not looked into in the time box.
+  Both tests pass (pace-act3 7, pace-act4 5).
+- **A plan stuck an hour on one step is through for the full-floor reset** (`done()`): pace-act3's
+  run 4 (the Act III-only campaign) folded its Servos design without circuits, Servos II could not be
+  laid, Floating City waited on servos from 19:30, and once the District stood full it idled 155
+  minutes to the run's cap (no step before chemistry had a give-up). The cause of the circuit-less
+  fold (the run's state after run 3's longer chain) is not found yet.

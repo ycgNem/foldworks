@@ -187,6 +187,15 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
     while (!(o.horizon && g.s.tick >= o.horizon * TICK_RATE)) {
       if (runSeconds(g) >= cap) {
         if (!toHorizon) break;
+        // (at the cap with Relocation known and paying, the player moves rather than Reorganizes:
+        // the fourth pass's run 3 researched Relocation 2 hours before its cap, and the 2-hour rule
+        // would have handed it to the Reorganize)
+        const to = (g.s.tick - start) % (60 * TICK_RATE) === 0 && act4 ? act4.relocateTo(true) : null;
+        if (to) {
+          for (const id of act4!.habits()) { g.act({ k: 'habit', id }); g.step(TICK_RATE / 4); }
+          relocate = to;
+          break;
+        }
         if ((g.s.tick - start) % (60 * TICK_RATE) === 0 && !reorganizeRefusal(g)) { reset = true; break; }
       }
       if (!bot) {

@@ -1658,6 +1658,16 @@ its hand-over: not looked into). Runs (pace-act3): 1 0:00-4:22 (14 Patents), 2 4
 7:24-17:02 (37), 4 17:02-26:22 (12), 5 26:22-36:18 (9), 6 36:18-40:00; the District peaks at 153
 groups (1.03 ms a tick), 8 District folds.
 
+**Re-measured, the fourth pass** (DECISIONS.md "The fourth pass": Relocation's chain): the plan goes
+on past Batteries with standing corner lines (sludge for Hydroponics, produce, sandwiches, the
+Engineer on an Assembler Mk2, umbrellas on a second), none of which holds the full-floor reset; a
+plan step waited on for an hour no longer holds it either. Measured in the Act IV campaign (run 3):
+Batteries 12:17, Recycling before Hydroponics, Hydroponics 12:57, Sandwiches 14:17, Sandwich
+Engineering 15:23, Relocation 15:59. Pace-act3's Act III stretches wait 10.9, 19.9, 19.9 and 10.3
+min at worst (rules 1 and 2; were 10.2-10.8: open, the two 19.9-minute waits 30 minutes into runs 4
+and 5's Act III); its run 4 once folded a Servos design without circuits and waited on Floating
+City (the stuck-step reset bounds it).
+
 Lessons:
 - **The waste chute and 1 a trip halve the routes and make distance cost.** With waste going to
   the Dock on its own the bot flies one route a product (a second only for a second product), so
@@ -1983,42 +1993,48 @@ the cold machines and the Town Plan's layouts.
 - **Measured below** (the Act IV bot): the campaign does not reach the World yet.
 ### Pacing (measured, the Act IV bot)
 Measured by the campaign bot with the Act IV policy (`src/sim/bot4.ts` over `src/sim/bot3.ts`,
-`tests/pace-act4.test.ts`, seed 1000, `FOLD_ACT4_HOURS` = 40 h of play, 18 min of wall time; 80 h
-did not fit the time box). Second pass (DECISIONS.md "The second pass"): the Act III bot now makes
-rubber, sensors and robot arms, so the campaign reaches District Folds, Charting and the World in
-run 3. Relocation is still out of reach: it wants 3 Sandwich Engineers and 20 umbrellas, and no
-bot makes batteries, sandwiches or umbrellas yet.
+`tests/pace-act4.test.ts`, seed 1000, `FOLD_ACT4_HOURS` = 40 h of play, about 25 min of wall time;
+60 h measured once, about 25 min). Fourth pass (DECISIONS.md "The fourth pass"): the Act III bot now
+makes Relocation's whole chain in the chemistry corner (sludge, produce, sandwiches, batteries, the
+Engineer on an Assembler Mk2, umbrellas), so the campaign researches Relocation in run 3 and takes
+the first Relocate.
 
-| Measure | Target | Measured (third pass, seed 1000, 40 h) | Second pass |
+| Measure | Target | Measured (fourth pass, seed 1000, 40 h) | Third pass |
 |---|---|---|---|
-| District open | about 11 h | 9:53 (run 3) | 9:37 |
-| Chemistry, Robotics | (Act III) | 9:57, 11:28 (run 3) | 9:43, 13:57 |
-| District Folds; Charting and the World | before the first Relocate | **11:36; 11:46** (run 3; 3 District folds by 40 h) | 15:02; 15:41 |
-| Batteries (research, the line folded) | Relocation's chain | **12:28-12:36** (run 3; the Lighthouse 15 of 200 batteries: no Batteries copy on the Factory) | never |
-| World modules | | **63** at most (depth-3 copies of the District's folds) | 19 |
-| First Relocate | 40-45 h | **none** (open: Hydroponics' sludge, sandwiches, umbrellas, the Engineer) | none |
-| Four islands | by 60 h | **Home only** (open) | Home only |
-| Megaproject stages | | the City's stage 1 at 10:56; no Act IV stage | 13:33 |
-| Legacy | the tree by 75-80 h | none banked; preview 21 at 40 h (model ~35 at the first move) | 21 |
-| Floor bests at 40 h | 7-10 a floor | Workshop 3.75, Factory 4.4, District 6.75, World 1.69 (run 5's new World) | 2.5, 4, 6.25, 6.25 |
-| Patent preview 30-40 h | | 10.2-10.3 until run 4's cap at 31:24, then 0.1-6.9 (39 of 39 nodes) | 6.3-6.5, then 0.1-1.8 |
-| Rule 1 per stretch | 10 min | Act III 7.1; Act IV 9.0; III 6.4; III **19.9** (33:50, run 5) | 68.9; 13.5; 36.9; 154 |
-| Rule 2 per stretch | 15 min | 7.1; 8.9; 6.0; **19.2** | 34.7; 13.5; 36.9; 117 |
-| Tick, the biggest floor | under 4 ms | **1.32 ms** (a World of 63 modules; the District peaks at 159) | 0.65 (World 19) |
+| District open | about 11 h | 9:53 (run 3) | 9:53 |
+| Chemistry, Robotics | (Act III) | 9:57, 11:28 (run 3) | 9:57, 11:28 |
+| District Folds; Charting and the World | before the first Relocate | 11:47; 12:09 (run 3) | 11:36; 11:46 |
+| Relocation's chain | | Batteries 12:17, Hydroponics 12:57, Sandwiches 14:17, Sandwich Engineering 15:23, **Relocation 15:59** (run 3) | Batteries 12:28 |
+| World modules | | 49 at most | 63 |
+| **First Relocate** | 40-45 h | **18:00, Home to Rime, 20 Legacy** (open: 22-27 h early; the preview is the model's ~35 less the folds) | none |
+| The climb on Rime | 6-8 h | **Relocate 18:00, the World 22:36 (4.6 h)**, Relocation again 27:17 | |
+| Second Relocate | | 29:18, Rime to the Old Works, 8 Legacy | |
+| Four islands | by 60 h | **three by 60 h** (Home, Rime, the Old Works: the Act I planner stalls on the Old Works, open) | Home only |
+| Legacy | the tree by 75-80 h | 28 banked; the Purse, the Archive and the Clerk at 18:00, the Skiff Guild and Old Habits at 29:18 | none |
+| Floor bests before the first Relocate | 7-10 a floor | Workshop 2.5, Factory 4.4, District 6.25, World 1.56 | (at 40 h) 3.75, 4.4, 6.75, 1.69 |
+| Patent preview 30-40 h | | 0.0 (the run on the Old Works never reaches its slice end; 10 of 39 nodes kept) | 10.2, then 0.1-6.9 |
+| Rule 1 per stretch | 10 min | Act III 7.1; Act IV 6.0; Act III on Rime 7.8 | 7.1; 9.0; 6.4; 19.9 |
+| Rule 2 per stretch | 15 min | 7.1; 5.9; 7.7 | 7.1; 8.9; 6.0; 19.2 |
+| Tick, the biggest floor | under 4 ms | 1.08 ms (a World of 49 modules) | 1.32 ms |
 
-The runs (third pass): 1 0:00-4:22 (14 Patents), 2 4:22-7:24 (7), 3 7:24-19:24 (36, Act III from
-9:46, Act IV from 11:46), 4 19:24-31:24 (10, from 21:22), 5 31:24-40:00 (from 33:12). Runs 3 and 4
-end at the 12-hour cap (the World keeps growing). 33 min of wall time. No number moved. The second
-pass's windows were the bot's (DECISIONS.md "The third pass"): its slot lines stood blocked on a full
-corridor, and a standing line held the full-floor reset off.
+The runs (fourth pass): 1 0:00-4:22 (14 Patents), 2 4:22-7:24 (7), 3 7:24-18:00 (Act III from 9:46,
+Act IV from 12:09, Relocates to Rime: 20 Legacy), 4 18:00-29:18 on Rime (Act III from 20:44, the
+World 22:36, Relocates to the Old Works: 8), 5 29:18-40:00 on the Old Works (its Act I never ends).
+No number moved.
 
-**Open** (`[pace4] OPEN` in the test): rule 1 and 2's one 19.9-minute wait (run 5, from 33:50),
-every §22 target past the World (Relocation's chain past batteries: Hydroponics' 300 sludge,
-sandwiches, umbrellas and the Engineer; oil for the Factory's Batteries and Solvent copies, which
-want Plastic copies the placer could not lay: coal claims again), the floor bests, the Sky Anchor's
-800 bearings (nothing here makes bearings alone), and the islands' layouts (the Act I-II bots lay
-Home's lines; Pebble's sky chunks, Cinder's vents and the Old Works' ruins will refuse some of
-them). Coal claims may be the number that blocks honest play (DECISIONS.md).
+**Open** (`[pace4] OPEN` in the test):
+- **The first Relocate comes at 18 h, not 40-45 h.** The chain is about 4 h of the run that opens
+  the World (Charting 12:09, Relocation 15:59), and the move is taken 2 h later (the World never
+  stands full for 10 minutes; the 2-hour rule). §22's 40-45 h assumed the World played to its full
+  floor first; at 18 h the floor bests are a third of the model's 7-10, so the move banks 20, not
+  ~35. Either Relocation's price wants the World's own goods (an Act IV group's), or the Relocate
+  rule should wait for floor bests nearer the model's: for the owner (DECISIONS.md).
+- **The Old Works stops the Act I planner** (it lays Home's lines; ruins and rubble stand in the
+  way), so run 5 never reaches its slice end: 10.7 h of a run with no Act III stretch, the Patent
+  preview at 0, no floor bests. The islands' layouts are the next work (Rime first because every
+  Home layout stands there).
+- The floor bests, the Sky Anchor's 800 bearings, the Lighthouse's 200 batteries (the Factory's
+  battery feed finds no room), and four islands by 60 h.
 
 ### Derivative, flagged and re-derived (CLAUDE.md)
 - **A prestige tree of automation bought with the second reset's currency** resembles Antimatter
