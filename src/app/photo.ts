@@ -1,7 +1,7 @@
 // Photo mode (Milestone 11, DESIGN.md §24): the HUD steps aside so the floor can be looked at, and a
 // labelled strip along the foot snaps the whole floor (not just the view) to a PNG at 1x or 2x,
 // downloaded through a link. A white flash and a "Saved" note say it worked. Opened by the "Photo"
-// key under the Purse (beside Stuck?) or the HUD key (H, "HUD on/off", which had no handler);
+// key under the Purse (beside Stuck?) or the HUD key (H, labelled "Photo mode" on the Keys page; it had no handler before);
 // Esc, H or Done leave it. The picture is src/render/photo.ts's. Presentation only.
 import { C, rgba } from '../data/palette';
 import { smallWidth, textWidth } from '../ui/font';

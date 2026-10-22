@@ -21,7 +21,7 @@ export const ACTION_LABELS: Record<Action, string> = {
   slot6: 'Wheel pick 6', slot7: 'Wheel pick 7', slot8: 'Wheel pick 8', slot9: 'Wheel pick 9',
   wheel: 'Workbench Wheel', rotate: 'Rotate', remove: 'Remove tool', fold: 'Fold tool', floor: 'Switch floor', research: 'Research',
   orders: 'Orders', modules: 'Modules', cancel: 'Cancel', pause: 'Pause', help: 'Options and keys', mute: 'Sound on or off',
-  hud: 'HUD on/off', flow: 'Flow overlay', debug: 'Debug readout', stuck: 'Where am I stuck?',
+  hud: 'Photo mode', flow: 'Flow overlay', debug: 'Debug readout', stuck: 'Where am I stuck?',
 };
 
 export const DEFAULT_BINDS: Record<Action, string[]> = {
