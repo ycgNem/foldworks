@@ -75,6 +75,21 @@ export const TROPHIES: TrophyDef[] = [
   A('foldception', 'Foldception', '{u:fold} fold modules into one', null, { k: 'counter', name: 'nestedFolds' }, 1, '§18 Nested folds'),
   A('stampCollector', 'Stamp Collector', 'stamp 25 module copies', null, { k: 'counter', name: 'stamps' }, 25, '§10 Stamp; §18'),
   A('greatDrill', 'Breaking Ground', "{u:mega} finish the Great Drill's stage 1", 'drillBit', { k: 'counter', name: 'megaStages' }, 1, '§18 Megaproject #1, stage 1 by about 4:30'),
+  // Act III (DESIGN.md §21)
+  A('upInTheAir', 'Up in the Air', '{u:district} place a module on the District', null, { k: 'counter', name: 'districtPlaced' }, 1, '§21 The District: the act\'s first decision'),
+  A('skyLanes', 'Sky Lanes', '{u:district} fly a skiff route', null, { k: 'counter', name: 'routes' }, 1, '§21 The District: skiff routes'),
+  A('fleetAdmiral', 'Fleet Admiral', '{u:district} buy 50 skiffs', null, { k: 'counter', name: 'skiffs' }, 50, '§21 The District: about 750,000 coin of skiffs, an Act III evening'),
+  A('zoningBoard', 'Zoning Board', '{u:district} place 20 modules on the District', null, { k: 'counter', name: 'districtPlaced' }, 20, '§21 The District: 20 modules, ROADMAP Milestone 7\'s performance case'),
+  A('wardOfTheCity', 'Ward of the City', '{u:fold} fold a District group into one', null, { k: 'counter', name: 'districtFolds' }, 1, '§21 District folds: depth 3'),
+  A('wetWork', 'Wet Work', 'deliver 1 {i:solvent}', 'solvent', { k: 'delivered', item: 'solvent' }, 1, '§21 Tier 3: chemistry, the act\'s first new line'),
+  A('rollingAlong', 'Rolling Along', 'deliver 100 {i:bearing}', 'bearing', { k: 'delivered', item: 'bearing' }, 100, '§21 Tier 3: bearings'),
+  A('greenThumb', 'Green Thumb', 'deliver 100 {i:produce}', 'produce', { k: 'delivered', item: 'produce' }, 100, '§21 Tier 3: the Greenhouse, fed by a waste (sludge into fertilizer)'),
+  A('thinkingCap', 'Thinking Cap', 'deliver 1 {i:processor}', 'processor', { k: 'delivered', item: 'processor' }, 1, '§21 Tier 3: processors'),
+  A('armsRace', 'Arms Race', 'deliver 1 {i:robotArm}', 'robotArm', { k: 'delivered', item: 'robotArm' }, 1, '§21 Tier 3: the robot arm, 24,000 coin'),
+  A('lunchIsServed', 'Lunch Is Served', 'deliver 1 {i:sandwichEngineer}', 'sandwichEngineer', { k: 'delivered', item: 'sandwichEngineer' }, 1, '§21 Tier 3: the Autonomous Sandwich Engineer, the act\'s absurd last product'),
+  A('cityInTheSky', 'City in the Sky', '{u:mega} raise the Floating City\'s Platform', null, { k: 'counter', name: 'megaStages' }, 4, '§21 Megaprojects: the Great Drill\'s three stages, then the first of Act III\'s'),
+  A('againstTheOdds', 'Against the Odds', 'win a Challenge', null, { k: 'counter', name: 'challengesWon' }, 1, '§21 Challenges'),
+  A('fullHouse', 'Full House', 'win all five Challenges', null, { k: 'counter', name: 'challengesWon' }, 5, '§21 Challenges: the five of v1'),
 ];
 
 export const TROPHY: Record<string, TrophyDef> = Object.fromEntries(TROPHIES.map((t) => [t.id, t]));
