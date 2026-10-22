@@ -22,9 +22,12 @@ import { itemIcon } from '../render/sprites';
 import { nominal, feeders, entName, endsAtSink, outLinks, lineOf } from '../sim/analysis';
 import { shares } from '../sim/systems/stats';
 import { powerFactor, poleReach, drawKw } from '../sim/systems/power';
-import { modeSpeed, baseSpeed, veinBoost } from '../sim/systems/machines';
-import { fname, feedsDock, mainItem } from '../sim/systems/modules';
-import { megaFrac } from '../render/factory';
+import { modeSpeed, baseSpeed, veinBoost, byEvery } from '../sim/systems/machines';
+import { fname, feedsDock, mainItem, chuteCap, BYPRODUCTS } from '../sim/systems/modules';
+import { megaFrac, mainOutput } from '../render/factory';
+import { ITEM_IDS } from '../data/items';
+import { mouthLook } from './mouths';
+import type { Game } from '../sim/Game';
 import { gridIndex, capacity, powered, burnerOf, fuelCount, engineOf, producerKw, kw } from '../render/powerview';
 import { DX, DY, MODES, opposite, type Ent, type FEnt, type Mode } from '../sim/world';
 import { tag, tagSize, rule, meter, button, uiIcon, type UIconName } from './chrome';
@@ -53,8 +56,12 @@ export interface Report {
   more?: Row[];
   /** the keycap verbs along the foot */
   verbs?: string;
-  /** a powered Workshop machine with Tuning: the four mode buttons under the rows (pinned) */
+  /** a powered Workshop machine with Tuning (or Recycling): its mode buttons under the rows (pinned) */
   modes?: Ent;
+  /** the modes it offers now (Tuning's, Recycling's), in MODES order */
+  modeList?: Mode[];
+  /** a Chute Mouth: the items it can be set to, as buttons under the rows (pinned) */
+  picker?: { e: Ent; items: ItemId[] };
 }
 
 const rich = (s: string, opt = false): Row => ({ t: 'rich', s, opt });
@@ -212,7 +219,7 @@ function machineReport(app: App, e: Ent): Report {
   if (r.byproduct) {
     const full = e.by >= RULES.outputCap.value;
     const to = byproductTo(app, e);
-    const route = `side ${icon(r.byproduct.item)} 1 per ${r.byproduct.every} → ${full ? '{bad:nowhere}' : to ? to : '{warn:nowhere yet}'}`;
+    const route = `side ${icon(r.byproduct.item)} 1 per ${byEveryNow(e, r)} → ${full ? '{bad:nowhere}' : to ? to : '{warn:nowhere yet}'}`;
     if (full || (e.state === 'blocked' && e.why === e.byItem)) rows.push(rich(route));
     else more.push(rich(route));
   }
@@ -227,10 +234,13 @@ function machineReport(app: App, e: Ent): Report {
   if (pw.rows.length) {
     if (pw.none) rows.push(...pw.rows);
     else more.push(...pw.rows);
-    if (g.done('tuning')) {
+    const list = modesFor(g, e, r);
+    if (list.length > 1) {
       const m = e.mode ?? 'normal';
-      more.push(rich(`mode ${m === 'normal' ? '{soft:Normal}' : MODE_NAME[m]} · ${modeSpeed(e)}x speed`));
+      const by = r.byproduct ? byEveryNow(e, r) : 0;
+      more.push(rich(`mode ${m === 'normal' ? '{soft:Normal}' : MODE_NAME[m]} · ${modeSpeed(e)}x speed${by && (m === 'recycling' || m === 'byproduct') ? ` · ${icon(r.byproduct!.item)} 1 per ${by}` : ''}`));
       rep.modes = e;
+      rep.modeList = list;
     }
   }
   // ---- the line around it (the first rows to go when the tag is too tall)
@@ -287,6 +297,84 @@ function lineRows(app: App, m: Ent): Row[] {
   const jams = ms.filter((e) => e.state === 'blocked' && e.why && e.why === e.byItem);
   if (jams.length) out.push(rich(`{bad:slag stuck} at ${jams.map((e) => entName(g, e)).join(', ')}`, true));
   return out;
+}
+
+/** Crafts per byproduct in the machine's mode now (Recycling halves the waste, Byproduct doubles it). */
+const byEveryNow = (e: Ent, r: RecipeDef) => byEvery(e, r) || r.byproduct?.every || 0;
+
+/** The modes a powered machine offers now: Normal, Tuning's three once researched, Recycling's
+ * two once researched and only for a recipe with a byproduct (DESIGN.md §18, §21 Modes), and
+ * whatever it runs in now. */
+export function modesFor(g: Game, e: Ent, r: RecipeDef | null): Mode[] {
+  const cur = e.mode ?? 'normal';
+  return MODES.filter((m) => m === 'normal' || m === cur
+    || ((m === 'efficient' || m === 'overclock' || m === 'precision') && g.done('tuning'))
+    || ((m === 'recycling' || m === 'byproduct') && g.done('recycling') && !!r?.byproduct));
+}
+
+// ------------------------------------------------------------------ the Chute (DESIGN.md §21)
+
+/** What the Chute holds of an item now (whole items), and what it holds at most. */
+export function chuteStock(g: Game, it: ItemId): { have: number; cap: number } {
+  return { have: Math.floor((g.s.chute?.[it] ?? 0) + 1e-9), cap: chuteCap(g) };
+}
+
+/** The items a Chute Mouth can be set to: what the Chute holds now and every item a module on the
+ * Factory floor makes (its main output and its byproducts), plus what it is set to, ITEM_IDS order. */
+export function chuteChoices(g: Game, e: Ent | null): ItemId[] {
+  const set = new Set<ItemId>();
+  for (const [k, v] of Object.entries(g.s.chute ?? {}) as [ItemId, number][]) if (v > 1e-9) set.add(k);
+  for (const m of g.s.factory.ents) {
+    if (m.kind !== 'module') continue;
+    const d = g.design(m.design);
+    if (d) for (const k of Object.keys(d.outs) as ItemId[]) set.add(k);
+  }
+  if (e?.recipe && e.recipe in ITEMS) set.add(e.recipe as ItemId);
+  return ITEM_IDS.filter((id) => set.has(id));
+}
+
+/** The Factory floor's routes ending in its Chute: the item each carries and its flow a second. */
+export function chuteFeeds(g: Game): { item: ItemId; flow: number }[] {
+  const out: { item: ItemId; flow: number }[] = [];
+  for (const rt of g.routes) {
+    if (rt.to?.kind !== 'fchute') continue;
+    const d = g.design(rt.from.design);
+    const item = rt.by ? ((Object.keys(d?.outs ?? {}) as ItemId[]).find((k) => BYPRODUCTS.has(k)) ?? null) : mainOutput(g, rt.from.design);
+    const last = rt.tiles[rt.tiles.length - 1];
+    if (item) out.push({ item, flow: last ? last.flow : 0 });
+  }
+  return out;
+}
+
+/** A Chute Mouth's report (pillar 3): what it is set to and how it is doing (empty stock is
+ * starved, naming the item), the stock in the Chute, where that item comes from, and (pinned) the
+ * item picker. */
+function chuteMouthReport(app: App, e: Ent): Report {
+  const g = app.game;
+  const it = e.recipe && e.recipe in ITEMS ? (e.recipe as ItemId) : null;
+  const rows: Row[] = [];
+  const more: Row[] = [];
+  const rep: Report = { title: BUILD.chuteMouth.name, item: it, uicon: 'chute', rows, more, picker: { e, items: chuteChoices(g, e) } };
+  const look = mouthLook(e);
+  const fchute = g.s.factory.ents.some((q) => q.kind === 'fchute');
+  if (!it) rows.push(rich('{chip:warn:NO ITEM} pick what it pushes out'));
+  else if (look === 'push') rows.push(rich(`{chip:good:PUSHING} ${icon(it)} ${ITEMS[it].name} out the front`));
+  else if (look === 'empty') rows.push(rich(`{chip:warn:EMPTY} ${icon(it)} none in the Chute`));
+  else rows.push(rich(`{chip:bad:BLOCKED} ${icon(it)} its front takes no more`));
+  if (it) {
+    const { have, cap } = chuteStock(g, it);
+    rows.push(rich(`${icon(it)} ${have}/${cap} in the Chute`));
+    rows.push({ t: 'bar', frac: have / cap, role: have <= 0 ? 'warn' : 'good' });
+    const feed = chuteFeeds(g).filter((f) => f.item === it);
+    if (!fchute) rows.push(rich('{warn:no Factory Chute} · trunk goods into one'));
+    else if (!feed.length) rows.push(rich(`{warn:no trunk brings} ${icon(it)} to the Factory Chute`));
+    else more.push(rich(`← Factory Chute ${icon(it)} ${pm(feed.reduce((s, f) => s + f.flow, 0) * 60)}/min`));
+  } else if (!fchute) rows.push(rich('{soft:the Factory Chute drops goods here}'));
+  const held = (Object.entries(g.s.chute ?? {}) as [ItemId, number][]).filter(([, v]) => v >= 1);
+  if (held.length) more.push(rich(`in the Chute ${held.slice(0, 6).map(([k, v]) => `${icon(k)} ${Math.floor(v)}`).join('  ')}`));
+  more.push(rich(`{soft:120/min at most · a fold box may not hold it}`));
+  rep.verbs = `{k:LMB} ${it ? 'pin' : 'pick its item'}  {k:R} turn  {k:X} remove`;
+  return rep;
 }
 
 // ------------------------------------------------------------------ power buildings
@@ -379,6 +467,7 @@ function blockedRows(app: App, e: FEnt, item: ItemId): Row[] {
     return [rich(`→ ${name} takes ${pm(takes)}/min · {warn:its store is full}`)];
   }
   if (to.kind === 'fbay') return [rich('→ the Bay takes only {i:steel} {i:drillBit}')];
+  if (to.kind === 'fchute') return [rich(`→ the Factory Chute {bad:full} · ${chuteCap(g)} ${icon(item)} wait below`), rich('{soft:a Chute Mouth set to it empties it}')];
   return [rich(`trunk {bad:full} · ${FACTORY.trunkSpeed * 60}/min at most`), rich('{soft:give the module its own trunk}')];
 }
 
@@ -423,6 +512,7 @@ function factoryReport(app: App, e: FEnt): Report {
     rep.verbs = '{k:LMB} the Megaproject';
     return rep;
   }
+  if (e.kind === 'fchute') return factoryChuteReport(app, e, rep);
   const d = g.design(e.design);
   if (!d) return rep;
   rep.item = mainItem(d);
@@ -452,11 +542,42 @@ function factoryReport(app: App, e: FEnt): Report {
   return rep;
 }
 
+/** Items whose Chute stock is full: the trunks bringing them back up (DESIGN.md §21). */
+export function chuteFull(g: Game): ItemId[] {
+  const cap = chuteCap(g);
+  return (Object.entries(g.s.chute ?? {}) as [ItemId, number][]).filter(([, v]) => v >= cap - 1e-6).map(([k]) => k);
+}
+
+/** The Factory Chute's report (pillar 3): what it is taking and how fast, the stock it has dropped
+ * to the Workshop, and which items are full (their trunks back up). */
+function factoryChuteReport(app: App, e: FEnt, rep: Report): Report {
+  const g = app.game;
+  const rows = rep.rows, more = rep.more!;
+  rep.uicon = 'chute';
+  const cap = chuteCap(g);
+  const feeds = chuteFeeds(g);
+  const full = chuteFull(g);
+  const taking = feeds.filter((f) => f.flow > 0.01);
+  if (full.length) rows.push(rich(`{chip:bad:FULL} ${full.map((k) => icon(k)).join(' ')} ${cap}/${cap} · its trunk backs up`));
+  else if (taking.length) rows.push(rich('{chip:good:TAKING} drops it to the Workshop'));
+  else rows.push(rich(feeds.length ? '{chip:warn:WAITING} nothing on its trunks' : '{chip:soft:IDLE} trunk goods into it'));
+  for (const f of feeds.slice(0, 3)) rows.push(rich(`← ${icon(f.item)} ${pm(f.flow * 60)}/min`));
+  const held = (Object.entries(g.s.chute ?? {}) as [ItemId, number][]).filter(([, v]) => v >= 1);
+  if (held.length) rows.push(rich(`stock ${held.slice(0, 5).map(([k, v]) => `${icon(k)} ${Math.floor(v)}/${cap}`).join('  ')}`));
+  else rows.push(rich('{soft:stock empty}'));
+  const mouths = g.s.ents.filter((q) => q.kind === 'chuteMouth');
+  more.push(rich(mouths.length ? `{u:workshop} ${mouths.length} Chute Mouth${mouths.length === 1 ? '' : 's'} ${mouths.map((q) => (q.recipe ? icon(q.recipe) : '{soft:?}')).join(' ')}` : '{warn:no Chute Mouth} on the Workshop yet'));
+  more.push(rich(`{soft:${cap} of each item at most · lifted for a full refund}`));
+  rep.verbs = '{k:LMB} pin  {k:X} remove';
+  void e;
+  return rep;
+}
+
 /** A design's rates are per second (d.outs): the module report shows them a minute. */
 
 // ------------------------------------------------------------------ laying out and drawing
 
-interface Laid { rep: Report; rows: { row: Row; h: number }[]; cw: number; w: number; h: number; verbsH: number; modesH: number; /** rows left out to fit (optional ones count half) */ cut: number; /** the brief hover: the name in Reed */ brief: boolean }
+interface Laid { rep: Report; rows: { row: Row; h: number }[]; cw: number; w: number; h: number; verbsH: number; modesH: number; /** the Chute Mouth's item picker */ pickH: number; /** rows left out to fit (optional ones count half) */ cut: number; /** the brief hover: the name in Reed */ brief: boolean }
 
 const ROW_GAP = 1;
 const BAR_H = 9;
@@ -495,11 +616,12 @@ function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: 
   const titleW = (brief ? textWidth(rep.title) : bigWidth(bigSafe(rep.title))) + (rep.item || rep.uicon ? 12 : 0) + (closeBtn ? 16 : 0);
   const natural = Math.max(...rows.map((r) => (r.t === 'rich' ? richWidth(r.s) : r.t === 'bar' ? 150 : 0)), rep.verbs ? richWidth(rep.verbs) : 0);
   const cw = Math.min(maxCw, Math.max(brief ? BRIEF_CW : MIN_CW, titleW, natural));
-  const modesH = full && rep.modes ? MODES_H + ROW_GAP : 0;
+  const modesH = full && rep.modes ? modeGrid(rep.modeList?.length ?? 4).rows * MODES_H + ROW_GAP : 0;
+  const pickH = full && rep.picker ? pickGrid(rep.picker.items.length, cw).h + ROW_GAP : 0;
   const verbsH = rep.verbs ? layoutRich(rep.verbs, cw).h + 4 : 0;
   const measure = (rs: Row[]) => {
     const hs = rs.map((row) => ({ row, h: rowH(row, cw) }));
-    const ch = titleH + 3 + hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + modesH + verbsH;
+    const ch = titleH + 3 + hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + modesH + pickH + verbsH;
     return { hs, outer: tagSize(cw, ch, 'left').h };
   };
   let m = measure(rows);
@@ -513,8 +635,8 @@ function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: 
     rows = [...rows.slice(0, keep), rich(`{soft:+${more} more ${more > 1 ? 'rows' : 'row'}}`)];
     m = measure(rows);
   }
-  const sz = tagSize(cw, titleH + 3 + m.hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + modesH + verbsH, 'left');
-  return { rep, rows: m.hs, cw, w: sz.w, h: sz.h, verbsH, modesH, cut, brief };
+  const sz = tagSize(cw, titleH + 3 + m.hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + modesH + pickH + verbsH, 'left');
+  return { rep, rows: m.hs, cw, w: sz.w, h: sz.h, verbsH, modesH, pickH, cut, brief };
 }
 
 /** Draw a laid-out report as a tag at (x, y): on a string to `anchor`, or pinned. */
@@ -545,13 +667,20 @@ function drawLaid(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: nu
   }
   if (L.modesH && rep.modes) {
     const e = rep.modes;
-    const bw = Math.floor((L.cw - 9) / 4);
-    const fullName = MODES.every((m) => richWidth(MODE_NAME[m]) + 8 <= bw);
-    MODES.forEach((m, i) => {
+    const list = rep.modeList ?? MODES.slice(0, 4);
+    const grid = modeGrid(list.length);
+    const bw = Math.floor((L.cw - 3 * (grid.per - 1)) / grid.per);
+    const r0 = e.recipe ? RECIPE[e.recipe] : null;
+    list.forEach((m, i) => {
       const cur = (e.mode ?? 'normal') === m;
-      if (button(ui, 'mode_' + m, r.x + i * (bw + 3), yy, bw, MODES_H - 1, fullName ? MODE_NAME[m] : MODE_SHORT[m], { active: cur, tip: modeTip(m, BUILD[e.kind].kw ?? 0, cur) }) && !cur) app.act({ k: 'mode', x: e.x, y: e.y, mode: m });
+      const bx = r.x + (i % grid.per) * (bw + 3), by = yy + Math.floor(i / grid.per) * MODES_H;
+      if (button(ui, 'mode_' + m, bx, by, bw, MODES_H - 1, richWidth(MODE_NAME[m]) + 8 <= bw ? MODE_NAME[m] : MODE_SHORT[m], { active: cur, tip: modeTip(m, BUILD[e.kind].kw ?? 0, cur, r0) }) && !cur) app.act({ k: 'mode', x: e.x, y: e.y, mode: m });
     });
     yy += L.modesH;
+  }
+  if (L.pickH && rep.picker) {
+    drawPicker(app, rep.picker.e, rep.picker.items, r.x, yy, L.cw);
+    yy += L.pickH;
   }
   if (rep.verbs) {
     rule(ui, r.x, yy, L.cw);
@@ -560,11 +689,48 @@ function drawLaid(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: nu
   return r;
 }
 
-function modeTip(m: Mode, base: number, cur: boolean) {
-  const sp = m === 'efficient' ? RULES.modeEfficientSpeed.value : m === 'overclock' ? RULES.modeOverclockSpeed.value : m === 'precision' ? RULES.modePrecisionSpeed.value : 1;
+function modeTip(m: Mode, base: number, cur: boolean, r: RecipeDef | null = null) {
+  const sp = m === 'efficient' ? RULES.modeEfficientSpeed.value : m === 'overclock' ? RULES.modeOverclockSpeed.value : m === 'precision' ? RULES.modePrecisionSpeed.value
+    : m === 'recycling' ? RULES.modeRecyclingSpeed.value : m === 'byproduct' ? RULES.modeByproductSpeed.value : 1;
   const pw = m === 'efficient' ? RULES.modeEfficientPower.value : m === 'overclock' ? RULES.modeOverclockPower.value : 1;
-  const extra = m === 'precision' ? ` · +${Math.round(RULES.modePrecisionYield.value * 100)}% main output` : '';
+  let extra = m === 'precision' ? ` · +${Math.round(RULES.modePrecisionYield.value * 100)}% main output` : '';
+  // Recycling and Byproduct (DESIGN.md §21 Modes): the byproduct every 2x or 0.5x the crafts
+  const by = r?.byproduct;
+  if (r && by && (m === 'recycling' || m === 'byproduct' || m === 'normal')) extra += ` · ${icon(by.item)} 1 per ${byEvery({ mode: m }, r)}${m === 'recycling' ? ' · half the waste' : m === 'byproduct' ? ' · twice the waste' : ''}`;
   return [{ text: `{big:${MODE_NAME[m]}}` }, { text: `${sp}x speed · ${pw}x power · {power:${Math.round(base * pw)} kW}${extra}` }, { text: cur ? '{soft:its mode now}' : '{k:LMB} switch' }];
+}
+
+/** The mode buttons' grid: up to four in a row, six in two rows of three. */
+function modeGrid(n: number): { per: number; rows: number } {
+  const per = n <= 4 ? Math.max(1, n) : Math.ceil(n / 2);
+  return { per, rows: Math.ceil(Math.max(1, n) / per) };
+}
+
+const PICK = 16;
+/** The Chute Mouth's item picker: a caption, then a key per item (PICK px, 2 apart). */
+function pickGrid(n: number, cw: number): { per: number; h: number } {
+  const per = Math.max(1, Math.floor((cw + 2) / (PICK + 2)));
+  return { per, h: 10 + (n ? Math.ceil(n / per) * (PICK + 2) : LINE_H) };
+}
+
+/** Draw the picker: each item a paper key with its icon (the one set lit); hover says its stock
+ * in the Chute; a click sets the Chute Mouth to it. */
+function drawPicker(app: App, e: Ent, items: ItemId[], x: number, y: number, cw: number) {
+  const ui = app.ui;
+  const g = app.game;
+  ui.small('PUSHES OUT', x, y + 1, T.inkSoft);
+  if (!items.length) { drawLayout(ui, layoutRich('{soft:no module on the Factory makes anything yet}', cw), x, y + 10, T.inkSoft); return; }
+  const { per } = pickGrid(items.length, cw);
+  items.forEach((it, i) => {
+    const bx = x + (i % per) * (PICK + 2), by = y + 10 + Math.floor(i / per) * (PICK + 2);
+    const cur = e.recipe === it;
+    const { have, cap } = chuteStock(g, it);
+    const tip = [{ text: `{i:${it}} {big:${bigSafe(ITEMS[it].name)}}` }, { text: `${have}/${cap} in the Chute` }, { text: cur ? '{soft:pushing it now}' : '{k:LMB} push this one' }];
+    if (button(ui, 'chutePick_' + it, bx, by, PICK, PICK, '', { active: cur, tip }) && !cur) app.act({ k: 'recipe', x: e.x, y: e.y, recipe: it });
+    ui.ctx.drawImage(itemIcon(it), bx + 4, by + 3 + (ui.hover(bx, by, PICK, PICK) && ui.input.mouse.down[0] ? 1 : 0));
+    // an empty stock: a short red line along the key's foot
+    if (have <= 0) { ui.ctx.fillStyle = T.bad; ui.ctx.fillRect(bx + 3, by + PICK - 3, PICK - 6, 1); }
+  });
 }
 
 // ------------------------------------------------------------------ placing
@@ -605,6 +771,7 @@ export function place(app: App, near: Rect, w: number, h: number, also: Rect[] =
 
 /** The report for a Workshop entity (machines and power buildings), or null. */
 export function entReport(app: App, e: Ent): Report | null {
+  if (e.kind === 'chuteMouth') return chuteMouthReport(app, e);
   if (isPower(e.kind)) return powerReport(app, e);
   if (isMachine(e.kind)) return machineReport(app, e);
   return null;

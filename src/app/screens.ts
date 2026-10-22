@@ -37,6 +37,8 @@ import { reorganizeCard } from './reorganize';
 import { patentsScreen } from './patents';
 import { drawerScreen } from './drawer';
 import './m5bar'; // Patents and Reorganize on the top bar, the Drawer and the Office as menus
+// Act III (DESIGN.md §21): the Scenario boards
+import { scenariosScreen, scenariosOpen } from './scenarios';
 
 export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options' | 'modules' | 'grade' | 'offline' | 'sliceEnd'
   // Act II (Milestone 4): the Factory floor's grade card, the Codex, the Survey Office, the Megaproject
@@ -46,7 +48,9 @@ export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options
   // Milestone 5: Reorganize, the Patent Office, the Patent Drawer
   | 'reorganize' | 'patents' | 'drawer'
   // the 180 (docs/hud-180.md): the Swamp Gazette's page and the drawn keyboard
-  | 'gazette' | 'keys';
+  | 'gazette' | 'keys'
+  // Act III (DESIGN.md §21): the Scenario boards (src/app/scenarios.ts)
+  | 'scenarios';
 
 /** Screens added from other files (Milestones 5 and 6): drawn in the overlay rect like the rest. */
 const EXTRA = new Map<string, (app: App, r: Rect, L: Layout) => void>();
@@ -85,6 +89,7 @@ export function drawScreen(app: App, L: Layout) {
     case 'reorganize': return reorganizeCard(app, r);
     case 'patents': return patentsScreen(app, r);
     case 'drawer': return drawerScreen(app, r);
+    case 'scenarios': return scenariosScreen(app, r);
   }
 }
 
@@ -311,14 +316,15 @@ const TREE: Record<ResearchId, [number, number, number?]> = {
   circuits: [4, 1.0], concrete: [4, 2.6, 1],
   heavyMachines: [5, 0.2], motors: [5, 1.3, 1], nestedFolds: [5, 2.6],
   tuning: [6, 0.2, 1], greatDrill: [6, 1.9],
-  // Act III's page (columns 0-6)
-  zoning: [0, 1.5],
-  chutes: [1, 1.5, 1],
-  chemistry: [2, 0.6], bearings: [2, 2.6, 1],
-  vulcanizing: [3, 0], batteries: [3, 1.1, 1], processors: [3, 2.2], hydroponics: [3, 3.3, 1],
-  sensors: [4, 0], recycling: [4, 1.1, 1], servos: [4, 2.4], sandwiches: [4, 3.3, 1],
-  robotics: [5, 1.0], floatingCity: [5, 2.4, 1],
-  districtFolds: [6, 0.2, 1], sandwichEngineering: [6, 1.6], scrapTransmuter: [6, 3.0, 1],
+  // Act III's page (columns 0-6, each node a column after what it needs, rows ordered so the
+  // pencil lines cross as little as they can)
+  zoning: [0, 1.6],
+  chutes: [1, 1.6, 1],
+  chemistry: [2, 0.8], bearings: [2, 2.6, 1],
+  vulcanizing: [3, 0], processors: [3, 0.8, 1], batteries: [3, 1.6, 1], hydroponics: [3, 2.4, 1], servos: [3, 3.2, 1],
+  sensors: [4, 0], recycling: [4, 0.8, 1], sandwiches: [4, 2.4, 1], floatingCity: [4, 3.2, 1],
+  robotics: [5, 0.8, 1], scrapTransmuter: [5, 2.4, 1],
+  districtFolds: [6, 0.2, 1], sandwichEngineering: [6, 1.8, 1],
 };
 
 const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
@@ -327,7 +333,7 @@ const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
   coalSeams: 'coal', steelmaking: 'steel', overdrive: 'overdrive', steamPower: 'power', surveying: 'survey', glassworks: 'glass',
   crushing: 'gravel', concrete: 'concrete', refining: 'plastic', machineKits: 'machineKit', circuits: 'circuit',
   heavyMachines: 'heavy', tuning: 'mode', motors: 'motor', nestedFolds: 'fold', greatDrill: 'mega',
-  zoning: 'factory', chutes: 'flow', chemistry: 'solvent', bearings: 'bearing', vulcanizing: 'rubber', batteries: 'battery',
+  zoning: 'district', chutes: 'chute', chemistry: 'solvent', bearings: 'bearing', vulcanizing: 'rubber', batteries: 'battery',
   servos: 'servo', sensors: 'sensor', processors: 'processor', recycling: 'mode', hydroponics: 'produce', sandwiches: 'sandwich',
   robotics: 'robotArm', floatingCity: 'mega', scrapTransmuter: 'mega', sandwichEngineering: 'sandwichEngineer', districtFolds: 'fold',
 };
@@ -359,22 +365,34 @@ export const unlockRows = (id: ResearchId) => RESEARCH[id].unlocks.split(' · ')
 
 const NODE_R = 13;
 
+/** Act III's page is open (HudState.treePage holds the first two pages' choice). */
+const tree = { three: false };
+/** Open the research tree at a page (the e2e states; a goal that names Act III's research). */
+export function setTreePage(app: App, n: 1 | 2 | 3) {
+  tree.three = n === 3;
+  if (n !== 3) app.hud.treePage = n;
+}
+
 function researchTree(app: App, r: Rect) {
   const ui = app.ui;
   const g = app.game;
-  // two pages: the Workshop's tree, and Act II's once Folding is done (the template's tabs)
+  // the pages: the Workshop's tree, Act II's once Folding is done, Act III's once the Great Drill
+  // is researched (DESIGN.md §21: every Act III node waits for the Drill's stage 3, and the page
+  // says so while it does)
   const act2 = g.done('folding');
-  const page = act2 ? app.hud.treePage : 1;
-  const ready2 = RESEARCH_LIST.some((d) => d.act === 2 && available(g, d.id));
+  const act3 = act2 && (g.done('greatDrill') || RESEARCH_LIST.some((d) => d.act === 3 && g.done(d.id)));
+  const page: 1 | 2 | 3 = !act2 ? 1 : act3 && tree.three ? 3 : app.hud.treePage;
+  const ready = (n: number) => page !== n && RESEARCH_LIST.some((d) => (d.act ?? 1) === n && available(g, d.id)) ? '!' : undefined;
   const tabs: MenuTab[] = act2 ? [
-    { id: 'tree1', label: 'Workshop', icon: 'workshop', tip: '{u:workshop} the first tree', active: page === 1, onClick: () => { app.hud.treePage = 1; } },
-    { id: 'tree2', label: 'Act II', icon: 'mega', tip: '{u:factory} the second tree', active: page === 2, onClick: () => { app.hud.treePage = 2; }, badge: page === 1 && ready2 ? '!' : undefined },
+    { id: 'tree1', label: 'Workshop', icon: 'workshop', tip: '{u:workshop} the first tree', active: page === 1, onClick: () => { app.hud.treePage = 1; tree.three = false; } },
+    { id: 'tree2', label: 'Act II', icon: 'mega', tip: '{u:factory} the second tree', active: page === 2, onClick: () => { app.hud.treePage = 2; tree.three = false; }, badge: ready(2) },
+    ...(act3 ? [{ id: 'tree3', label: 'Act III', icon: 'star' as const, tip: '{u:district} the third tree · the District', active: page === 3, onClick: () => { tree.three = true; } }] : []),
   ] : [];
   const info = Math.min(196, Math.floor(r.w * 0.34));
   const { body, detail } = menuTemplate(app, r, { title: 'Research', accent: T.research, icon: 'research', tabs, detail: info });
   const ctx = ui.ctx;
   const nodes = RESEARCH_LIST.filter((d) => (d.act ?? 1) === page);
-  const cols = page === 2 ? 6 : 5;
+  const cols = page >= 2 ? 6 : 5;
   const mx = body.w >= 400 ? 30 : 24;
   const area = { x: body.x + mx, y: body.y + 26, w: body.w - mx * 2, h: body.h - 72 };
   const pos = (id: ResearchId) => {
@@ -512,14 +530,14 @@ function researchTree(app: App, r: Rect) {
     ui.text('locked', kx + 13, ky + 1, T.inkSoft);
   }
   // the right page: the hovered (or selected) node
-  const show = hovered ?? sel ?? nodes.find((d) => available(g, d.id))?.id ?? null;
-  nodePage(app, detail!, show);
+  const show = hovered ?? sel ?? nodes.find((d) => available(g, d.id))?.id ?? nodes.find((d) => !g.done(d.id))?.id ?? null;
+  nodePage(app, detail!, show, page === 3 && (g.s.mega.stage ?? 0) < 3);
 }
 
 /** The right page of the tree: a node's name, state and progress, what it unlocks, what it costs
  * in items delivered to the Hopper, Inspiration, what it needs and leads to, the select button,
  * the nodes ready now, the lab at work and the bank. */
-function nodePage(app: App, page: Rect, show: ResearchId | null) {
+function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = false) {
   const ui = app.ui;
   const g = app.game;
   const ctx = ui.ctx;
@@ -527,6 +545,13 @@ function nodePage(app: App, page: Rect, show: ResearchId | null) {
   const banked = (Object.entries(g.s.research.bank) as [ItemId, Num][]).filter(([, v]) => v.gt(0));
   const end = page.y + page.h - (banked.length ? 22 : 0);
   let y = page.y + 2;
+  // Act III's page before the Great Drill's stage 3 (DESIGN.md §21): what opens every node on it
+  if (drillGate) {
+    const s = `{u:mega} {bad:${ICON.lock} the Great Drill's stage 3} {soft:opens this page · now stage ${g.s.mega.stage ?? 0}}`;
+    y += drawRich(ui, s, x, y, w, T.ink) + 3;
+    rule(ui, x, y, w, true);
+    y += 5;
+  }
   /** what is still owed on a node, in items */
   const owed = (id: ResearchId) => {
     const prog = g.s.research.progress[id] ?? {};
@@ -593,9 +618,11 @@ function nodePage(app: App, page: Rect, show: ResearchId | null) {
       ui.hint(x, y, w, 10, [{ text: '{big:Inspiration}' }, { text: `{k:LMB} the Hopper · the selected node · up to ${Math.round(cap * 100)}% of each item` }], 190);
       y += 12;
     }
-    // what it needs first
-    if (d.requires.length && !done && y + 12 <= end) {
-      y += flowRow(ui, ['{soft:needs}', ...d.requires.map((q) => (g.done(q) ? `{good:${ICON.check} ${RESEARCH[q].name}}` : `{bad:${RESEARCH[q].name}}`))], x, y, w, end) + 3;
+    // what it needs first (an Act III node also the Great Drill's stage 3, DESIGN.md §21)
+    const drillShort = (d.drill ?? 0) > (g.s.mega.stage ?? 0);
+    if ((d.requires.length || drillShort) && !done && y + 12 <= end) {
+      const gate = d.drill ? [(g.s.mega.stage ?? 0) >= d.drill ? `{good:${ICON.check} the Great Drill's stage ${d.drill}}` : `{bad:the Great Drill's stage ${d.drill}}`] : [];
+      y += flowRow(ui, ['{soft:needs}', ...gate, ...d.requires.map((q) => (g.done(q) ? `{good:${ICON.check} ${RESEARCH[q].name}}` : `{bad:${RESEARCH[q].name}}`))], x, y, w, end) + 3;
     }
     // the button
     if (done) {
@@ -606,8 +633,8 @@ function nodePage(app: App, page: Rect, show: ResearchId | null) {
         y += 21;
       }
     } else if (y + 14 <= end) {
-      drawRich(ui, `{soft:${ICON.lock} locked}`, x, y + 2, w, T.inkSoft);
-      y += 15;
+      const why = drillShort ? `{soft:${ICON.lock} needs the Great Drill's stage ${d.drill}}` : `{soft:${ICON.lock} locked}`;
+      y += drawRich(ui, why, x, y + 2, w, T.inkSoft) + 4;
     }
     // what it leads to
     const next = RESEARCH_LIST.filter((q) => q.requires.includes(show));
@@ -974,6 +1001,12 @@ function optionsScreen(app: App, r: Rect) {
   y += 6;
   const help = app.input.binds.help?.[0];
   if (button(ui, 'openKeys', x, y, Math.min(w, 140), 17, `Keys${help ? `  {k:${keyLabel(help)}}` : ''}`, { tip: '{k:LMB} the drawn keyboard' })) { app.panel = 'keys'; app.audio.sfx('open'); }
+  // Act III: the Scenario boards, other games beside the town (after the first Reorganize)
+  if (scenariosOpen(app) && y + 21 + 26 <= body.y + body.h) {
+    y += 21;
+    y += caption(ui, 'other games', x, y) + 2;
+    if (button(ui, 'openScenarios', x, y, Math.min(w, 140), 17, '{u:trophies} Scenarios', { tip: [{ text: '{big:Scenarios}' }, { text: 'puzzle boards · a personal best each' }, { text: '{soft:your town waits while you play}' }] })) { app.panel = 'scenarios'; app.audio.sfx('open'); }
+  }
   // the right page: saves, the overnight forecast, the title
   const dp = detail!;
   const dx = dp.x + 4, dw = dp.w - 8;

@@ -129,6 +129,27 @@ await page.evaluate(districtSetup, 'districtGrade');
 await rest();
 await shot('08d-district-grade', "the District fold's grade card");
 
+// ---------------------------------------------------------------- Act III (Milestone 7)
+// Set up by screens.mjs's act3Setup (a late game, not the bot's): the Chem Vat, the Greenhouse and
+// three Chute Mouths on the Workshop, a Mouth's report with its picker, the Factory Chute full (its
+// hover report), Act III's research page and the Floating City under way.
+await page.evaluate(() => window.__app.attachBot(null));
+for (const [state, name, note] of [
+  ['act3ws', '09-act3-workshop', 'Act III on the Workshop: a Chem Vat, a Greenhouse, three Chute Mouths (the last empty)'],
+  ['act3mouth', '10-chute-mouth', "a Chute Mouth's report with the item picker"],
+  ['act3chuteHover', '11-factory-chute', 'the Factory Chute fed by two modules, steel full, its hover report'],
+  ['research3open', '12-research-act3', "Act III's research page, Sensors under way"],
+  ['megaCity', '13-floating-city', 'the Floating City: stage 1 built, stage 2 under way'],
+]) {
+  const { act3Setup } = await import('./screens.mjs');
+  const f = await page.evaluate(act3Setup, state);
+  await frames(page, 4);
+  if (f?.hover) await hoverTile(page, f.hover[0], f.hover[1]);
+  await shot(name, note);
+  await page.mouse.move(Math.floor(w * 0.6), Math.floor(h * 0.45));
+}
+// ---------------------------------------------------------------- (end of Act III)
+
 fs.writeFileSync(`${OUT}/shots.md`, `# Shots at ${w}x${h}\n\n${log.join('\n')}\n\n${errors.length ? '## Console\n\n' + errors.map((e) => '- ' + e).join('\n') : 'No console errors.'}\n`);
 console.log(log.join('\n'));
 if (errors.length) console.log(errors.join('\n'));
