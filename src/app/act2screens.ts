@@ -1032,15 +1032,36 @@ function worldProjectPage(app: App, r: Rect, id: MegaId, tabs: MenuTab[]) {
   let yy = ay + PX + 9;
   const n = P.stages.length;
   const sw = Math.floor((dw - 3 * (n - 1)) / n);
-  P.stages.forEach((st, i) => {
-    const sx = dx + i * (sw + 3);
-    const sd = built.includes(st.stage), now = cur?.stage === st.stage;
+  // each island's chip at its longest wording that lets the row fit (the Act IV screens' review: a
+  // built island's tick squeezed Cinder to "C" at 1024): the widest chip gives way first, a built
+  // one dropping its tick (the solid green says it) before its name is cut
+  const labs = P.stages.map((st) => {
     const isle = ISLE_SHORT[st.world ?? 'home'];
-    const lab = sd ? `${ICON.check} ${textWidth(isle) + 18 <= sw ? isle : isle[0]}` : textWidth(isle) + 8 <= sw ? isle : isle.slice(0, 3);
+    const cut = isle.split(' ')[0].slice(0, 4);
+    return built.includes(st.stage) ? [`${ICON.check} ${isle}`, isle, `${ICON.check} ${cut}`, cut] : [isle, cut];
+  });
+  const lvl = labs.map(() => 0);
+  const total = () => lvl.reduce((t, l, i) => t + chipWidth(labs[i][l]), 0) + 3 * (n - 1);
+  while (total() > dw) {
+    let wi = -1;
+    for (let i = 0; i < n; i++) if (lvl[i] < labs[i].length - 1 && (wi < 0 || chipWidth(labs[i][lvl[i]]) > chipWidth(labs[wi][lvl[wi]]))) wi = i;
+    if (wi < 0) break;
+    lvl[wi]++;
+  }
+  // in equal slots when every chip fits its slot, else packed from the left
+  const even = lvl.every((l, i) => chipWidth(labs[i][l]) <= sw);
+  let px = dx + Math.max(0, Math.floor((dw - total()) / 2));
+  P.stages.forEach((st, i) => {
+    const lab = labs[i][lvl[i]];
+    const cw = chipWidth(lab);
+    const sx = even ? dx + i * (sw + 3) : px;
+    const slot = even ? sw : cw;
+    px += cw + 3;
+    const sd = built.includes(st.stage), now = cur?.stage === st.stage;
     const rl: Role = sd ? 'good' : now && open ? 'coin' : 'soft';
-    chip(ui, sx + Math.max(0, Math.floor((sw - chipWidth(lab)) / 2)), yy, lab, { role: rl, solid: sd || (now && open) });
-    if (now) pencil(ui, sx + 2, yy + CHIP_H + 1, sw - 4, T.bad);
-    ui.hint(sx, yy, sw, CHIP_H, [{ text: `{big:${st.name}}` }, { text: st.reward }, { text: sd ? '{good:built}' : now ? '{coinc:built here, now}' : ms?.held?.[st.stage] ? '{coinc:half built} · {soft:it waits on its island}' : '{soft:built on its island}' }], 200);
+    chip(ui, sx + Math.max(0, Math.floor((slot - cw) / 2)), yy, lab, { role: rl, solid: sd || (now && open) });
+    if (now) pencil(ui, sx + 2, yy + CHIP_H + 1, slot - 4, T.bad);
+    ui.hint(sx, yy, slot, CHIP_H, [{ text: `{big:${st.name}}` }, { text: st.reward }, { text: sd ? '{good:built}' : now ? '{coinc:built here, now}' : ms?.held?.[st.stage] ? '{coinc:half built} · {soft:it waits on its island}' : '{soft:built on its island}' }], 200);
   });
   yy += CHIP_H + 7;
   if (cur && open && yy + 22 <= dp.y + dp.h) {

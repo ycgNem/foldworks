@@ -27,17 +27,29 @@ Act V's sim", "Milestone 12".
   `systems/ledger.ts`; tests/act5.test.ts). SAVE_VERSION 10.
 - **Sound (Milestone 12)**: the mix, ambience per floor, reset stings, sound options.
 - Act IV and Act V art (`pixel-art/act4`, `pixel-art/act5`), 0 PixelLab generations.
+- **Act V's screens (Milestone 10's UI)**: Beyond on the lift (a four-point star key) with its
+  night sky, `beyond_*` platform, couriers, depth-4 modules, lots, tool strip, reports and floor
+  tags; the Last Fold (research page 5, the World's labelled "Last Fold" key, the audit slip under
+  the tool strip, the grade card with the bank, kept and lost and the Kept Legacy picker, the
+  two-click "Fold the World", the full-screen sequence with the third reset sound, the landing on
+  the new universe); the Kernel tree page (Rules, Further, Kept); the Seed on the Workshop (side
+  arrows in each ore's ink, ore chips on hover, a report with the labelled Turn button); the
+  Endless Ledger page (the order, next in turn, the cosmetic shelf with skin previews); wide belts
+  drawing their second item; tier-5 icons; lesson cards for the first Last Fold card, Beyond and
+  the Seed; Act V states in `npm run screens` and shots 14-19 in `npm run shots`
+  (`src/app/lastfold.ts`, `kernels.ts`, `endless.ts`).
 
 ### Stubbed / not done
-- The World floor's screen, Relocate's card and the Legacy tree (being built); Act V's screens
-  (the Last Fold card and sequence, the Kernel tree, Beyond, the Seed, the Ledger) after them.
+- No skin picker: cosmetics show on the Ledger's shelf only (the sim applies none yet). Beyond's
+  Bay position stays empty (no Megaproject #6). Beyond's lots, tool strip and route cards are
+  the District's widgets over `g.s.beyond`.
 - No Act IV or Act V bot: Act IV and V pacing are model estimates (DESIGN.md §22, §23). The Act
   III bot is being re-measured under the gate's new numbers.
 - The owner's own play from the 15 h checkpoint (the second gate's condition).
 
 ### Next
-Merge the World UI and the Act III re-measure; mark the second gate passed with conditions; build
-Act V's screens and the Act IV bot; Milestone 11's long tail (its sim and data being built);
+Merge the World UI, Act V's screens and the Act III re-measure; mark the second gate passed with
+conditions; build the Act IV and Act V bots; Milestone 11's long tail (its sim and data being built);
 Milestone 14 (pace to 100 h, perf, saves, README, GitHub Pages; no itch.io, no desktop build).
 
 ## Status (2026-10-22, later): Milestone 13, onboarding, UX and accessibility, built

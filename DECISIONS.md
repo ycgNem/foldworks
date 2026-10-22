@@ -2092,3 +2092,40 @@ their derivations are DESIGN.md §23; all are model estimates until an Act V bot
   covered by §22's flags; nothing new.
 - Open: Cinder's chip shrinks to "C" on the Lighthouse page at 1024; the World ground uses the
   District frame where no `world_*` sprite exists; the Relocate foot row is hidden at 1024 by Fly.
+
+### Act V's screens (Beyond, the Last Fold, Kernels, the Seed, the Ledger)
+- **Beyond reuses the District's renderer and tools** over `g.s.beyond` (the `beyond_*` platform
+  art, couriers instead of skiffs, depth-4 modules only). Nothing folds there: F on Beyond says so.
+  **Its sky is night** (a baked ink-to-violet gradient, slow-parallax stars, a rare shooting star):
+  the floor above the World reads as further up at a glance. The lift key is a four-point star,
+  left of the World's globe; the wing widens to 41 px.
+- **The World's tool strip gains a labelled "Last Fold" key** (the owner: core actions get a
+  button); its tip gives the sim's refusal while it can't run. Once Beyond is owned the World also
+  gets a Fold tool, for depth 4 only.
+- **The audit runs on a slip under the strip** (the window, the countdown, the grade so far and
+  its U/W/C meters, the Kernel count, "The card" and "Cancel"), not a centre card: the World stays
+  in view and workable while it is graded. The floor shows a lighter box with a sweeping beam.
+- **The grade card is a two-page spread**: the bank (the stamped grade, value ÷ 10, the grade
+  bonus, the total and what would raise it) beside what is kept and lost, struck through in the
+  sim's own words; the right page is the Seed it plants and the World's modules counted, plus the
+  Kept Legacy picker when that node is owned. "Keep the World" cancels; "Fold the World" takes two
+  clicks (the first arms it), like Relocate's Fly.
+- **The sequence** is a full-screen strip (`lastfold.json`) over a starfield: the World folds into
+  the Seed, a flash on the third reset sound, then the new universe's Home with "+N KERNELS"
+  stamped in the sky; Skip/Onward, then the Kernel tree opens. Nothing on the HUD draws over it.
+- **The Kernel tree is its own page** in three bands (Rules, Further, Kept), each node with a flat
+  price tag; research page 5 links to it through a "Kernel node" disc so the act's research and
+  its tree read as one road.
+- **The Seed shows its sides at 1x**: an arrowhead in each ore's ink on each edge, blinking red on
+  a side holding an ore it can't hand on; hovered or pinned, each side's ore icon on a chip past
+  the edge. Its report has a labelled "Turn it" key beside R.
+- **The Ledger page shows, never chooses**: the order under way, the next ten in turn, the next
+  cosmetic and how many orders off, and the shelf of skins with previews. No skin picker yet: the
+  sim applies no skin, and a picker for nothing would be a lie.
+- **The District strip compacts at narrow widths** (drop the MODULES caption, then routes as
+  n/max) instead of running under the lift.
+- Small fixes: the Lighthouse page's island chips demote the widest first (Cinder no longer
+  shrinks to "C"); Relocate's foot row picks the longest wording that fits left of Fly; a ruin's
+  mode keys ignore clicks for 0.4 s after Repair (a double click no longer switches its mode).
+- Derivative check: nothing new beyond §23's flags (third layer, infinite orders, wide belts, the
+  Seed). The starfield sky and a stamped "+N" are this game's own moments reused.

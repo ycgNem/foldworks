@@ -33,6 +33,10 @@ import { highW } from '../sim/systems/high';
 import { drawPip, shapeOf, stateShape, type PipShape } from './pips';
 import { drawIsleGround, drawOverlaid, drawHeatReach, workshopLand } from './isleground';
 import { isSky } from '../sim/systems/islands';
+import { SEED_ORES, seedSide } from '../sim/systems/seed';
+
+/** The Seed's notches: each raw ore's colour (its icon's) */
+const SEED_INK: Record<string, string> = { ironOre: C.sky, copperOre: C.copper, coal: C.fog, sand: C.tan };
 
 /** seconds the paving takes to spread over a bought chunk */
 const PAVE_S = 0.7;
@@ -79,7 +83,7 @@ export interface SoundReq { id: string; v: number; p: number }
 export class Renderer {
   /** which floor is drawn; each floor keeps its own camera */
   floor: Floor = 'workshop';
-  cams: Record<Floor, Camera> = { workshop: new Camera(), factory: new Camera(), district: new Camera(), world: new Camera() };
+  cams: Record<Floor, Camera> = { workshop: new Camera(), factory: new Camera(), district: new Camera(), world: new Camera(), beyond: new Camera() };
   get cam(): Camera {
     return this.cams[this.floor];
   }
@@ -134,6 +138,12 @@ export class Renderer {
   dplat = new DistrictPlatform();
   /** the World's (DESIGN.md §22): the District's geometry in its own art */
   wplat = new DistrictPlatform('world');
+  /** Beyond's (DESIGN.md §23): the highest platform, starlit, in its own `beyond_*` art */
+  bplat = new DistrictPlatform('beyond');
+  /** a high floor's platform */
+  hplat(f: Floor): DistrictPlatform | null {
+    return f === 'district' ? this.dplat : f === 'world' ? this.wplat : f === 'beyond' ? this.bplat : null;
+  }
   /** chunks being paved over after a buy: the wave's centre (tile units), its age, which tiles
    *  it has reached (a dust puff as it reaches each) */
   private paving: { id: string; x: number; y: number; t: number; hit: Uint8Array }[] = [];
@@ -190,11 +200,12 @@ export class Renderer {
     // over it); below, the south rim and the cliff under it (the sky island)
     const pad = 4 * TILE;
     const top = (TOWN_ROWS + 1) * TILE;
-    const bot = this.floor === 'factory' ? this.plat.below : this.floor === 'district' ? this.dplat.below : this.floor === 'world' ? this.wplat.below : this.isle.below;
+    const hp = this.hplat(this.floor);
+    const bot = this.floor === 'factory' ? this.plat.below : hp ? hp.below : this.isle.below;
     c.x = mw + pad * 2 <= halfW * 2 ? mw / 2 : Math.max(halfW - pad, Math.min(mw + pad - halfW, c.x));
     // zoomed out far enough for the whole island (or platform) to show: frame all of it; else the
     // player may pan on down past the cliff to the island's point
-    const B = this.floor === 'factory' ? this.plat.bounds() : this.floor === 'district' ? this.dplat.bounds() : this.floor === 'world' ? this.wplat.bounds() : this.isle.bounds();
+    const B = this.floor === 'factory' ? this.plat.bounds() : hp ? hp.bounds() : this.isle.bounds();
     const low = Math.max(mh + bot, B.y1);
     if (B.y1 > B.y0 && B.y1 - B.y0 <= halfH * 2) c.y = (B.y0 + B.y1) / 2;
     else c.y = mh + top + bot <= halfH * 2 ? Math.max((mh + bot - top) / 2, Math.min(low - halfH, c.y)) : Math.max(halfH - top, Math.min(low - halfH, c.y));
@@ -279,11 +290,11 @@ export class Renderer {
             fx.ring(px + c, py + c, C.bone, 10 * big, 0.25, 6);
           } else this.drops.set((e.y ?? 0) * 4096 + (e.x ?? 0), { t: this.time, landed: false });
           if (e.id === 'pole') { fx.ring(px + 8, py + 8, C.teal1, (poleReach(g) + 0.5) * TILE, 0.5, 6); this.sfx('powerOn', 0.5); }
-          if ((e.floor === 'district' || e.floor === 'world') && e.id === 'module' && (g.s.counters[e.floor + 'Placed'] ?? 0) <= 1) {
-            // the first group up on the District (or the World)
+          if ((e.floor === 'district' || e.floor === 'world' || e.floor === 'beyond') && e.id === 'module' && (g.s.counters[e.floor + 'Placed'] ?? 0) <= 1) {
+            // the first group up on the District (or the World, or Beyond)
             fx.burst(px + 8, py + 8, 40, [C.gold, C.brass1, C.hot, C.bone], 80, 40, 1, 1.1);
             fx.ring(px + 8, py + 8, C.gold, 30, 0.8, 4);
-            fx.text(px + 8, py - 14, e.floor === 'world' ? 'FIRST WORLD MODULE!' : 'FIRST DISTRICT GROUP!', C.gold, 2, true);
+            fx.text(px + 8, py - 14, e.floor === 'beyond' ? 'FIRST MODULE BEYOND!' : e.floor === 'world' ? 'FIRST WORLD MODULE!' : 'FIRST DISTRICT GROUP!', C.gold, 2, true);
             fx.kick(4);
             this.sfx('fanfare', 0.6);
           }
@@ -338,7 +349,7 @@ export class Renderer {
           // x, y is the machine's (or module's) centre tile; d is how many it set running hot
           const cx = px + 8, cy = py + 8;
           const n = e.d ?? 1;
-          if (e.floor === 'factory' || e.floor === 'district' || e.floor === 'world') {
+          if (e.floor === 'factory' || e.floor === 'district' || e.floor === 'world' || e.floor === 'beyond') {
             // a module and every module trunked (or flown) to it: a burst on each, a big one on the clicked
             for (const m of e.floor === 'factory' ? g.s.factory.ents : g.s[e.floor]?.ents ?? []) {
               if (m.kind !== 'module' || !(m.od ?? 0) || m.id === e.value) continue;
@@ -401,7 +412,7 @@ export class Renderer {
           break;
         }
         case 'fold': {
-          if (e.floor === 'factory' || e.floor === 'district' || e.floor === 'world') {
+          if (e.floor === 'factory' || e.floor === 'district' || e.floor === 'world' || e.floor === 'beyond') {
             fx.burst(px, py, 40, [C.gold, C.brass1, C.hot, C.bone], 90, 30, 1, 1);
             fx.ring(px, py, C.gold, 40, 0.8, 6);
             break;
@@ -424,7 +435,7 @@ export class Renderer {
           this.sfx('place', 0.7, 1.3);
           break;
         }
-        case 'firstRoute': fx.text(px + 8, py - 14, e.floor === 'world' ? 'FIRST BARGE ROUTE!' : 'FIRST SKIFF ROUTE!', C.gold, 2, true); fx.kick(3); this.sfx('fanfare', 0.5); break;
+        case 'firstRoute': fx.text(px + 8, py - 14, e.floor === 'beyond' ? 'FIRST COURIER ROUTE!' : e.floor === 'world' ? 'FIRST BARGE ROUTE!' : 'FIRST SKIFF ROUTE!', C.gold, 2, true); fx.kick(3); this.sfx('fanfare', 0.5); break;
         case 'bayOpen': fx.ring(px, py, C.gold, 40, 0.9, 6); fx.burst(px, py, 30, [C.gold, C.iron2, C.hot], 70, 40, 1, 1); fx.kick(3); break;
         case 'megaGive': fx.pop(px, py - 20, e.value ?? 1, 'mega:' + e.id, C.gold, e.id ?? null); fx.burst(px, py, 4, [C.gold, C.iron2], 25, 40); break;
         case 'megaDone': fx.ring(px, py, C.gold, 60, 1.2, 6); fx.burst(px, py, 80, [C.gold, C.hot, C.bone, C.iron2], 120, 40, 2, 1.6); break;
@@ -451,9 +462,11 @@ export class Renderer {
     drawSky(ctx, this.W, this.H, this.cam, this.time, ov.floor);
     ctx.setTransform(z, 0, 0, z, ox, oy);
     ctx.imageSmoothingEnabled = false;
-    if (ov.floor === 'district' || ov.floor === 'world') {
-      // the District (DESIGN.md §21) and the World (§22): their own platforms, no town up here
-      (ov.floor === 'world' ? this.wplat : this.dplat).draw(ctx, highW(g, ov.floor), HIGH[ov.floor].h, this.time);
+    const hp = this.hplat(ov.floor);
+    if (hp && (ov.floor === 'district' || ov.floor === 'world' || ov.floor === 'beyond')) {
+      // the District (DESIGN.md §21), the World (§22) and Beyond (§23): their own platforms, no
+      // town up here
+      hp.draw(ctx, highW(g, ov.floor), HIGH[ov.floor].h, this.time);
       const a = this.screenToWorld(this.view.x, this.view.y), b = this.screenToWorld(this.view.x + this.view.w, this.view.y + this.view.h);
       drawDistrict(ctx, g, this.time, ov.district, { x0: a.x, y0: a.y, x1: b.x, y1: b.y });
       this.effects(dt);
@@ -499,7 +512,11 @@ export class Renderer {
     // everything that stands up
     for (const b of g.belts) this.belt(g, b);
     this.drawWires(g);
-    for (const b of g.belts) if (b.item) this.beltItem(b, alpha);
+    // Wide Belts (a Kernel node, DESIGN.md §23): a second item rides behind the first, drawn first
+    for (const b of g.belts) {
+      if (b.item2) this.beltItem(b, b.item2, Math.min(b.p2 ?? 0, (b.item ? b.p : 1) - 0.5), alpha);
+      if (b.item) this.beltItem(b, b.item, b.p, alpha);
+    }
     for (const e of g.s.ents) if (e.kind !== 'belt') this.building(g, e);
     this.sparks(g);
     this.snapFold(g);
@@ -609,9 +626,9 @@ export class Renderer {
     }
   }
 
-  private beltItem(b: Ent, alpha: number) {
+  private beltItem(b: Ent, item: string, p0: number, alpha: number) {
     const step = RULES.beltSpeed.value / 20;
-    const p = b.mv ? b.p + alpha * step : b.p;
+    const p = Math.max(0, Math.min(1, b.mv ? p0 + alpha * step : p0));
     const turn = this.turns.get(b.id);
     let fx: number, fy: number;
     const cx = b.x * TILE + 8, cy = b.y * TILE + 8;
@@ -625,7 +642,7 @@ export class Renderer {
       fx = cx + DX[b.rot] * (p - 0.5) * TILE;
       fy = cy + DY[b.rot] * (p - 0.5) * TILE;
     }
-    this.ctx.drawImage(itemIcon(b.item!), Math.round(fx - 4), Math.round(fy - 4));
+    this.ctx.drawImage(itemIcon(item), Math.round(fx - 4), Math.round(fy - 4));
   }
 
   // ---------------------------------------------------------------- power
@@ -856,6 +873,16 @@ export class Renderer {
         this.pip(x, y, e.state === 'work' ? C.pipGreen : e.state === 'starved' ? C.pipYellow : C.pipGrey, false);
         return;
       }
+      case 'seed': {
+        // the Seed (DESIGN.md §23): its 4-frame hum while any side takes its ore, frame 0 (the
+        // still pose) when every side holds one; a coloured notch at each edge says which ore
+        // leaves that side (hovered or pinned: the ore icons themselves, seedLabels)
+        const s = sheet('seed');
+        drawRot(ctx, s, e.state === 'work' ? frameAt(s, this.time + e.id * 0.17) : 0, x, y, 0);
+        this.seedNotches(e, x, y);
+        this.pip(x + W - TILE, y, e.state === 'work' ? C.pipGreen : C.pipRed, e.state === 'blocked');
+        return;
+      }
       default: {
         const s = sheet(spriteName(e.kind));
         if (isPower(e.kind) && !e.ruined) return this.powerBuilding(g, e, s);
@@ -904,6 +931,43 @@ export class Renderer {
           this.pip(x + W - TILE, y, col, blocked, col === C.pipGrey && !e.paused ? 'idle' : stateShape(e));
         }
       }
+    }
+  }
+
+  /** The Seed's four sides: at the middle of each edge an arrowhead in its ore's colour pointing out
+   *  (iron out of the side it faces, then copper, coal and sand clockwise: SEED_ORES, seedSide), lit
+   *  blinking red while that side holds an ore it can't hand on. Readable at 1x. */
+  private seedNotches(e: Ent, x: number, y: number) {
+    const ctx = this.ctx;
+    for (let k = 0; k < SEED_ORES.length; k++) {
+      const it = SEED_ORES[k];
+      const d = seedSide(e.rot, k);
+      const col = SEED_INK[it] ?? C.bone;
+      const held = (e.inBuf[it] ?? 0) >= 1 && e.state === 'blocked';
+      // an arrowhead 5 px wide at its base, 3 deep, its tip on the tile's edge, in an ink outline
+      const ux = DX[d], uy = DY[d], px = -uy, py = ux;
+      const cx = x + 8 - (ux < 0 ? 1 : 0), cy = y + 8 - (uy < 0 ? 1 : 0);
+      const pts: [number, number][] = [];
+      for (let i = 0; i < 3; i++) for (let j = -(2 - i); j <= 2 - i; j++) pts.push([cx + ux * (5 + i) + px * j, cy + uy * (5 + i) + py * j]);
+      ctx.fillStyle = C.ink;
+      for (const [qx, qy] of pts) { ctx.fillRect(qx - 1, qy, 3, 1); ctx.fillRect(qx, qy - 1, 1, 3); }
+      ctx.fillStyle = held && Math.floor(this.time * 3) % 2 ? C.pipRed : col;
+      for (const [qx, qy] of pts) ctx.fillRect(qx, qy, 1, 1);
+    }
+  }
+
+  /** The Seed hovered or pinned: each side's ore as its 8x8 icon on a chip just past that edge. */
+  private seedLabels(e: Ent) {
+    const ctx = this.ctx;
+    for (let k = 0; k < SEED_ORES.length; k++) {
+      const d = seedSide(e.rot, k);
+      const ix = e.x * TILE + 4 + DX[d] * 13, iy = e.y * TILE + 4 + DY[d] * 13;
+      ctx.fillStyle = C.ink;
+      ctx.fillRect(ix - 2, iy - 1, 12, 10);
+      ctx.fillRect(ix - 1, iy - 2, 10, 12);
+      ctx.fillStyle = C.bone;
+      ctx.fillRect(ix - 1, iy - 1, 10, 10);
+      ctx.drawImage(itemIcon(SEED_ORES[k]), ix, iy);
     }
   }
 
@@ -1156,7 +1220,11 @@ export class Renderer {
     if (ov.selected) {
       const e = g.byId.get(ov.selected);
       if (e) this.frame(e.x, e.y, e.w, e.h, C.gold);
+      if (e?.kind === 'seed') this.seedLabels(e);
     }
+    // the Seed under the mouse: which ore leaves which side
+    const hs = ov.hover && !ov.build && !ov.drag ? g.entAt(ov.hover.x, ov.hover.y) : null;
+    if (hs?.kind === 'seed' && hs.id !== ov.selected) this.seedLabels(hs);
     if (ov.drag) {
       for (const d of ov.drag) this.ghost(g, 'belt', d.x, d.y, d.rot);
       return;
@@ -1412,7 +1480,7 @@ export class Renderer {
   private orderCascade(g: Game, id: string) {
     const fx = this.fx;
     let dock: { x: number; y: number } | null = null;
-    if (this.floor === 'factory' || this.floor === 'district' || this.floor === 'world') {
+    if (this.floor !== 'workshop') {
       const d = (this.floor === 'factory' ? g.s.factory.ents : g.s[this.floor]?.ents ?? []).find((e) => e.kind === 'fdock');
       if (d) dock = { x: d.x + 1, y: d.y + 1 };
     } else {

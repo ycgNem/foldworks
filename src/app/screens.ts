@@ -18,6 +18,10 @@ import { available, researchFrac } from '../sim/systems/research';
 import { worldOf } from '../sim/systems/islands';
 import { WORLDS, type WorldId } from '../data/worlds';
 import { inspireUnlocked, inspiredFrac } from '../sim/systems/inspire';
+import { megaComplete } from '../sim/systems/research';
+import { hasKernel } from '../sim/kernels';
+import { KERNELS } from '../data/kernels';
+import { MEGAS } from '../data/megaprojects';
 import { trophyValue } from '../sim/systems/stats';
 import { Num } from '../engine/num';
 import { button, meter, portrait, uiIcon, bubble, chip, chipWidth, rule, pencil, label, roleInk, T, type UIconName, type Role } from './chrome';
@@ -57,7 +61,10 @@ export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options
   // Act III (DESIGN.md §21): the Scenario boards (src/app/scenarios.ts)
   | 'scenarios'
   // Act IV (DESIGN.md §22): the Relocate card and the Legacy tree (src/app/relocate.ts, legacy.ts)
-  | 'relocate' | 'legacy';
+  | 'relocate' | 'legacy'
+  // Act V (DESIGN.md §23): the Last Fold's card and sequence, the Kernel tree, the Endless Ledger
+  // (src/app/lastfold.ts, kernels.ts, endless.ts)
+  | 'lastfold' | 'kernels' | 'ledger';
 
 /** Screens added from other files (Milestones 5 and 6): drawn in the overlay rect like the rest. */
 const EXTRA = new Map<string, (app: App, r: Rect, L: Layout) => void>();
@@ -339,10 +346,15 @@ const TREE: Record<ResearchId, [number, number, number?]> = {
   cinderSmelting: [2.55, 1.2, 1], sunsetDyes: [3.65, 1.2, 1], sunsetEngineering: [4.75, 1.2, 1],
   thermals: [2.55, 2.2, 1], frostWorks: [3.65, 2.2, 1], stormCells: [4.75, 2.2, 1], pocketWeathers: [5.85, 2.2, 1],
   relicStudy: [2.55, 3.2, 1],
-  // Act V's page (placeholder positions from the sim agent: the Last Fold, then each island's tier 5
-  // node a row under it)
-  lastFold: [0, 1.6], cartography: [1, 0.4], starForging: [1, 1.2, 1], weatherBottling: [1, 2.0], relicEngines: [1, 2.8, 1],
+  // Act V's page (DESIGN.md §23): The Last Fold on the left, the Kernel node Beyond as a gate in the
+  // middle (drawn by the page, not a research node: KERNEL_GATE), each island's tier 5 node a row on
+  // the right in the islands' order, captioned above it as Act IV's are (ISLE_ROWS)
+  lastFold: [0.5, 1.7], cartography: [4.4, 0.2, 1], starForging: [4.4, 1.2, 1], weatherBottling: [4.4, 2.2, 1], relicEngines: [4.4, 3.2, 1],
 };
+
+/** Act V's page: where the Kernel node Beyond stands between The Last Fold and the islands' nodes
+ *  (column, row), a gate every tier 5 node needs. */
+const KERNEL_GATE: [number, number] = [2.45, 1.7];
 
 /** Act IV's island rows: the island and its row (TREE's), captioned above its first node. */
 const ISLE_ROWS: [WorldId, number][] = [['pebble', 0.2], ['cinder', 1.2], ['rime', 2.2], ['oldworks', 3.2]];
@@ -361,8 +373,8 @@ const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
   cinderSmelting: 'cinderAlloy', sunsetDyes: 'sunsetDye', sunsetEngineering: 'sunsetGenerator',
   frostWorks: 'frostAlloy', stormCells: 'stormCell', pocketWeathers: 'pocketWeather', relicStudy: 'relicGear',
   lighthouse: 'lighthouseLamp', skyAnchor: 'anchorChain', relocation: 'relocate',
-  // Act V (placeholders until the art director's lastFold and items5 icons)
-  lastFold: 'fold', cartography: 'mapOfEverywhere', starForging: 'verySmallSun', weatherBottling: 'bottledTuesday', relicEngines: 'quietEngine',
+  // Act V: the Last Fold's own icon, each island's node its first impossible invention
+  lastFold: 'lastFold', cartography: 'mapOfEverywhere', starForging: 'verySmallSun', weatherBottling: 'bottledTuesday', relicEngines: 'quietEngine',
 };
 
 /** nodes with their own drawing in ui_research (the art director's), by frame */
@@ -392,16 +404,22 @@ export const unlockRows = (id: ResearchId) => RESEARCH[id].unlocks.split(' · ')
 
 const NODE_R = 13;
 
-/** Act III's or Act IV's page is open (HudState.treePage holds the first two pages' choice);
- *  `drawn` the UI clock at the tree's last frame (a gap is a fresh opening); `pinned` a page set
- *  from outside. */
-const tree = { three: false, four: false, drawn: -1, pinned: false };
+/** Act III's, Act IV's or Act V's page is open (HudState.treePage holds the first two pages'
+ *  choice); `drawn` the UI clock at the tree's last frame (a gap is a fresh opening); `pinned` a page
+ *  set from outside. */
+const tree = { three: false, four: false, five: false, drawn: -1, pinned: false };
 /** Open the research tree at a page (the e2e states; a goal that names Act III's research). */
-export function setTreePage(app: App, n: 1 | 2 | 3 | 4) {
+export function setTreePage(app: App, n: 1 | 2 | 3 | 4 | 5) {
   tree.three = n === 3;
   tree.four = n === 4;
+  tree.five = n === 5;
   tree.pinned = true;
   if (n < 3) app.hud.treePage = n as 1 | 2;
+}
+
+/** Act V's page shows once The Last Fold is open to research (or done), or any of its nodes is. */
+function act5Shown(g: App['game']): boolean {
+  return RESEARCH_LIST.some((d) => d.act === 5 && (g.done(d.id) || available(g, d.id))) || (g.s.meta.lastFolds ?? 0) > 0;
 }
 
 /** Act IV's page shows once Act III's does, or as soon as one of its nodes is open or done (Thermals
@@ -424,10 +442,11 @@ function freshTreePage(app: App, act2: boolean, act3: boolean, act4: boolean) {
   if (!fresh) return;
   if (tree.pinned) { tree.pinned = false; return; }
   const g = app.game;
-  tree.four = act4 && act4UnderWay(g);
-  const three = !tree.four && act3 && ((g.s.mega.stage ?? 0) >= 3 || RESEARCH_LIST.some((d) => d.act === 3 && g.done(d.id)));
+  tree.five = act5Shown(g) && (g.done('lastFold') || available(g, 'lastFold'));
+  tree.four = !tree.five && act4 && act4UnderWay(g);
+  const three = !tree.five && !tree.four && act3 && ((g.s.mega.stage ?? 0) >= 3 || RESEARCH_LIST.some((d) => d.act === 3 && g.done(d.id)));
   tree.three = three;
-  if (!three && !tree.four && act2) app.hud.treePage = 2;
+  if (!three && !tree.four && !tree.five && act2) app.hud.treePage = 2;
 }
 
 function researchTree(app: App, r: Rect) {
@@ -439,14 +458,16 @@ function researchTree(app: App, r: Rect) {
   const act2 = g.done('folding');
   const act3 = act2 && (g.done('greatDrill') || RESEARCH_LIST.some((d) => d.act === 3 && g.done(d.id)));
   const act4 = act2 && act4Shown(g, act3);
+  const act5 = act4 && act5Shown(g);
   freshTreePage(app, act2, act3, act4);
-  const page: 1 | 2 | 3 | 4 = !act2 ? 1 : act4 && tree.four ? 4 : act3 && tree.three ? 3 : app.hud.treePage;
+  const page: 1 | 2 | 3 | 4 | 5 = !act2 ? 1 : act5 && tree.five ? 5 : act4 && tree.four ? 4 : act3 && tree.three ? 3 : app.hud.treePage;
   const ready = (n: number) => page !== n && RESEARCH_LIST.some((d) => (d.act ?? 1) === n && available(g, d.id)) ? '!' : undefined;
   const tabs: MenuTab[] = act2 ? [
-    { id: 'tree1', label: 'Workshop', icon: 'workshop', tip: '{u:workshop} the first tree', active: page === 1, onClick: () => { app.hud.treePage = 1; tree.three = false; tree.four = false; } },
-    { id: 'tree2', label: 'Act II', icon: 'mega', tip: '{u:factory} the second tree', active: page === 2, onClick: () => { app.hud.treePage = 2; tree.three = false; tree.four = false; }, badge: ready(2) },
-    ...(act3 ? [{ id: 'tree3', label: 'Act III', icon: 'star' as const, tip: '{u:district} the third tree · the District', active: page === 3, onClick: () => { tree.three = true; tree.four = false; } }] : []),
-    ...(act4 ? [{ id: 'tree4', label: 'Act IV', icon: 'world' as const, tip: '{u:world} the fourth tree · the World and the islands', active: page === 4, onClick: () => { tree.four = true; tree.three = false; }, badge: ready(4) }] : []),
+    { id: 'tree1', label: 'Workshop', icon: 'workshop', tip: '{u:workshop} the first tree', active: page === 1, onClick: () => { app.hud.treePage = 1; tree.three = false; tree.four = false; tree.five = false; } },
+    { id: 'tree2', label: 'Act II', icon: 'mega', tip: '{u:factory} the second tree', active: page === 2, onClick: () => { app.hud.treePage = 2; tree.three = false; tree.four = false; tree.five = false; }, badge: ready(2) },
+    ...(act3 ? [{ id: 'tree3', label: 'Act III', icon: 'star' as const, tip: '{u:district} the third tree · the District', active: page === 3, onClick: () => { tree.three = true; tree.four = false; tree.five = false; } }] : []),
+    ...(act4 ? [{ id: 'tree4', label: 'Act IV', icon: 'world' as const, tip: '{u:world} the fourth tree · the World and the islands', active: page === 4, onClick: () => { tree.four = true; tree.three = false; tree.five = false; }, badge: ready(4) }] : []),
+    ...(act5 ? [{ id: 'tree5', label: 'Act V', icon: 'lastFold' as const, tip: '{u:lastFold} the fifth tree · the Last Fold and Beyond', active: page === 5, onClick: () => { tree.five = true; tree.four = false; tree.three = false; }, badge: ready(5) }] : []),
   ] : [];
   const info = Math.min(196, Math.floor(r.w * 0.34));
   const { body, detail } = menuTemplate(app, r, { title: 'Research', accent: T.research, icon: 'research', tabs, detail: info });
@@ -460,8 +481,11 @@ function researchTree(app: App, r: Rect) {
     return { x: Math.round(area.x + (c / cols) * area.w), y: Math.round(area.y + (row / 3.2) * area.h) };
   };
   // the pencil links: dashed and faint while locked, flowing toward a node that can be picked
+  const gateAt = { x: Math.round(area.x + (KERNEL_GATE[0] / cols) * area.w), y: Math.round(area.y + (KERNEL_GATE[1] / 3.2) * area.h) };
   for (const d of nodes)
     for (const q of d.requires.filter((q2) => (RESEARCH[q2].act ?? 1) === page)) {
+      // Act V: through the gate (drawn after the loop)
+      if (page === 5 && d.kernel) continue;
       const a = pos(q), b = pos(d.id);
       const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
       const ux = (b.x - a.x) / L, uy = (b.y - a.y) / L;
@@ -476,10 +500,11 @@ function researchTree(app: App, r: Rect) {
         for (let i = 0; i <= n; i++) if ((i - run + 90) % 9 < 2) { ctx.fillStyle = T.research; ctx.fillRect(Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), 1, 1); }
       } else pencilLine(ui, x0, y0, x1, y1, T.inkSoft, 0.45, 2);
     }
-  // Act IV: each island's row captioned above its first node (offered only there: the others say
-  // "on Cinder Isle", the island the town is on "here")
+  if (page === 5) kernelGateLinks(app, nodes, pos, gateAt);
+  // Act IV (and V): each island's row captioned above its first node (offered only on it: the others
+  // say "on Cinder Isle", the island the town is on "here")
   const here = worldOf(g);
-  const isleCaps = page !== 4 ? [] : ISLE_ROWS.map(([w, row]) => {
+  const isleCaps = page !== 4 && page !== 5 ? [] : ISLE_ROWS.map(([w, row]) => {
     const first = nodes.filter((d) => d.world === w).sort((a, b) => TREE[a.id][0] - TREE[b.id][0])[0];
     const p = first ? pos(first.id) : { x: area.x, y: Math.round(area.y + (row / 3.2) * area.h) };
     const s = w === here ? `HERE ON ${WORLDS[w].name.toUpperCase()}` : `ON ${WORLDS[w].name.toUpperCase()}`;
@@ -493,6 +518,8 @@ function researchTree(app: App, r: Rect) {
   const spots = new Map<ResearchId, Spot>();
   {
     const placed: Rect[] = isleCaps.map((c) => ({ x: c.r.x - 1, y: c.r.y - 1, w: c.r.w + 2, h: c.r.h + 2 }));
+    // Act V: the gate's disc and its label keep the names off
+    if (page === 5) placed.push({ x: gateAt.x - NODE_R - 2, y: gateAt.y - NODE_R - 2, w: NODE_R * 2 + 4, h: NODE_R * 2 + 16 });
     const R2 = NODE_R + 2;
     const over = (a: Rect, b: Rect) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
     for (const d of nodes) {
@@ -516,7 +543,7 @@ function researchTree(app: App, r: Rect) {
       };
       const vert = (lines: string[]) => { add(lines, pref ? 'below' : 'above'); add(lines, pref ? 'above' : 'below'); };
       // an island's rows stand close together: their names go on two lines first
-      if (page === 4 && d.world && two) vert(two);
+      if ((page === 4 || page === 5) && d.world && two) vert(two);
       vert([d.name]);
       if (short !== d.name) vert([short]);
       add([d.name], 'right'); add([d.name], 'left');
@@ -543,6 +570,8 @@ function researchTree(app: App, r: Rect) {
     ui.small(c.s, c.r.x, c.r.y, c.w === here ? T.research : T.inkSoft);
     ui.hint(c.r.x, c.r.y - 1, c.r.w, 9, [{ text: `{big:${WORLDS[c.w].name.replace(/^the /, 'The ')}}` }, { text: c.w === here ? '{good:the town is here} · its research is offered' : `{soft:its research is offered only there} · {u:relocate} Relocate` }, { text: WORLDS[c.w].rule }], 200);
   }
+  // Act V: the Kernel node Beyond, a gate between The Last Fold and the islands
+  if (page === 5) kernelGate(app, gateAt);
   // the nodes
   let hovered: ResearchId | null = null;
   const sel = g.s.research.selected;
@@ -607,7 +636,51 @@ function researchTree(app: App, r: Rect) {
   }
   // the right page: the hovered (or selected) node
   const show = hovered ?? sel ?? nodes.find((d) => available(g, d.id))?.id ?? nodes.find((d) => !g.done(d.id))?.id ?? null;
-  nodePage(app, detail!, show, (page === 3 || page === 4) && (g.s.mega.stage ?? 0) < 3 && !!show && (RESEARCH[show].drill ?? 0) > (g.s.mega.stage ?? 0));
+  nodePage(app, detail!, show, page >= 3 && (g.s.mega.stage ?? 0) < 3 && !!show && (RESEARCH[show].drill ?? 0) > (g.s.mega.stage ?? 0));
+}
+
+/** Act V's links: The Last Fold to the Kernel gate, the gate to each island's node (pencil, as the
+ * other links: inked when done, flowing toward a node that can be picked, dashed while locked). */
+function kernelGateLinks(app: App, nodes: typeof RESEARCH_LIST, pos: (id: ResearchId) => { x: number; y: number }, gate: { x: number; y: number }) {
+  const ui = app.ui;
+  const g = app.game;
+  const line = (a: { x: number; y: number }, b: { x: number; y: number }, done: boolean, open: boolean) => {
+    const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const ux = (b.x - a.x) / L, uy = (b.y - a.y) / L;
+    const x0 = a.x + ux * (NODE_R + 2), y0 = a.y + uy * (NODE_R + 2), x1 = b.x - ux * (NODE_R + 3), y1 = b.y - uy * (NODE_R + 3);
+    if (done) pencilLine(ui, x0, y0, x1, y1, T.ink, 0.75);
+    else if (open) pencilLine(ui, x0, y0, x1, y1, T.inkSoft, 0.8);
+    else pencilLine(ui, x0, y0, x1, y1, T.inkSoft, 0.45, 2);
+  };
+  const beyond = hasKernel(g, 'beyond');
+  line(pos('lastFold'), gate, g.done('lastFold') && beyond, g.done('lastFold'));
+  for (const d of nodes) if (d.kernel) line(gate, pos(d.id), g.done(d.id), beyond && g.done('lastFold'));
+}
+
+/** Act V's gate: the Kernel node Beyond as a disc with its icon and name, ticked once owned; its tip
+ * says what it is; a click opens the Kernel tree. */
+function kernelGate(app: App, at: { x: number; y: number }) {
+  const ui = app.ui;
+  const g = app.game;
+  const own = hasKernel(g, 'beyond');
+  const x = at.x - NODE_R, y = at.y - NODE_R;
+  const hov = ui.hover(x - 1, y - 1, NODE_R * 2 + 2, NODE_R * 2 + 2);
+  ui.mark('gate:beyond', x, y, NODE_R * 2, NODE_R * 2);
+  ui.region(x, y, NODE_R * 2, NODE_R * 2, 'button');
+  ui.ctx.drawImage(discCanvas(NODE_R, hov ? 'hover' : own ? 'normal' : 'locked'), x, y - (hov ? 1 : 0));
+  uiIcon(ui, 'beyond', x + NODE_R - 8, y + NODE_R - 8 - (hov ? 1 : 0));
+  if (own) tickStamp(ui, x + NODE_R * 2 - 9, y + NODE_R * 2 - 11);
+  const lab = 'Beyond';
+  const lw = textWidth(lab);
+  ui.ctx.fillStyle = T.paper;
+  ui.ctx.fillRect(at.x - Math.floor(lw / 2) - 1, y + NODE_R * 2 + 2, lw + 2, 10);
+  ui.text(lab, at.x - Math.floor(lw / 2), y + NODE_R * 2 + 3, own ? T.good : T.inkSoft);
+  ui.small('KERNEL NODE', at.x, y - 9, T.inkSoft, { align: 'center' });
+  if (hov) {
+    ui.hoverId = 'gate:beyond';
+    ui.tip([{ text: '{u:kernel} {big:Beyond}' }, { text: 'a Kernel node, not research: the fifth floor and these four nodes' }, { text: own ? '{good:yours}' : `{soft:${KERNELS.beyond.cost} Kernels · from the Last Fold}` }, { text: '{k:LMB} the Kernel tree' }], 220);
+    if (ui.clicked) { ui.eat(); ui.sfx('click'); app.panel = 'kernels'; }
+  }
 }
 
 /** The right page of the tree: a node's name, state and progress, what it unlocks, what it costs
@@ -705,8 +778,14 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
     }
     // what it needs first (an Act III node also the Great Drill's stage 3, DESIGN.md §21)
     const drillShort = (d.drill ?? 0) > (g.s.mega.stage ?? 0);
-    if ((d.requires.length || drillShort) && !done && y + 12 <= end) {
+    // Act V (DESIGN.md §23): The Last Fold waits on the Lighthouse and the Sky Anchor, tier 5 on the
+    // Kernel node Beyond
+    const megaShort = (d.megas ?? []).filter((m) => !megaComplete(g, m));
+    const kernelShort = !!d.kernel && !hasKernel(g, d.kernel);
+    if ((d.requires.length || drillShort || d.megas?.length || d.kernel) && !done && y + 12 <= end) {
       const gate = d.drill ? [(g.s.mega.stage ?? 0) >= d.drill ? `{good:${ICON.check} the Great Drill's stage ${d.drill}}` : `{bad:the Great Drill's stage ${d.drill}}`] : [];
+      for (const m of d.megas ?? []) gate.push(megaComplete(g, m) ? `{good:${ICON.check} ${MEGAS[m].name}}` : `{bad:${MEGAS[m].name}}`);
+      if (d.kernel) gate.push(hasKernel(g, d.kernel) ? `{good:${ICON.check} the Kernel node ${KERNELS[d.kernel].name}}` : `{bad:the Kernel node ${KERNELS[d.kernel].name}}`);
       y += flowRow(ui, ['{soft:needs}', ...gate, ...d.requires.map((q) => (g.done(q) ? `{good:${ICON.check} ${RESEARCH[q].name}}` : `{bad:${RESEARCH[q].name}}`))], x, y, w, end) + 3;
     }
     // the button
@@ -719,7 +798,10 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
       }
     } else if (y + 14 <= end) {
       const elsewhere = !!d.world && d.world !== worldOf(g);
-      const why = drillShort ? `{soft:${ICON.lock} needs the Great Drill's stage ${d.drill}}` : elsewhere ? `{u:relocate} {soft:Relocate to ${WORLDS[d.world!].name} to research it}` : `{soft:${ICON.lock} locked}`;
+      const why = drillShort ? `{soft:${ICON.lock} needs the Great Drill's stage ${d.drill}}`
+        : megaShort.length ? `{u:mega} {soft:${megaShort.map((m) => MEGAS[m].name).join(' and ')} must stand first}`
+        : kernelShort ? `{u:kernel} {soft:needs the Kernel node ${KERNELS[d.kernel!].name}: bought with Kernels}`
+        : elsewhere ? `{u:relocate} {soft:Relocate to ${WORLDS[d.world!].name} to research it}` : `{soft:${ICON.lock} locked}`;
       y += drawRich(ui, why, x, y + 2, w, T.inkSoft) + 4;
     }
     // what it leads to

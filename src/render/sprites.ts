@@ -145,11 +145,12 @@ export function frameAt(s: SpriteSheet, t: number) {
 
 let itemCells: Map<string, HTMLCanvasElement> | null = null;
 
-/** The item atlases in ITEM_IDS order: the slice's (items.png), Act II's (items2.png), Act III's
- *  and Act IV's (items3.png, items4.png: the islands' 15, whose sidecars name each cell). */
-const ITEM_SHEETS: [string, number][] = [['items', 10], ['items2', 12], ['items3', 19], ['items4', 15]];
+/** The item atlases in ITEM_IDS order: the slice's (items.png), Act II's (items2.png), Act III's,
+ *  Act IV's and Act V's (items3.png, items4.png, items5.png: the islands' 15 and the impossible
+ *  inventions' 8, whose sidecars name each cell). */
+const ITEM_SHEETS: [string, number][] = [['items', 10], ['items2', 12], ['items3', 19], ['items4', 15], ['items5', 8]];
 
-/** The 8x8 icon for an item: from src/art/items.png, items2.png, items3.png and items4.png (each
+/** The 8x8 icon for an item: from src/art/items.png, items2.png ... items5.png (each
  *  continuing ITEM_IDS's order; a sheet whose sidecar lists `names` is looked up by name), or code. */
 export function itemIcon(id: string): HTMLCanvasElement {
   if (!itemCells) {

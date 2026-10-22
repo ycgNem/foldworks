@@ -103,9 +103,21 @@ function relocateCard(app: App, r0: Rect) {
   const bw = Math.max(110, bigWidth(label) + 34);
   const bx = body.x + body.w - bw - 2;
   const since = Math.max(0, (g.s.tick - (m.here?.start ?? 0)) / TICK_RATE);
-  const runRow = `{big:${isleName(worldOf(g), true)}} {u:clock} ${hm(since)} {soft:this world} · ${m.relocations ?? 0} {soft:${(m.relocations ?? 0) === 1 ? 'move' : 'moves'}}`;
-  const RL = layoutRich(runRow);
-  if (body.x + 2 + RL.w < bx - 10) drawLayout(ui, RL, body.x + 2, fy - 2, T.ink);
+  const moves = `${m.relocations ?? 0} {soft:${(m.relocations ?? 0) === 1 ? 'move' : 'moves'}}`;
+  // the longest wording that fits left of the Fly button (the Act IV screens' review: at 1024 the
+  // whole row was hidden behind it)
+  const isle = isleName(worldOf(g), true);
+  const runRows = [
+    `{big:${isle}} {u:clock} ${hm(since)} {soft:this world} · ${moves}`,
+    `{big:${SHORT[worldOf(g)]}} {u:clock} ${hm(since)} · ${moves}`,
+    `{u:clock} ${hm(since)} {soft:this world} · ${moves}`,
+    `{u:clock} ${hm(since)} · ${moves}`,
+  ];
+  const RL = runRows.map((q) => layoutRich(q)).find((q) => body.x + 2 + q.w < bx - 8);
+  if (RL) {
+    drawLayout(ui, RL, body.x + 2, fy - 2, T.ink);
+    ui.hint(body.x + 2, fy - 3, RL.w, 12, [{ text: `{big:${isle}}` }, { text: `${hm(since)} this world · ${m.relocations ?? 0} ${(m.relocations ?? 0) === 1 ? 'move' : 'moves'} so far` }], 200);
+  }
   const tip = why ? [{ text: `{bad:${why}}` }] : armed ? [{ text: '{u:relocate} click again · the town flies' }] : [{ text: '{u:relocate} two clicks · the first arms it' }, { text: `{coin:+${p.now} Legacy} banked · Patents and the tree reset` }];
   if (button(ui, 'relocateGo', bx, fy - 6, bw, 20, label, { icon: 'relocate', disabled: !!why, gold: !why, big: true, pulse: armed, tip })) {
     if (!armed) st.armedUntil = ui.time + 4;

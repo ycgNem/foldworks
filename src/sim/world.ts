@@ -23,7 +23,7 @@ export const opposite = (d: Dir): Dir => ((d + 2) % 4) as Dir;
 export const cw = (d: Dir): Dir => ((d + 1) % 4) as Dir;
 export const ccw = (d: Dir): Dir => ((d + 3) % 4) as Dir;
 
-export type Floor = 'workshop' | 'factory' | 'district' | 'world';
+export type Floor = 'workshop' | 'factory' | 'district' | 'world' | 'beyond';
 /** The floors of modules (rate functions): the Factory and the high floors above it. */
 export type ModFloor = Exclude<Floor, 'workshop'>;
 

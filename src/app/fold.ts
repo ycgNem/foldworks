@@ -75,7 +75,7 @@ const stamps = new Map<string, HTMLCanvasElement>();
 /** The Inspector's rubber stamp for a grade: the grade art's letter (and the stamp ring with
  * `ring`) as a red-ink impression, its outline a deeper red, worn where the ink didn't take.
  * 48x48 with the ring, 32x32 without; the kit's word stamp until the art loads. */
-function gradeStamp(letter: string, ring: boolean): HTMLCanvasElement {
+export function gradeStamp(letter: string, ring: boolean): HTMLCanvasElement {
   const key = letter + (ring ? ':r' : '');
   const hit = stamps.get(key);
   if (hit) return hit;
@@ -160,7 +160,7 @@ function reportBoard(ui: App['ui'], x: number, y: number, w: number, h: number):
 }
 
 /** Draw a stamp canvas centred on (cx, cy) at an integer scale, turned `angle` radians. */
-function drawStamp(ctx: CanvasRenderingContext2D, cv: HTMLCanvasElement, cx: number, cy: number, scale: number, angle: number, alpha = 0.95) {
+export function drawStamp(ctx: CanvasRenderingContext2D, cv: HTMLCanvasElement, cx: number, cy: number, scale: number, angle: number, alpha = 0.95) {
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.translate(Math.round(cx), Math.round(cy));

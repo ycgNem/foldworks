@@ -31,6 +31,7 @@ import { sign, tag, tagSize, coinIcon, sparkline, dot, uiIcon, rule, chip, chipW
 import type { Layout } from './layout';
 import type { Rect } from '../ui/ui';
 import { DS } from './district';
+import { ledgerOpen, ledgerFrac } from '../sim/systems/ledger';
 import type { App } from './app';
 import type { ScreenName } from './screens';
 import { bigSafe, zones } from './tags';
@@ -203,7 +204,7 @@ function shippingTag(app: App, x: number, y: number) {
 // ------------------------------------------------------------------ problems and the bell
 
 /** Something not working for a share of the last minute: a Workshop machine or a Factory module. */
-export interface Problem { floor: 'workshop' | 'factory' | 'district' | 'world'; id: number; x: number; y: number; share: number; bad: boolean }
+export interface Problem { floor: 'workshop' | 'factory' | 'district' | 'world' | 'beyond'; id: number; x: number; y: number; share: number; bad: boolean }
 
 function badShare(hist: string, state: string): number {
   if (!hist.length) return state === 'blocked' || state === 'starved' ? 1 : 0;
@@ -221,13 +222,15 @@ export function problems(app: App) {
   const dmods = g.s.district?.ents.filter((e) => e.kind === 'module') ?? [];
   // and the World's (DESIGN.md §22)
   const wmods = g.s.world?.ents.filter((e) => e.kind === 'module') ?? [];
+  // and Beyond's (DESIGN.md §23)
+  const bmods = g.s.beyond?.ents.filter((e) => e.kind === 'module') ?? [];
   let work = 0, starved = 0, blocked = 0, unpowered = 0;
   for (const m of all) {
     if (m.state === 'work') work++;
     else if (m.state === 'blocked') blocked++;
     else if (m.state === 'starved') { if (m.why === 'power') unpowered++; else starved++; }
   }
-  for (const m of [...mods, ...dmods, ...wmods]) {
+  for (const m of [...mods, ...dmods, ...wmods, ...bmods]) {
     if (m.state === 'work') work++;
     else if (m.state === 'blocked') blocked++;
     else if (m.state === 'starved') starved++;
@@ -252,6 +255,11 @@ export function problems(app: App) {
     if (m.paused || (m.state !== 'blocked' && m.state !== 'starved')) continue;
     const s = badShare(m.hist, m.state);
     if (s >= 0.1) list.push({ floor: 'world', id: m.id, x: m.x + 0.5, y: m.y + 0.5, share: s, bad: m.state === 'blocked' });
+  }
+  for (const m of bmods) {
+    if (m.paused || (m.state !== 'blocked' && m.state !== 'starved')) continue;
+    const s = badShare(m.hist, m.state);
+    if (s >= 0.1) list.push({ floor: 'beyond', id: m.id, x: m.x + 0.5, y: m.y + 0.5, share: s, bad: m.state === 'blocked' });
   }
   list.sort((a, b) => b.share - a.share || a.id - b.id);
   const showPower = unpowered > 0 || g.machines.some((m) => powered(m.kind));
@@ -313,7 +321,7 @@ export function bell(app: App, L: Layout, y: number): number {
       if (p.floor === 'factory') {
         app.setFloor('factory');
         app.fselected = p.id;
-      } else if (p.floor === 'district' || p.floor === 'world') {
+      } else if (p.floor === 'district' || p.floor === 'world' || p.floor === 'beyond') {
         app.setFloor(p.floor);
         DS.floor = p.floor;
         DS.game = app.game;
@@ -392,11 +400,11 @@ export function lift(app: App, L: Layout, dt: number) {
   const open = g.flag('factoryOpen');
   const fresh = open && !g.flag('factorySeen');
   // the dial's ticks (h180_lift.json): Workshop 180, Factory 120, District 60; the World past it
-  const want = app.floor === 'world' ? 20 : app.floor === 'district' ? 60 : app.floor === 'factory' ? 120 : 180;
+  const want = app.floor === 'beyond' ? 0 : app.floor === 'world' ? 20 : app.floor === 'district' ? 60 : app.floor === 'factory' ? 120 : 180;
   const hs = app.hud;
   hs.liftAngle += (want - hs.liftAngle) * Math.min(1, dt * 8);
   ui.region(R.x, R.y, R.w, R.h, 'panel');
-  if (g.s.district || g.s.world) districtWing(app, R);
+  if (g.s.district || g.s.world || g.s.beyond) districtWing(app, R);
   const art = hasArt('h180_lift') ? sheet('h180_lift') : null;
   if (art) ui.ctx.drawImage(art.frames[0], R.x, R.y);
   else {
@@ -447,10 +455,10 @@ export function lift(app: App, L: Layout, dt: number) {
   });
 }
 
-/** How far the lift's wings reach out left of its case, in UI px: the District's, and the World's
- *  beside it once the World is open (the District's tool strip keeps off them). */
+/** How far the lift's wings reach out left of its case, in UI px: the District's, the World's
+ *  beside it once the World is open, and Beyond's beside that (the tool strip keeps off them). */
 export function liftWingW(app: App): number {
-  return app.game.s.world ? 28 : 15;
+  return app.game.s.beyond ? 41 : app.game.s.world ? 28 : 15;
 }
 
 /** The high floors' buttons (DESIGN.md §21, §22): a wooden wing bolted on the lift's left once the
@@ -475,8 +483,9 @@ function districtWing(app: App, R: { x: number; y: number; w: number; h: number 
   ctx.fillStyle = T.brassHi;
   ctx.fillRect(wx + ww - 2, wy + 3, 1, 1);
   ctx.fillRect(wx + ww - 2, wy + wh - 4, 1, 1);
-  const keys: { f: 'district' | 'world'; id: string; letter: string; name: string; x: number; seen: string }[] = [];
-  if (g.s.world) keys.push({ f: 'world', id: 'floorWorld', letter: 'W', name: 'World', x: wx + 3, seen: 'worldSeen' });
+  const keys: { f: 'district' | 'world' | 'beyond'; id: string; letter: string; name: string; x: number; seen: string }[] = [];
+  if (g.s.beyond) keys.push({ f: 'beyond', id: 'floorBeyond', letter: 'B', name: 'Beyond', x: wx + 3, seen: 'beyondSeen' });
+  if (g.s.world) keys.push({ f: 'world', id: 'floorWorld', letter: 'W', name: 'World', x: g.s.beyond ? wx + 16 : wx + 3, seen: 'worldSeen' });
   if (g.s.district) keys.push({ f: 'district', id: 'floorDistrict', letter: 'D', name: 'District', x: R.x - 12, seen: 'districtSeen' });
   for (const k of keys) {
     const bx = k.x, by = R.y + 9;
@@ -496,7 +505,11 @@ function districtWing(app: App, R: { x: number; y: number; w: number; h: number 
     ctx.fillStyle = T.brassLo;
     ctx.fillRect(bx + 2, by + 8, 6, 1);
     if (hov) { ctx.fillStyle = rgba(C.lamp3, 0.35); ctx.fillRect(bx + 1, by + 1, 8, 8); }
-    if (k.f === 'world') {
+    if (k.f === 'beyond') {
+      // a four-point star: the night above the World (DESIGN.md §23)
+      ctx.fillStyle = T.ink;
+      for (const [px, py, pw] of [[4, 1, 2], [4, 2, 2], [3, 3, 4], [1, 4, 8], [1, 5, 8], [3, 6, 4], [4, 7, 2], [4, 8, 2]] as const) ctx.fillRect(bx + px, by + py, pw, 1);
+    } else if (k.f === 'world') {
       // a globe, not a letter: the dial's own W is the Workshop
       ctx.fillStyle = T.ink;
       for (const [px, py, pw] of [[3, 2, 4], [2, 3, 1], [4, 3, 2], [7, 3, 1], [2, 4, 6], [2, 5, 6], [2, 6, 1], [4, 6, 2], [7, 6, 1], [3, 7, 4]] as const) ctx.fillRect(bx + px, by + py, pw, 1);
@@ -561,6 +574,7 @@ function markStatus(app: App, p: Page): string {
     case 'research': { const sel = g.s.research.selected; return sel ? `${Math.floor(researchFrac(g, sel) * 100)}%` : p.dot ? 'PICK' : ''; }
     case 'orders': { const a = g.s.orders.active; return a ? `${Math.floor(orderFrac(g, a) * 100)}%` : p.dot ? 'NEW' : ''; }
     case 'mega': return megaStage(g.s.mega.stage) ? `${Math.floor(megaFrac(g) * 100)}%` : '';
+    case 'ledger': return ledgerOpen(g) ? `${Math.floor(ledgerFrac(g) * 100)}%` : '';
     default: return p.dot ? 'NEW' : '';
   }
 }
