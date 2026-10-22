@@ -45,6 +45,7 @@ import { TROPHY } from '../data/trophies';
 import { Bot, type Policy } from '../sim/bot';
 // Milestone 5: Reorganize, the Patent tree and the Patent Drawer (src/app/reorganize.ts, patents.ts, drawer.ts)
 import { prules } from '../sim/patents';
+import { saveScenario } from './scenarios';
 
 export type Mode =
   | { k: 'idle' }
@@ -284,6 +285,8 @@ export class App {
     if (this.screen !== 'play') return false;
     // mid offline run the state is between two moments: the save before it stands until it ends
     if (this.offlineJob) return false;
+    // Act III: a Scenario board saves into its own slot, never over the town (src/app/scenarios.ts)
+    if (this.game.s.scenario) return saveScenario(this);
     const now = Date.now();
     const r = writeSaveSafe(SAVE_SLOT, savePayload(this.game, now) as never, { now, backupMs: IDLE.backupMinutes.value * 60000, backups: IDLE.backups.value, validate: validSave });
     this.autosave.mark(now);

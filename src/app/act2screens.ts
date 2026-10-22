@@ -8,17 +8,18 @@ import { C, rgba } from '../data/palette';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { CHUNKS, FACTORY, PATCHES, WORKSHOP } from '../data/land';
 import { RULES } from '../data/rules';
-import { MEGA, megaStage } from '../data/megaprojects';
+import { MEGA, megaStage, MEGAS, MEGA_IDS, type MegaId } from '../data/megaprojects';
+import { megaStageOf } from '../sim/systems/high';
 import { RECIPE } from '../data/recipes';
 import { RESEARCH } from '../data/research';
 import { ICON, textWidth, smallWidth, bigWidth, ellipsize, wrapText, LINE_H } from '../ui/font';
-import { itemIcon, sheet, hasArt } from '../render/sprites';
+import { itemIcon, sheet, hasArt, frameNamed } from '../render/sprites';
 import { bayFrame, megaFrac, mainOutput } from '../render/factory';
 import { claimsHeld, claimsUsed, claimPrice, copiesOf, oresOf } from '../sim/systems/claims';
 import { megaOpen } from '../sim/systems/modules';
 import { Num } from '../engine/num';
 import { button, meter, chip, chipWidth, rule, pencil, slip, stamp, ribbon, pushpin, portrait, T, type Role } from './chrome';
-import { menuTemplate, fmt, perMin, slamScale, rays, cells } from './widgets';
+import { menuTemplate, fmt, perMin, slamScale, rays, cells, type MenuTab } from './widgets';
 import { openOrders } from './orders';
 import { CUSTOMERS, ORDERS } from '../data/orders';
 import { offeredOrders, orderFrac } from '../sim/systems/orders';
@@ -362,17 +363,46 @@ function depositMap(app: App, page: Rect) {
 
 let landedAt = -1;
 
+// ---- Act III (DESIGN.md §21): Megaprojects #2 and #3 beside the Great Drill, one tab each
+
+/** which project the page shows */
+const megaTab = { id: 'drill' as 'drill' | MegaId };
+/** Show a project's tab (the e2e states). */
+export function setMegaTab(id: 'drill' | MegaId) { megaTab.id = id; }
+
+/** Act III's projects are on the page once Act III opens (the Drill's stage 3) or one has begun. */
+function act3Megas(app: App): boolean {
+  const g = app.game;
+  return (g.s.mega.stage ?? 0) >= 3 || g.done('zoning') || MEGA_IDS.some((m) => g.done(MEGAS[m].opens as never) || !!g.s.megas?.[m]);
+}
+
+/** The page's tabs: the Great Drill, the Floating City, the Scrap Transmuter (none before Act III). */
+function megaTabs(app: App): MenuTab[] {
+  if (!act3Megas(app)) return [];
+  const short: Record<MegaId, string> = { city: 'Floating City', transmuter: 'Transmuter' };
+  return [
+    { id: 'mtab_drill', label: 'Great Drill', icon: 'mega', tip: '{u:mega} Megaproject #1 · the Factory Bay', active: megaTab.id === 'drill', onClick: () => { megaTab.id = 'drill'; } },
+    ...MEGA_IDS.map((m): MenuTab => ({
+      id: 'mtab_' + m, label: short[m], icon: 'mega', tip: `{u:district} ${MEGAS[m].name} · the District Bay`,
+      active: megaTab.id === m, onClick: () => { megaTab.id = m; },
+    })),
+  ];
+}
+
 export function megaScreen(app: App, r: Rect) {
   const ui = app.ui;
   const g = app.game;
+  const tabs = megaTabs(app);
+  if (!tabs.length) megaTab.id = 'drill';
+  if (megaTab.id !== 'drill') return projectPage(app, r, megaTab.id, tabs);
   const stage = megaStage(g.s.mega.stage);
   const doneStage = MEGA.find((m) => m.stage === g.s.mega.stage) ?? null;
   const t = ui.time - app.gradeAt;
   const celebrate = g.s.mega.stage >= 1 && t < 12 && t >= 0;
   const side = Math.floor(r.w * 0.4);
-  const title = stage ? stage.name : doneStage ? doneStage.name : 'The Megaproject';
-  const { body, detail, free } = menuTemplate(app, r, { title: bigWidth(title) > r.w * 0.45 ? 'The Great Drill' : title, accent: T.coin, icon: 'mega', detail: side });
-  if (!stage && doneStage) titleChip(app, r, bigWidth(title) > r.w * 0.45 ? 'The Great Drill' : title, free, 'COMPLETE', 'good');
+  const title = tabs.length ? 'Megaprojects' : stage ? stage.name : doneStage ? doneStage.name : 'The Megaproject';
+  const { body, detail, free } = menuTemplate(app, r, { title: bigWidth(title) > r.w * 0.45 ? 'The Great Drill' : title, accent: T.coin, icon: 'mega', detail: side, tabs: tabs.length ? tabs : undefined });
+  if (!stage && doneStage && !tabs.length) titleChip(app, r, bigWidth(title) > r.w * 0.45 ? 'The Great Drill' : title, free, 'COMPLETE', 'good');
   // the left page: what the stage wants (or the celebration)
   if (stage) wants(app, stage, body);
   else complete(app, body, celebrate, t);
@@ -745,6 +775,140 @@ function complete(app: App, page: Rect, celebrate: boolean, t: number) {
   const nx = MEGA.find((m) => m.stage === g.s.mega.stage + 1);
   if (nx && y + 14 <= page.y + page.h - 22) drawRich(ui, `{u:mega} {soft:stage ${nx.stage} opens at the Committee's reputation} ${nx.rep ?? 0} · {soft:now} ${g.s.orders.rep.committee ?? 0}`, cx, y + 4, w - 12, T.ink, { align: 'center' });
   if (button(ui, 'megaOk', cx - 60, page.y + page.h - 19, 120, 19, 'Magnificent', { gold: true, big: true, pulse: celebrate })) app.panel = null;
+}
+
+// ------------------------------------------------------------------ the Floating City, the Scrap Transmuter
+
+/** What the District's routes carry into its Bay now, items a second. */
+function districtBayFeeds(app: App): Partial<Record<ItemId, number>> {
+  const d = app.game.s.district;
+  const out: Partial<Record<ItemId, number>> = {};
+  if (!d) return out;
+  const bay = d.ents.find((e) => e.kind === 'fbay');
+  if (!bay) return out;
+  for (const rt of d.routes) if (rt.to === bay.id) out[rt.item] = (out[rt.item] ?? 0) + (rt.flow ?? 0);
+  return out;
+}
+
+/** A project of the District Bay (DESIGN.md §21 Megaprojects #2 and #3): on the left its stages,
+ * each with what it wants (meters and arrival rates for the stage under way), its reward and its
+ * Patents; on the right its picture (pN = N stages done, run once complete), the stage track, and
+ * the stage under way in all. */
+function projectPage(app: App, r: Rect, id: MegaId, tabs: MenuTab[]) {
+  const ui = app.ui;
+  const g = app.game;
+  const P = MEGAS[id];
+  app.hud.opened.add('mega:' + id);
+  const ms = g.s.megas?.[id];
+  const done = ms?.stage ?? 0;
+  const cur = megaStageOf(g, id);
+  const prog = ms?.progress ?? {};
+  const open = g.done(P.opens as never);
+  const feeds = districtBayFeeds(app);
+  const side = Math.floor(r.w * 0.4);
+  const { body, detail } = menuTemplate(app, r, { title: 'Megaprojects', accent: T.coin, icon: 'mega', detail: side, tabs });
+  const x = body.x + 2, w = body.w - 4;
+  const end = body.y + body.h;
+  let y = body.y + 2;
+  // the name and where it stands
+  const [cs, role]: [string, Role] = !cur ? ['COMPLETE', 'good'] : !open ? ['NOT RESEARCHED', 'soft'] : [`STAGE ${cur.stage} OF ${P.stages.length}`, 'coin'];
+  const nameW = bigWidth(P.name) <= w - chipWidth(cs) - 8 ? P.name : P.name.replace(/^The /, '');
+  ui.big(nameW, x, y, T.ink);
+  chip(ui, x + w - chipWidth(cs), y, cs, { role, solid: !cur || open });
+  y += 16;
+  const bay = g.s.district?.ents.some((e) => e.kind === 'fbay');
+  const opener = RESEARCH[P.opens as keyof typeof RESEARCH]?.name ?? P.opens;
+  const where = !open ? `{u:research} ${opener} {soft:opens it} · {u:district} {soft:built at the District Bay}`
+    : !cur ? '{good:built} · {reset:kept through every reset}'
+    : bay ? '{u:district} {soft:routes into the District Bay} · {reset:kept through every reset}' : "{u:district} {soft:its Bay stands in the District's south-west corner}";
+  y += drawRich(ui, where, x, y, w, T.ink) + 5;
+  for (const st of P.stages) {
+    if (y + 24 > end) break;
+    const sdone = done >= st.stage, now = cur?.stage === st.stage;
+    const nm = st.name.split(': ')[1] ?? `stage ${st.stage}`;
+    const head = `Stage ${st.stage}${st.name.includes(': ') ? ` · ${nm}` : ''}`;
+    ui.text(head, x, y, sdone ? T.good : now ? T.ink : T.inkSoft);
+    if (now && open) pencil(ui, x, y + 9, textWidth(head), T.bad);
+    if (sdone) tickStamp(ui, x + textWidth(head) + 4, y - 2);
+    drawRich(ui, `{reset:+${st.patents}} {u:patents}`, x + w, y, Infinity, T.ink, { align: 'right' });
+    ui.hint(x + w - 30, y - 1, 30, 11, [{ text: `{big:${st.patents} Patents}` }, { text: '{soft:paid at Reorganize as it is delivered}' }], 180);
+    y += 12;
+    const wants = Object.entries(st.wants) as [ItemId, number][];
+    if (now && open) {
+      // the stage under way: each part with its meter, the rate arriving, have / want
+      for (const [it, want] of wants) {
+        if (y + 20 > end) break;
+        const have = Math.min(want, Math.floor(prog[it]?.toNumber() ?? 0));
+        const f = have / want;
+        const ok = f >= 1;
+        ui.ctx.drawImage(itemIcon(it), x, y + 1);
+        ui.text(ITEMS[it].name, x + 11, y, ok ? T.good : T.ink);
+        const rate = feeds[it];
+        const rx = x + 11 + textWidth(ITEMS[it].name) + 5;
+        if (rate && !ok) chip(ui, rx, y - 2, `+${perMin(rate)}/min`, { role: 'good' });
+        else if (!ok && bay) chip(ui, rx, y - 2, 'NOT ARRIVING', { role: 'warn', solid: true });
+        ui.text(`${fmt(have)} / ${fmt(want)}`, x + w, y, ok ? T.good : T.coin, { align: 'right' });
+        meter(ui, x + 11, y + 11, w - 11, 5, f, { role: ok ? 'good' : 'coin', glint: false });
+        ui.hint(x, y, w, 18, rate && !ok ? [{ text: `{i:${it}} +${perMin(rate)}/min {soft:arriving}` }, { text: `{u:clock} about ${eta((want - have) / rate)} to go` }] : ok ? `{good:${ICON.check} enough} {i:${it}}` : [{ text: `{warn:nothing brings} {i:${it}} {warn:to the Bay}` }, { text: '{u:district} route a group making it into the Bay' }], 180);
+        y += 19;
+      }
+    } else {
+      const ws = wants.map(([it, n]) => `${sdone ? `{good:${fmt(n)}}` : fmt(n)} {i:${it}}`).join('  ');
+      y += drawRich(ui, ws, x, y, w, T.ink) + 2;
+    }
+    const rw = `{soft:reward} ${st.reward}`;
+    if (y + richHeight(rw, w) <= end) y += drawRich(ui, rw, x, y, w, sdone ? T.good : T.ink) + 3;
+    rule(ui, x, y, w);
+    y += 5;
+  }
+  // the right page: the picture, the stage track, the stage under way in all
+  const dp = detail!;
+  const dx = dp.x + 4, dw = dp.w - 8;
+  const name = id === 'city' ? 'mega_city' : 'mega_transmuter';
+  const S0 = 48;
+  const k = Math.max(1, Math.min(5, Math.floor(Math.min(dp.h - 70, dw - 12) / S0)));
+  const PX = S0 * k;
+  const ax = dx + Math.floor((dw - PX) / 2), ay = dp.y + 6;
+  const ctx = ui.ctx;
+  ctx.fillStyle = rgba(T.shadow, 0.35);
+  ctx.fillRect(ax - 3, ay - 3, PX + 9, PX + 9);
+  ui.fill(ax - 5, ay - 5, PX + 10, PX + 10, T.paperHi);
+  ui.fill(ax - 1, ay - 1, PX + 2, PX + 2, T.ink);
+  if (hasArt(name)) {
+    const s = sheet(name);
+    const flip = Math.floor(ui.time * (s.fps || 4)) % 2;
+    const fi = !cur ? frameNamed(s, flip ? 'run2' : 'run1') : frameNamed(s, `p${Math.min(2, done)}${flip ? 'b' : 'a'}`);
+    ctx.drawImage(s.frames[fi], ax, ay, PX, PX);
+  } else ui.fill(ax, ay, PX, PX, C.shadow);
+  if (!cur) { ui.clip(ax, ay, PX, PX); rays(app, ax + PX / 2, ay + PX / 2, PX, C.gold, 14); ui.unclip(); }
+  ctx.fillStyle = rgba(C.lamp3, 0.7);
+  ctx.fillRect(ax - 8, ay - 7, 14, 4);
+  ctx.fillRect(ax + PX - 6, ay - 7, 14, 4);
+  let yy = ay + PX + 9;
+  const n = P.stages.length;
+  const sw = Math.floor((dw - 4 * (n - 1)) / n);
+  P.stages.forEach((st, i) => {
+    const sx = dx + i * (sw + 4);
+    const sd = done >= st.stage, now = cur?.stage === st.stage;
+    const lab = sd ? `${ICON.check} ${st.stage}` : now && open ? (textWidth(`Stage ${st.stage}`) + 8 <= sw ? `Stage ${st.stage}` : `${st.stage}`) : `${ICON.lock} ${st.stage}`;
+    const rl: Role = sd ? 'good' : now && open ? 'coin' : 'soft';
+    chip(ui, sx + Math.floor((sw - chipWidth(lab)) / 2), yy, lab, { role: rl, solid: sd || (now && open) });
+    if (now) pencil(ui, sx + 2, yy + CHIP_H + 1, sw - 4, T.bad);
+    ui.hint(sx, yy, sw, CHIP_H, [{ text: `{big:Stage ${st.stage}}` }, { text: st.reward }, { text: `{reset:+${st.patents}} {soft:Patents}` }], 190);
+  });
+  yy += CHIP_H + 7;
+  if (cur && open && yy + 22 <= dp.y + dp.h) {
+    let have = 0, need = 0;
+    for (const [it, want] of Object.entries(cur.wants) as [ItemId, number][]) { need += want; have += Math.min(want, prog[it]?.toNumber() ?? 0); }
+    const f = need ? have / need : 0;
+    caption(ui, `stage ${cur.stage} in all`, dx, yy + 3);
+    ui.big(`${Math.floor(f * 100)}%`, dx + dw, yy, T.coin, { align: 'right' });
+    yy += 14;
+    meter(ui, dx, yy, dw, 7, f, { role: 'coin' });
+    yy += 12;
+  }
+  const keep = !cur ? '{good:complete} · its rewards stand for good' : '{reset:kept through every reset}';
+  if (yy + 10 <= dp.y + dp.h) drawRich(ui, keep, dx + dw / 2, yy, dw, T.ink, { align: 'center' });
 }
 
 void wrapText; void portrait;

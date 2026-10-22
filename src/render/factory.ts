@@ -13,7 +13,7 @@ import { RULES } from '../data/rules';
 import { prules } from '../sim/patents'; // Milestone 5: the Patent rules (More Auditors, Quick Audits)
 import { megaStage } from '../data/megaprojects';
 import { ITEMS, type ItemId } from '../data/items';
-import { BYPRODUCTS } from '../sim/systems/modules';
+import { BYPRODUCTS, chuteCap } from '../sim/systems/modules';
 import { drawText, textWidth } from '../ui/font';
 import { paperRaw } from '../ui/paper';
 import { onPaper } from '../ui/theme';
@@ -35,6 +35,10 @@ export interface FactoryOverlay {
   /** a nested-fold box being dragged (tile rect, inclusive corners) */
   box: { x0: number; y0: number; x1: number; y1: number; ok: boolean } | null;
 }
+
+/** The Factory Chute in hand (src/app/act3.ts sets it each frame): its ghost on the hovered tile,
+ * green where it can stand, red where not. */
+export const handChute: { at: { x: number; y: number; ok: boolean } | null } = { at: null };
 
 /** The main output of a design: the item drawn in a module's well. */
 export function mainOutput(g: Game, design: number): ItemId | null {
@@ -292,6 +296,10 @@ export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number
       drawBay(ctx, g, e, time);
       continue;
     }
+    if (e.kind === 'fchute') {
+      drawChute(ctx, g, e, time);
+      continue;
+    }
     if (e.kind !== 'module') continue;
     const d = g.design(e.design);
     const deep = d?.depth === 2;
@@ -335,6 +343,29 @@ export function drawFactory(ctx: CanvasRenderingContext2D, g: Game, time: number
   }
   fauditBox(ctx, g, time);
   overlays(ctx, g, ov, time);
+  // the Factory Chute in hand
+  const hc = handChute.at;
+  if (hc) {
+    ctx.globalAlpha = 0.6;
+    drawRot(ctx, sheet('factory_chute'), 0, hc.x * TILE, hc.y * TILE, 0);
+    ctx.globalAlpha = 1;
+    outline(ctx, hc.x, hc.y, 1, 1, hc.ok ? C.pipGreen : C.pipRed);
+  }
+}
+
+/** The Factory Chute (DESIGN.md §21): its mouth working while trunks bring it goods; the pip
+ * green while it takes, red and blinking when an item's stock below is full (its trunk backs up:
+ * pillar 3), grey when nothing comes. */
+function drawChute(ctx: CanvasRenderingContext2D, g: Game, e: FEnt, time: number) {
+  const x = e.x * TILE, y = e.y * TILE;
+  const cap = chuteCap(g);
+  const full = Object.values(g.s.chute ?? {}).some((v) => (v ?? 0) >= cap - 1e-6);
+  let flow = 0;
+  for (const rt of g.routes) if (rt.to === e) { const last = rt.tiles[rt.tiles.length - 1]; flow += last ? last.flow : 0; }
+  const taking = flow > 0.01;
+  const s = sheet('factory_chute');
+  drawRot(ctx, s, taking ? frameAt(s, time + e.id * 0.2) : 0, x, y, 0);
+  pip(ctx, x, y, full ? C.pipRed : taking ? C.pipGreen : C.pipGrey, full, time);
 }
 
 /** A module running at 3x: a hot pulse over the case, the art director's 'module_od' overlay

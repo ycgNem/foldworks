@@ -399,6 +399,162 @@ export async function m5Setup(state) {
 
 export const M5 = ['reorg', 'patents', 'patentsHover', 'drawer', 'annex', 'committee', 'mega2'];
 
+// ---------------------------------------------------------------- Act III (Milestone 7: the player-facing pieces)
+/** Runs in the page (Act III's pieces on the Workshop, the Factory and the pages, DESIGN.md §21):
+ * act3ws (a Chem Vat, a Greenhouse and three Chute Mouths: pushing, pushing, empty), act3mouth (a
+ * Chute Mouth's pinned report with its item picker), act3factory (the Factory Chute fed by two
+ * modules, its steel full: the red pip), act3chuteHover (its hover tag), research3 (Act III's tree
+ * page waiting on the Great Drill's stage 3), research3open (the page open, a node under way),
+ * megaCity (the Floating City, stage 1 built and stage 2 under way), megaTransmuter, orders3 and
+ * codex3 (Act III's orders and tier 3 specimens), act3modes (a Chem Vat's pinned report with the six
+ * modes). */
+export async function act3Setup(state) {
+  const a = window.__app;
+  // the game's own instance of a module: after a hot update Vite serves it as path?t=..., and a
+  // bare import would load a second copy whose state the game never reads
+  const mod = async (p) => { for (const c of ['/src/app/hud.ts', '/src/app/screens.ts', '/src/app/app.ts']) { const m = (await (await fetch(c)).text()).match(new RegExp(`["'](${p.replace(/\./g, '\\.')}\\?[^"']*)["']`)); if (m) return import(m[1]); } return import(p); };
+  a.newGame(21);
+  a.freeze();
+  const g = a.game;
+  const N = g.s.coin.constructor;
+  g.s.coin = N.of(8.2e6);
+  g.s.earned = N.of(4.1e7);
+  g.s.land = ['A', 'B', 'C', 'D', 'E', 'F'];
+  g.s.upgrades.push('bellows');
+  const { RESEARCH_LIST } = await import('/src/data/research.ts');
+  const early = RESEARCH_LIST.filter((d) => (d.act ?? 1) < 3).map((d) => d.id);
+  const act3 = ['zoning', 'chutes', 'chemistry', 'bearings', 'vulcanizing', 'batteries', 'processors', 'hydroponics', 'recycling'];
+  g.s.research.done = [...early, ...act3];
+  g.s.flags.push('factoryOpen', 'factorySeen', 'sliceEnd', 'ordersSeen');
+  g.s.mega = { stage: 3, progress: {} };
+  g.s.meta.runs = 3;
+  g.s.orders.done = ['boardwalk', 'lampPosts', 'gizmoFestival', 'calibration', 'lensArray', 'streetlamps', 'promenade', 'turbine', 'thePile', 'brickThrone', 'shinyThings'];
+  g.s.orders.rep = { bramble: 4, unit7: 3, voltaire: 2, committee: 5 };
+  g.s.orders.active = null;
+  g.s.income = Array(60).fill(52000);
+  const gr = (letter, mult) => ({ letter, score: 0.86, u: 0.9, w: 1, c: 0.82, mult });
+  const D = (id, name, ins, outs, grade) => ({ id, name, box: { x: 16, y: 1, w: 4, h: 3 }, parts: [], ins, outs, grade, bill: 4000, stamped: 0, spare: 3 });
+  g.s.designs = [
+    D(1, 'Steel x30/min', {}, { steel: 0.5 }, gr('A', 1.1)),
+    D(2, 'Motors', {}, { motor: 0.08 }, gr('S', 1.25)),
+    D(3, 'Plastic', {}, { plastic: 0.3 }, gr('B', 1)),
+    D(4, 'Circuits', {}, { circuit: 0.2 }, gr('A', 1.1)),
+  ];
+  g.s.nextDesign = 5;
+  a.renderer.ground = null;
+  g.rebuild();
+  const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
+  // the Factory: steel and motors trunked into the Chute, plastic to the Dock
+  a.setFloor('factory', true);
+  act({ k: 'fplace', design: 1, x: 2, y: 1, rot: 0 });
+  for (let x = 3; x <= 5; x++) act({ k: 'ftrunk', x, y: 1, rot: 0 });
+  act({ k: 'fchute', x: 6, y: 1 });
+  act({ k: 'fplace', design: 2, x: 2, y: 3, rot: 0 });
+  for (let x = 3; x <= 5; x++) act({ k: 'ftrunk', x, y: 3, rot: 0 });
+  act({ k: 'ftrunk', x: 6, y: 3, rot: 3 });
+  act({ k: 'ftrunk', x: 6, y: 2, rot: 3 });
+  act({ k: 'fplace', design: 3, x: 2, y: 5, rot: 0 });
+  for (let x = 3; x <= 9; x++) act({ k: 'ftrunk', x, y: 5, rot: 0 });
+  // the Workshop: a boiler and engine, two Poles, a Chem Vat making solvent, a Greenhouse, and
+  // three Chute Mouths (motors, steel, rubber: the last with nothing in the Chute)
+  a.setFloor('workshop', true);
+  act({ k: 'place', kind: 'boiler', x: 16, y: 4, rot: 0 });
+  act({ k: 'place', kind: 'steamEngine', x: 17, y: 4, rot: 0 });
+  act({ k: 'place', kind: 'pole', x: 18, y: 3, rot: 0 });
+  act({ k: 'place', kind: 'pole', x: 22, y: 3, rot: 0 });
+  act({ k: 'place', kind: 'chemVat', x: 19, y: 1, rot: 3 });
+  act({ k: 'recipe', x: 19, y: 1, recipe: 'mixSolvent' });
+  act({ k: 'place', kind: 'heap', x: 20, y: 1, rot: 0 });
+  act({ k: 'place', kind: 'greenhouse', x: 21, y: 1, rot: 3 });
+  act({ k: 'recipe', x: 21, y: 1, recipe: 'growProduce' });
+  act({ k: 'place', kind: 'kiln', x: 19, y: 4, rot: 0 });
+  act({ k: 'recipe', x: 19, y: 4, recipe: 'fireGlass' });
+  for (const [y, it] of [[7, 'motor'], [8, 'steel'], [9, 'rubber']]) {
+    act({ k: 'place', kind: 'chuteMouth', x: 15, y, rot: 0 });
+    act({ k: 'recipe', x: 15, y, recipe: it });
+    for (let x = 16; x <= 19; x++) act({ k: 'place', kind: 'belt', x, y, rot: 0 });
+  }
+  const feed = () => {
+    g.entAt(16, 4).inBuf.coal = 8;
+    Object.assign(g.entAt(19, 1).inBuf, { oil: 8, sand: 4 });
+    Object.assign(g.entAt(21, 1).inBuf, { fertilizer: 4 });
+    Object.assign(g.entAt(19, 4).inBuf, { sand: 4 });
+  };
+  feed();
+  a.step(20 * 6);
+  feed();
+  g.s.chute = { ...(g.s.chute ?? {}), motor: 7.4, steel: 20 };
+  a.step(12);
+  if (state === 'act3modes') g.entAt(19, 1).mode = 'recycling';
+  g.events.drain();
+  a.toasts = [];
+  a.trophyPops = [];
+  a.refusal = null;
+  a.panel = null;
+  a.renderer.fx.flyers = [];
+  a.renderer.fx.pops = [];
+  a.fitCamera(true);
+  a.lookAt(18, 5);
+  if (state === 'act3mouth') a.selected = g.entAt(15, 7).id;
+  if (state === 'act3modes') a.selected = g.entAt(19, 1).id;
+  if (state === 'act3hoverMouth') return { hover: [15, 9] };
+  if (state === 'act3factory' || state === 'act3chuteHover') {
+    g.s.chute.steel = 20; // full: the red pip
+    a.setFloor('factory', true);
+    a.fitCamera(true);
+    if (state === 'act3chuteHover') return { hover: [6, 1] };
+  }
+  if (state === 'act3wheel') { a.openWheelAt(); return { hoverIds: ['wheel_heavy', 'wheel_item_chemVat'] }; }
+  if (state === 'act3wheelF') { a.setFloor('factory', true); a.fitCamera(true); a.openWheelAt(); return { hoverIds: ['wheel_trunk', 'wheel_item_fchute'] }; }
+  if (state === 'research3' || state === 'research3open') {
+    (await mod('/src/app/screens.ts')).setTreePage(a, 3);
+    if (state === 'research3') {
+      g.s.mega = { stage: 2, progress: {} };
+      g.s.research.done = early;
+    } else {
+      g.s.research.selected = 'sensors';
+      g.s.research.progress = { sensors: { rubber: N.of(212), circuit: N.of(530) } };
+    }
+    a.panel = 'research';
+  }
+  if (state === 'megaCity' || state === 'megaTransmuter') {
+    g.s.research.done.push('servos', 'floatingCity', 'scrapTransmuter');
+    g.s.megas = {
+      city: { stage: 1, progress: { liftRotor: N.of(86), sandwich: N.of(410), glass: N.of(2650) } },
+      transmuter: { stage: 0, progress: { transmuterCoil: N.of(12), steel: N.of(5200) } },
+    };
+    (await mod('/src/app/act2screens.ts')).setMegaTab(state === 'megaCity' ? 'city' : 'transmuter');
+    a.panel = 'mega';
+    a.gradeAt = a.ui.time - 30;
+  }
+  if (state === 'orders3') {
+    g.s.research.done.push('servos', 'sensors', 'robotics', 'sandwiches');
+    g.s.orders.active = 'specimens';
+    g.s.orders.progress = { specimens: { rubber: N.of(10), battery: N.of(4), bearing: N.of(10), gearbox: N.of(2), sensor: N.of(7) } };
+    a.panel = 'orders';
+    (await mod('/src/app/orders.ts')).cheerFor(a, 'unit7', 0);
+  }
+  if (state === 'codex3') {
+    g.s.codex = ['ironIngot', 'ironPlate', 'gear', 'gizmo', 'copperWire', 'coal', 'steel', 'glass', 'circuit', 'motor', 'plastic', 'concrete', 'solvent', 'rubber', 'battery', 'bearing', 'gearbox', 'sensor', 'processor', 'sandwich', 'clockworkFrog'];
+    a.panel = 'codex';
+  }
+  return null;
+}
+
+export const ACT3 = ['act3ws', 'act3mouth', 'act3modes', 'act3hoverMouth', 'act3factory', 'act3chuteHover', 'act3wheel', 'act3wheelF', 'research3', 'research3open', 'megaCity', 'megaTransmuter', 'orders3', 'codex3'];
+
+/** Act III's pages after a Reorganize (on m5Setup's run-2 game): the card offering Challenges (Hands
+ * Off picked), a Challenge under way (its slip under the Purse), the Scenarios page with a record,
+ * and a Scenario board in play (its slip). */
+// (the game's own module instance, as act3Setup's mod: inlined, each runs in the page on its own)
+export const ACT3_M5 = {
+  reorgChallenges: { base: 'reorg', post: async () => { const mod = async (p) => { for (const c of ['/src/app/hud.ts', '/src/app/screens.ts', '/src/app/app.ts']) { const m = (await (await fetch(c)).text()).match(new RegExp(`["'](${p.replace(/\./g, '\\.')}\\?[^"']*)["']`)); if (m) return import(m[1]); } return import(p); }; (await mod('/src/app/reorganize.ts')).pickNextRun('handsOff'); } },
+  challengeRun: { base: 'reorg', post: () => { const a = window.__app; a.game.s.challenge = 'noSplitters'; a.panel = null; } },
+  scenarios: { base: 'reorg', post: () => { localStorage.setItem('foldworks_scenario_best', JSON.stringify({ tinyIsland: { score: 0.4166, grade: 'A', date: Date.UTC(2026, 9, 18), design: 'Gizmo works' } })); window.__app.panel = 'scenarios'; } },
+  scenarioPlay: { base: 'scenarios', post: async () => { const a = window.__app; const mod = async (p) => { for (const c of ['/src/app/hud.ts', '/src/app/screens.ts', '/src/app/app.ts']) { const m = (await (await fetch(c)).text()).match(new RegExp(`["'](${p.replace(/\./g, '\\.')}\\?[^"']*)["']`)); if (m) return import(m[1]); } return import(p); }; (await mod('/src/app/scenarios.ts')).playScenario(a, 'tinyIsland', true); a.freeze(); a.toasts = []; a.panel = null; } },
+};
+// ---------------------------------------------------------------- (end of Act III's states)
+
 const SIZES = [[1280, 720], [1920, 1080], [1024, 640]];
 // each state: a function run in the page that puts the app there (frozen); it may return
 // { hover: [x, y] } to put the mouse over that tile instead of the board's top edge
@@ -542,6 +698,8 @@ STATES.act2hover = { base: 'act2power', post: () => { const a = window.__app; a.
 for (const s of ACT2) STATES[s] = s;
 for (const s of WORKSHOP) STATES[s] = { ws: s };
 for (const s of M5) STATES[s] = { m5: s };
+for (const s of ACT3) STATES[s] = { a3: s }; // Act III
+Object.assign(STATES, ACT3_M5); // Act III
 
 async function main() {
   const only = process.argv.slice(2);
@@ -559,7 +717,7 @@ async function main() {
     for (const [state, fn] of Object.entries(STATES)) {
       if (only.length && !only.includes(state)) continue;
       const name = `${w}x${h}-${state}`;
-      const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post)) : await page.evaluate(f));
+      const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.a3 ? await page.evaluate(act3Setup, f.a3) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post)) : await page.evaluate(f));
       const r = await run(fn);
       // the goal card slides in when its goal changes: a state set from scratch shows it at rest
       await page.evaluate(() => { window.__app.hud.goalKey = null; });
