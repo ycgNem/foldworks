@@ -1760,3 +1760,29 @@ bottleneck is never hidden: every route says what it carries of what it is wante
 - **No pause on the District yet**: the pause command takes the Factory only (to add with the
   World, Milestone 9).
 - **`- skiff` uses an ASCII hyphen**: the bitmap font has no minus sign.
+
+### Act III on the Workshop, the Factory and the pages
+- **The Chute Mouth's report is its control**: placing one pins its report, whose `PUSHES OUT`
+  picker lists the Chute's stock and every item a Factory module makes; states PUSHING, EMPTY
+  (naming the item: pillar 3), BLOCKED, NO ITEM. Its pip and still frame are drawn in
+  `src/app/act3.ts` for now (the renderer gives pips to machines only); they move into the
+  renderer's `buildingAt` when that file is next worked on.
+- **The Factory Chute is on the wheel's trunk petal** with a placement ghost; its pip blinks red
+  while a stock is full (its trunk backs up) and green while it takes.
+- **Recycling and Byproduct sit beside Tuning's modes** once Recycling is researched.
+- **Act III's Heavy machines stay off the wheel until the Great Drill's stage 3** (or one is
+  unlocked), so Act II's wheel isn't crowded with locked kinds.
+- **The research screen's Act III tab** appears once the Great Drill is researched; every node says
+  "needs the Great Drill's stage 3" until it stands. No "!" badge on the tab (it ran into the coin
+  chip).
+- **The Megaproject page has a tab per project** (the Great Drill, the Floating City, the Scrap
+  Transmuter) with per-stage meters and the pictures (pN = N stages done, then the running pair).
+- **Challenges**: a `NEXT RUN` strip on the Reorganize card from the second reset; while one runs, a
+  slip under the Purse states its rule and goal with a two-click Give up; a win is a banner, a
+  toast and a fanfare; the Patent Office shows `N/5 challenges`.
+- **Scenarios open from Options** after the first Reorganize (a toast points there). Each board
+  saves under `foldworks_scenario_<id>`; the personal bests under `foldworks_scenario_best`; a slip
+  shows the best and the record with a `To town` button; a new best is a banner.
+- **The Patent Office's lower branches share the width by their column count** (four-wide Rules
+  and Automation rows crowded at 1024 px with equal widths).
+- **UI icons `district` and `chute`** were drawn with the ui-icons pipeline (appended at 34, 35).
