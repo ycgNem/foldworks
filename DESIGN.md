@@ -1380,7 +1380,7 @@ waste is another's input (gravel from slag, fertilizer from sludge). Powered mac
 ### Research, page 3
 Seventeen nodes (`src/data/research.ts`, `act: 3`), every one waiting for **the Great Drill's stage
 3** (`drill: 3`): Act III opens once Act II's spine is finished, about the third run (§19). Zoning
-is paid in what the Act II floor already makes (300 motors, 600 circuits, 1,500 concrete); Chutes
+is paid in what the Act II floor already makes (200 motors, 300 circuits, 300 concrete, measured below); Chutes
 (2,500 steel, 100 motors) next; then each tier 3 node in the goods of the node before it.
 
 ### Megaprojects #2 and #3 (`src/data/megaprojects.ts` `MEGAS`, state `s.megas`)
@@ -1463,11 +1463,68 @@ the board is A and B); Rich Ore makes ore free and kW dear (Efficient mode, few 
 Scarce Belts' 40 tiles are two-thirds of an Act II circuit line's (§18), so machines face each other
 and feed by side intake. The coin is each board's lines twice over at §4 and §18 prices.
 
-### Pacing (to be measured)
+### Pacing (measured, Milestone 7)
 §16's targets for Act III: the District at about **15 h**, the first megaproject complete by 25 h
 (the Great Drill already is, at about 10 h), rules 1 (a goal every 10 min of active play), 2 (no 15
-min without a decision) and 5 hold to 40 h for the planner bot (`src/sim/bot3.ts`,
-`tests/pace-act3.test.ts`).
+min without a decision) and 5 to 40 h for the planner bot. Measured by the campaign bot with the
+Act III policy (`src/sim/bot3.ts`, `tests/pace-act3.test.ts`, seed 1000, 40 h of play, resetting
+when the Reorganize preview stalls, or at a run's cap once the Reorganize may be taken):
+
+| Measure | Target | Measured |
+|---|---|---|
+| District open (Zoning researched) | about 15 h | **10:01** (Act III hand-over 9:53, run 3) |
+| Floating City stage 1 (first Act III Megaproject stage) | by 25 h | **15:48** (run 4) |
+| District modules at 40 h | 20+ | **49** (50 at most; the floor full, 119 of 120 routes) |
+| Routes between District modules | some (rule 5) | up to 14 of 119 |
+| A sim tick with that District | under 4 ms (e2e/perf.mjs) | **0.24 ms** |
+| Rule 1 and rule 2 over Act III | 10 and 15 min | run 3: **8.7** min; run 4: **42.5** from 13:40; run 5: **open** (below) |
+
+The runs: 1 0:00-4:24 (14 Patents), 2 4:24-7:26 (7), 3 7:26-10:46 (15, Act III from 9:53), 4
+10:46-16:38 (9, Act III from 13:12), 5 16:38-40:00 (Act III from 18:49, never reset).
+
+Lessons, and the numbers they moved (each with its derivation in `src/data/research.ts`):
+- **Zoning 300/600/1,500 → 200 motors, 300 circuits, 300 concrete.** At the Act III hand-over the
+  Act II floor makes motors only in the lab (phase M) and concrete only in the old Bay floor's two
+  copies; at the old price the first development runs stalled with Zoning nearly paid (0.97) and
+  motors short, the plan waiting on nothing else (rule 2). At the new price the District opens about
+  8 min after the hand-over, at 10:01: earlier than §16's 15 h,
+  because the Great Drill now stands at about 9.9 h in run 3. The window the test holds is 8-16 h.
+- **Bearings 3,000 → 2,000 steel** (1,500 gears unchanged): paid from the bank Act II leaves, so
+  Bearings completes within minutes of Chutes and the Chute's first lines are not held for steel.
+- **The Floating City 3,000 → 400 concrete** (60 servos unchanged): the old Bay floor that made
+  concrete is cleared for the Chute, and a Concrete group makes about 0.1 a second; at 3,000 the
+  research sat at 0.87-0.90 for hours in the development runs with the plan blocked on it. The
+  Platform's own 4,000 concrete is unchanged: four Concrete groups at the District Bay, and the
+  City's stage 1 stood at 15:48, about 2.5 h after run 4's Act III hand-over.
+- **The player's Act III build** (bot3.ts): the Workshop's chunk D holds two line slots (a chain of
+  machines facing east, fed by Chute Mouths outside the fold box, the product belted up to the
+  corridor and the Hopper) and the standing Machine Kit line; the Factory annex holds the Chute with
+  six hand-laid feeders down a spine trunk (the search placer could not fit feeders with side
+  trunks there), and the 12x8 is the bench where each group is nested; groups go up to the
+  District beside what they feed, every product routed where it is wanted most (a module short of
+  it, research, the Bay, an order, the Dock).
+- **Lift rotors**: the Rotors group takes one Steel copy, not two: a fourth route could not reach
+  the rotor assembly's back. It makes about 0.015 rotors a second; 120 came in about 30 minutes
+  from the copies placed. (Rotors II was given up on the bench in run 5: three tries.)
+
+**Open** (measured, not yet met, `[pace] OPEN` in the test):
+- **Rules 1 and 2 in run 4: 42.5 min from 13:40.** The plan waits on Servos (200 gearboxes, 200
+  motors) with its Gearboxes and Motors groups on the District sending what they make to the
+  Hopper and nothing else to place; a cheaper Servos, or the Bearing Patent bought a run earlier,
+  is the next thing to try.
+- **Rules 1 and 2 after about 21.5 h.** In run 5 the District is full (49 modules, 119 routes) and
+  the City's first stage stands; every goal left is chemistry's (Chemistry, then sludge for
+  Hydroponics, sandwiches for the City's second stage, processors and batteries for the
+  Transmuter), which this player does not build yet. With nothing new to patent the Reorganize is
+  refused, so the run idles to 40 h: an 18.5 h gap. The fix is content for the player (Chem Vat
+  lines on the Workshop and a sludge sink), not a number: until then Act III's own content runs out
+  at about 21 h of play.
+- **Rule 5's skiffs.** Every route carries its want with one skiff, because the placer stands each
+  copy beside what it feeds; the skiff decision never comes up. Not yet a lesson about the numbers:
+  a player who places for income first would meet it.
+- **The Scrap Transmuter and Act III orders.** The policy accepts the Servo Ballet once servos run;
+  the Transmuter needs processors and batteries (chemistry, and copper ingots no folded design
+  makes yet).
 
 ## 22. Act IV: Worlds and Relocate (Milestone 9, 40-80 h)
 
