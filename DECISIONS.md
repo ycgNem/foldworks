@@ -1817,3 +1817,39 @@ has measured is committed, and any target it hasn't shown holding is listed as o
   the City's stage 2 and the Transmuter); run 4 waits 42.5 min on Servos research; no route ever
   needed a second skiff with this bot's placement (rule 5's skiff decision); seed 8919 not run.
   The bot's limits, not the model's, as far as the arithmetic shows; the gate review weighs in.
+
+## The second gate (Milestone 8): Act III failed, and was fixed (2026-10-22)
+
+The idle-critic's verdict: **fail for Act III** (Acts I-II pass with their known open items);
+the pacing-auditor: Act III's bills were 3-10x their derivations. Both reviewed `main` before the
+Act III bot's research retune was merged. Fixed in d9b33dc (sim and data) and two agents after it
+(the District's UI, the Act III bot); each fix's number is derived in DESIGN.md §21.
+
+- **Distance didn't matter** (one skiff carried every depth-2 flow even across the floor; 120
+  routes held 120 skiffs): skiffs carry **1 a trip, at 40,000** - ship value, not bulk. Rejected:
+  a per-floor fleet (the auditor's alternative): one more number to track, where the load already
+  makes the bulk/value split.
+- **The 120-route cap was the hidden wall** and made lots worthless: waste with no route goes to the
+  Dock on its own (half the routes were waste), each lot adds 20 routes, the cap is shown.
+- **A District fold had nowhere to go until Milestone 9**: the District takes its own depth-3 folds.
+- **Act III research and Megaproject stages** cut to 20-40 min of the floor that pays them and
+  about an hour of two groups a stage; lots 1M x n; head starts re-priced to §19's rule.
+- **A Megaproject with a stage standing keeps its Bay open** without its research (every run
+  re-paid the research before the Bay counted anything).
+- **Two Challenges were won in 2 s** (their goals were researches a head start knows): goals are
+  this run's deliveries or orders; rewards became Act III rules.
+- **§16's District target moved from 15 h to about 11 h** (the Great Drill stands at ~9.5 h; holding
+  Zoning to 15 h would add Act II's dead air).
+- **Legibility**: a route's want counts the Great Drill; the District UI agent fixes the starved
+  report, the coach's stale Act II steps, the skiffs crowding the Dock, the route count.
+- **Open, owned elsewhere**: reset 3 feels like reset 1 (the Patent preview is ~0 at 30-40 h):
+  Relocate and Legacy (Milestone 9) answer it, and depth-3 folds must file a step deeper; rule 6
+  (the never-reset bot holds at the Drill's stage 1 for 25 h: `bot2.ts` takes only Committee orders
+  its Dock fills within 40 min; a player could reach the District by ~10 h) stays open for the bot.
+- **Flagged as derivative** (the auditor): the tier 3 chemistry (refinery waste oil → solvent, a
+  battery from copper + solvent, a processor from circuits + solvent) follows Factorio's
+  petroleum, sulfuric acid, battery and processing-unit chain. Kept for now as the genre's common
+  chemistry; owner to decide.
+
+The gate is marked **passed with conditions** in ROADMAP.md once the District UI and the Act III
+bot's re-measure land: the owner's play from the 15 h checkpoint is owed, as at the first gate.
