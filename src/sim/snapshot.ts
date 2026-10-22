@@ -80,7 +80,7 @@ export function fingerprint(g: Game): string {
   const ents = s.ents.map((e) => `${e.id}${e.kind}${e.x},${e.y}${e.rot}|${e.item ?? ''}${e.p.toFixed(3)}${e.item2 ? e.item2 + (e.p2 ?? 0).toFixed(3) : ''}|${JSON.stringify(e.inBuf)}${e.out}${e.by}${e.prog}${e.count}${e.store.join(',')}`).join(';');
   // the layer-3 state (DESIGN.md §23): Kernels, the universe, the Ledger
   const m = s.meta;
-  const meta = `${m.kernels?.toString() ?? ''}:${(m.kernelNodes ?? []).join(',')}:${m.lastFolds ?? 0}:${m.ledger?.n ?? 0}`;
+  const meta = `${m.kernels?.toString() ?? ''}:${(m.kernelNodes ?? []).join(',')}:${m.lastFolds ?? 0}:${m.ledger?.n ?? 0}:${m.ledger?.item ?? ''}`;
   // the long tail (DESIGN.md §24): the shelf, the cosmetics and skins, the boards, the free buildings
   const tail = `${s.flags.filter((f) => f.startsWith('trophy:')).join(',')}|${(m.cosmetics ?? []).join(',')}|${JSON.stringify(m.skins ?? {})}|${JSON.stringify(m.boards ?? {})}|${s.ents.filter((e) => e.free).map((e) => e.id).join(',')}|${s.challenge ?? ''}:${(m.challenges ?? []).join(',')}`;
   // the islands (DESIGN.md §22): where the town is, the rubble lying and the record of what stays
