@@ -1817,3 +1817,36 @@ has measured is committed, and any target it hasn't shown holding is listed as o
   the City's stage 2 and the Transmuter); run 4 waits 42.5 min on Servos research; no route ever
   needed a second skiff with this bot's placement (rule 5's skiff decision); seed 8919 not run.
   The bot's limits, not the model's, as far as the arithmetic shows; the gate review weighs in.
+
+## The second gate: the District's UI (2026-10-22)
+
+The idle-critic's UI findings on the District, fixed in `src/app/district.ts`, `src/app/goals.ts`,
+`src/app/rail.ts`, `src/app/floortags.ts`, `src/render/district.ts`, `src/app/screens.ts`.
+- **The route cap is on the tool strip** (`routes 24/120`, warn ink within 10 of `maxRoutes`),
+  with a hover saying a lot adds 20 and a fold packs a group's routes; the lot's tip says
+  `+2 columns · +20 routes`. The coach says so too, before a short route, once within 10.
+- **A starved report counts instead of guessing.** For each input whose buffer has run down: what
+  the module needs a second (the design's rate × the Great Drill's factor, as `routeWant` reads it)
+  against its routes' smoothed flow, then the binding cause: a route whose skiffs carry less than
+  its source's share (`add a skiff to the Circuits II route`), the feeders making too little at
+  full speed (`its feeders make 0.06: place another Circuits II`), no route, or a feeder that is
+  itself starved or blocked. An input stocked up behind another is not listed (its feeder backs
+  up behind it). The brief hover keeps one short cause row; the numbers are the pinned report's
+  (the owner wants brief tags). Module `in`/`out` rows now read at the Drill's speed too.
+- **On the District the coach speaks of the District only**: a District fold's audit, the
+  District chain, the route cap, then orders and the next Act III node. Once the District stands
+  this run, Act I-II's teaching chain is skipped everywhere; the power and Mk2 steps also skip on
+  lifetime counters (`gridsLit`, `mk2Built`), which survive resets. On the District the bubble
+  keeps off the Bay's 2x2 corner: its chips and bar fold away first, then the whole bubble (the
+  "!" bubble), as at 1024x640.
+- **Skiffs**: no sprites on routes of 2 tiles or less (a pulse runs down the line while it
+  carries); a skiff over a building draws at 45% so the module under it reads.
+- **The Dock's and the Hopper's floor tags hang in the floor's east margin** (the walk where the
+  next lot stands), level with their building, their inflow rows cut to the room (a long research
+  name gives way to its %). The pinned report docks as before; the lot's Buy button moves up or
+  down the lot off it, or is put away while the report would cover it.
+- **The research tree opens on the newest act under way** each time it opens (Act III's page once
+  the Drill's stage 3 is reached or an Act III node is done); the tabs still pick another page
+  while it is open.
+- **Depth-3 District folds are on the strip's groups list** after the groups, marked with a teal
+  rim and a "3" tab, and go into the hand on the District (`app.pickModule`).

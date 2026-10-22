@@ -37,6 +37,11 @@ worktrees: the art, the District's screen, Act III's other screens, the Act III 
   the District fold's clipboard and grade card, Act III goals; the Chem Vat, Greenhouse, Chute
   Mouth (report with item picker) and Factory Chute; research page 3; the Megaproject page's three
   tabs; Challenges on the Reorganize card and a slip while one runs; Scenarios from Options.
+- **The second gate's District UI** (DECISIONS.md "The second gate: the District's UI"): the
+  route cap on the strip, starved reports that count need against flow and name the fix, a coach
+  that speaks of the District only (and skips Act I-II teaching once it stands), skiffs that keep
+  off the modules, the Dock's and Hopper's tags in the east margin, research opening on the newest
+  act, depth-3 folds on the strip. New screens state `districtStarved` (a starved group pinned).
 - **Art** (`pixel-art/act3/`): every Act III sprite, 0 PixelLab generations.
 
 ### Measured
@@ -56,7 +61,7 @@ District opens at 10:01, the Floating City's stage 1 at 15:48, 49 District modul
   sink, the City's stage 2, the Transmuter) and idles from there; run 4 waits 42.5 min on Servos;
   rule 5's second skiff never arises with its placement; seed 8919 not run.
 - No pause on the District (the pause command takes the Factory only; with the World).
-- The District's Scrap Transmuter and Dock tags crowd the Dock at 1280; dark tier 3 icons lose
+- Dark tier 3 icons lose
   contrast in module wells (a lighter well or rim would fix it).
 - The owner's look at Act III, and the derivative flags in DECISIONS.md.
 

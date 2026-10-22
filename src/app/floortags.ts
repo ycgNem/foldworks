@@ -14,7 +14,7 @@ import { researchFrac, available } from '../sim/systems/research';
 import { offeredOrders, orderFrac } from '../sim/systems/orders';
 import { megaFrac } from '../render/factory';
 import { districtMegaFrac } from '../render/district';
-import { megaStageOf } from '../sim/systems/high';
+import { megaStageOf, highW } from '../sim/systems/high';
 import { capacity, kw } from '../render/powerview';
 import { LINE_H } from '../ui/font';
 import { layoutRich, drawLayout, richWidth, CHIP_H } from '../ui/rich';
@@ -29,7 +29,14 @@ import type { Layout } from './layout';
 import type { App } from './app';
 
 /** One floor tag: what it hangs from, its content size, and how to draw the content. */
-interface FloorTag { id: string; near: Rect; cw: number; ch: number; draw: (x: number, y: number) => void; hover?: () => void; /** hang it under its anchor (a line whose sink is above it) */ below?: boolean }
+interface FloorTag {
+  id: string; near: Rect; cw: number; ch: number; draw: (x: number, y: number) => void; hover?: () => void;
+  /** hang it under its anchor (a line whose sink is above it) */
+  below?: boolean;
+  /** hang it beside its anchor with its left edge at this screen x (the District's east margin, so
+   *  the Dock's and the Hopper's tags keep off the modules round them: the second gate) */
+  east?: number;
+}
 
 /** belts' last item, so a line's tag keeps its icon between items */
 const lastItem = new Map<number, string>();
@@ -82,9 +89,18 @@ export function floorTags(app: App, L: Layout) {
       m.set(e.item, (m.get(e.item) ?? 0) + (rates.get(e.item as ItemId) ?? 0) / (per.get(e.item) ?? 1));
     }
   }
-  /** an inflow row: up to four items, the busiest first, each its icon and how many a minute */
-  const inflowRow = (m: Map<string, number>) =>
-    [...m.entries()].sort((p, q) => q[1] - p[1]).slice(0, 4).map(([it, pm]) => `{i:${it}} ${pm > 0 ? fmtRate(pm) : '{warn:0}'}`).join('  ') + (m.size ? ' {soft:/min}' : '');
+  /** an inflow row: up to `n` items, the busiest first, each its icon and how many a minute */
+  const inflowRow = (m: Map<string, number>, n = 4) =>
+    [...m.entries()].sort((p, q) => q[1] - p[1]).slice(0, n).map(([it, pm]) => `{i:${it}} ${pm > 0 ? fmtRate(pm) : '{warn:0}'}`).join('  ') + (m.size ? ' {soft:/min}' : '');
+  // the District's east margin (the walk east of the floor, where the next lot stands): the Dock's
+  // and the Hopper's tags hang there, beside their buildings, and their inflow rows keep to its room
+  const eastX = dist ? worldRect(app, highW(g, 'district'), 0, 0, 0).x + 6 : 0;
+  const pad = tagSize(0, 0, 'left').w;
+  const eastRow = (m: Map<string, number>) => {
+    let n = 4;
+    while (n > 1 && dist && eastX + pad + richWidth(inflowRow(m, n)) > ui.w - 2) n--;
+    return inflowRow(m, n);
+  };
 
   // ---- the Dock: coin a minute; the active order's portrait and bars; orders waiting
   const dock: Ent | FEnt | undefined = dist ? g.s.district?.ents.find((e) => e.kind === 'fdock') : fac ? g.s.factory.ents.find((e) => e.kind === 'fdock') : g.s.ents.find((e) => e.kind === 'dock');
@@ -107,11 +123,11 @@ export function floorTags(app: App, L: Layout) {
       else if (here) { cw = Math.max(cw, (portrait ? 28 : 0) + 74); ch += 3 + Math.max(portrait ? 24 : 0, wants.length * 9); }
       const chipS = offered ? `{chip:good:${offered} offered}` : '';
       if (offered) { cw = Math.max(cw, richWidth(chipS)); ch += CHIP_H + 2; }
-      const inS = inflow.dock.size ? inflowRow(inflow.dock) : '';
+      const inS = inflow.dock.size ? eastRow(inflow.dock) : '';
       const il = inS ? layoutRich(inS) : null;
       if (il) { cw = Math.max(cw, il.w); ch += LINE_H; }
       tags.push({
-        id: 'dock', near: r, cw, ch,
+        id: 'dock', near: r, cw, ch, east: dist ? eastX : undefined,
         draw: (x, y) => {
           drawLayout(ui, hl, x, y);
           let yy = y + LINE_H;
@@ -146,12 +162,14 @@ export function floorTags(app: App, L: Layout) {
       if (sel) {
         const f = researchFrac(g, sel);
         const p = `{research:${Math.floor(f * 100)}%}`;
-        const name = compact ? p : `${RESEARCH[sel].name} ${p}`;
+        let name = compact ? p : `${RESEARCH[sel].name} ${p}`;
+        // in the District's margin a long node name gives way to its % (the node's icon stays)
+        if (dist && eastX + pad + 10 + richWidth(name) > ui.w - 2) name = p;
         const nl = layoutRich(name);
-        const il = inflow.hopper.size ? layoutRich(inflowRow(inflow.hopper)) : null;
+        const il = inflow.hopper.size ? layoutRich(eastRow(inflow.hopper)) : null;
         const cw = Math.max(10 + nl.w, il?.w ?? 0), ch = (compact ? LINE_H - 2 : LINE_H + 6) + (il ? LINE_H : 0);
         tags.push({
-          id: 'hopper', near: r, cw, ch,
+          id: 'hopper', near: r, cw, ch, east: dist ? eastX : undefined,
           draw: (x, y) => {
             nodeIcon(ui, sel as ResearchId, x, y, true);
             drawLayout(ui, nl, x + 10, y);
@@ -227,6 +245,24 @@ export function floorTags(app: App, L: Layout) {
   ui.audit = false;
   try {
     for (const t of tags) {
+      if (t.east !== undefined) {
+        // beside its anchor in the margin: level with its top, else the nearest free height
+        const sz = tagSize(t.cw, t.ch, 'left');
+        const x = Math.max(2, Math.min(t.east, ui.w - sz.w - 2));
+        const y0 = Math.max(2, Math.min(ui.h - sz.h - 2, t.near.y));
+        const free = (y: number) => y >= 2 && y + sz.h <= ui.h - 2 && ![...placed, ...zones].some((p) => overlap({ x, y, w: sz.w, h: sz.h }, p));
+        let y = y0;
+        for (let d = 0; d <= ui.h; d += 2) {
+          if (free(y0 + d)) { y = y0 + d; break; }
+          if (free(y0 - d)) { y = y0 - d; break; }
+        }
+        const b = { x, y, w: sz.w, h: sz.h };
+        placed.push(b);
+        const anchor = { x: t.near.x + t.near.w - 2, y: Math.max(t.near.y + 2, Math.min(t.near.y + t.near.h - 2, y + 6)) };
+        const r = tag(ui, b.x, b.y, b.w, b.h, { hole: 'left', anchor, blocking: false });
+        t.draw(r.x, r.y);
+        continue;
+      }
       const sz0 = tagSize(t.cw, t.ch, 'left');
       let x = Math.round(t.near.x + t.near.w / 2 - 6);
       const top = (hh: number) => (t.below ? t.near.y + t.near.h + 5 : t.near.y - 5 - hh);

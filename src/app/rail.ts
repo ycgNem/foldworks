@@ -22,7 +22,8 @@ import { researchFrac } from '../sim/systems/research';
 import { offeredOrders, orderFrac } from '../sim/systems/orders';
 import { bubble, button, meter, chip, chipWidth, lilyPad, portrait, rule } from './chrome';
 import { nextGoal, type Speaker } from './goals';
-import { bigSafe } from './tags';
+import { bigSafe, worldRect } from './tags';
+import { HIGH } from '../data/floors';
 import { toolboxButton } from './wheel';
 import type { Layout } from './layout';
 import { nodeIcon } from './screens';
@@ -95,7 +96,7 @@ export function rail(app: App, L: Layout) {
   const g = app.game;
   const hs = app.hud;
   cameos(app);
-  const goal = nextGoal(g);
+  const goal = nextGoal(g, app.floor);
   const cam = hs.cameos[0] ?? null;
   const who: Speaker = cam ? cam.who : goal?.who ?? 'bramble';
   const text = cam ? cam.text : goal ? goal.text : 'Build, balance, keep it humming!';
@@ -148,29 +149,48 @@ export function rail(app: App, L: Layout) {
   const holding = !!grab && app.mode.k === 'build' && app.mode.kind === grab;
   const canGrab = !!grab && !holding && g.s.coin.gte(BUILD[grab].cost);
   // a chip wider than the bubble drops words from its end (never into the Gazette's slip)
-  const chips = ((cam ? cam.chips : goal?.chips) ?? []).map((c) => fitChip(c, cw));
-  const bar = cam ? undefined : goal?.bar;
-  const note = cam ? null : goal?.note ? layoutRich(goal.note, cw) : null;
-  // chips flow in rows
-  const chipRows: string[][] = [];
-  let rowW = 0;
-  for (const c of chips) {
-    const w = chipWidth(c);
-    if (!chipRows.length || rowW + w > cw) { chipRows.push([c]); rowW = w + 3; } else { chipRows[chipRows.length - 1].push(c); rowW += w + 3; }
-  }
-  let ch = lay.h - 2;
-  if (bar !== undefined) ch += 9;
-  if (chipRows.length) ch += 3 + chipRows.length * (CHIP_H + 2);
-  if (bellows) ch += canBuy ? 20 : 11;
-  if (canGrab) ch += 20;
-  else if (holding) ch += 12;
-  if (note) ch += 5 + note.h;
+  let chips = ((cam ? cam.chips : goal?.chips) ?? []).map((c) => fitChip(c, cw));
+  let bar = cam ? undefined : goal?.bar;
+  let note = cam ? null : goal?.note ? layoutRich(goal.note, cw) : null;
   const grabLabel = grab ? `Grab a ${BUILD[grab].name} {coin:${Num.of(BUILD[grab].cost).format()}}` : '';
-  const natural = Math.max(lay.w, ...chipRows.map((r) => r.reduce((s, c) => s + chipWidth(c) + 3, -3)), note ? note.w : 0, canBuy ? 130 : bellows ? 110 : 0, canGrab ? richWidth(grabLabel) + 16 : 0, holding ? richWidth(HOLDING) : 0);
-  const bw = Math.min(maxW, natural + 12);
-  const bh = ch + 10;
   const bx = P.x + 54;
-  const by = Math.min(ui.h - 8 - bh, P.y + 40 - bh + 14);
+  const size = () => {
+    // chips flow in rows
+    const chipRows: string[][] = [];
+    let rowW = 0;
+    for (const c of chips) {
+      const w = chipWidth(c);
+      if (!chipRows.length || rowW + w > cw) { chipRows.push([c]); rowW = w + 3; } else { chipRows[chipRows.length - 1].push(c); rowW += w + 3; }
+    }
+    let ch = lay.h - 2;
+    if (bar !== undefined) ch += 9;
+    if (chipRows.length) ch += 3 + chipRows.length * (CHIP_H + 2);
+    if (bellows) ch += canBuy ? 20 : 11;
+    if (canGrab) ch += 20;
+    else if (holding) ch += 12;
+    if (note) ch += 5 + note.h;
+    const natural = Math.max(lay.w, ...chipRows.map((r) => r.reduce((s, c) => s + chipWidth(c) + 3, -3)), note ? note.w : 0, canBuy ? 130 : bellows ? 110 : 0, canGrab ? richWidth(grabLabel) + 16 : 0, holding ? richWidth(HOLDING) : 0);
+    const bw = Math.min(maxW, natural + 12);
+    const bh = ch + 10;
+    const by = Math.min(ui.h - 8 - bh, P.y + 40 - bh + 14);
+    return { chipRows, bw, bh, by };
+  };
+  let sz = size();
+  // on the District the bubble keeps off the Bay's corner (south-west, beside the portrait; the
+  // second gate at 1024x640): its chips, bar and note fold away first, then the whole bubble
+  if (app.floor === 'district' && g.s.district) {
+    const b = HIGH.district.bay;
+    const bay = worldRect(app, b.x, b.y, 2, 2);
+    const hits = () => bx < bay.x + bay.w && bx + sz.bw > bay.x && sz.by < bay.y + bay.h && sz.by + sz.bh > bay.y;
+    if (hits()) { chips = []; bar = undefined; note = null; sz = size(); }
+    if (hits()) {
+      const news = hs.goalAt > hs.foldedAt;
+      bubbleRaw(ui.ctx, P.x + 40, P.y - 2, 15, 14, 'left', 6);
+      ui.big(news ? '!' : '…', P.x + 47, P.y, news ? T.bad : T.inkSoft, { align: 'center' });
+      return;
+    }
+  }
+  const { chipRows, bw, bh, by } = sz;
   const at = Math.max(6, Math.min(bh - 12, P.y + 22 - by));
   // a new line pops in: the bubble grows from its tail for a moment
   const k = Math.min(1, t / 0.18);
@@ -348,7 +368,7 @@ export function diegetic(app: App, L: Layout) {
     }
   }
   // the goal's arrow, bobbing over the tile it names
-  const goal = nextGoal(g);
+  const goal = nextGoal(g, app.floor);
   if (goal?.tile && !app.panel && !fac && !dist) {
     const s = r.toScreen(goal.tile.x + 0.5, goal.tile.y);
     const bob = Math.round(Math.sin(ui.time * 6) * 2);

@@ -1,7 +1,8 @@
 // The District's tools and panels (DESIGN.md §21, docs/endgame.md Milestone 7), in the 180's ink on
 // paper (docs/hud-180.md). Every core action is a labelled button (the owner): a tool strip hangs
-// at the top centre with Route, Remove and Fold and the groups in hand (depth-2 designs with spare
-// copies, each a slot that puts one in your hand); the next lot's Buy button stands on the lot
+// at the top centre with Route, Remove and Fold, the route count against the cap, and the groups in
+// hand (depth-2 designs and the District's own depth-3 folds with spare copies, each a slot that
+// puts one in your hand); the next lot's Buy button stands on the lot
 // itself at the floor's east edge. The Route tool: click a source module, then where it goes; when
 // the source makes several things the destination takes, a small labelled list picks the item. A
 // route (its line, or a module's route list) opens its card: `3 skiffs · 1.4/s of 2.1 wanted ·
@@ -21,7 +22,7 @@ import { TICK_RATE } from '../engine/time';
 import { prules } from '../sim/patents';
 import type { Game } from '../sim/Game';
 import type { FEnt, SkiffRoute } from '../sim/world';
-import { highW, hent, hentAt, hname, routeDist, routeCap, routeWant, routeRefusal, lotPrice, megaStageOf, gradeHAudit, skiffRateNow } from '../sim/systems/high';
+import { highW, hent, hentAt, hname, routeDist, routeCap, routeWant, routeRefusal, lotPrice, megaStageOf, gradeHAudit, skiffRateNow, maxRoutes, drillFactor } from '../sim/systems/high';
 import { BYPRODUCTS, defaultName, mainItem } from '../sim/systems/modules';
 import { bigWidth, smallWidth, LINE_H, BIG_LINE_H, ICON } from '../ui/font';
 import { layoutRich, drawLayout, richWidth, drawRich, CHIP_H, type RichLayout } from '../ui/rich';
@@ -123,17 +124,89 @@ interface DRep {
   routes?: SkiffRoute[];
 }
 
-/** Why a module is starved of `item`, as a row: no route brings it, a route short of skiffs, or
- *  its feeder making too little. */
-function starvedCause(g: Game, e: FEnt, item: string): string {
+/** A row only the pinned report shows (the brief hover keeps to the cause), and one only a hover
+ *  shows (the short cause the pinned report's numbers replace). */
+const PIN = '\u0001';
+const HOVER = '\u0002';
+
+/** What a module needs of one input against what its routes bring (DESIGN.md §21), and why it falls
+ *  short: no route brings it, a route short of skiffs (the one whose skiffs carry least of what its
+ *  source can spare), the feeders making too little at full speed, or a feeder not running. */
+interface Supply {
+  need: number;
+  gets: number;
+  why: 'none' | 'skiffs' | 'makes' | 'feeder' | 'ok';
+  /** the route to add a skiff to ('skiffs'), the feeder to place another of ('makes') or the one
+   *  not running ('feeder') */
+  route?: SkiffRoute;
+  src?: FEnt;
+  /** what the feeders make of it a second at full speed (their share of it, for 'makes') */
+  makes: number;
+  /** a feeder's output is split with other routes */
+  shared?: boolean;
+}
+
+function supplyOf(g: Game, e: FEnt, item: ItemId): Supply {
   const st = g.s.district!;
+  const drill = drillFactor(g);
+  const need = (g.design(e.design)?.ins[item] ?? 0) * drill;
   const ins = st.routes.filter((r) => r.to === e.id && r.item === item);
-  if (!ins.length) return `{bad:no route brings} ${icon(item)} · the Route tool`;
-  const short = ins.find((r) => routeShort(g, r));
-  if (short) return `{warn:short of skiffs} ${rate(routeCap(g, ID, short))}/s of ${rate(routeWant(g, ID, short))}`;
-  const src = hent(g, ID, ins[0].from);
-  if (src && src.state !== 'work') return `its feeder is {warn:${src.state}}`;
-  return `${icon(item)} by skiff ${rate(ins.reduce((s, r) => s + r.flow, 0))}/s · more than one feeder?`;
+  const gets = ins.reduce((s, r) => s + r.flow, 0);
+  if (!ins.length) return { need, gets, why: 'none', makes: 0 };
+  // each route's share of its source (routes from one output share it in turn) and what its
+  // skiffs can carry of it
+  const legs = ins.map((r) => {
+    const src = hent(g, ID, r.from);
+    const make = (src ? g.design(src.design)?.outs[item] ?? 0 : 0) * drill;
+    const split = st.routes.filter((q) => q.from === r.from && q.item === item).length || 1;
+    return { r, src, make, share: make / split, cap: routeCap(g, ID, r) };
+  });
+  const srcs = new Map<number, number>();
+  for (const l of legs) srcs.set(l.r.from, l.make);
+  const makes = [...srcs.values()].reduce((s, v) => s + v, 0);
+  const can = legs.reduce((s, l) => s + Math.min(l.share, l.cap), 0);
+  // the skiffs bind: the route whose skiffs leave most of its share behind
+  const tight = legs.filter((l) => l.cap < l.share * 0.9).sort((a, b) => (b.share - b.cap) - (a.share - a.cap))[0];
+  if (can < need * 0.9 && tight) return { need, gets, why: 'skiffs', route: tight.r, src: tight.src ?? undefined, makes };
+  // the feeders bind: what they make (their share of it) is under the need
+  if (can < need * 0.9) {
+    const top = legs.sort((a, b) => b.make - a.make)[0];
+    return { need, gets, why: 'makes', src: top.src ?? undefined, makes: legs.reduce((s, l) => s + l.share, 0), shared: legs.some((l) => l.share < l.make - 1e-9) };
+  }
+  const idle = legs.find((l) => l.src && l.src.state !== 'work');
+  if (idle) return { need, gets, why: 'feeder', src: idle.src!, makes };
+  return { need, gets, why: 'ok', makes };
+}
+
+/** Why a module is starved of `item`, as one short row (the brief hover's cause). */
+function starvedCause(g: Game, e: FEnt, item: ItemId): string {
+  const s = supplyOf(g, e, item);
+  if (s.why === 'none') return `{bad:no route brings} ${icon(item)}`;
+  if (s.why === 'skiffs') return `{warn:short of skiffs} · the ${s.src ? nameOf(g, s.src) : '?'} route`;
+  if (s.why === 'makes') return `{warn:its feeders make too little} ${icon(item)}`;
+  if (s.why === 'feeder') return `its feeder is {warn:${s.src!.state}}`;
+  return `${icon(item)} {soft:by skiff} ${rate(s.gets)}/s`;
+}
+
+/** The pinned report's numbers for every input a module is short of (or the one it starves on):
+ *  `needs 0.10/s · gets 0.08`, then what to do about it. */
+function starvedRows(g: Game, e: FEnt): string[] {
+  const d = g.design(e.design);
+  if (!d) return [];
+  const out: string[] = [];
+  for (const item of Object.keys(d.ins) as ItemId[]) {
+    const s = supplyOf(g, e, item);
+    // an input short of its need with its buffer run down (one stocked up is waiting on another
+    // input, not the cause: its feeder backs up behind it)
+    if (item !== e.why && (s.gets >= s.need * 0.9 || (e.inBuf[item] ?? 0) >= s.need)) continue;
+    out.push(`${PIN}${icon(item)} needs ${rate(s.need)}/s · gets ${s.gets < s.need * 0.9 ? `{warn:${rate(s.gets)}}` : rate(s.gets)}`);
+    const name = s.src ? nameOf(g, s.src) : '?';
+    if (s.why === 'none') out.push(`${PIN}{bad:no route brings it} · the Route tool`);
+    else if (s.why === 'skiffs') out.push(`${PIN}add a skiff to the ${name} route {soft:(${rate(routeCap(g, ID, s.route!))}/s now)}`);
+    else if (s.why === 'makes') out.push(`${PIN}its feeders ${s.shared ? 'spare it' : 'make'} ${rate(s.makes)}: place another ${name}`);
+    else if (s.why === 'feeder') out.push(`${PIN}its feeder ${name} is {warn:${s.src!.state}}`);
+  }
+  return out;
 }
 
 /** Why a module's `item` backs up, as a row. */
@@ -143,7 +216,7 @@ function blockedCause(g: Game, e: FEnt, item: string): string {
   if (!outs.length) return BYPRODUCTS.has(item) ? `{bad:no route takes} ${icon(item)} · waste blocks it` : `{bad:no route takes} ${icon(item)}`;
   if (outs.some((r) => routeShort(g, r))) {
     const cap = outs.reduce((s, r) => s + routeCap(g, ID, r), 0);
-    const made = g.design(e.design)?.outs[item as ItemId] ?? 0;
+    const made = (g.design(e.design)?.outs[item as ItemId] ?? 0) * drillFactor(g);
     return `{warn:short of skiffs} ${rate(cap)}/s of ${rate(made)}/s made`;
   }
   const to = hent(g, ID, outs[0].to);
@@ -189,10 +262,14 @@ function entRep(app: App, e: FEnt): DRep {
   }
   const d = g.design(e.design);
   if (!d) return { title: 'Module', rows, more };
-  rows.push(`{chip:${gradeRole(d.grade.letter)}:${d.grade.letter}} rates ×${d.grade.mult.toFixed(2)} · {research:depth 2}`);
+  rows.push(`{chip:${gradeRole(d.grade.letter)}:${d.grade.letter}} rates ×${d.grade.mult.toFixed(2)} · {research:depth ${d.depth ?? 2}}`);
   const p = Math.round(e.fAvg * 100);
   if (e.state === 'work') rows.push(`{chip:good:WORKING} ${p}% of full speed`);
-  else if (e.state === 'starved') { rows.push(`{chip:warn:STARVED} ${icon(e.why)} · ${p}%`); if (e.why) rows.push(starvedCause(g, e, e.why)); }
+  else if (e.state === 'starved') {
+    rows.push(`{chip:warn:STARVED} ${icon(e.why)} · ${p}%`);
+    if (e.why && e.why in ITEMS) rows.push(HOVER + starvedCause(g, e, e.why as ItemId));
+    rows.push(...starvedRows(g, e));
+  }
   else if (e.state === 'blocked') { rows.push(`{chip:bad:BLOCKED} ${icon(e.why)} backs up`); if (e.why) rows.push(blockedCause(g, e, e.why)); }
   else rows.push('{chip:soft:IDLE}');
   if (e.spill) rows.push(`{chip:warn:SPILLING} ${icon(e.spill)} no route takes it all`);
@@ -200,10 +277,12 @@ function entRep(app: App, e: FEnt): DRep {
   const od = e.od ?? 0, cool = e.cool ?? 0;
   if (odOn && od > 0) rows.push(`{chip:warn:OVERDRIVE ${RULES.overdriveMult.value}x ${Math.ceil(od / TICK_RATE)}s} with its group`);
   else if (odOn && cool > 0) rows.push(`{chip:soft:COOLING ${Math.ceil(cool / TICK_RATE)}s}`);
+  // at full speed now: the Great Drill's boost runs every module faster (as routeWant reads it)
+  const drill = drillFactor(g);
   const outs = Object.entries(d.outs) as [ItemId, number][];
-  rows.push(`out ${outs.map(([k, v]) => `${icon(k)} ${rate(v ?? 0)}/s`).join('  ')}`);
+  rows.push(`out ${outs.map(([k, v]) => `${icon(k)} ${rate((v ?? 0) * drill)}/s`).join('  ')}`);
   const ins = Object.entries(d.ins) as [ItemId, number][];
-  if (ins.length) more.push(`in ${ins.map(([k, v]) => `${icon(k)} ${rate(v ?? 0)}/s`).join('  ')}`);
+  if (ins.length) more.push(`in ${ins.map(([k, v]) => `${icon(k)} ${rate((v ?? 0) * drill)}/s`).join('  ')}`);
   const mine = st.routes.filter((r) => r.from === e.id || r.to === e.id);
   if (!mine.length) more.push('{warn:no routes} · the Route tool joins it');
   const odReady = odOn && !od && !cool;
@@ -227,7 +306,9 @@ interface Laid { rep: DRep; cw: number; w: number; h: number; rows: { lay: RichL
 const ROUTE_ROW = 14;
 
 function layRep(rep: DRep, full: boolean, maxCw: number, brief: boolean, close: boolean, maxH = Infinity): Laid {
-  let rows = full ? [...rep.rows, ...rep.more] : rep.rows;
+  // the pinned report's own rows (marked PIN) stay out of every hover; a hover's short cause
+  // (marked HOVER) gives way to them when pinned
+  let rows = (full ? [...rep.rows, ...rep.more] : rep.rows).filter((s) => !s.startsWith(full ? HOVER : PIN)).map((s) => (s.startsWith(PIN) || s.startsWith(HOVER) ? s.slice(1) : s));
   if (brief) {
     // the brief hover: a cause (a chip, warn or bad ink) never goes; plain rows past five do
     const cause = (s: string) => /\{(chip:|bad:|warn:)/.test(s);
@@ -356,7 +437,7 @@ function hintOf(app: App, L: Layout): { s: string; r: Rect } | null {
 export function districtZones(app: App, L: Layout): Rect[] {
   if (app.floor !== 'district' || !app.game.s.district) return [];
   const out = [stripRect(app, L)];
-  const lot = lotRect(app);
+  const lot = lotRect(app, L);
   if (lot) out.push(lot);
   const h = hintOf(app, L);
   if (h) out.push(h.r);
@@ -376,19 +457,28 @@ function tools(app: App): Tool[] {
   return out;
 }
 
-/** Depth-2 designs with spare copies: the groups in hand. */
+/** Designs with spare copies the District takes: depth-2 groups and its own depth-3 folds (DESIGN.md
+ *  §21), the groups first. */
 function groups(app: App) {
-  return app.game.s.designs.filter((d) => d.depth === 2 && d.spare > 0);
+  const ds = app.game.s.designs.filter((d) => (d.depth === 2 || d.depth === 3) && d.spare > 0);
+  return [...ds.filter((d) => d.depth === 2), ...ds.filter((d) => d.depth === 3)];
 }
 
 const SLOT = 21;
+
+/** The route count on the strip (DESIGN.md §21: `routes 96/140`), warn ink within 10 of the cap. */
+function routesLabel(app: App): string {
+  const g = app.game;
+  const n = g.s.district?.routes.length ?? 0, max = maxRoutes(g, ID);
+  return n >= max - 10 ? `{warn:routes ${n}/${max}}` : `routes ${n}/${max}`;
+}
 
 function stripNatural(app: App): number {
   const ts = tools(app);
   const tw = ts.reduce((s, t) => s + t.w + 3, 0);
   const gs = groups(app);
   const slots = gs.length ? 6 + smallWidth('GROUPS') + 4 + gs.length * (SLOT + 2) : 6 + richWidth('{soft:no spare groups}');
-  return 12 + tw + slots;
+  return 12 + tw + 4 + richWidth(routesLabel(app)) + 6 + slots;
 }
 
 /** The tool strip at the top centre: the tools, then the groups in hand (a page at a time). */
@@ -406,13 +496,24 @@ function toolStrip(app: App, L: Layout) {
     if (button(ui, t.id, x, y, t.w, 20, t.label, { icon: t.icon, active: t.on, tip: t.tip })) t.go();
     x += t.w + 3;
   }
+  // the route count: how many more the floor holds (a refusal at the cap says why: the sim)
+  const rl = routesLabel(app), rw = richWidth(rl);
+  const g = app.game;
+  const nR = g.s.district?.routes.length ?? 0, maxR = maxRoutes(g, ID);
+  drawRich(ui, rl, x + 2, y + 5, Infinity, T.inkSoft);
+  ui.hint(x, y, rw + 4, 20, [
+    { text: '{big:Routes}' },
+    { text: `${nR} of the ${maxR} this floor holds` },
+    { text: `a lot adds ${RULES.routesPerLot.value} · a fold packs a group's routes into one tile` },
+  ], 220);
+  x += rw + 4;
   ui.ctx.fillStyle = T.paperEdge;
   ui.ctx.fillRect(x + 1, y + 1, 1, 18);
   x += 5;
   const gs = groups(app);
   if (!gs.length) {
     drawRich(ui, '{soft:no spare groups}', x, y + 5, Infinity, T.inkSoft);
-    ui.hint(x, y, R.x + R.w - x, 20, [{ text: '{big:Groups}' }, { text: 'depth-2 modules go up here' }, { text: 'fold a group on the {u:factory} Factory · stamp copies on the Modules page' }], 210);
+    ui.hint(x, y, R.x + R.w - x, 20, [{ text: '{big:Groups}' }, { text: 'depth-2 groups and depth-3 folds go up here' }, { text: 'fold a group on the {u:factory} Factory · stamp copies on the Modules page' }], 210);
     return;
   }
   ui.small('GROUPS', x, y + 7, T.inkSoft);
@@ -426,8 +527,10 @@ function toolStrip(app: App, L: Layout) {
   for (const d of shown) {
     const holding = app.mode.k === 'hmodule' && app.mode.design === d.id;
     const out = mainItem(d);
+    const deep = d.depth === 3;
     const tip: TipLine[] = [
       { text: `{big:${bigSafe(d.name)}}` },
+      ...(deep ? [{ text: '{research:depth 3} · a District fold' }] : []),
       { text: `{chip:${gradeRole(d.grade.letter)}:${d.grade.letter}} out ${(Object.entries(d.outs) as [ItemId, number][]).map(([k, v]) => `${icon(k)} ${rate(v ?? 0)}/s`).join(' ')}` },
       ...(Object.keys(d.ins).length ? [{ text: `in ${(Object.entries(d.ins) as [ItemId, number][]).map(([k, v]) => `${icon(k)} ${rate(v ?? 0)}/s`).join(' ')}` }] : []),
       { text: `${d.spare} spare · {k:LMB} take one` },
@@ -437,6 +540,20 @@ function toolStrip(app: App, L: Layout) {
     ui.ctx.drawImage(s.frames[0], x + 2, y + 1);
     if (out) ui.ctx.drawImage(itemIcon(out), x + 6, y + 1 + (hasArt('dist_module') ? 6 : 4));
     ui.small(String(d.spare), x + SLOT - 2, y + 11, T.ink, { align: 'right' });
+    // a depth-3 fold: a research-teal rim inside the slot and a "3" tab on its top-left corner
+    if (deep) {
+      const c = ui.ctx;
+      c.fillStyle = T.research;
+      c.fillRect(x + 1, y + 1, SLOT - 2, 1);
+      c.fillRect(x + 1, y + 18, SLOT - 2, 1);
+      c.fillRect(x + 1, y + 1, 1, 18);
+      c.fillRect(x + SLOT - 2, y + 1, 1, 18);
+      c.fillStyle = T.ink;
+      c.fillRect(x, y, 7, 9);
+      c.fillStyle = T.research;
+      c.fillRect(x + 1, y + 1, 5, 7);
+      ui.small('3', x + 2, y + 2, T.paperHi);
+    }
     x += SLOT + 2;
   }
   if (np > 1) {
@@ -444,10 +561,10 @@ function toolStrip(app: App, L: Layout) {
   }
 }
 
-/** The next lot's Buy button, standing on the lot east of the floor. */
 /** Where the lot's Buy button stands (the lot's lower part: the Dock's and the Hopper's tags hang
- *  over their own tiles, above it), or null when no lot is for sale or it is off the screen. */
-function lotRect(app: App): Rect | null {
+ *  beside their own tiles, above it), or null when no lot is for sale or it is off the screen. A
+ *  pinned report docked over it moves it up or down the lot, or puts it away while it is pinned. */
+function lotRect(app: App, L: Layout): Rect | null {
   const ui = app.ui;
   const g = app.game;
   const price = lotPrice(g, ID);
@@ -458,19 +575,26 @@ function lotRect(app: App): Rect | null {
   const priceS = `{coin:${price.format()}}`;
   const bw = Math.max(richWidth('Buy lot') + 14, chipWidth(priceS)), bh = 17 + 2 + CHIP_H;
   const x = Math.round(Math.max(4, Math.min(ui.w - bw - 4, r.x + r.w / 2 - bw / 2)));
-  const y = Math.round(Math.max(40, Math.min(ui.h - 100, r.y + r.h * 0.72 - bh / 2)));
-  return { x, y, w: bw, h: bh };
+  const lo = 40, hi = ui.h - 100;
+  const y = Math.round(Math.max(lo, Math.min(hi, r.y + r.h * 0.72 - bh / 2)));
+  const P = pinnedPlace(app, L);
+  if (!P || overlapArea({ x, y, w: bw, h: bh }, P) <= 0) return { x, y, w: bw, h: bh };
+  const fits = (yy: number) => yy >= Math.max(lo, r.y) && yy + bh <= Math.min(hi + bh, r.y + r.h);
+  const below = P.y + P.h + 4, above = P.y - bh - 4;
+  if (fits(below)) return { x, y: below, w: bw, h: bh };
+  if (fits(above)) return { x, y: above, w: bw, h: bh };
+  return null;
 }
 
-function lotButton(app: App) {
+function lotButton(app: App, L: Layout) {
   const ui = app.ui;
   const g = app.game;
   const price = lotPrice(g, ID);
-  const R = lotRect(app);
+  const R = lotRect(app, L);
   if (!price || !R) return;
   const can = g.s.coin.gte(price);
   const priceS = `{coin:${price.format()}}`;
-  const tip: TipLine[] = [{ text: '{big:A District lot}' }, { text: `${HIGH.district.lotCols} columns × ${HIGH.district.h} · east of the floor` }, { text: can ? `{k:LMB} buy ${priceS}` : `{soft:you have} {coin:${g.s.coin.format()}}` }, { text: '{reset:until Reorganize}' }];
+  const tip: TipLine[] = [{ text: '{big:A District lot}' }, { text: `+${HIGH.district.lotCols} columns · +${RULES.routesPerLot.value} routes` }, { text: can ? `{k:LMB} buy ${priceS}` : `{soft:you have} {coin:${g.s.coin.format()}}` }, { text: '{reset:until Reorganize}' }];
   if (button(ui, 'buyLot', R.x, R.y, R.w, 17, 'Buy lot', { gold: can, tip })) app.act({ k: 'hlot', floor: ID });
   chip(ui, R.x + Math.round((R.w - chipWidth(priceS)) / 2), R.y + 19, priceS, { role: can ? 'coin' : 'soft' });
 }
@@ -577,10 +701,21 @@ function routeCard(app: App, L: Layout) {
 function pinned(app: App, L: Layout) {
   const id = DS.sel;
   if (id === null) return;
+  if (!hent(app.game, ID, id)) { DS.sel = null; return; }
+  const P = pinnedPlace(app, L);
+  if (!P) return;
+  drawRep(app, P.laid, P.x, P.y, { pin: true, close: () => { DS.sel = null; }, blocking: true });
+}
+
+/** Where the pinned report goes: docked on the right, or the left when the right would sit on the
+ *  thing (the lot's Buy button keeps off it: lotRect). */
+function pinnedPlace(app: App, L: Layout): { laid: Laid; x: number; y: number; w: number; h: number } | null {
+  const id = DS.sel;
+  if (id === null) return null;
   const g = app.game;
   const ui = app.ui;
   const e = hent(g, ID, id);
-  if (!e) { DS.sel = null; return; }
+  if (!e) return null;
   const rep = entRep(app, e);
   const near = worldRect(app, e.x, e.y, e.w, e.h);
   const top = L.slips.y + 18, bot = L.notebook.y - 6;
@@ -588,7 +723,7 @@ function pinned(app: App, L: Layout) {
   let x = ui.w - 6 - laid.w;
   const y = Math.max(top, Math.min(bot - laid.h, near.y - 10));
   if (near.x + near.w > x - 8) x = Math.max(6, near.x - 12 - laid.w);
-  drawRep(app, laid, x, y, { pin: true, close: () => { DS.sel = null; }, blocking: true });
+  return { laid, x, y, w: laid.w, h: laid.h };
 }
 
 /** The District fold's audit: the Inspector's clipboard on a string beside the box (the countdown,
@@ -649,7 +784,7 @@ export function districtHud(app: App, L: Layout) {
   if (app.floor !== 'district' || !app.game.s.district) return;
   sync(app);
   toolStrip(app, L);
-  lotButton(app);
+  lotButton(app, L);
   auditClip(app);
   pinned(app, L);
   // the item list asks a question: the route card waits while it is up
@@ -774,7 +909,7 @@ export function hgradeCard(app: App, L: Layout) {
     cancel: () => app.act({ k: 'hauditCancel' }),
     foldRows: [
       `{u:fold} ${mods.length} groups · ${res.boxTiles} tiles → 1 tile`,
-      `rates ×${res.grade.mult.toFixed(2)} · depth 3 · for the World floor`,
+      `rates ×${res.grade.mult.toFixed(2)} · depth 3 · stands here or on the World`,
       `${skiffs} skiff${skiffs === 1 ? '' : 's'} inside refunded {coin:${coinK(skiffs * skiffCost())}}`,
       `copies {coin:${coinK(bill)}} ×1 · ×1.5 · ×2 · …`,
     ],
