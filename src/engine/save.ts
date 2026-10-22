@@ -5,7 +5,7 @@
 // snapshot and the commands since it (src/sim/snapshot.ts).
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -142,6 +142,19 @@ export const MIGRATIONS: Record<number, Migration> = {
     m.ledger ??= { n: 0, progress: {} };
     m.cosmetics ??= [];
     return { ...d, snap: JSON.stringify(st), v: 10 };
+  },
+  // v11 (Milestone 11, the long tail, DESIGN.md §24): no skin worn and no efficiency board on file.
+  // Trophies already on the shelf keep their flags, so their new bonuses apply at once; the
+  // cosmetics their Challenges, reputation and trophies have earned are granted within a second of
+  // loading (src/sim/longtail.ts grantCosmetics); no building was placed free before.
+  10: (d) => {
+    if (typeof d.snap !== 'string') return { ...d, v: 11 };
+    const st = JSON.parse(d.snap);
+    const m = (st.meta ??= {});
+    m.skins ??= {};
+    m.boards ??= {};
+    m.cosmetics ??= [];
+    return { ...d, snap: JSON.stringify(st), v: 11 };
   },
 };
 

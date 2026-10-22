@@ -16,6 +16,9 @@ import { offlineCeiling, offlineEfficiency } from './offline';
 import { IDLE } from '../data/idle';
 import { CHALLENGES } from '../data/challenges';
 import { krules } from './kernels';
+import { trules } from './longtail';
+import { TROPHY_CAPS } from '../data/trophies';
+import { scenarioOf } from './scenario';
 
 export interface PatentRules {
   foldMax: number;
@@ -55,7 +58,8 @@ const cache = new WeakMap<State, { key: string; r: PatentRules }>();
 export function prules(g: Game): PatentRules {
   const s = g.s;
   const rep = s.orders.rep.committee ?? 0;
-  const key = s.meta.nodes.length + ':' + rep + ':' + (s.challenge ?? '') + ':' + (s.meta.challenges?.length ?? 0) + ':' + (s.meta.kernelNodes?.length ?? 0);
+  const tr = trules(g);
+  const key = s.meta.nodes.length + ':' + rep + ':' + (s.challenge ?? '') + ':' + (s.meta.challenges?.length ?? 0) + ':' + (s.meta.kernelNodes?.length ?? 0) + ':' + tr.n + ':' + (s.scenario ?? '');
   const hit = cache.get(s);
   if (hit && hit.key === key) return hit.r;
   const r: PatentRules = {
@@ -118,6 +122,13 @@ export function prules(g: Game): PatentRules {
   // the Bigger Box (a Kernel node, DESIGN.md §23): 12x12 (a Challenge's small box still holds)
   r.foldMax = Math.max(r.foldMax, krules(g).foldMax);
   if (s.challenge === 'smallBoxes') r.foldMax = Math.min(r.foldMax, CHALLENGES.smallBoxes.value ?? 4);
+  // a Scenario board's box (Pocket Workshop, DESIGN.md §24)
+  const board = scenarioOf(g);
+  if (board?.foldMax) r.foldMax = Math.min(r.foldMax, board.foldMax);
+  // the Trophy Shelf's bonuses (DESIGN.md §24): bigger heaps, a cooler Overdrive, more Drawer slots
+  r.heapCap += tr.heap;
+  r.overdriveCool = Math.max(RULES.overdriveCool.value - TROPHY_CAPS.cool, r.overdriveCool - tr.cool);
+  r.drawerSlots += tr.drawer;
   // the ceiling of ROADMAP Milestone 5 (rounding: 0.5 + 0.05 x 3; the Night Shift's 0.1 is added
   // in offlineEfficiency, src/sim/offline.ts, which caps the sum at 0.75)
   r.offline = Math.min(0.75, Math.round(r.offline * 1000) / 1000);

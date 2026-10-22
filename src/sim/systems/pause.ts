@@ -69,6 +69,13 @@ export function hpauseTargets(g: Game, id: HighFloorId, m: FEnt, line: boolean):
 }
 
 export function setPause(g: Game, c: PauseCmd): ActResult {
+  const r = pauseNow(g, c);
+  // a stop counted for the shelf (the hidden Tea Break, DESIGN.md §24)
+  if (r.ok && c.on) g.bump('pauses');
+  return r;
+}
+
+function pauseNow(g: Game, c: PauseCmd): ActResult {
   if (c.floor === 'district' || c.floor === 'world') {
     const id = c.floor;
     const m = hentAt(g, id, c.x, c.y);

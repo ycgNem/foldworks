@@ -13,6 +13,7 @@ import { RULES, SCORE_WEIGHTS, gradeFor } from '../../data/rules';
 import { itemName, type ItemId } from '../../data/items';
 import type { AuditResult, Box, FEnt, ModuleDesign } from '../world';
 import { inBox, splusGate } from './audits';
+import { compactFull, splusShare, strictGrade } from './challenges';
 import { BYPRODUCTS, defaultName, fname } from './modules';
 
 const DT = 1 / TICK_RATE;
@@ -155,9 +156,9 @@ export function gradeFAudit(g: Game): AuditResult {
   const w = byMade > 1e-6 ? byHandled / byMade : 1;
   const machineTiles = mods.length;
   const boxTiles = a.box.w * a.box.h;
-  const c = Math.min(1, machineTiles / boxTiles / RULES.compactFull.value);
+  const c = Math.min(1, machineTiles / boxTiles / compactFull(g));
   const score = SCORE_WEIGHTS.u * u + SCORE_WEIGHTS.w * w + SCORE_WEIGHTS.c * c;
-  const gr = splusGate(gradeFor(score), score, byMade, a.inside);
+  const gr = strictGrade(g, splusGate(gradeFor(score), score, byMade, a.inside, splusShare(g)));
   const rate = (t: Record<string, number>) => {
     const o: Partial<Record<ItemId, number>> = {};
     for (const [k, v] of Object.entries(t)) if (v > 1e-6) o[k as ItemId] = v / secs;
@@ -177,7 +178,7 @@ export function gradeFAudit(g: Game): AuditResult {
     lines.push({ lost: SCORE_WEIGHTS.w * (1 - w), text: `${Math.round(byMade - byHandled)} of ${Math.round(byMade)} byproducts went nowhere. Give them a side trunk out of the box, or a module inside that uses them.` });
   }
   if (c < 1) {
-    lines.push({ lost: SCORE_WEIGHTS.c * (1 - c), text: `${machineTiles} of ${boxTiles} tiles are modules; ${Math.ceil(boxTiles * RULES.compactFull.value)} would be fully compact. Draw the box tighter.` });
+    lines.push({ lost: SCORE_WEIGHTS.c * (1 - c), text: `${machineTiles} of ${boxTiles} tiles are modules; ${Math.ceil(boxTiles * compactFull(g))} would be fully compact. Draw the box tighter.` });
   }
   return {
     grade: { letter: gr.letter, score, u, w, c, mult: gr.mult },
@@ -230,6 +231,7 @@ export function foldFAudited(g: Game, name: string | null): ActResult {
   g.bump('folds');
   g.bump('nestedFolds');
   if (res.grade.letter === 'S') g.bump('foldS');
+  g.bump('grade:' + res.grade.letter);
   g.emit({ type: 'fold', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, id: d.grade.letter, value: d.id, d: a.box.w * a.box.h, floor: 'factory' });
   if (g.first('firstNested')) g.emit({ type: 'firstNested', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, value: d.id, floor: 'factory' });
   return OK;

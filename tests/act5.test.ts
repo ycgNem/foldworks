@@ -574,7 +574,8 @@ describe('the Endless Ledger (DESIGN.md §23)', () => {
 
 describe('Act V in saves (DESIGN.md §23)', () => {
   it('a v9 save migrates to v10: no Kernels, no Last Fold, the Ledger at its first order', () => {
-    expect(SAVE_VERSION).toBe(10);
+    // (v11 is the long tail's, DESIGN.md §24: the chain carries a v9 save on to it)
+    expect(SAVE_VERSION).toBeGreaterThanOrEqual(10);
     const g = new Game(3);
     g.step(100);
     const p = savePayload(g, 0) as unknown as { v: number; snap: string };
@@ -582,7 +583,7 @@ describe('Act V in saves (DESIGN.md §23)', () => {
     for (const k of ['kernels', 'kernelsEarned', 'kernelNodes', 'lastFolds', 'seeds', 'keptLegacy', 'ledger', 'cosmetics']) delete st.meta[k];
     const old = { ...p, v: 9, snap: JSON.stringify(st) };
     const m = migrate(old) as unknown as { v: number; snap: string };
-    expect(m.v).toBe(10);
+    expect(m.v).toBe(SAVE_VERSION);
     const meta = JSON.parse(m.snap).meta;
     expect(meta.kernels).toBe('N:0');
     expect(meta.lastFolds).toBe(0);

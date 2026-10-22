@@ -15,7 +15,9 @@ import { CHALLENGES } from '../src/data/challenges';
 import { SCENARIOS } from '../src/data/scenarios';
 import { RULES, GRADES, SCORE_WEIGHTS } from '../src/data/rules';
 import { SPARKS } from '../src/data/sparks';
-import { TROPHIES } from '../src/data/trophies';
+import { TROPHIES, TROPHY_CAPS } from '../src/data/trophies';
+import { COSMETICS } from '../src/data/cosmetics';
+import { CODEX_PAGES } from '../src/data/codex';
 import { IDLE, IDLE_UPGRADES } from '../src/data/idle';
 import { PATENT_LIST, PATENTS, PATENT_IDS } from '../src/data/patents';
 import { WORLDS, RUBBLE } from '../src/data/worlds';
@@ -68,6 +70,8 @@ function records(): [string, { derivation?: string } & Record<string, unknown>][
     ['kernel grade bonus', KERNEL_GRADE as any],
     ...LEDGER.map((d) => ['ledger ' + d.item, d] as [string, any]),
     ['ledger rules', LEDGER_RULES as any],
+    // the long tail (DESIGN.md §24): the shelf's caps (the trophies, Challenges and Scenarios are above)
+    ['trophy caps', TROPHY_CAPS as any],
   ];
 }
 
@@ -163,6 +167,52 @@ describe('cross-references', () => {
     expect(off).toBeCloseTo(0.65, 5);
     expect(off + IDLE_UPGRADES.reduce((t, u) => t + u.eff, 0)).toBeCloseTo(0.75, 5);
     expect(PATENTS.bellows.cost).toBe(1);
+  });
+  it('the long tail points at real things: trophies, the Codex, cosmetics, Challenges, Scenarios (DESIGN.md §24)', () => {
+    const builds = new Set<string>(Object.keys(BUILD));
+    const trophies = new Set(TROPHIES.map((t) => t.id));
+    const cosmetics = new Set(COSMETICS.map((c) => c.id));
+    const orders = new Set(ORDERS.map((o) => o.id));
+    expect(trophies.size).toBe(TROPHIES.length);
+    for (const t of TROPHIES) {
+      const s = t.stat;
+      if (s.k === 'delivered' || s.k === 'lifetime') expect(items.has(s.item), `${t.id}: ${s.item}`).toBe(true);
+      if (s.k === 'built') expect(builds.has(s.kind), `${t.id}: ${s.kind}`).toBe(true);
+      if (s.k === 'rep' && s.who) expect(CUSTOMERS[s.who], t.id).toBeTruthy();
+      if (s.k === 'mega' && s.id !== 'drill') expect(MEGAS[s.id], t.id).toBeTruthy();
+      if (s.k === 'board') expect(SCENARIOS[s.id], t.id).toBeTruthy();
+      if (t.icon) expect(items.has(t.icon), `${t.id}: ${t.icon}`).toBe(true);
+      expect(t.n, t.id).toBeGreaterThan(0);
+      const b = t.bonus;
+      if (b.k === 'speed') expect(items.has(b.item), `${t.id}: ${b.item}`).toBe(true);
+      if (b.k === 'free') expect(builds.has(b.kind), `${t.id}: ${b.kind}`).toBe(true);
+      if (b.k === 'cosmetic') expect(cosmetics.has(b.id), `${t.id}: ${b.id}`).toBe(true);
+    }
+    for (const c of COSMETICS) {
+      expect(c.slots.length, c.id).toBeGreaterThan(0);
+      for (const s of c.slots) expect(builds.has(s) || ['module', 'skiff', 'barge', 'courier'].includes(s), `${c.id}: ${s}`).toBe(true);
+      const src = c.source;
+      if (src.k === 'trophy') expect(trophies.has(src.id), `${c.id}: ${src.id}`).toBe(true);
+      if (src.k === 'challenge') expect(CHALLENGES[src.id], `${c.id}: ${src.id}`).toBeTruthy();
+      if (src.k === 'rep') expect(CUSTOMERS[src.customer], c.id).toBeTruthy();
+      expect(c.flavor.length).toBeGreaterThan(10);
+    }
+    for (const p of CODEX_PAGES) {
+      if (p.open.k === 'trophy') expect(trophies.has(p.open.id), p.id).toBe(true);
+      if (p.open.k === 'island') expect(WORLDS[p.open.id], p.id).toBeTruthy();
+      expect(p.lines.length).toBeGreaterThan(0);
+    }
+    for (const c of Object.values(CHALLENGES)) {
+      const goal = c.goal;
+      if (goal.k === 'order') expect(orders.has(goal.id), `${c.id}: ${goal.id}`).toBe(true);
+      if (goal.k === 'deliver') expect(items.has(goal.item), `${c.id}: ${goal.item}`).toBe(true);
+      if (goal.k === 'research') expect(research.has(goal.id), `${c.id}: ${goal.id}`).toBe(true);
+    }
+    for (const d of Object.values(SCENARIOS)) {
+      for (const l of d.land) expect(CHUNKS.some((c) => c.id === l), `${d.id}: ${l}`).toBe(true);
+      expect(items.has(d.product), d.id).toBe(true);
+      expect(d.derivation).toMatch(/§2[14]/);
+    }
   });
   it('the research tree has no cycles and every node can be reached', () => {
     const done = new Set<string>();

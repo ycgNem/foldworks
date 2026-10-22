@@ -51,6 +51,7 @@ import { workShare } from './systems/stats';
 import { highModules } from './systems/high';
 import { prules } from './patents';
 import { challengeRefusal, startChallenge } from './systems/challenges';
+import { trules } from './longtail';
 import type { ChallengeId } from '../data/challenges';
 
 /** What a Reorganize keeps, in words (the confirm card lists it). */
@@ -428,6 +429,12 @@ export function startRun(g: Game) {
   fresh.nextSpark = g.sparkDelay();
   fresh.annex = Math.min(ANNEX.blocks, fresh.meta.keptRoom?.annex ?? 0);
   applyHeadStarts(g);
+  // the Trophy Shelf's coin trophies (DESIGN.md §24): a little coin at every run's start
+  const tc = trules(g).startCoin;
+  if (tc > 0) {
+    fresh.coin = fresh.coin.add(tc);
+    fresh.granted = (fresh.granted ?? Num.ZERO).add(tc);
+  }
   g.layoutDirty = true;
   g.factoryDirty = true;
 }

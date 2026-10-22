@@ -52,6 +52,27 @@ Merge the World UI, Act V's screens and the Act III re-measure; mark the second 
 conditions; build the Act IV and Act V bots; Milestone 11's long tail (its sim and data being built);
 Milestone 14 (pace to 100 h, perf, saves, README, GitHub Pages; no itch.io, no desktop build).
 
+## Status (2026-10-22, late): Milestone 11, the long tail's sim and data, built
+
+Built in a worktree off `m9-worlds`, sim, data, tests and docs only (the screens are another
+agent's). DESIGN.md §24, DECISIONS.md "Milestone 11: the long tail's sim". **205 trophies** (18
+hidden, "???" until earned), each with a small bonus of one of twelve capped kinds (`trules` in
+`src/sim/longtail.ts`: a product's craft +5%, the first n of a building free, skiffs and routes,
+Drawer slots, Spark life, heap room, start coin, Overdrive cooling, repairs, Chute room, a skin);
+**the Codex**'s completion by tier and **16 lore pages** in Unit 7's voice, the last its ending at the
+first Last Fold; **15 Challenges** (ten new across Acts II-IV, each wired through `ruled`/`won` and
+the rule helpers at the foot of `systems/challenges.ts`); **8 Scenarios** (five new) and the
+**efficiency boards** (bests per tile, per kW and waste, in `meta.boards`, handed to the town by the
+`boards` command); **41 cosmetics** plus the Ledger's ribbons in one list, granted from reputation,
+Challenges and trophies, worn with `{ k: 'skin', kind, id }`. `SAVE_VERSION` 11. Tests:
+`tests/longtail.test.ts` (38) and the long tail's cross-references in `tests/data.test.ts`; the
+slice pace tests and `pace-reorganize` pass (slice end 30:00 mean; run 2 passes run 1's peak at 0:16
+on both seeds, after the first cut's run-1 craft speeds were moved later: DECISIONS.md). **Open:** the screens (the shelf with bonuses and
+"???", the Codex pages, the Challenge list's new ten and their `needs`, the boards' three bests, the
+skin picker) and the `skin_<id>_<kind>` art; the slip placeholders in `src/app/act3.ts` `SHORT` were
+added for the typecheck. No Act III-IV bot plays a Challenge yet, so the new goals' times are the
+model's.
+
 ## Status (2026-10-22, later): Milestone 13, onboarding, UX and accessibility, built
 
 Built in a worktree off `m9-worlds` while Act IV's sim and the District's UI were worked on

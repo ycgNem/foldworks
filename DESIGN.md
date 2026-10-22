@@ -2019,3 +2019,161 @@ whole-World audit, a Last Fold and Kernel nodes from the command log.
 - **The Seed** resembles a roguelite's carried-over starting item. Re-derived from the fold: it is the
   World folded into one tile, it digs the four raw ores the Workshop is built from, and its sides are a
   routing puzzle (which ore leaves which side).
+
+## 24. The long tail (Milestone 11, 60 h+)
+
+New thinking: **nothing new to learn, everything to master.** By 60 h every rule of the game is on
+the table; the long tail is the set of goals that ask the player to use them well, and each one pays
+back a small rule about the thing it asked for, so the reward is felt in the act it was earned in.
+Data: `src/data/trophies.ts` (the shelf and its caps), `src/data/codex.ts` (completion and the lore
+pages), `src/data/cosmetics.ts` (every skin), the Milestone 11 blocks of `src/data/challenges.ts` and
+`src/data/scenarios.ts`. Sim: `src/sim/longtail.ts` (`trules`, `craftSpeed`, `freeBuild`,
+`codexCompletion`, `codexPages`, `grantCosmetics`, `setSkin`, `boardRecord`, `takeBoards`), and the
+rule helpers at the foot of `src/sim/systems/challenges.ts`. Tests: `tests/longtail.test.ts`.
+
+### The Trophy Shelf
+**205 trophies, 18 of them hidden** (shown as "???" until earned: `trophyFace`). They cover every act
+and layer: the slice's 29 and Acts II-III's 26 from before; then the long deliveries (every run
+counted: `meta.lifetime.delivered` plus this run, Act I's gears to Act IV's Sunset Generators), the
+firsts of Acts II-V, the Codex tier by tier, Reorganize and the Drawer, Relocate and the islands, the
+Megaprojects, the District and Beyond, the Last Fold and the Kernel tree, the Endless Ledger, grades
+and audits, Challenges, every Scenario board, skins, reputation, lifetime coin and the shelf itself.
+Trophies are kept through every reset (their `trophy:<id>` flags), so their bonuses are too; they are
+checked once a second at the end of the tick (`checkTrophies`), offline replay included.
+
+**Trophy bonuses.** Every trophy carries one small bonus about what earned it (`bonus`), one of twelve
+kinds, summed over the trophies that give it and **capped** (`TROPHY_CAPS`), so a full shelf is a set
+of small rules and never a reward that grows with the count:
+
+| kind | what it does | one trophy | the cap | derivation |
+|---|---|---|---|---|
+| `speed` | Workshop machines crafting that product run faster | +5% | +10% a product | a long delivery is 3-7 h of one line (each trophy says which); a twentieth of a line is one machine in twenty, folded into the module with the rest of the audit |
+| `free` | the first n of a Workshop building on the map are free; a free one refunds nothing (removed or folded) | 1-4 machines, 10-20 belts | none | one machine's price, a few minutes of the act's income: the Miner 40, the Slag Heap 25 (the first slag jam's own cure: "Slag Happens"), the Chem Vat 12,000; never in a Scenario |
+| `skiffs` | every route takes more skiffs | +1 | +4 (12 -> 16) | a route trophy's (§21: twelve skiffs carry a far feeder) |
+| `routes` | every high floor holds more routes | +5 or +10 | +40 | a third of the 120 (§21) |
+| `drawer` | the Patent Drawer holds more designs | +1 or +2 | +6 (8 -> 14) | under A Deeper Drawer's 4 plus the Legacy's (§19, §22): which lines to keep stays a choice |
+| `sparkLife` | Sparks stay longer | +2 or +3 s | +10 s (20 -> 30) | §6's 20 s, for a player who catches them |
+| `heap` | Slag Heaps hold more | +50 or +100 | +200 | 400 is about 53 min of one smelter (§4): +50 is 7 min |
+| `startCoin` | every run after a reset starts with more coin (a head start: `granted`) | 10-10,000 | none | each about the act's first purchase when it is earned (the Bellows' 15 ... a new universe's first lines' 10,000) |
+| `cool` | Overdrive cools sooner | 2-3 s | 10 s (30 -> 20) | still twice its 10 s run (§18) |
+| `repair` | the Old Works' ruins repair cheaper | 10-15% | 30% | off §22's quarter |
+| `chute` | the Chute holds more of each item | +5 or +10 | +40 (20 -> 60) | Specimen Jars' level (§21) |
+| `cosmetic` | a skin | one | none | the firsts with no rule worth giving (Warm Hands: the Bellows ends cranking within a minute) |
+
+*Derivation:* PLAN.md asks for "a small, specific bonus" per trophy; DECISIONS.md forbids a pooled
+multiplier. Each bonus is a rule the player already knows (§4 prices, §6 Sparks, §18 Overdrive, §19
+the Drawer, §21 routes and the Chute, §22 the Old Works), moved a notch, and each cap keeps the sum of
+a kind under what one Patent, Legacy or Kernel node gives. **Pacing:** the slice's own trophies (first
+Miner, first jam, 100 ingots, 500 plates...) are earned in the first hour of the first run, so their
+bonuses are inside the slice pace tests (first purchase 20-40 s, Miner by 2:00, first fold by 40:00,
+slice end by 45:00, the first Reorganize at 4-6 h with 12-20 Patents); `startCoin` begins at the
+second run. **No craft speed and no Overdrive cooling is earned in the first run** (the second
+gate's rule 3 lesson again, re-learnt here): with +5% on ingots, plates, wire and Gizmos from the
+slice's delivery trophies, and the long Act I deliveries at 10,000 gears and 5,000 Gizmos (the
+campaign bot makes those by 2.6 h and 1.1 h), run 1's peak rose 9% (14.8K to 16.2K a minute) and seed
+1000's run 2 passed it at 0:59 against a limit of 0:42. So the slice's delivery trophies give a
+machine free instead, the Act I long deliveries count 50,000-100,000 (runs later), the Overdrive and
+hidden click trophies count ten times further, and Bar Hopping (100 ingots, minutes in) gives a
+Smelter rather than heap room (§12's offline lesson is a furnace filling the first heap's 400 in
+53 min). Everything else lands past 5 h.
+
+*Measured* (with the shelf's bonuses, the five pace tests): the Bellows at 0:21, the first Miner at
+0:47, the first fold at 23:12 mean, the slice end at 30:00 mean (greedy 27:37, Dock-only 38:11); the
+first Reorganize at 4:22 and 4:17 with 14 Patents (seeds 1000 and 8919), run 1's peak 15.2K and 14.5K a
+minute (was 14.8K and 14.3K), run 2 passing it at 0:16 on both seeds (was 0:27 and 0:16; limit about
+0:43), run 3 passing run 2's at 1:11 and 1:19 (still open, §19: limits 0:55).
+
+### The Codex
+**Completion** (`codexCompletion`): the items first delivered (`s.codex`, Unit 7's collection: an item
+is logged once Unit 7's rep 1 pays the Codex, §18) out of every item the Codex logs (a Dock value above
+nothing: 56), by tier: 9, 10, 16, 13 and 8. Five trophies complete a tier each, two count the whole.
+
+**Lore pages** (`CODEX_PAGES`; `codexPages`, a pure function of the state): one a tier, one a floor and
+one an island, written by Unit 7 in its own voice (capitals, third person, as the orders' pitches and
+the Gazette's "UNIT 7 REPORTS"), each opened by a first the sim already keeps through every reset:
+
+| page | opened by |
+|---|---|
+| Specimens I-V (a tier each) | an item of that tier in the Codex |
+| the Workshop | the trophy Open for Business (the first sale) |
+| the Factory | the first fold (`folds` counter) |
+| the District, the World, Beyond | the first module placed there (`districtPlaced`, `worldPlaced`, `beyondPlaced`) |
+| Home | the first Relocate (a place is only seen once it is left) |
+| Pebble Isle, Cinder Isle, Rime, the Old Works | a visit (the `visit:<island>` counter, which a Last Fold keeps where `meta.visited` is not) |
+| **Unit 7: Collection Complete** | the first Last Fold |
+
+**Unit 7's ending** closes the Codex: the World folded into one tile is the last specimen, the
+collection is complete, and Unit 7 opens a new, empty drawer; its gratitude line ("UNIT 7 IS OFTEN
+PLEASED. THIS IS MORE.", §18 Customers) is the last words.
+
+### Challenges, 6-15 (`src/data/challenges.ts`)
+As §21's five: one rule a run, the goal something done this run (an order, a delivery, a fold, a
+count from the run's start), the reward a small rule that matters in the act it is won in. Acts III
+and IV's are offered only once that floor has stood in some run (`needs`).
+
+| Challenge | act | rule | goal | reward, for good |
+|---|---|---|---|---|
+| Clean Hands | II | no Slag Heaps built | 400 concrete delivered | gravel and concrete craft 10% faster |
+| Old Faithful | II | no Mk2 machines | 100 motors delivered | Mk2 machines 15% cheaper |
+| Hand-Made | II | no stamping | 8 modules standing on the Factory | a design's first stamp takes no Machine Kits |
+| The Strict Inspector | II | every fold a letter lower | a fold graded A (an S before) | S+ needs 70% of byproducts used inside (was 80%) |
+| Belt Budget | II | 60 belt tiles on the Workshop | 1,000 steel delivered | C full at 0.55 machine tiles a box tile (was 0.6) |
+| Headwinds | III | District skiffs at half speed | 30 robot arms delivered | District skiffs +0.5 tiles/s |
+| Short Haul | III | District routes at most 5 tiles | 10 Sandwich Engineers delivered | every route takes 2 more skiffs |
+| Zoning Freeze | III | no District lots | the Specimen Drawer (Unit 7) | District lots 20% cheaper |
+| Rough Seas | IV | World barges carry 1 a trip | 10 modules standing on the World | barges carry one more |
+| Light Fleet | IV | 3 skiffs, barges or couriers a route | a Megaproject stage this run | dwell x0.75 on every high floor |
+
+*Derivation:* each row's own derivation string in the data names its numbers (§10, §18, §21, §22). The
+goals are 15-60 min of the act's lines (§16 rule 1); each reward is under one Patent or Legacy node's
+worth, and none is a multiplier on income. Every Challenge won also pays a skin.
+
+### Scenarios, 4-8 (`src/data/scenarios.ts`)
+| board | land | research | coin | twist | scored by |
+|---|---|---|---|---|---|
+| Pocket Workshop | A, B | Act I | 8,000 | fold boxes 4x4 | Gizmos a minute |
+| Slag Mountain | A, C, E, F | Acts I-II | 300,000 | no Slag Heaps | concrete a minute per tile |
+| The Antique Shop | all six | Acts I-II | 800,000 | Mk1 machines only | motors a minute |
+| Night Market | A, E, F | Acts I-II | 400,000 | power producers 0.75x | plastic a minute per kW |
+| Thin Vein | A, B | Act I | 8,000 | Miners 0.5x | gears a minute per tile |
+
+*Derivation:* three are Challenges as boards (Small Boxes, Clean Hands, Old Faithful, §21): the same
+rule, scored as a number instead of won once. Night Market scores per kW drawn by the box's machines
+in Normal mode (`designKwOf`), so Efficient mode (0.75x speed at 0.5x power, §18) scores 1.5x. Thin
+Vein halves §4's 30 ore a minute, so the patch is the limit and the score is per tile. The coin is each
+board's lines twice over at §4 and §18 prices.
+
+### The efficiency boards
+Every board keeps **three personal bests besides its score**: its product a minute **per tile** of the
+fold box, **per kW** its machines draw (0 while no fold is powered), and **waste**, the share of
+byproducts the audit found unhandled (1 - W, §10; lower is better). Each is the best over every fold
+of the board's product, so the four may come from four designs (`BoardRecord`, `mergeBoard`). A
+Scenario game notes its own (`meta.boards`, once a second); the town takes them with the `boards`
+command when the player comes back (`takeBoards`: checked, field by field, only a better value kept)
+and keeps them through every reset, in the save. **Local only**: a public board stays in `IDEAS.md`
+until there is a reason for a server.
+
+### Cosmetics (`src/data/cosmetics.ts`)
+One list of 41 and the Ledger's numbered ribbons: the Ledger's three skins (§23), eight from
+reputation (each customer at rep 3 and 5), fifteen from Challenges, fifteen from trophies. A skin
+dresses one or more kinds (`slots`: a Workshop building, `module`, or the high floors' `skiff`,
+`barge`, `courier`); a decoration is a skin of the Dock or Hopper. Owned: `meta.cosmetics` (granted
+once a second by `grantCosmetics`, the Ledger's by the Ledger, never in a Scenario); worn:
+`meta.skins[kind]`, chosen by `{ k: 'skin', kind, id }` (null: plain). The art is `skin_<id>_<kind>`
+sheets (`skinSprite`). Purely cosmetic: no system reads the choice.
+
+### Saves
+`SAVE_VERSION` 11: an older save has no skin worn and no board on file; its trophies keep their flags,
+so their bonuses apply at once, and the cosmetics its Challenges, reputation and trophies have earned
+are granted within a second of loading. The determinism fingerprint covers the shelf, the cosmetics
+and skins, the boards, the free buildings and the Challenges.
+
+### Derivative, flagged and re-derived (CLAUDE.md)
+- **Achievements with bonuses** resemble Antimatter Dimensions' achievement rewards and Cookie
+  Clicker's milk. Re-derived: each bonus is a rule about the thing that earned it, and every kind is
+  capped, so the shelf never multiplies income by its own size (milk's whole idea).
+- **Challenges** resemble Antimatter Dimensions' (§21). Re-derived as before: factory goals, rule
+  rewards, no multiplier; three of the new ten are also Scenario boards, scored instead of won.
+- **Efficiency boards** resemble Zachtronics' histograms (cost, cycles, area). Re-derived from the
+  fold audit: the three numbers are the audit's own (rate per tile is C, waste is W, per kW is §18's
+  power), local, no histogram of other players.
