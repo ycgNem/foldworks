@@ -59,8 +59,13 @@ function stale(app: App): boolean {
   return !!a && (a.version !== g.version || a.fversion !== g.fversion);
 }
 
-/** The rows the forecast shows: a stopped line (one per line) or a heap filling on its own. */
-const trouble = (res: OfflineReport): TimelineEntry[] => res.timeline.filter((e) => e.kind === 'jam' || e.kind === 'heap');
+/** The rows the forecast shows: a stopped line (one per line), a heap filling on its own, a high
+ * floor's route short of carriers, and the Committee's reorganize it would have made (the morning
+ * report's rows: the forecast is the same model). */
+const trouble = (res: OfflineReport): TimelineEntry[] => res.timeline.filter((e) => e.kind === 'jam' || e.kind === 'heap' || e.kind === 'route' || e.kind === 'committee');
+
+/** A row's icon (a short route has its floor's, as the morning report's). */
+const rowIcon = (e: TimelineEntry) => (e.kind === 'jam' ? '{u:remove}' : e.kind === 'heap' ? '{i:slag}' : e.kind === 'committee' ? '{u:reset}' : e.floor === 'world' ? '{u:world}' : e.floor === 'beyond' ? '{u:kernel}' : '{u:district}');
 
 /** The Inspector's line on the clipboard. */
 function inspectorLine(app: App): string {
@@ -146,8 +151,10 @@ function forecastBoard(app: App, body: Rect) {
     y += ROW_H + 2;
   } else {
     let cx = a.x;
-    if (nl) cx += chip(ui, cx, y, `${nl} line${nl === 1 ? '' : 's'} stop`, { role: 'bad', solid: true }) + 3;
-    if (nl) chip(ui, cx, y, `${res.jams} machine${res.jams === 1 ? '' : 's'}`, { role: 'bad' });
+    const nr = res.lines.filter((l) => l.route).length, ns = nl - nr;
+    if (ns) cx += chip(ui, cx, y, `${ns} line${ns === 1 ? '' : 's'} stop`, { role: 'bad', solid: true }) + 3;
+    if (ns) cx += chip(ui, cx, y, `${res.jams} machine${res.jams === 1 ? '' : 's'}`, { role: 'bad' }) + 3;
+    if (nr) chip(ui, cx, y, `${nr} route${nr === 1 ? '' : 's'} short`, { role: 'warn' });
     y += ROW_H + 2;
   }
   rule(ui, a.x, y - 2, a.w, true);
@@ -161,8 +168,10 @@ function forecastBoard(app: App, body: Rect) {
     shown++;
     const i = shown;
     ui.text((e.est ? '~' : '') + clock(e.t), a.x + 30, y + 2, T.inkSoft, { align: 'right' });
-    drawLayout(ui, layoutRich(e.kind === 'jam' ? '{u:remove}' : '{i:slag}'), a.x + 34, y + 2, T.ink);
-    const target = e.x !== undefined ? (e.floor === 'factory' ? g.fentAt(e.x, e.y!) : g.entAt(e.x, e.y!)) : null;
+    drawLayout(ui, layoutRich(rowIcon(e)), a.x + 34, y + 2, T.ink);
+    // only the Workshop's and the Factory's can be stopped from here (a high floor's are its own)
+    const low = e.floor === undefined || e.floor === 'workshop' || e.floor === 'factory';
+    const target = e.x !== undefined && low ? (e.floor === 'factory' ? g.fentAt(e.x, e.y!) : g.entAt(e.x, e.y!)) : null;
     const stopped = !!target && !!target.paused;
     const canStop = !!line?.stopKeeps && !!target;
     const right = canStop ? 98 : 34;
@@ -170,7 +179,8 @@ function forecastBoard(app: App, body: Rect) {
     const lx = a.x + 46;
     if (line) lineRows(app, line, lx, y, a.w - 46, room, true);
     else ui.text(fit(e.text, room), lx, y + 2, T.warn);
-    if (button(ui, 'onGo' + i, a.x + a.w - (canStop ? 96 : 32), y - 1, 32, 14, 'Go', { tip: line ? `{u:remove} show ${line.root.name} · the first of its line to block · ${line.count} would stop` : 'show me where' })) goTo(app, e);
+    const goTip = line?.route ? `{u:district} show the ${line.root.name} route · its ${line.route.carrier}s` : line ? `{u:remove} show ${line.root.name} · the first of its line to block · ${line.count} would stop` : 'show me where';
+    if (e.x !== undefined && button(ui, 'onGo' + i, a.x + a.w - (canStop ? 96 : 32), y - 1, 32, 14, 'Go', { tip: goTip })) goTo(app, e);
     if (canStop && button(ui, 'onStop' + i, a.x + a.w - 61, y - 1, 61, 14, stopped ? 'Stopped' : 'Stop line', { disabled: stopped, tip: [{ text: '{u:pause} {big:Stop line}' }, { text: '{u:pause} every machine of this line, now' }, { text: line!.stopKeeps!, color: T.inkSoft }, { text: '{u:research} the forecast runs again after it', color: T.inkSoft }] })) {
       app.act({ k: 'pause', x: e.x!, y: e.y!, floor: e.floor === 'factory' ? 'factory' : undefined, line: true, on: true });
     }

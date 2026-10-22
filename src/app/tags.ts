@@ -213,6 +213,8 @@ function seedReport(app: App, e: Ent): Report {
   }
   more.push(rich(`${pm(60 / secs)}/min of each · ${secs <= 2 ? 'a Miner\'s pace' : 'half a Miner'}`));
   more.push(rich('{soft:the World folded into one tile · it stays, and never folds}'));
+  // what it carries (DESIGN.md §23: the prestige review): every run of a later universe knows Acts I-II
+  more.push(rich(`{soft:it remembers Acts I-${['I', 'II', 'III', 'IV', 'V'][RULES.seedActs.value - 1] ?? 'II'}'s research · every run of this universe knows it}`));
   return { title: 'The Seed', uicon: 'kernel', rows, more, turn: e, verbs: '{k:R} turn  {k:LMB} pin' };
 }
 
