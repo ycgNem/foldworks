@@ -65,10 +65,10 @@ describe(`Act III pacing to 40 h (seed ${SEED})`, () => {
   // Measured and printed, not asserted (DESIGN.md §21 Pacing): rules 1 and 2 hold while the
   // District grows, a copy every few minutes and a lot as the routes or the tiles run out; once the
   // floor is full (about 140 groups on 180 routes, every lot) this player has nothing left to
-  // build: it now builds chemistry as far as Robotics research (the chemistry corner,
-  // src/sim/bot3.ts), but its Sensors line starves for rubber, so Robotics, District Folds, sludge
-  // for Hydroponics, the City's stage 2 and the Transmuter stay out of reach. It then resets
-  // (src/sim/campaign.ts ACT3_FULL), so the worst wait is about the reset's 10 minutes.
+  // build: it builds chemistry through District Folds and Batteries (the chemistry corner,
+  // src/sim/bot3.ts; Hydroponics' sludge, the City's stage 2 and the Transmuter stay out of reach:
+  // oil, DECISIONS.md "The third pass"). It then resets (src/sim/campaign.ts ACT3_FULL), so the
+  // worst wait is about the reset's 10 minutes (measured 10.2-10.8 in the third pass).
   it('rules 1 and 2 over Act III (logged; OPEN past the first megaproject stage)', () => {
     const r = act3Campaign(SEED);
     const goals = r.decisions.filter((_, i) => GOAL.test(r.what[i]));

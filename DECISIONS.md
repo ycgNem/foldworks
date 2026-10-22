@@ -2790,3 +2790,61 @@ the numbers; `tests/longtail.test.ts` ("the long tail's rewards, after the revie
   324-minute idle in run 4): the bot's plan waiting on a step it gave up (the pattern it fixed for
   Gears II), not the model; the second gate's 10.4-minute stretches came from the first pass.
   Logged OPEN in the pace test; the next bot pass logs its waiting step through those windows.
+
+### The third pass: the idle windows found, and batteries (2026-10-22)
+Built in a worktree off `m9-worlds` (2676237), time-boxed (3 h). Every rule 1-2 window was a plan
+step waiting on something no line here would make; each was logged through its window with the
+bot's waiting step (`a3.waiting`), the research's progress and the Chute's stock. **No data or sim
+number moved.**
+- **The corridor ran full, so the slot lines never ran.** The Workshop lines (chunk D) belt their
+  product up column 12 into the corridor to the Hopper, which carries the lab's banked steel, glass,
+  plastic and motors at a belt's 120 a minute; a line side-loading into it found no gaps, stood
+  blocked (press and assembler `blocked` on their own output), and its fold waited: in pace-act3's
+  run 3 the Gears line gave up after 45 minutes (10:45), the Gearboxes line after it (12:32), and
+  Servos research, 120 gearboxes, then waited out the run (the "68.7 min at 11:07" was this, and
+  the Floating City wait in a later run its cousin). **Two Buffer Crates in the output column**
+  (one at each slot's row) let a line run at speed through its audit and drain into the corridor
+  as it has room: the Gears line now folds in a minute. Chosen over lifting the lab's banked flows
+  (the lab is the Act II bot's) and over a second corridor (no free face of the Hopper).
+- **A standing line is not work to come.** `done()` counted the arms line's slot (it stands for
+  good, feeding the Hopper), so a full District never read as full and the full-floor reset never
+  came: pace-act3's run 4 idled 324 minutes from 25:42 (and pace-act4's run 5 154 from 37:25 is
+  gone with the same fix: 19.9 at most now). A standing line no longer counts.
+- **The District grows while the plan waits.** Before chemistry the District grew only by the
+  plan's own `district` steps, so a research wait was dead air. Now it grows (`GROW`, a copy every
+  3 minutes) whenever the plan has waited 20 minutes on one step, and its copies go where they are
+  wanted most, the Hopper among them (`growing`).
+- **A given-up line is tried once more when research waits on its product** (30 minutes on a
+  good that only it makes): Gearboxes for Servos, Processors (the corner) for Robotics, measured.
+- **The Solvent line folds once research has its solvent**, not at bot2's 30-minute "fold it as it
+  is": it folded 18 solvent short of Processors, which then waited the hour and ended the plan
+  (the fold is pushed when Vulcanizing's and Processors' solvent is in, or after 75 minutes).
+- **A running line's empty Chute input gets a feeder**: when a slot or corner line's Chute input
+  stands empty 10 minutes, one more Chute feeder of the design that makes it (four at most a run;
+  the Processors line drew circuits faster than one Circuits II feeder sent them, measured).
+- **Research a floor can't pay is passed over**: a node selected 10 minutes with no good coming in
+  is skipped for 30 (the Sky Anchor's 800 bearings, which nothing here makes, held Batteries off for
+  good). On Act IV's page Batteries and Hydroponics now come after Charting, before the Sky Anchor.
+- **Relocation's chain, its first links.** Copper ingots fold on chunk D's second copper patch (a
+  Miner into a Smelter, its slag into a brick press: `PATCH`), and two copies feed the Chute; the
+  Solvent line runs once more, unfolded, until Batteries has its 150 solvent (`CORNER.solventB`,
+  `stand`); Batteries research is paid (12:28-12:35 in run 3) and the **Batteries** line (the
+  corner's solvent vat into a battery vat, copper belted in along row 8) folds. Not reached, and
+  why: the battery feed (a Batteries copy on the Factory with Plastic and Copper ingots copies) and
+  the Solvent feed (Solvent copies sending their sludge to the Factory Hopper for Hydroponics) were
+  laid without their Plastic copies (the placer left them out: coal claims, kits or room), so the
+  Solvent copies starve for oil, no Batteries copy runs, the Lighthouse stands at 15 of 200
+  batteries and Hydroponics at 0 of 300 sludge. A corner sludge run (the Solvent line's waste
+  turned into the product belt) was tried and dropped: the Chute's oil, the feeders' byproduct, ran
+  dry within minutes, and a second oil feed's Plastic copies were not placed either. **Oil is the
+  wall again, and oil is Plastic copies, and Plastic copies are coal claims** (the second pass's
+  item for the owner, still open). Sandwiches, umbrellas (four inputs: a 1x1 assembler has three
+  faces, so a Mk2 or a mixed belt), the Engineer (Mk2, powered, four inputs) and bearings for the Sky
+  Anchor are not taught.
+- **Measured** (seed 1000, 40 h; pace-act3 7 passed in 27 min, pace-act4 5 passed in 33 min):
+  District 9:53, Robotics 11:28, District Folds 11:36, **Charting and the World 11:46** (was 15:41),
+  Batteries 12:28-12:36 (run 3); the World up to 63 modules (1.32 ms a tick), the District to 153-159
+  groups (1.03 ms). **Rules 1 and 2**: pace-act3's four Act III stretches 10.2-10.8 min at worst (the
+  full floor's 10-minute reset; were 68.7 and 324), pace-act4's 7.1, 9.0 (Act IV), 6.4 and one 19.9 /
+  19.2 min from 33:50 (run 5, 38 minutes after its hand-over; were 68.9, 13.5, 36.9 and 154). No
+  Relocate: the next link is oil for the Factory's chemistry copies (above).

@@ -109,6 +109,30 @@ and §20 "Save size"; DECISIONS.md "Milestone 14".
 Merge into `m9-worlds`; fix the sim hotspots after Milestone 11 lands; the pace sim to 100 h with
 the Act IV and V bots.
 
+## Status (2026-10-22, morning): the Act III bot's third pass (the idle windows; batteries)
+
+Built in a worktree off `m9-worlds`, time-boxed (3 h). DECISIONS.md "The third pass"; DESIGN.md
+§21 and §22 Pacing (measured). Only `src/sim/bot3.ts`, `src/sim/bot4.ts` and the docs changed;
+no data or sim number.
+
+- **The idle windows were the bot's**: the slot lines' output side-loaded into a corridor running
+  full with the lab's banked goods, so they stood blocked and were given up (now two Buffer Crates
+  in the output column); a standing line (the arms line) held the full-floor reset off for hours
+  (no longer counted); the District now grows while the plan waits 20 minutes; a given-up line is
+  retried once when research waits on its product; the Solvent line folds once research has its
+  solvent; an empty Chute input gets a feeder; research nothing can pay is passed over.
+- **Measured** (seed 1000, 40 h; pace-act3 7 passed, pace-act4 5 passed): Charting and the World
+  at **11:46** (was 15:41), the World up to 63 modules (1.32 ms a tick); every Act III stretch
+  10.2-10.8 min at worst in pace-act3 (was 68.7 and 324), pace-act4 at most 9.0 except one 19.9
+  min in run 5 (was 154).
+- **Relocation's chain, first links**: Copper ingots fold on chunk D's second copper patch and feed
+  the Chute; Batteries research is paid and the Batteries line folds (12:28-12:36).
+- **Open**: no Relocate. The Factory's Batteries and Solvent copies need oil, and their Plastic
+  copies were not laid (coal claims, room or kits): the Lighthouse stands at 15 of 200 batteries,
+  Hydroponics at 0 of 300 sludge; sandwiches, umbrellas (four inputs), the Engineer (Mk2, powered)
+  and bearings for the Sky Anchor are not taught. Pace-act4's run 5 wait (19.9 min from 33:50) is
+  not looked into.
+
 ## Status (2026-10-22, late night): the Act III bot's chemistry, the Act IV bot
 
 Built in a worktree off `m9-worlds`, time-boxed. DECISIONS.md "The Act III bot's chemistry and
