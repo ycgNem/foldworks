@@ -32,14 +32,18 @@ import { megaStage, MEGA } from '../data/megaprojects';
 import { fillOrder, saleValue } from './systems/docks';
 import { creditResearch, runResearch } from './systems/research';
 import { runOrders } from './systems/orders';
-import { megaGive, fname } from './systems/modules';
+import { megaGive, fname, BYPRODUCTS, chuteCap } from './systems/modules';
 import { entName, lines as workshopLines } from './analysis';
 import { restore } from './snapshot';
 import { prules } from './patents';
 import type { Ent, FEnt } from './world';
 import { HIGH, type HighFloorId } from '../data/floors';
-import { HIGH_IDS, bayProjects, megaStageOf, megaGiveX } from './systems/high';
+import { HIGH_IDS, bayProjects, megaStageOf, megaGiveX, hent, hname, routeCap, routeWant, routeDist, skiffRateNow, maxSkiffs } from './systems/high';
 import { krules } from './kernels';
+import { lrules } from './legacy';
+import { standingDue } from './systems/automation';
+import { BUILD } from '../data/machines';
+import type { SkiffRoute } from './world';
 
 /** The offline efficiency now (DESIGN.md §12, §20): the base 0.5 plus the Patent tree's offline
  * nodes (§19) plus the Night Shift bought with coin, capped at 0.75. The one function every
@@ -60,7 +64,10 @@ export function offlineEfficiencyUncapped(g: Game): number {
   return Math.round(e * 1e6) / 1e6;
 }
 
-export type TimelineKind = 'jam' | 'heap' | 'order' | 'research' | 'mega' | 'bay';
+export type TimelineKind = 'jam' | 'heap' | 'order' | 'research' | 'mega' | 'bay' | 'route' | 'committee';
+
+/** The floor a report row is on (a jump-to goes there). */
+export type ReportFloor = 'workshop' | 'factory' | HighFloorId;
 
 /** One thing that happened while away, at `t` seconds into the time away. */
 export interface TimelineEntry {
@@ -71,12 +78,12 @@ export interface TimelineEntry {
   /** where (a line's first machine to block, a heap), for the jump-to button */
   x?: number;
   y?: number;
-  floor?: 'workshop' | 'factory';
+  floor?: ReportFloor;
   /** a jam: the item its first machine is blocked by */
   why?: string | null;
   /** worked out from the measured rates rather than replayed tick by tick */
   est?: boolean;
-  /** a jam row: its line in `OfflineReport.lines` */
+  /** a jam row (or a short route's): its line in `OfflineReport.lines` */
   line?: number;
 }
 
@@ -84,7 +91,7 @@ export interface TimelineEntry {
 export interface JamLine {
   /** when the line stopped: its heap filling, or its first machine blocking (s into the time away) */
   t: number;
-  floor: 'workshop' | 'factory';
+  floor: ReportFloor;
   /** the first machine (module) to block, and the item it is blocked by: the root cause */
   root: { name: string; x: number; y: number; why: string | null; t: number };
   /** machines (modules) it stopped, the root included */
@@ -98,6 +105,13 @@ export interface JamLine {
   /** what stopping the line before leaving keeps, or null when it keeps nothing */
   stopKeeps: string | null;
   est: boolean;
+  /** a high-floor route short of carriers (DESIGN.md §20): not a line that stopped but one that runs
+   * short the whole time, named like the District's starved report ("short of 3 barges"); `root`
+   * is the route's source, `count` 0 */
+  route?: { id: number; item: ItemId; cap: number; want: number; short: number; carrier: string; max: boolean };
+  /** copies of one high-floor group that stopped the same way, folded into this row (`count` is
+   * every module of them) */
+  copies?: number;
 }
 
 export interface OfflineReport {
@@ -133,9 +147,15 @@ export interface OfflineReport {
    * research node finished */
   segments: number;
   /** the first machine or module to jam (kept for the slice's card and older callers) */
-  firstJam: { t: number; x: number; y: number; floor: 'workshop' | 'factory'; name: string; why: string | null } | null;
+  firstJam: { t: number; x: number; y: number; floor: ReportFloor; name: string; why: string | null } | null;
   /** the Slag Heap still filling at the end, and when it fills (seconds from the return) */
   nextHeap: { x: number; y: number; inSeconds: number } | null;
+  /** the Standing Committee's number reached while away: it never Reorganizes while you are away
+   * (DESIGN.md §20), so the report says when it would have, and at how many Patents */
+  committee: { t: number; patents: number; at: number } | null;
+  /** the compute budget (DESIGN.md §20): the estimated cost of a tick (ms on the reference PC,
+   * from the number of things that tick) and the live ticks the run could afford */
+  budget: { tickMs: number; ticks: number };
 }
 
 /** Deliveries by destination while a tally is open (runDocks and the Bay add to it), as Num:
@@ -182,20 +202,64 @@ function jammedHist(hist: string, n: number): boolean {
 }
 
 const heapCap = (g: Game) => prules(g).heapCap; // Deep Heaps (§19)
+const crateCap = () => BUILD.crate.capacity ?? 50;
+
+/** Stopped `n` seconds straight on a high floor: starved, blocked or blocked by its waste (a
+ * module runs at a fraction there: a starved one runs short of an input, not only at 0). */
+function stoppedHist(hist: string, n: number): boolean {
+  if (hist.length < n) return false;
+  for (let i = hist.length - n; i < hist.length; i++) if (hist[i] !== 'b' && hist[i] !== 'x' && hist[i] !== 's') return false;
+  return true;
+}
+
+/** A high-floor module counts as stopped when starved or blocked 10 s straight and running at
+ * under half speed (a module a little short of an input is the route rows' news, not a stop). */
+const highStopped = (m: FEnt, J: number) => m.kind === 'module' && !m.paused && m.fAvg < 0.5 && stoppedHist(m.hist, J);
+
+/** What a high floor's carriers are called (the District's skiffs, the World's barges, Beyond's couriers). */
+export const carrierWord = (f: HighFloorId) => (f === 'beyond' ? 'courier' : f === 'world' ? 'barge' : 'skiff');
+
+/** The things a tick steps, counted (DESIGN.md §20, the compute budget): Workshop pieces (belts,
+ * Miners, machines, splitters, crates, heaps), Factory pieces (modules and trunks) and high-floor
+ * pieces (modules and routes on the District, the World and Beyond). */
+export function tickLoad(g: Game): { workshop: number; factory: number; high: number } {
+  let high = 0;
+  for (const id of HIGH_IDS) {
+    const st = g.s[id];
+    if (!st) continue;
+    high += st.routes.length;
+    for (const e of st.ents) if (e.kind === 'module') high++;
+  }
+  let fmods = 0;
+  for (const e of g.s.factory.ents) if (e.kind === 'module') fmods++;
+  return { workshop: g.belts.length + g.miners.length + g.machines.length + g.logistics.length, factory: fmods + g.routes.length, high };
+}
+
+/** A tick's cost, estimated from what ticks (ms on the reference PC, DESIGN.md §20): never read
+ * from a clock, so the replayed window is the same on every machine and in every replay. */
+export function tickCostMs(g: Game): number {
+  const n = tickLoad(g);
+  return IDLE.tickBaseMs.value + n.workshop * IDLE.tickWorkshopMs.value + n.factory * IDLE.tickFactoryMs.value + n.high * IDLE.tickHighMs.value;
+}
 
 /** "copper ingots", "gears"; slag, oil, sand and the other stuffs stay as they are. */
 const COUNTED = ['ingot', 'plate', 'gear', 'gizmo', 'circuit', 'motor', 'kit', 'bit', 'brick'];
 const plural = (name: string) => (COUNTED.includes(name.split(' ').pop()!) ? name + 's' : name);
 
-type Cause = { heap: Ent } | { bay: ItemId } | { hbay: HighFloorId; item: ItemId } | { order: string } | { research: ResearchId };
+type Cause = { heap: Ent } | { crate: Ent } | { chute: ItemId } | { bay: ItemId } | { hbay: HighFloorId; item: ItemId } | { order: string } | { research: ResearchId };
 
 interface LineAcc {
   key: string;
-  floor: 'workshop' | 'factory';
+  floor: ReportFloor;
   root: JamLine['root'] | null;
   count: number;
   heap: (NonNullable<JamLine['heap']> & { est: boolean }) | null;
+  /** a high-floor line: its root's cause and fix, read when it stopped (the routes may change) */
+  said?: { cause: string; fix: string };
 }
+
+/** A route seen short of carriers while away (its row's numbers, read when first seen). */
+interface RouteAcc { f: HighFloorId; r: SkiffRoute; t: number; est: boolean; line: JamLine }
 
 /**
  * An offline run that can be spread over frames: `step(maxTicks)` does at most that many live
@@ -256,6 +320,25 @@ export class OfflineRun {
   private segments = 0;
   /** times the measuring window was opened again in this live stretch (a jam inside it) */
   private reopened = 0;
+  /** the compute budget (DESIGN.md §20): a tick's estimated cost, and the live ticks the whole run
+   * may spend (the replay, then each segment's settle and measure) */
+  readonly tickMs: number;
+  readonly budgetTicks: number;
+  /** seconds the first replay runs (an hour at most; shorter when the budget says so) */
+  readonly firstReplay: number;
+  /** the measuring window of the live stretch now (s): a window opened again is this long */
+  private windowSecs: number = IDLE.measureSeconds.value;
+  /** Buffer Crates and the Factory Chute's stock filling (a full one backs its line up, like a
+   * heap): counts when the measuring window opened, and rates over it */
+  private crates0 = new Map<number, number>();
+  private crateRate = new Map<number, number>();
+  private chute0: Partial<Record<ItemId, number>> = {};
+  private chuteRate = new Map<ItemId, number>();
+  /** high-floor routes seen short of carriers, by floor and route id */
+  private routeRows = new Map<string, RouteAcc>();
+  /** seconds in a row each high-floor module has run under half speed */
+  private slow = new Map<string, number>();
+  private committee: OfflineReport['committee'] = null;
 
   constructor(g: Game, awaySeconds: number, opts: { eff?: number } = {}) {
     this.g = g;
@@ -280,18 +363,48 @@ export class OfflineRun {
       for (const e of l) this.lineKey.set('w' + e.id, key);
     }
     this.factoryGroups();
+    this.highGroups();
     // what is already jammed or full when the player leaves is not news
     const J = IDLE.jamSeconds.value;
     for (const m of [...g.miners, ...g.machines]) if (jammedHist(m.hist, J)) { this.jammed.add('w' + m.id); this.jammedAtStart++; }
     for (const m of s.factory.ents) if (m.kind === 'module' && jammedHist(m.hist, J)) { this.jammed.add('f' + m.id); this.jammedAtStart++; }
+    for (const id of HIGH_IDS) for (const m of s[id]?.ents ?? []) if (highStopped(m, J)) { this.jammed.add('h' + id + m.id); this.jammedAtStart++; }
+    // a route short of carriers when the player leaves is news all the same: it runs short the whole
+    // time away, and most of Act III-V's income is made up there (the Acts IV-V review)
+    this.watchRoutes(0, false);
     for (const h of g.logistics) {
       if (h.kind !== 'heap') continue;
       if (h.count >= heapCap(g)) this.heapsFull.add(h.id);
       else this.heapRoom0.set(h.id, heapCap(g) - h.count);
     }
-    const ticks = Math.min(Math.floor(this.counted * TICK_RATE), RULES.offlineReplayTicks.value);
+    // the compute budget: the run may spend about IDLE.replayBudgetMs on live ticks, at the cost a
+    // tick is estimated at from what ticks; the replay takes its share, the segments the rest
+    this.tickMs = tickCostMs(g);
+    this.budgetTicks = Math.floor(IDLE.replayBudgetMs.value / this.tickMs);
+    const afford = Math.max(IDLE.replayMinSeconds.value * TICK_RATE, Math.floor(this.budgetTicks * IDLE.replayShare.value));
+    const ticks = Math.min(Math.floor(this.counted * TICK_RATE), RULES.offlineReplayTicks.value, afford);
+    this.firstReplay = ticks / TICK_RATE;
     // rates come from the replay's last 5 minutes, after lines have settled
     this.startLive(ticks, Math.min(ticks, 5 * 60 * TICK_RATE));
+  }
+
+  /** High-floor modules joined by routes are one line, as the Factory's joined by trunks. */
+  private highGroups() {
+    const g = this.g;
+    for (const id of HIGH_IDS) {
+      const st = g.s[id];
+      if (!st) continue;
+      const parent = new Map<number, number>();
+      const find = (a: number): number => {
+        let r = a;
+        while (parent.get(r) !== r) r = parent.get(r)!;
+        parent.set(a, r);
+        return r;
+      };
+      for (const m of st.ents) if (m.kind === 'module') parent.set(m.id, m.id);
+      for (const r of st.routes) if (parent.has(r.from) && parent.has(r.to)) parent.set(find(r.from), find(r.to));
+      for (const m of parent.keys()) this.lineKey.set('h' + id + m, 'h' + id + find(m));
+    }
   }
 
   /** Modules joined by trunks are one line on the Factory floor (as `line: true` stops them). */
@@ -344,6 +457,7 @@ export class OfflineRun {
     this.liveLeft = this.liveTotal = ticks;
     this.measureAt = Math.min(ticks, measureTicks);
     this.measureSecs = this.measureAt / TICK_RATE;
+    this.windowSecs = Math.max(1, Math.min(IDLE.measureSeconds.value, this.measureSecs));
     this.mark = null;
     this.phase = ticks > 0 ? 'live' : 'extrap';
     if (ticks > 0 && this.measureAt >= ticks) this.openMeasure();
@@ -354,7 +468,12 @@ export class OfflineRun {
     if (this.mark) return;
     this.mark = copyTally(this.tally);
     this.heaps0.clear();
-    for (const h of this.g.logistics) if (h.kind === 'heap') this.heaps0.set(h.id, h.count);
+    this.crates0.clear();
+    for (const h of this.g.logistics) {
+      if (h.kind === 'heap') this.heaps0.set(h.id, h.count);
+      else if (h.kind === 'crate') this.crates0.set(h.id, h.store.length);
+    }
+    this.chute0 = { ...(this.g.s.chute ?? {}) };
   }
 
   /** A jam inside the measuring window: what the window counted before it is a line that has
@@ -365,7 +484,7 @@ export class OfflineRun {
     this.reopened++;
     this.mark = null;
     const left = Math.max(0, Math.floor((this.counted - this.t) * TICK_RATE));
-    this.liveLeft = Math.min(Math.max(this.liveLeft, IDLE.measureSeconds.value * TICK_RATE), left);
+    this.liveLeft = Math.min(Math.max(this.liveLeft, Math.round(this.windowSecs * TICK_RATE)), left);
     this.liveTotal = Math.max(this.liveTotal, this.liveLeft);
     this.measureAt = this.liveLeft;
     this.measureSecs = this.liveLeft / TICK_RATE;
@@ -382,6 +501,22 @@ export class OfflineRun {
         const rate = (h.count - this.heaps0.get(h.id)!) / this.measureSecs;
         if (rate > 1e-6) this.heapRate.set(h.id, rate);
       }
+    // a crate or the Chute's stock rising fills like a heap (with a shorter replay, one filling
+    // after it would otherwise be paid on as if it never did)
+    this.crateRate.clear();
+    this.chuteRate.clear();
+    if (this.measureSecs > 0) {
+      for (const c of this.g.logistics) {
+        if (c.kind !== 'crate' || !this.crates0.has(c.id)) continue;
+        const rate = (c.store.length - this.crates0.get(c.id)!) / this.measureSecs;
+        if (rate > 1e-6 && c.store.length < crateCap()) this.crateRate.set(c.id, rate);
+      }
+      const ch = this.g.s.chute ?? {};
+      for (const [item, n] of Object.entries(ch) as [ItemId, number][]) {
+        const rate = (n - (this.chute0[item] ?? 0)) / this.measureSecs;
+        if (rate > 1e-6 && n < chuteCap(this.g)) this.chuteRate.set(item, rate);
+      }
+    }
     this.phase = this.counted - this.t > 1e-6 && this.measureSecs > 0 ? 'extrap' : 'done';
   }
 
@@ -425,6 +560,18 @@ export class OfflineRun {
       if (!h || h.count >= heapCap(g)) continue;
       const tf = (heapCap(g) - h.count) / rate;
       if (tf < dt) { dt = tf; cause = { heap: h }; }
+    }
+    for (const [id, rate] of this.crateRate) {
+      const c = g.byId.get(id);
+      if (!c || c.store.length >= crateCap() || !c.store.length) continue;
+      const tf = (crateCap() - c.store.length) / rate;
+      if (tf < dt) { dt = tf; cause = { crate: c }; }
+    }
+    for (const [item, rate] of this.chuteRate) {
+      const n = s.chute?.[item] ?? 0;
+      if (n >= chuteCap(g)) continue;
+      const tf = (chuteCap(g) - n) / rate;
+      if (tf < dt) { dt = tf; cause = { chute: item }; }
     }
     const st = megaStage(s.mega.stage);
     if (st && this.eff > 0)
@@ -479,10 +626,27 @@ export class OfflineRun {
       if (!h) continue;
       h.count = Math.min(heapCap(g), Math.floor(h.count + rate * dt + 1e-9));
     }
+    // crates and the Chute's stock as well (whole items: a crate holds the last thing it took)
+    for (const [id, rate] of this.crateRate) {
+      const c = g.byId.get(id);
+      if (!c || !c.store.length) continue;
+      const to = Math.min(crateCap(), Math.floor(c.store.length + rate * dt + 1e-9));
+      while (c.store.length < to) c.store.push(c.store[c.store.length - 1]);
+    }
+    for (const [item, rate] of this.chuteRate) {
+      const st0 = (s.chute ??= {});
+      st0[item] = Math.min(chuteCap(g), Math.floor((st0[item] ?? 0) + rate * dt + 1e-9));
+    }
     this.extrapolated += dt;
     if (cause && 'heap' in cause) {
       cause.heap.count = heapCap(g);
       this.heapFull(cause.heap, this.t, true);
+    } else if (cause && 'crate' in cause) {
+      // full: its line backs up behind it in the live minutes after (a jam row if a machine stops)
+      const c = cause.crate;
+      while (c.store.length < crateCap()) c.store.push(c.store[c.store.length - 1]);
+    } else if (cause && 'chute' in cause) {
+      (s.chute ??= {})[cause.chute] = chuteCap(g);
     } else if (cause && 'bay' in cause) {
       // top up the last fraction so the want is met exactly, then say so
       const st2 = megaStage(s.mega.stage);
@@ -525,11 +689,15 @@ export class OfflineRun {
     g.tally = this.tally;
     const remaining = this.counted - this.t;
     if (!cause || remaining <= 1e-6) { this.phase = 'done'; return; }
-    // replay a few minutes live from here: the jam spreads, then the new rates are measured
+    // replay a few minutes live from here: the jam spreads, then the new rates are measured (the
+    // measuring window shortened to what the budget has left, never under its floor)
     this.segments++;
-    const liveSecs = IDLE.settleSeconds.value + IDLE.measureSeconds.value;
-    const ticks = Math.min(Math.floor(remaining * TICK_RATE), liveSecs * TICK_RATE);
-    this.startLive(ticks, Math.min(ticks, IDLE.measureSeconds.value * TICK_RATE));
+    this.watchRoutes(this.t, true);
+    const budgetLeft = Math.max(0, this.budgetTicks - this.liveTicks);
+    const settle = IDLE.settleSeconds.value;
+    const measure = Math.max(IDLE.measureMinSeconds.value, Math.min(IDLE.measureSeconds.value, Math.floor(budgetLeft / TICK_RATE) - settle));
+    const ticks = Math.min(Math.floor(remaining * TICK_RATE), (settle + measure) * TICK_RATE);
+    this.startLive(ticks, Math.min(ticks, measure * TICK_RATE));
   }
 
   /** Credit `secs` of the measured rates at the offline efficiency, through the live functions. */
@@ -609,7 +777,7 @@ export class OfflineRun {
     this.timeline.push(e);
   }
 
-  private acc(key: string, floor: 'workshop' | 'factory'): LineAcc {
+  private acc(key: string, floor: ReportFloor): LineAcc {
     let a = this.lineAcc.get(key);
     if (!a) this.lineAcc.set(key, (a = { key, floor, root: null, count: 0, heap: null }));
     return a;
@@ -634,15 +802,119 @@ export class OfflineRun {
     }
   }
 
-  /** A machine or module jammed (blocked 10 s straight) at `t`: count it into its line. */
-  private jam(m: Ent | FEnt, floor: 'workshop' | 'factory', t: number) {
+  /** A machine or module jammed (blocked 10 s straight; on a high floor, starved or blocked) at
+   * `t`: count it into its line. */
+  private jam(m: Ent | FEnt, floor: ReportFloor, t: number) {
     const g = this.g;
-    const name = floor === 'workshop' ? entName(g, m as Ent) : fname(g, m as FEnt);
-    const id = (floor === 'workshop' ? 'w' : 'f') + m.id;
+    const high = floor !== 'workshop' && floor !== 'factory';
+    const name = floor === 'workshop' ? entName(g, m as Ent) : high ? hname(g, m as FEnt) : fname(g, m as FEnt);
+    const id = (floor === 'workshop' ? 'w' : floor === 'factory' ? 'f' : 'h' + floor) + m.id;
     this.machineJams.push({ t, x: m.x, y: m.y, floor, name, why: m.why });
     const a = this.acc(this.lineKey.get(id) ?? id, floor);
     a.count++;
-    if (!a.root) a.root = { name, x: m.x, y: m.y, why: m.why, t };
+    if (!a.root) {
+      a.root = { name, x: m.x, y: m.y, why: m.why, t };
+      if (high) a.said = this.highCause(floor, m as FEnt);
+    }
+  }
+
+  /** Why a high-floor module stopped and what to build, in the District's starved report's words
+   * (src/app/district.ts, src/app/stuck.ts): no route brings it, a route short of carriers (how
+   * many more), its feeder stopped, or its feeders make too little; blocked: nothing takes it, a
+   * route out short of carriers, or where it goes takes no more. */
+  private highCause(f: HighFloorId, m: FEnt): { cause: string; fix: string } {
+    const g = this.g;
+    const st = g.s[f]!;
+    const item = m.why as ItemId | null;
+    const d = g.design(m.design);
+    const main = (Object.keys((m.state === 'starved' ? d?.ins : d?.outs) ?? {}) as ItemId[]).find((i) => !BYPRODUCTS.has(i));
+    const it = item && ITEMS[item] ? item : main ?? null;
+    const wn = it ? plural(itemName(it).toLowerCase()) : m.state === 'starved' ? 'its input' : 'its goods';
+    const word = carrierWord(f);
+    const shortFix = (r: SkiffRoute) => {
+      const q = this.routeShortBy(f, r);
+      const a = hent(g, f, r.from);
+      return q.max ? `the ${a ? hname(g, a) : '?'} route's ends closer (${maxSkiffs(g, f)} ${word}s at most)` : `${q.short} more ${word}${q.short > 1 ? 's' : ''} on the ${a ? hname(g, a) : '?'} route`;
+    };
+    if (m.state === 'starved') {
+      const ins = st.routes.filter((r) => r.to === m.id && r.item === item);
+      if (!ins.length) return { cause: `no route brings it ${wn}`, fix: `a route bringing ${wn} from a group that makes it` };
+      const short = ins.find((r) => this.isShort(f, r));
+      if (short) return { cause: `its ${wn} route is short of ${word}s`, fix: shortFix(short) };
+      const src = ins.map((r) => hent(g, f, r.from)).find((e): e is FEnt => !!e && e.kind === 'module' && e.state !== 'work');
+      if (src) return { cause: `its feeder ${hname(g, src)} stopped`, fix: `${hname(g, src)} running again (its own row says how)` };
+      const a = hent(g, f, ins[0].from);
+      return { cause: `its feeders make too little ${wn}`, fix: `another ${a ? hname(g, a) : 'group making it'} routed in` };
+    }
+    const outs = st.routes.filter((r) => r.from === m.id && (!item || r.item === item));
+    if (!outs.length) return { cause: `its ${wn} had nowhere to go`, fix: item && BYPRODUCTS.has(item) ? `a route taking ${wn} to the Dock` : `a route taking ${wn} to the Dock or a group` };
+    const short = outs.find((r) => this.isShort(f, r));
+    if (short) return { cause: `its ${wn} route out is short of ${word}s`, fix: shortFix(short) };
+    if (item && this.orderOnly.has(item)) return { cause: `the Dock stopped taking ${wn} (${this.orderOnly.get(item)} filled)`, fix: `a group that uses ${wn}` };
+    const to = hent(g, f, outs[0].to);
+    // the Dock, the Hopper and the Bay take all: a module blocked there waits on its carriers (one
+    // that carries 90-100% of its want still leaves it waiting between loads)
+    if (!to || to.kind !== 'module') return { cause: `its ${wn} wait on the ${word}s`, fix: shortFix(outs[0]) };
+    return { cause: `${hname(g, to)} takes no more ${wn}`, fix: `a route taking the rest of its ${wn} to the Dock` };
+  }
+
+  /** A route carrying under 90% of what it is wanted (the District's `routeShort`, the Dispatcher's
+   * test; a route with no carrier at all is one the player parked, as the Stuck? button reads it). */
+  private isShort(f: HighFloorId, r: SkiffRoute): boolean {
+    const want = routeWant(this.g, f, r);
+    return r.skiffs > 0 && want > 1e-9 && routeCap(this.g, f, r) < 0.9 * want;
+  }
+
+  /** How many carriers a route is short of all it is wanted (the District's `skiffsNeeded` less
+   * what it has), and whether that is past the most a route takes. */
+  private routeShortBy(f: HighFloorId, r: SkiffRoute): { short: number; max: boolean } {
+    const g = this.g;
+    const a = hent(g, f, r.from), b = hent(g, f, r.to);
+    const per = a && b ? skiffRateNow(g, f, routeDist(a, b)) : 0;
+    const need = per > 0 ? Math.max(1, Math.ceil((routeWant(g, f, r) - 1e-9) / per)) : r.skiffs;
+    return { short: Math.max(1, need - r.skiffs), max: need > maxSkiffs(g, f) };
+  }
+
+  /** Routes short of carriers, first seen at `t` (at the start, each live minute and after each
+   * extrapolated segment): one row each, its numbers read when first seen. */
+  private watchRoutes(t: number, est: boolean) {
+    const g = this.g;
+    for (const f of HIGH_IDS) {
+      const st = g.s[f];
+      if (!st) continue;
+      for (const r of st.routes) {
+        const key = f + r.id;
+        if (this.routeRows.has(key) || !this.isShort(f, r)) continue;
+        const a = hent(g, f, r.from), b = hent(g, f, r.to);
+        if (!a || !b) continue;
+        const cap = routeCap(g, f, r), want = routeWant(g, f, r);
+        const q = this.routeShortBy(f, r);
+        const word = carrierWord(f);
+        const wn = plural(itemName(r.item).toLowerCase());
+        const most = maxSkiffs(g, f);
+        const line: JamLine = {
+          t, floor: f,
+          root: { name: `${hname(g, a)} to ${hname(g, b)}`, x: Math.floor((a.x + a.w / 2 + b.x + b.w / 2) / 2), y: Math.floor((a.y + a.h / 2 + b.y + b.h / 2) / 2), why: r.item, t },
+          count: 0, heap: null,
+          cause: `short of ${q.short} ${word}${q.short > 1 ? 's' : ''}`,
+          fix: q.max ? `its ends closer: ${most} ${word}s carry ${Math.round((Math.min(1, (cap / Math.max(1, r.skiffs)) * most / want)) * 100)}% of it` : `${q.short} more ${word}${q.short > 1 ? 's' : ''} carry all its ${wn}`,
+          stopKeeps: null, est,
+          route: { id: r.id, item: r.item, cap, want, short: q.short, carrier: word, max: q.max },
+        };
+        this.routeRows.set(key, { f, r, t, est, line });
+      }
+    }
+  }
+
+  /** The Standing Committee's number reached while away: said once, never acted on (DESIGN.md §20). */
+  private watchCommittee(t: number, est: boolean) {
+    const g = this.g;
+    if (this.committee || !lrules(g).standing) return;
+    if (!est && g.s.tick % (RULES.standingEvery.value * TICK_RATE) !== 0) return;
+    const p = standingDue(g);
+    if (p === null) return;
+    this.committee = { t, patents: p, at: g.s.meta.standing ?? p };
+    this.push({ t, kind: 'committee', text: `The Committee would have reorganized at ${p} Patents`, est });
   }
 
   /** Once a second of live ticks (and after each credited slice): what changed. */
@@ -664,7 +936,9 @@ export class OfflineRun {
       for (let k = this.stageSeen + 1; k <= s.mega.stage; k++) this.push({ t, kind: 'mega', text: `${MEGA.find((m) => m.stage === k)?.name ?? 'A Megaproject stage'}: done!`, est });
       this.stageSeen = s.mega.stage;
     }
+    this.watchCommittee(t, est);
     if (est) return;
+    if (s.tick % (60 * TICK_RATE) === 0) this.watchRoutes(t, false);
     const J = IDLE.jamSeconds.value;
     const n0 = this.machineJams.length;
     for (const list of [g.miners, g.machines])
@@ -678,6 +952,19 @@ export class OfflineRun {
       this.jammed.add('f' + m.id);
       this.jam(m, 'factory', Math.max(0, t - J));
     }
+    // a high-floor module stops when it runs under half speed 10 s straight (read each second: one
+    // fed by carriers flickers blocked between loads at 95%, which is not a stop)
+    for (const id of HIGH_IDS)
+      for (const m of s[id]?.ents ?? []) {
+        if (m.kind !== 'module') continue;
+        const k = 'h' + id + m.id;
+        if (this.jammed.has(k)) continue;
+        const slow = !m.paused && m.state !== 'work' && m.state !== 'idle' && m.fAvg < 0.5 ? (this.slow.get(k) ?? 0) + 1 : 0;
+        this.slow.set(k, slow);
+        if (slow < J) continue;
+        this.jammed.add(k);
+        this.jam(m, id, Math.max(0, t - J));
+      }
     for (const h of g.logistics) if (h.kind === 'heap' && h.count >= heapCap(g)) this.heapFull(h, t, false);
     if (this.machineJams.length > n0) this.reopenMeasure();
   }
@@ -691,7 +978,10 @@ export class OfflineRun {
     const span = this.counted % 3600 === 0 && this.counted < 86400 ? `${this.counted / 3600}h` : duration(this.counted);
     let cause: string, fix: string, stopKeeps: string | null = null;
     const heap = a.heap && (why === 'slag' || a.heap.t <= root.t + IDLE.settleSeconds.value) ? a.heap : null;
-    if (heap) {
+    if (a.said) {
+      cause = a.said.cause;
+      fix = a.said.fix;
+    } else if (heap) {
       cause = 'its Slag Heap filled';
       // the slag it makes in the whole time away, less the room the heap had: more heaps take it
       const more = Math.max(1, Math.ceil((heap.rate * this.counted - heap.room) / heapCap(g)));
@@ -747,14 +1037,35 @@ export class OfflineRun {
         if (n.gt(0)) addTo(given, item, n);
       }
     // one row per stopped line, in place of its machines' jams and its heap's row
-    const pairs = [...this.lineAcc.values()].filter((a) => a.root).map((a) => ({ key: a.key, l: this.jamLine(a) })).sort((a, b) => a.l.t - b.l.t);
+    const pairs0 = [...this.lineAcc.values()].filter((a) => a.root).map((a) => ({ key: a.key, l: this.jamLine(a) })).sort((a, b) => a.l.t - b.l.t);
+    // copies of one group on a high floor that stop the same way are one row (the District stamps
+    // groups by the dozen: twelve identical rows would hide the thirteenth)
+    const pairs: typeof pairs0 = [];
+    const same = new Map<string, JamLine>();
+    for (const p of pairs0) {
+      const high = p.l.floor !== 'workshop' && p.l.floor !== 'factory';
+      const k = p.l.floor + '|' + p.l.root.name + '|' + p.l.cause;
+      const was = high ? same.get(k) : undefined;
+      if (was) { was.count += p.l.count; was.copies = (was.copies ?? 1) + 1; continue; }
+      if (high) same.set(k, p.l);
+      pairs.push(p);
+    }
     const lines = pairs.map((p) => p.l);
+    // the routes short of carriers, after the lines that stopped (in time order among themselves)
+    const routes = [...this.routeRows.values()].sort((a, b) => a.t - b.t);
+    for (const r of routes) lines.push(r.line);
     const merged = new Set(pairs.filter((p) => p.l.heap).map((p) => p.key));
     const heapRowsGone = new Set(this.heapRows.filter((h) => h.key && merged.has(h.key)).map((h) => h.e));
     const rows = this.timeline.filter((e) => !heapRowsGone.has(e));
     lines.forEach((l, i) => {
       const n = l.count;
-      rows.push({ t: l.t, kind: 'jam', text: `${l.root.name}'s line stopped: ${l.cause} (${n} machine${n > 1 ? 's' : ''})`, x: l.root.x, y: l.root.y, floor: l.floor, why: l.root.why, est: l.est, line: i });
+      if (l.route) {
+        rows.push({ t: l.t, kind: 'route', text: `The ${l.root.name} route ${l.t > 0 ? 'ran' : 'was'} ${l.cause}${l.t > 0 ? '' : ' the whole time'}`, x: l.root.x, y: l.root.y, floor: l.floor, why: l.root.why, est: l.est, line: i });
+        return;
+      }
+      const what = l.floor === 'workshop' || l.floor === 'factory' ? 'machine' : 'module';
+      const copies = l.copies ? `, ${l.copies} copies` : '';
+      rows.push({ t: l.t, kind: 'jam', text: `${l.root.name}'s line stopped: ${l.cause} (${n} ${what}${n > 1 ? 's' : ''}${copies})`, x: l.root.x, y: l.root.y, floor: l.floor, why: l.root.why, est: l.est, line: i });
     });
     const timeline = rows.sort((a, b) => a.t - b.t);
     const j = this.machineJams.sort((a, b) => a.t - b.t)[0];
@@ -778,6 +1089,8 @@ export class OfflineRun {
       segments: this.segments,
       firstJam: j ? { ...j } : null,
       nextHeap,
+      committee: this.committee,
+      budget: { tickMs: this.tickMs, ticks: this.budgetTicks },
     };
   }
 }

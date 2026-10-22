@@ -2,8 +2,11 @@
 // (docs/hud-180.md): he opens it in a speech bubble in his own voice, then the totals (the coin in
 // the display face, the Hopper, Machine Kits, the Megaproject, what sold), then the timeline as
 // rows (each line that stopped as one row: its first machine to block, the cause and how many
-// machines it stopped as chips, the fix to build as a chip, a jump-to button; heaps filling, orders
-// filled, research finished, the Megaproject's stages one row each), and at the foot exactly how
+// machines it stopped as chips, the fix to build as a chip, a jump-to button; on the District, the
+// World and Beyond the same for a module that stopped, and a row for each route short of carriers,
+// naming it and how many it is short, as the District's starved report does; heaps filling, orders
+// filled, research finished, the Megaproject's stages one row each; the Standing Committee's number
+// reached while away, which it waits on until you are back), and at the foot exactly how
 // the number was made: what ran tick by tick, what was worked out from the rates and at what
 // efficiency (pillar 4: a number the player can check). While the run is still going (it is spread
 // over frames, so the page never freezes) the letter shows its progress.
@@ -13,7 +16,9 @@ import { textWidth, bigWidth, BIG_H } from '../ui/font';
 import { button, meter, coinIcon, chip, chipWidth, rule } from './chrome';
 import { duration, clock } from '../engine/fmt';
 import { Num } from '../engine/num';
-import { type TimelineEntry, type OfflineReport, type OfflineRun, type JamLine } from '../sim/offline';
+import { type TimelineEntry, type OfflineReport, type OfflineRun, type JamLine, type ReportFloor } from '../sim/offline';
+import { hentAt } from '../sim/systems/high';
+import { DS } from './district';
 import { IDLE } from '../data/idle';
 import { layoutRich, drawLayout } from '../ui/rich';
 import { T, roleInk, type Role } from '../ui/theme';
@@ -47,17 +52,30 @@ export function fit(s: string, w: number): string {
 const KIND: Record<TimelineEntry['kind'], { icon: string; role: Role }> = {
   jam: { icon: '{u:remove}', role: 'bad' }, heap: { icon: '{i:slag}', role: 'warn' }, order: { icon: '{u:orders}', role: 'good' },
   research: { icon: '{u:research}', role: 'research' }, mega: { icon: '{u:mega}', role: 'coin' }, bay: { icon: '{u:mega}', role: 'coin' },
+  route: { icon: '{u:district}', role: 'warn' }, committee: { icon: '{u:reset}', role: 'reset' },
 };
 
-/** Go to a jam or a heap on its floor and pin its report. */
-export function goTo(app: App, e: { x?: number; y?: number; floor?: 'workshop' | 'factory' }) {
+/** A row's icon: a short route has its floor's. */
+const rowIcon = (e: TimelineEntry) => (e.kind !== 'route' ? KIND[e.kind].icon : e.floor === 'world' ? '{u:world}' : e.floor === 'beyond' ? '{u:kernel}' : '{u:district}');
+
+const isLine = (l: JamLine) => !l.route;
+
+/** Go to a jam, a heap or a short route on its floor and pin its report (a route's: its own). */
+export function goTo(app: App, e: { x?: number; y?: number; floor?: ReportFloor }, line?: JamLine | null) {
   if (e.x === undefined || e.y === undefined) return;
   const g = app.game;
+  const f = e.floor ?? 'workshop';
   app.panel = null;
-  app.setFloor(e.floor ?? 'workshop', true);
+  app.setFloor(f, true);
   app.lookAt(e.x + 0.5, e.y + 0.5);
-  if ((e.floor ?? 'workshop') === 'workshop') app.selected = g.entAt(e.x, e.y)?.id ?? null;
-  else app.fselected = g.fentAt(e.x, e.y)?.id ?? null;
+  if (f === 'workshop') app.selected = g.entAt(e.x, e.y)?.id ?? null;
+  else if (f === 'factory') app.fselected = g.fentAt(e.x, e.y)?.id ?? null;
+  else {
+    DS.game = g;
+    DS.floor = f;
+    DS.route = line?.route ? line.route.id : null;
+    DS.sel = line?.route ? null : hentAt(g, f, e.x, e.y)?.id ?? null;
+  }
 }
 
 /** The biggest few things sold, as icon rows: "{i:steel} 12.3K  {i:glass} 4.5K". */
@@ -77,7 +95,9 @@ export function paidRow(rep: Pick<OfflineReport, 'replayed' | 'extrapolated' | '
 /** Mayor Bramble's opening line for the letter. */
 function brambleLine(rep: OfflineReport | null): string {
   if (!rep) return 'Welcome back! Counting it all up, one moment!';
-  if (rep.lines.length) return rep.lines.length === 1 ? 'While you were away, a line got stuck! Look!' : 'While you were away, some lines got stuck! Look!';
+  const n = rep.lines.filter(isLine).length;
+  if (n) return n === 1 ? 'While you were away, a line got stuck! Look!' : 'While you were away, some lines got stuck! Look!';
+  if (rep.lines.length) return 'While you were away, a route ran short! Look!';
   if (rep.coin.gt(0)) return 'While you were away, she never stopped! Smells like money!';
   return 'Welcome back! A quiet stretch. Ribbit.';
 }
@@ -105,8 +125,9 @@ export function offlineReportCard(app: App, L: Layout) {
     // still running: a meter, never a frozen page
     meter(ui, c.x, yy + 2, c.w, 8, job.progress(), { role: 'coin' });
     yy += 16;
-    drawLayout(ui, layoutRich('{u:clock} the first hour · tick by tick, the same machines as live play · {good:pays in full}', c.w), c.x, yy, T.ink);
-    yy += layoutRich('{u:clock} the first hour · tick by tick, the same machines as live play · {good:pays in full}', c.w).h + 4;
+    const first = `{u:clock} the first ${duration(job.firstReplay)} · tick by tick, the same machines as live play · {good:pays in full}`;
+    drawLayout(ui, layoutRich(first, c.w), c.x, yy, T.ink);
+    yy += layoutRich(first, c.w).h + 4;
     drawLayout(ui, layoutRich('{u:stats} the rest · the rates measured · a new segment at each full heap, filled order, finished research', c.w), c.x, yy, T.inkSoft);
     return;
   }
@@ -139,10 +160,12 @@ export function offlineReportCard(app: App, L: Layout) {
   // ---- the timeline: its summary as chips, then a row a line (two when it has a fix)
   rule(ui, c.x, yy, c.w, true);
   yy += 4;
-  const nl = rep.lines.length;
+  const nl = rep.lines.filter(isLine).length;
+  const nr = rep.lines.length - nl;
   const sum: { text: string; role: Role }[] = nl
     ? [{ text: `${nl} line${nl > 1 ? 's' : ''} stopped`, role: 'bad' }, { text: `${rep.jams} machine${rep.jams > 1 ? 's' : ''}`, role: 'bad' }]
-    : [{ text: `nothing jammed in ${duration(rep.counted)}`, role: 'good' }];
+    : nr ? [] : [{ text: `nothing jammed in ${duration(rep.counted)}`, role: 'good' }];
+  if (nr) sum.push({ text: `${nr} route${nr > 1 ? 's' : ''} short`, role: 'warn' });
   if (rep.orders.length) sum.push({ text: `${rep.orders.length} order${rep.orders.length > 1 ? 's' : ''} filled`, role: 'good' });
   if (rep.research.length) sum.push({ text: `${rep.research.length} research done`, role: 'research' });
   let sx = c.x;
@@ -171,12 +194,13 @@ export function offlineReportCard(app: App, L: Layout) {
     const k = KIND[e.kind];
     const line = e.line !== undefined ? rep.lines[e.line] : null;
     ui.text((e.est ? '~' : '') + clock(e.t), c.x + 30, yy + 2, T.inkSoft, { align: 'right' });
-    drawLayout(ui, layoutRich(k.icon), c.x + 34, yy + 2, T.ink);
-    const go = e.x !== undefined && (e.kind === 'jam' || e.kind === 'heap');
+    drawLayout(ui, layoutRich(rowIcon(e)), c.x + 34, yy + 2, T.ink);
+    const go = e.x !== undefined && (e.kind === 'jam' || e.kind === 'heap' || e.kind === 'route');
     const room = c.w - 46 - (go ? 40 : 0);
     if (line) lineRows(app, line, c.x + 46, yy, c.w - 46, room, true);
     else ui.text(fit(e.text, room), c.x + 46, yy + 2, roleInk(k.role));
-    if (go && button(ui, 'offGo' + i, c.x + c.w - 36, yy - 1, 36, 14, 'Go', { tip: line ? `{u:remove} show ${line.root.name} · the first of its line to block` : e.est ? '~ worked out from the measured rates · this is where it will be' : 'show me where' })) goTo(app, e);
+    const tip = line?.route ? `{u:district} show the ${line.root.name} route · its ${line.route.carrier}s` : line ? `{u:remove} show ${line.root.name} · the first of its line to block` : e.est ? '~ worked out from the measured rates · this is where it will be' : 'show me where';
+    if (go && button(ui, 'offGo' + i, c.x + c.w - 36, yy - 1, 36, 14, 'Go', { tip })) goTo(app, e, line);
     yy += rowH(e);
   }
   if (pages > 1) {
@@ -207,7 +231,8 @@ export function lineRows(app: App, line: JamLine, x: number, y: number, w: numbe
   const ui = app.ui;
   const who = line.root.why && ITEMS[line.root.why as ItemId] ? `{i:${line.root.why}} ` : '';
   const cause = `${who}${line.cause}`;
-  const count = `${line.count} stopped`;
+  // a short route stops nothing: its chip says how much of its want it carries
+  const count = line.route ? `carries ${Math.round((line.route.cap / Math.max(1e-9, line.route.want)) * 100)}%` : `${line.count} stopped`;
   const name = line.root.name;
   const nw = textWidth(name) + 5;
   // line one: the name, then the cause and the count when they fit beside it
