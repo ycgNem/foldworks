@@ -96,6 +96,9 @@ export class Renderer {
   factoryTarget: { x: number; y: number } | null = null;
   /** per-machine blink phase start when it became blocked */
   private jamSince = new Map<number, number>();
+  /** each Workshop pip's colour last frame and when it last changed (by world px), for its ripple */
+  private pipCol = new Map<number, { col: string; since: number }>();
+  private pipAt = new Map<number, number>();
   /** recent crafting flashes: entity id -> time */
   private flashes = new Map<number, number>();
   /** buildings just placed on the Workshop (tile key y * 4096 + x -> time): they drop in from
@@ -391,7 +394,7 @@ export class Renderer {
           const side = Math.max(1, Math.round(Math.sqrt(e.d ?? 4)));
           const box = snap ?? { x: Math.round((e.x ?? 0) - side / 2), y: Math.round((e.y ?? 0) - side / 2), w: side, h: side, img: null };
           fx.folds.push({ x: box.x * TILE, y: box.y * TILE, w: box.w * TILE, h: box.h * TILE, img: snap?.img ?? null, t: 0, letter: e.id ?? '' });
-          this.sfx('whoosh');
+          // its sound is the app's (Audio.foldSound: the crease, the corners and the snap, timed to this)
           break;
         }
         case 'route': {
@@ -971,6 +974,15 @@ export class Renderer {
   /** the status pip, the top-right 4x4 of the tile at (x, y) (DESIGN.md §4, §17); blocked pips blink */
   private pip(x: number, y: number, col: string, blink: boolean) {
     const ctx = this.ctx;
+    // Milestone 12: a pip that changes colour after holding one for 1.5 s ripples out once in its
+    // new colour (0.4 s); a machine flickering between working and waiting each craft does not
+    const key = y * 65536 + x, was = this.pipCol.get(key);
+    if (!was || was.col !== col) {
+      if (was && this.time - was.since >= 1.5 && !this.fx.calm) this.pipAt.set(key, this.time);
+      this.pipCol.set(key, { col, since: this.time });
+    }
+    const age = this.time - (this.pipAt.get(key) ?? -9);
+    if (age < 0.4) { const r = 1 + Math.round(age * 7); ctx.strokeStyle = rgba(col, 1 - age / 0.4); ctx.lineWidth = 1; ctx.strokeRect(x + 11 - r + 0.5, y - r + 0.5, 4 + r * 2, 4 + r * 2); }
     if (blink && Math.floor(this.time * 3) % 2) col = C.rust;
     ctx.fillStyle = C.ink;
     ctx.fillRect(x + 11, y, 5, 5);
@@ -1217,7 +1229,6 @@ export class Renderer {
       if (f.t < FOLD_DUR * FOLD_FLASH && f.t + dt >= FOLD_DUR * FOLD_FLASH) {
         this.fx.burst(cx, cy, 16, [C.bone, C.gold, C.hot], 60, 0, 1, 0.5);
         this.fx.ring(cx, cy, C.bone, Math.max(f.w, f.h) / 2 + 6, 0.35, 6);
-        this.sfx('stamp', 0.7);
       }
       if (f.t < FOLD_DUR && f.t + dt >= FOLD_DUR) {
         const s = this.toScreen(cx / TILE, cy / TILE);

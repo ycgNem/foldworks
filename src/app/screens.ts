@@ -31,6 +31,7 @@ import { drawRich, richHeight, richWidth, CAP_H, BIG_CAP_H, CHIP_H } from '../ui
 import { offlineReportCard } from './offlinereport';
 import { overnightScreen } from './overnight';
 import { cycleNotation, NOTATION_LABEL, cycleHoverTags, getHoverTags, HOVER_LABEL } from './settings';
+import { setMute, setCalm, volumeRows } from './soundopts';
 import { getNotation } from '../engine/num';
 // Milestone 5: Reorganize, the Patent Office and the Patent Drawer
 import { reorganizeCard } from './reorganize';
@@ -981,7 +982,10 @@ function optionsScreen(app: App, r: Rect) {
     if (button(ui, id, bx, by, 50, 17, on ? 'on' : 'off', { active: on, tip: on ? '{k:LMB} off' : '{k:LMB} on' })) click();
   };
   const mute = app.input.binds.mute?.[0];
-  row('{u:heart}', `Sound${mute ? `  {k:${keyLabel(mute)}}` : ''}`, toggle('opt:Sound', !app.muted, () => { app.muted = !app.muted; app.audio.setMuted(app.muted); }));
+  row('{u:heart}', `Sound${mute ? `  {k:${keyLabel(mute)}}` : ''}`, toggle('opt:Sound', !app.muted, () => setMute(app, !app.muted)));
+  // Milestone 12: the four buses' volumes (src/app/soundopts.ts)
+  y += volumeRows(app, x, y - 2, w) + 2;
+  rule(ui, x, y - 4, w);
   // Milestone 6: the notation, a player setting (src/app/settings.ts), cycled by one button
   const notes = Object.values(NOTATION_LABEL) as string[];
   const nw = Math.max(80, ...notes.map((n) => textWidth(n) + 16));
@@ -989,7 +993,7 @@ function optionsScreen(app: App, r: Rect) {
     const cur = NOTATION_LABEL[getNotation()];
     if (button(ui, 'opt:notation', bx, by, nw, 17, cur, { tip: [{ text: '{big:Numbers}' }, { text: notes.map((n) => (n === cur ? `{ink:${n}}` : `{soft:${n}}`)).join(' · ') }, { text: '{k:LMB} next' }] })) cycleNotation();
   }, nw);
-  row('{u:play}', 'Reduced motion', toggle('opt:Reduced motion', app.renderer.fx.calm, () => { app.renderer.fx.calm = !app.renderer.fx.calm; }));
+  row('{u:play}', 'Reduced motion', toggle('opt:Reduced motion', app.renderer.fx.calm, () => setCalm(app, !app.renderer.fx.calm)));
   // how much a hover over the floor shows (the owner, 2026-10-21: the tags took too much room)
   const hovers = Object.values(HOVER_LABEL) as string[];
   const hw = Math.max(80, ...hovers.map((n) => richWidth(n) + 16));

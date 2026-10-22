@@ -32,6 +32,7 @@ import { pinnedReport, hoverEnt, worldTip, zones, pinTop, bigSafe } from './tags
 import { drawWheel } from './wheel';
 import { nextGoal } from './goals';
 import { getHoverTags } from './settings';
+import { calm } from './soundopts';
 import { districtHud, districtHover, districtHoverKey, districtZones } from './district';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
@@ -375,6 +376,9 @@ function celebrations(app: App, L: Layout, dt: number) {
   h.celebs = h.celebs.filter((c) => c.t < (c.kind === 'megaDone' ? 4.5 : c.kind === 'splus' ? 3.2 : c.kind === 'banner' ? BANNER_S : 1.6));
   let bannerN = 0;
   let bannerY = 0;
+  // reduced motion (Milestone 12): a few flakes, no flashes, ribbons that fade in place
+  const still = calm(app);
+  if (still) { if (h.rain.length > 24) h.rain.length = 24; h.confetti = Math.min(h.confetti, 3); if (h.flakes.length > 12) h.flakes.length = 12; }
   // confetti rain
   if (h.rain.length) {
     const s = sheet('fx_confetti');
@@ -397,10 +401,10 @@ function celebrations(app: App, L: Layout, dt: number) {
   }
   for (const c of h.celebs) {
     if (c.kind === 'megaDone') {
-      if (c.t < 0.35) { ctx.fillStyle = rgba(C.hot, (0.35 - c.t) * 1.6); ctx.fillRect(0, 0, ui.w, ui.h); }
+      if (c.t < 0.35 && !still) { ctx.fillStyle = rgba(C.hot, (0.35 - c.t) * 1.6); ctx.fillRect(0, 0, ui.w, ui.h); }
       // the ribbon drops in, bounces, holds, then lifts away
       const k = Math.min(1, c.t * 3);
-      const drop = c.t < 0.33 ? (1 - k) * -60 : c.t > 3.8 ? (c.t - 3.8) * -120 : Math.round(Math.sin(Math.min(1, (c.t - 0.33) * 4) * Math.PI) * 4);
+      const drop = still ? 0 : c.t < 0.33 ? (1 - k) * -60 : c.t > 3.8 ? (c.t - 3.8) * -120 : Math.round(Math.sin(Math.min(1, (c.t - 0.33) * 4) * Math.PI) * 4);
       // a District project (the Floating City, the Scrap Transmuter) or the Great Drill
       const proj = c.id && c.id in MEGAS ? MEGAS[c.id as MegaId] : null;
       const st = proj ? proj.stages.find((m) => m.stage === c.value) : MEGA.find((m) => m.stage === c.value);
@@ -410,9 +414,9 @@ function celebrations(app: App, L: Layout, dt: number) {
       bannerRibbon(app, Math.floor(ui.w / 2), Math.round(30 + drop), title, sub, 'gold', sc);
     } else if (c.kind === 'splus') {
       // S+: a gold flash, then the ribbon drops in over the floor, bounces, and lifts away
-      if (c.t < 0.25) { ctx.fillStyle = rgba(C.gold, (0.25 - c.t) * 1.4); ctx.fillRect(0, 0, ui.w, ui.h); }
+      if (c.t < 0.25 && !still) { ctx.fillStyle = rgba(C.gold, (0.25 - c.t) * 1.4); ctx.fillRect(0, 0, ui.w, ui.h); }
       const k = Math.min(1, c.t * 4);
-      const drop = c.t < 0.25 ? (1 - k) * -50 : c.t > 2.7 ? (c.t - 2.7) * -140 : Math.round(Math.sin(Math.min(1, (c.t - 0.25) * 4) * Math.PI) * 3);
+      const drop = still ? 0 : c.t < 0.25 ? (1 - k) * -50 : c.t > 2.7 ? (c.t - 2.7) * -140 : Math.round(Math.sin(Math.min(1, (c.t - 0.25) * 4) * Math.PI) * 3);
       const title = c.id === 'fold' ? 'S+ Module!' : 'S+ Flawless!';
       const sub = c.id === 'fold' ? 'the best fold there is · ×1.35 in one tile' : 'the top grade · every part at full marks';
       const onCard = app.panel === 'grade' || app.panel === 'fgrade';
@@ -420,7 +424,7 @@ function celebrations(app: App, L: Layout, dt: number) {
       // on the grade card it is a ribbon alone at the very top, clear of the card's parts
       const r = bannerRibbon(app, Math.floor(ui.w / 2), onCard ? Math.round(L.overlay.y + 1 + Math.min(0, drop)) : Math.round(36 + drop), title, onCard ? '' : sub, 'gold', onCard ? 2 : 3);
       const mid = r.x + r.w / 2;
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < (still ? 0 : 10); i++) {
         const a = c.t * 3 + (i * Math.PI) / 5;
         ctx.fillStyle = i % 2 ? C.gold : C.bone;
         ctx.fillRect(Math.round(mid + Math.cos(a) * (r.w / 2 + 8)), Math.round(r.y + r.h / 2 + Math.sin(a) * (r.h / 2 + 6)), 2, 2);
@@ -432,13 +436,13 @@ function celebrations(app: App, L: Layout, dt: number) {
       if (i > 2) continue;
       const col: RibbonColor = c.color ? ribbonFor(accentRole(c.color)) : 'gold';
       const k = Math.min(1, c.t * 5);
-      const lift = c.t < 0.2 ? Math.round((1 - k) * -20) : c.t > BANNER_S - 0.4 ? Math.round((c.t - (BANNER_S - 0.4)) * -60) : 0;
+      const lift = still ? 0 : c.t < 0.2 ? Math.round((1 - k) * -20) : c.t > BANNER_S - 0.4 ? Math.round((c.t - (BANNER_S - 0.4)) * -60) : 0;
       ctx.globalAlpha = c.t > BANNER_S - 0.4 ? Math.max(0, (BANNER_S - c.t) / 0.4) : 1;
       const title = (c.title ?? '').replace(/[\u0001-\u0016]/g, '').trim();
       if (i === 0) bannerY = app.panel ? L.overlay.y + 2 : 44;
       const r = bannerRibbon(app, Math.floor(ui.w / 2), bannerY + lift, title, c.sub ?? '', col, bigWidth(title) * 2 + 60 <= ui.w ? 2 : 1);
       bannerY += r.h + 4;
-      if (c.t < 0.6) for (let j = 0; j < 8; j++) {
+      if (c.t < 0.6 && !still) for (let j = 0; j < 8; j++) {
         const a = (j / 8) * Math.PI * 2, rr = 8 + c.t * 70;
         ctx.fillStyle = j % 2 ? C.gold : C.bone;
         ctx.fillRect(Math.round(ui.w / 2 + Math.cos(a) * rr * 1.6), Math.round(r.y + 10 + Math.sin(a) * rr * 0.5), 2, 2);
