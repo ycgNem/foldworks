@@ -11,6 +11,9 @@ import { RULES } from '../../data/rules';
 import { creditResearch } from './research';
 import { wastePrice } from './modules';
 import { dockTally } from '../offline';
+import { lrules } from '../legacy';
+import { orderQueue } from '../transfer';
+import { ISLAND_GOODS, worldOf } from './islands';
 
 /** What one item sells for at the Dock right now. */
 export function saleValue(g: Game, item: ItemId): number {
@@ -25,18 +28,23 @@ export function saleValue(g: Game, item: ItemId): number {
  * An order for the Factory Dock only counts deliveries made there. */
 export function fillOrder(g: Game, item: ItemId, n: Num, floor?: 'factory' | 'district' | 'world'): Num {
   const o = g.s.orders;
-  if (!o.active) return n;
-  const d = ORDER[o.active];
-  if (d.at && floor !== d.at) return n;
-  const want = d.wants[item];
-  if (!want) return n;
-  const prog = (o.progress[o.active] ??= {});
-  const have = prog[item] ?? Num.ZERO;
-  if (have.gte(want)) return n;
-  const room = Num.of(want).sub(have);
-  const take = Num.min(room, n);
-  prog[item] = have.add(take);
-  return n.sub(take);
+  const runners = lrules(g).runners;
+  // Contract Runners (a Legacy node, DESIGN.md §22): every order on offer, from any floor's Dock
+  const ids = runners ? orderQueue(g) : o.active ? [o.active] : [];
+  for (const id of ids) {
+    if (n.isZero()) break;
+    const d = ORDER[id];
+    if (d.at && floor !== d.at && !runners) continue;
+    const want = d.wants[item];
+    if (!want) continue;
+    const prog = (o.progress[id] ??= {});
+    const have = prog[item] ?? Num.ZERO;
+    if (have.gte(want)) continue;
+    const take = Num.min(Num.of(want).sub(have), n);
+    prog[item] = have.add(take);
+    n = n.sub(take);
+  }
+  return n;
 }
 
 export function runDocks(g: Game) {
@@ -72,12 +80,23 @@ export function runDocks(g: Game) {
   g.intake.length = 0;
 }
 
-/** The Codex (Unit 7's rep 1): the first delivery of each item pays 30x its value, once. */
+/** The Codex (Unit 7's rep 1): the first delivery of each item pays 30x its value, once. Field
+ * Notes (Unit 7's rep 5, DESIGN.md §22): an island's exotic and tier 4 goods pay it again on each
+ * island they are first delivered on. */
 function codex(g: Game, item: ItemId, x: number, y: number, floor?: 'factory' | 'district' | 'world') {
-  if (g.s.orders.rep.unit7 < 1 || g.s.codex.includes(item)) return;
+  if (g.s.orders.rep.unit7 < 1) return;
   const v = ITEMS[item].value;
   if (v <= 0) return;
-  g.s.codex.push(item);
+  if (g.s.codex.includes(item)) {
+    if (g.s.orders.rep.unit7 < 5 || !ISLAND_GOODS.has(item)) return;
+    const key = `${worldOf(g)}:${item}`;
+    const notes = (g.s.meta.fieldNotes ??= []);
+    if (notes.includes(key)) return;
+    notes.push(key);
+  } else {
+    g.s.codex.push(item);
+    if (ISLAND_GOODS.has(item)) (g.s.meta.fieldNotes ??= []).push(`${worldOf(g)}:${item}`);
+  }
   g.bump('codex');
   const pay = Num.of(v * RULES.codexMult.value);
   g.earn(pay, true);

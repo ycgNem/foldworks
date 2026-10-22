@@ -33,13 +33,17 @@ import { RULES, GRADES } from '../data/rules';
 import { RECIPES, RECIPE } from '../data/recipes';
 import { ITEMS, ITEM_IDS, itemName, type ItemId } from '../data/items';
 import { BUILD, isMachine, isPower } from '../data/machines';
-import { RESEARCH_IDS, type ResearchId } from '../data/research';
+import { RESEARCH, RESEARCH_IDS, type ResearchId } from '../data/research';
 import { CUSTOMERS, type CustomerId } from '../data/orders';
 import { MEGA, megaStage } from '../data/megaprojects';
-import { FACTORY, START_LAYOUT } from '../data/land';
+import { ANNEX, FACTORY, START_LAYOUT } from '../data/land';
 import { IDLE_UPGRADES } from '../data/idle';
 import { PATENTS, type PatentId } from '../data/patents';
-import { newState, type Filed, type ModuleDesign, type State } from './world';
+import { newState, type Filed, type ModuleDesign, type RunRecord, type State } from './world';
+import { isSky, setupIsland } from './systems/islands';
+import { lrules } from './legacy';
+import { megaDone } from './systems/high';
+import { noteBests } from './relocate';
 import { BYPRODUCTS, mainItem, megaOpen } from './systems/modules';
 import { recipeKnown } from './transfer';
 import { workShare } from './systems/stats';
@@ -134,7 +138,10 @@ export interface Valued { item: ItemId; steps: number; grade: string; mult: numb
 export function designValue(d: ModuleDesign): Valued | null {
   const item = mainItem(d);
   if (!item || !patentable(item)) return null;
-  const steps = stepsFolded(d, item);
+  // a fold on a high floor files a step deeper per depth past 2 (DESIGN.md §22, the second gate):
+  // its box's routes are logistics folded away, so a District fold of a chain is worth more than the
+  // Factory's nested fold of the same chain
+  const steps = stepsFolded(d, item) + Math.max(0, (d.depth ?? 1) - 2) * RULES.highFoldSteps.value;
   const scale = designScale(d, item);
   const tier = rateTier(scale);
   return { item, steps, grade: d.grade.letter, mult: d.grade.mult, scale, tier, value: steps * d.grade.mult * tierMult(tier), rate: d.outs[item] ?? 0, design: d };
@@ -362,28 +369,57 @@ export function reorganize(g: Game, challenge?: ChallengeId): ActResult {
   const p = previewPatents(g).now;
   const m = s.meta;
   fileDesigns(g);
-  m.history.push({ run: m.runs + 1, ticks: s.tick - m.runStart, patents: p, earned: s.earned, peakPerMin: m.peakPerMin });
+  endRun(g, { patents: p });
   m.patents = m.patents.add(p);
   m.patentsEarned = m.patentsEarned.add(p);
+  if (m.here) m.here.runs++;
+  keepRoom(g);
+  startRun(g);
+  if (challenge) startChallenge(g, challenge);
+  g.bump('reorganizes');
+  g.emit({ type: 'reorganize', value: p, d: m.runs });
+  return OK;
+}
+
+/** Close the run: its record, the lifetime statistics, and this world's best folds (Reorganize and
+ * Relocate both call it before the reset). */
+export function endRun(g: Game, rec: { patents: number; relocate?: RunRecord['relocate']; legacy?: number }) {
+  const s = g.s;
+  const m = s.meta;
+  noteBests(g);
+  m.history.push({ run: m.runs + 1, ticks: s.tick - m.runStart, patents: rec.patents, earned: s.earned, peakPerMin: m.peakPerMin, ...(rec.relocate ? { relocate: rec.relocate, legacy: rec.legacy } : {}) });
   m.runs++;
   m.lifetime.earned = m.lifetime.earned.add(s.earned);
   for (const [it, n] of Object.entries(s.delivered) as [ItemId, Num][]) m.lifetime.delivered[it] = (m.lifetime.delivered[it] ?? Num.ZERO).add(n);
   m.lifetime.folds += s.designs.length;
-  const fresh = carry(s);
+}
+
+/** The Sky Anchor's stages (DESIGN.md §22): the room bought this run that is kept through a
+ * Reorganize, the most of it so far. */
+function keepRoom(g: Game) {
+  const s = g.s;
+  const k = (s.meta.keptRoom ??= {});
+  if (megaDone(g, 'anchor', 1)) k.annex = Math.max(k.annex ?? 0, s.annex ?? 0);
+  if (megaDone(g, 'anchor', 2)) k.district = Math.max(k.district ?? 0, s.district?.lots ?? 0);
+  if (megaDone(g, 'anchor', 3)) k.world = Math.max(k.world ?? 0, s.world?.lots ?? 0);
+}
+
+/** Start a fresh run on the island the town is on: the kept state carried over, the start layout,
+ * the island's ground, the head starts (Reorganize and Relocate both end here). */
+export function startRun(g: Game) {
+  const fresh = carry(g.s);
   g.s = fresh;
   // the old run's grid and lookups go with it, before anything is placed on the new floor
   g.rebuild();
   g.rebuildFactory();
   g.intake.length = 0;
   for (const b of START_LAYOUT) g.addPart(b.kind, b.x, b.y, b.rot);
+  setupIsland(g);
   fresh.nextSpark = g.sparkDelay();
+  fresh.annex = Math.min(ANNEX.blocks, fresh.meta.keptRoom?.annex ?? 0);
   applyHeadStarts(g);
-  if (challenge) startChallenge(g, challenge);
   g.layoutDirty = true;
   g.factoryDirty = true;
-  g.bump('reorganizes');
-  g.emit({ type: 'reorganize', value: p, d: m.runs });
-  return OK;
 }
 
 /** A fresh run's state with the kept parts of `s` carried over. */
@@ -423,7 +459,8 @@ export function applyHeadStarts(g: Game, ids: readonly PatentId[] = g.s.meta.nod
     if (!e || e.k !== 'head') continue;
     for (const u of e.upgrades ?? []) if (!s.upgrades.includes(u)) s.upgrades.push(u);
     for (const r of e.research ?? []) add(r);
-    for (const l of e.land ?? []) if (!s.land.includes(l)) s.land.push(l);
+    // (never sky: Pebble Isle's C, D and F are not land, DESIGN.md §22)
+    for (const l of e.land ?? []) if (!s.land.includes(l) && !isSky(g, l)) s.land.push(l);
     if (e.coin) {
       s.coin = s.coin.add(e.coin);
       s.granted = (s.granted ?? Num.ZERO).add(e.coin);
@@ -431,6 +468,11 @@ export function applyHeadStarts(g: Game, ids: readonly PatentId[] = g.s.meta.nod
     for (const q of e.place ?? []) if (!g.entAt(q.x, q.y)) g.addPart(q.kind, q.x, q.y, q.rot);
     if (e.lots) s.headLots = Math.max(s.headLots ?? 0, e.lots);
   }
+  // the Legacy tree's head starts (DESIGN.md §22): the Town Archive knows Act I; Standing Charts knows
+  // Charting in a world whose World floor has stood
+  const lr = lrules(g);
+  if (lr.archive) for (const r of RESEARCH_IDS) if ((RESEARCH[r].act ?? 1) === 1) add(r);
+  if (lr.charts && s.meta.here?.opened) add('charting');
   // in the tree's order, so the research screen and the bots read them as researched in turn
   s.research.done = RESEARCH_IDS.filter((r) => research.has(r));
   g.layoutDirty = true;

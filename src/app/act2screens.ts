@@ -379,7 +379,7 @@ function act3Megas(app: App): boolean {
 /** The page's tabs: the Great Drill, the Floating City, the Scrap Transmuter (none before Act III). */
 function megaTabs(app: App): MenuTab[] {
   if (!act3Megas(app)) return [];
-  const short: Record<MegaId, string> = { city: 'Floating City', transmuter: 'Transmuter' };
+  const short: Record<MegaId, string> = { city: 'Floating City', transmuter: 'Transmuter', lighthouse: 'Lighthouse', anchor: 'Sky Anchor' };
   return [
     { id: 'mtab_drill', label: 'Great Drill', icon: 'mega', tip: '{u:mega} Megaproject #1 · the Factory Bay', active: megaTab.id === 'drill', onClick: () => { megaTab.id = 'drill'; } },
     ...MEGA_IDS.map((m): MenuTab => ({

@@ -1,6 +1,7 @@
 // Research nodes (DESIGN.md §8). Each costs item deliveries to the Hopper; one is selected at a
 // time and fills from matching deliveries; items delivered with nothing selected are banked.
 import type { ItemId } from './items';
+import type { WorldId } from './worlds';
 
 export const RESEARCH_IDS = [
   'pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding',
@@ -10,6 +11,9 @@ export const RESEARCH_IDS = [
   // Act III (DESIGN.md §21)
   'zoning', 'chutes', 'chemistry', 'bearings', 'vulcanizing', 'batteries', 'servos', 'sensors', 'processors',
   'recycling', 'hydroponics', 'sandwiches', 'robotics', 'floatingCity', 'scrapTransmuter', 'sandwichEngineering', 'districtFolds',
+  // Act IV (DESIGN.md §22): the World floor, the islands' own nodes, Megaprojects #4 and #5, Relocation
+  'charting', 'thermals', 'skyglassCutting', 'horizonOptics', 'cinderSmelting', 'sunsetDyes', 'sunsetEngineering',
+  'frostWorks', 'stormCells', 'pocketWeathers', 'relicStudy', 'lighthouse', 'skyAnchor', 'relocation',
 ] as const;
 export type ResearchId = (typeof RESEARCH_IDS)[number];
 
@@ -27,6 +31,8 @@ export interface ResearchDef {
   /** the Great Drill's stage that must stand before it is offered (Act III opens once the Drill is
    * done: DESIGN.md §21) */
   drill?: number;
+  /** offered only on this island (Act IV, DESIGN.md §22: each island's own goods and rules) */
+  world?: WorldId;
   derivation: string;
 }
 
@@ -75,6 +81,22 @@ export const RESEARCH: Record<ResearchId, ResearchDef> = {
   scrapTransmuter: { id: 'scrapTransmuter', num: 41, act: 3, drill: 3, name: 'The Scrap Transmuter', cost: { processor: 40, battery: 100 }, requires: ['processors', 'batteries', 'floatingCity'], unlocks: '{u:mega} {i:transmuterCoil} · Megaproject #3', derivation: '§21 Megaprojects (the second gate\'s retune: 20-40 min of the floor that makes it): the Scrap Transmuter; 40 processors and 100 batteries, about 25 min' },
   sandwichEngineering: { id: 'sandwichEngineering', num: 42, act: 3, drill: 3, name: 'Sandwich Engineering', cost: { robotArm: 15, processor: 30, sandwich: 150 }, requires: ['robotics', 'sandwiches'], unlocks: '{i:robotArm} + {i:processor} + 10 {i:sandwich} + {i:battery} → {i:sandwichEngineer} · Mk2 only', derivation: '§21 Tier 3 (the second gate\'s retune: 20-40 min of the floor that makes it): the Autonomous Sandwich Engineer; 15 robot arms, 30 processors, 150 sandwiches, about 35-40 min of the act\'s deepest groups' },
   districtFolds: { id: 'districtFolds', num: 43, act: 3, drill: 3, name: 'District Folds', cost: { robotArm: 20, sensor: 120 }, requires: ['robotics'], unlocks: '{u:fold} on the District · groups fold into one · depth 3', derivation: '§21 District folds (the second gate\'s retune: 20-40 min of the floor that makes it): 20 robot arms and 120 sensors, about 35 min' },
+  // Act IV (DESIGN.md §22 Research, page 4): the World floor and the Megaprojects wait for the
+  // District's folds; each island's nodes are offered on that island only, and are paid in its exotic
+  charting: { id: 'charting', num: 44, act: 4, drill: 3, name: 'Charting', cost: { robotArm: 30, sensor: 150, processor: 60 }, requires: ['districtFolds'], unlocks: '{u:world} the World floor · barge routes · depth-3 modules go up', derivation: '§22 Research: the World floor; paid in the District\'s own goods: 30 robot arms, 150 sensors and 60 processors are 20-30 min of the District that researched District Folds (§21)' },
+  thermals: { id: 'thermals', num: 45, act: 4, world: 'rime', name: 'Thermals', cost: { coal: 500, steel: 150 }, requires: ['steamPower'], unlocks: 'the Heater · burns {i:coal} · warms powered machines within 2 tiles', derivation: '§22 Rime: the Heater with Act II\'s first powered machines, priced as Overdrive and Steam Power (§18), so a Rime run is never cold for want of research' },
+  skyglassCutting: { id: 'skyglassCutting', num: 46, act: 4, drill: 3, world: 'pebble', name: 'Skyglass Cutting', cost: { skyglass: 600, glass: 600 }, requires: ['chutes', 'glassworks'], unlocks: '2 {i:skyglass} + {i:glass} → {i:skyglassLens} in the Kiln', derivation: '§22 Research: Pebble Isle\'s first node, paid in its exotic (600 is about 13 min of one Miner at Pebble\'s 1.5x, 45 a minute)' },
+  horizonOptics: { id: 'horizonOptics', num: 47, act: 4, drill: 3, world: 'pebble', name: 'Horizon Optics', cost: { skyglassLens: 200, sensor: 80 }, requires: ['skyglassCutting', 'sensors'], unlocks: '2 {i:skyglassLens} + {i:sensor} → {i:horizonLens}', derivation: '§22 Research: Pebble Isle\'s deep node' },
+  cinderSmelting: { id: 'cinderSmelting', num: 48, act: 4, drill: 3, world: 'cinder', name: 'Cinder Smelting', cost: { cinderite: 600, steel: 1000 }, requires: ['chutes'], unlocks: '{i:cinderite} + {i:steel} → {i:cinderAlloy} in the Smelter', derivation: '§22 Research: Cinder Isle\'s first node, paid in its exotic' },
+  sunsetDyes: { id: 'sunsetDyes', num: 49, act: 4, drill: 3, world: 'cinder', name: 'Sunset Dyes', cost: { cinderAlloy: 200, solvent: 200 }, requires: ['cinderSmelting', 'chemistry'], unlocks: '2 {i:cinderite} + {i:solvent} → {i:sunsetDye} in the Chem Vat', derivation: '§22 Research: Cinder Isle\'s second node' },
+  sunsetEngineering: { id: 'sunsetEngineering', num: 50, act: 4, drill: 3, world: 'cinder', name: 'Sunset Engineering', cost: { sunsetDye: 200, sandwichEngineer: 2 }, requires: ['sunsetDyes', 'sandwichEngineering'], unlocks: '4 {i:sunsetDye} + {i:sandwichEngineer} + 2 {i:cinderAlloy} → {i:sunsetGenerator} · Mk2 only', derivation: '§22 Research: Cinder Isle\'s deep node, the Portable Sunset Generator' },
+  frostWorks: { id: 'frostWorks', num: 51, act: 4, drill: 3, world: 'rime', name: 'Frost Works', cost: { rimeCrystal: 600, solvent: 200 }, requires: ['chemistry'], unlocks: '{i:rimeCrystal} + {i:steel} + {i:solvent} → {i:frostAlloy} in the Chem Vat', derivation: '§22 Research: Rime\'s first node, paid in its exotic' },
+  stormCells: { id: 'stormCells', num: 52, act: 4, drill: 3, world: 'rime', name: 'Storm Cells', cost: { frostAlloy: 120, battery: 150 }, requires: ['frostWorks', 'batteries'], unlocks: '{i:frostAlloy} + {i:battery} → {i:stormCell} in the Chem Vat', derivation: '§22 Research: Rime\'s second node' },
+  pocketWeathers: { id: 'pocketWeathers', num: 53, act: 4, drill: 3, world: 'rime', name: 'Pocket Weather', cost: { stormCell: 40, umbrella: 15 }, requires: ['stormCells', 'robotics'], unlocks: '2 {i:stormCell} + {i:weatherBalloon} + {i:umbrella} → {i:pocketWeather} · Mk2 only', derivation: '§22 Research: Rime\'s deep node, Pocket Weather' },
+  relicStudy: { id: 'relicStudy', num: 54, act: 4, drill: 3, world: 'oldworks', name: 'Relic Study', cost: { relic: 600, gearbox: 100 }, requires: ['bearings'], unlocks: '{i:relic} + 2 {i:gear} + {i:bearing} → {i:relicGear}', derivation: '§22 Research: the Old Works\' node, paid in its exotic' },
+  lighthouse: { id: 'lighthouse', num: 55, act: 4, drill: 3, name: 'The Lighthouse at the Edge', cost: { sensor: 150, battery: 200, glass: 2000 }, requires: ['charting'], unlocks: '{u:mega} the World Bay · {i:lighthouseLamp} · Megaproject #4', derivation: '§22 Megaprojects: the Lighthouse, paid in what every island makes (its stages are built on four islands)' },
+  skyAnchor: { id: 'skyAnchor', num: 56, act: 4, drill: 3, name: 'The Sky Anchor', cost: { gearbox: 200, bearing: 800, steel: 3000 }, requires: ['charting'], unlocks: '{u:mega} the World Bay · {i:anchorChain} · Megaproject #5', derivation: '§22 Megaprojects: the Sky Anchor, paid in what every island makes' },
+  relocation: { id: 'relocation', num: 57, act: 4, drill: 3, name: 'Relocation', cost: { sandwichEngineer: 3, umbrella: 20 }, requires: ['charting', 'sandwichEngineering'], unlocks: '{u:relocate} Relocate · fly the town to another island · bank {u:legacy} Legacy', derivation: '§22 Relocate: the town packs up (an Engineer to pack the sandwiches, umbrellas for the flight); about an hour of an Act IV Engineer group, so a world is played to its World floor before it is left' },
   folding: { id: 'folding', num: 10, name: 'Folding', cost: { gizmo: 50, gear: 500 }, requires: ['gizmoTheory'], unlocks: '{u:fold} the Fold tool · Chunk D for sale', derivation: '§8 #10; 500 gears: chunk C\'s gear lines on the Hopper put Folding at 22-30 min and the Dock-only player 5+ min behind (§13 checks 6, 11); §16 first fold by 40 min' },
 };
 

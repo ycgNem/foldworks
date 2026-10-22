@@ -44,7 +44,8 @@ const cheb = (a: { x: number; y: number; w: number; h: number }, x: number, y: n
 /** Rebuild the grids from the layout (Game.rebuild calls it). Deterministic: id order throughout. */
 export function buildGrids(g: Game) {
   const poles = g.s.ents.filter((e) => e.kind === 'pole').sort((a, b) => a.id - b.id);
-  const link = RULES.poleLink.value;
+  // Dame Voltaire's rep 5 (DESIGN.md §22): High-Tension Lines join Poles at 8 tiles
+  const link = g.s.orders.rep.voltaire >= 5 ? RULES.highTensionLink.value : RULES.poleLink.value;
   const r = poleReach(g);
   // poles within link distance of each other share a grid (union-find)
   const parent = poles.map((_, i) => i);
@@ -113,19 +114,22 @@ function stoke(g: Game, burner: Ent): boolean {
 function output(g: Game, p: Ent): number {
   // Lean Power (a Challenge, DESIGN.md §21): half while it is taken, a tenth more once won
   const base = (BUILD[p.kind].power ?? 0) * powerMult(g);
-  if (p.kind === 'generator') return stoke(g, p) ? base : 0;
+  if (p.ruined) return 0;
+  // Cinder Isle (DESIGN.md §22): a burner beside a vent burns nothing
+  if (p.kind === 'generator') return g.vented.has(p.id) || stoke(g, p) ? base : 0;
   // a Steam Engine needs its Boiler burning
   const b = g.boilerOf.get(p.id);
   if (!b) return 0;
   const bonus = g.s.orders.rep.voltaire >= 2 ? 1 + RULES.voltaireSteam.value : 1;
-  return stoke(g, b) ? base * bonus : 0;
+  return g.vented.has(b.id) || stoke(g, b) ? base * bonus : 0;
 }
 
 export function runPower(g: Game) {
   for (const gr of g.grids) {
     // what is wanted: machines mid-craft, or ready to start and waiting on power
     let demand = 0;
-    for (const c of gr.consumers) if (!c.paused && (c.active || c.why === 'power')) demand += drawKw(c, g);
+    // a machine beside a vent (Cinder Isle, DESIGN.md §22) draws nothing from its grid
+    for (const c of gr.consumers) if (!c.paused && !c.ruined && !g.vented.has(c.id) && (c.active || c.why === 'power')) demand += drawKw(c, g);
     let supply = 0;
     const live: Ent[] = [];
     if (demand > 0) {
@@ -146,7 +150,7 @@ export function runPower(g: Game) {
     for (const p of gr.producers) {
       const burner = p.kind === 'generator' ? p : g.boilerOf.get(p.id);
       const on = live.includes(p);
-      if (burner && on) burner.prog = Math.max(0, burner.prog - load);
+      if (burner && on && !g.vented.has(burner.id)) burner.prog = Math.max(0, burner.prog - load);
       // the bills term counts a producer by its own burn share (§19): an unfuelled or idle one
       // counts nothing, a plant four times the load a quarter each
       if (on) {
@@ -178,6 +182,8 @@ export function runPower(g: Game) {
  *  satisfaction for powered ones, 0 when it is on no grid. */
 export function powerFactor(g: Game, m: Ent): number {
   if (!(BUILD[m.kind].kw ?? 0)) return 1;
+  // Cinder Isle (DESIGN.md §22): a vent beside it is all the power it needs
+  if (g.vented.has(m.id)) return 1;
   const gi = g.gridOf.get(m.id);
   if (gi === undefined) return 0;
   return g.grids[gi].sat;

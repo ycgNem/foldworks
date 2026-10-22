@@ -8,6 +8,9 @@ export const ITEM_IDS = [
   // Act III (DESIGN.md §21), in the order of src/art/items3.png
   'solvent', 'sludge', 'rubber', 'battery', 'fertilizer', 'bearing', 'gearbox', 'produce', 'sensor', 'processor', 'servo',
   'sandwich', 'clockworkFrog', 'weatherBalloon', 'umbrella', 'robotArm', 'liftRotor', 'transmuterCoil', 'sandwichEngineer',
+  // Act IV (DESIGN.md §22), in the order of src/art/items4.png: the four exotics, then the islands' goods
+  'skyglass', 'cinderite', 'rimeCrystal', 'relic', 'skyglassLens', 'cinderAlloy', 'frostAlloy', 'relicGear', 'stormCell',
+  'sunsetDye', 'horizonLens', 'pocketWeather', 'sunsetGenerator', 'lighthouseLamp', 'anchorChain',
 ] as const;
 export type ItemId = (typeof ITEM_IDS)[number];
 
@@ -72,6 +75,23 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   liftRotor: { id: 'liftRotor', name: 'Lift Rotor', value: 0, refused: true, color: 'brass1', flavor: 'Keeps a city in the sky. Please do not unplug.', derivation: '§21 Megaprojects: the Floating City\'s part, not for sale' },
   transmuterCoil: { id: 'transmuterCoil', name: 'Transmuter Coil', value: 0, refused: true, color: 'violet', flavor: 'Hums in a key that turns rubbish into change.', derivation: '§21 Megaprojects: the Scrap Transmuter\'s part, not for sale' },
   sandwichEngineer: { id: 'sandwichEngineer', name: 'Autonomous Sandwich Engineer', value: 90000, color: 'gold', flavor: 'Designs, builds and eats its own sandwiches. Has a union.', derivation: '§21 Tier 3: robot arm + processor + 10 sandwiches + battery (29,440) -> 90,000 (x3.06): Act III\'s first absurd product' },
+  // Act IV (DESIGN.md §22 Tier 4): each island's exotic deposit and the goods made of it, each step
+  // about 3-4x its inputs at the Dock, as §18 and §21
+  skyglass: { id: 'skyglass', name: 'Skyglass', value: 4, color: 'ice', flavor: 'Glass the sky made by itself, then dropped.', derivation: '§22 Tier 4: raw, Pebble Isle\'s exotic deposit; 4, twice coal (§18): a rarer raw, one deposit an island' },
+  cinderite: { id: 'cinderite', name: 'Cinderite', value: 4, color: 'hot', flavor: 'Warm to the touch. Warmer if you insult it.', derivation: '§22 Tier 4: raw, Cinder Isle\'s exotic deposit; 4, as skyglass' },
+  rimeCrystal: { id: 'rimeCrystal', name: 'Rime crystal', value: 4, color: 'ice', flavor: 'Frost that forgot to melt, on purpose.', derivation: '§22 Tier 4: raw, Rime\'s exotic deposit; 4, as skyglass' },
+  relic: { id: 'relic', name: 'Relic', value: 4, color: 'brass1', flavor: 'A part of something. Nobody remembers what. It still turns.', derivation: '§22 Tier 4: raw, the Old Works\' exotic deposit (a seam of old parts); 4, as skyglass' },
+  skyglassLens: { id: 'skyglassLens', name: 'Skyglass Lens', value: 70, color: 'ice', flavor: 'Shows you the weather from the other side.', derivation: '§22 Tier 4: 2 skyglass + glass (20) -> 70 (x3.5) in the Kiln' },
+  cinderAlloy: { id: 'cinderAlloy', name: 'Cinder Alloy', value: 90, color: 'hot', flavor: 'Steel that has been to a volcano and come back smug.', derivation: '§22 Tier 4: cinderite + steel (26) -> 90 (x3.5) in the Smelter, slag per 2' },
+  frostAlloy: { id: 'frostAlloy', name: 'Frost Alloy', value: 200, color: 'mist', flavor: 'Never warms up. Not even to you.', derivation: '§22 Tier 4: rime crystal + steel + solvent (56) -> 200 (x3.6) in the Chem Vat' },
+  relicGear: { id: 'relicGear', name: 'Relic Gear', value: 220, color: 'brass1', flavor: 'An old gear, re-toothed. It hums a tune from before the town.', derivation: '§22 Tier 4: relic + 2 gears + bearing (62) -> 220 (x3.5) in the Assembler' },
+  stormCell: { id: 'stormCell', name: 'Storm Cell', value: 1500, color: 'sky', flavor: 'A thunderstorm in a can. Do not shake.', derivation: '§22 Tier 4: frost alloy + battery (440) -> 1,500 (x3.4) in the Chem Vat' },
+  sunsetDye: { id: 'sunsetDye', name: 'Sunset Dye', value: 130, color: 'amber', flavor: 'Exactly the orange of six forty-two in the evening.', derivation: '§22 Tier 4: 2 cinderite + solvent (38) -> 130 (x3.4) in the Chem Vat' },
+  horizonLens: { id: 'horizonLens', name: 'Horizon Lens', value: 4000, color: 'cream', flavor: 'Look through it and the edge of the world waves back.', derivation: '§22 Tier 4: 2 skyglass lenses + sensor (1,140) -> 4,000 (x3.5) in the Assembler' },
+  pocketWeather: { id: 'pocketWeather', name: 'Pocket Weather', value: 64000, color: 'sky', flavor: 'A small cloud, an umbrella and a strong opinion about Tuesday.', derivation: '§22 Tier 4: 2 storm cells + weather balloon + umbrella (19,600) -> 64,000 (x3.3), Assembler Mk2 only: Rime\'s absurd product' },
+  sunsetGenerator: { id: 'sunsetGenerator', name: 'Portable Sunset Generator', value: 300000, color: 'gold', flavor: 'Fits in a cart. Ends the day whenever you like. Requires an Engineer to supervise.', derivation: '§22 Tier 4: 4 sunset dye + an Autonomous Sandwich Engineer + 2 cinder alloy (90,700) -> 300,000 (x3.3), Assembler Mk2 only: Cinder Isle\'s absurd product, one step past the Engineer' },
+  lighthouseLamp: { id: 'lighthouseLamp', name: 'Lighthouse Lamp', value: 0, refused: true, color: 'gold', flavor: 'Bright enough to be seen from the next island. That is the point.', derivation: '§22 Megaprojects: the Lighthouse at the Edge\'s part, not for sale' },
+  anchorChain: { id: 'anchorChain', name: 'Anchor Chain', value: 0, refused: true, color: 'steel', flavor: 'Each link is a promise not to drift.', derivation: '§22 Megaprojects: the Sky Anchor\'s part, not for sale' },
 };
 
 export function itemName(id: string): string {

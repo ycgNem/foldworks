@@ -38,6 +38,7 @@ export const CUSTOMERS: Record<CustomerId, CustomerDef> = {
       { rep: 2, text: 'a free Buffer Crate every minute · up to 5' },
       { rep: 3, text: 'the Lily Pad Dock' },
       { rep: 4, text: 'the Skiff Club · skiffs carry {good:2} a trip, was 1' },
+      { rep: 5, text: 'Harbour Rights · each island\'s exotic deposit holds {good:2} claims more' },
     ],
     derivation: '§7 Reputation (Bramble)',
   },
@@ -56,6 +57,7 @@ export const CUSTOMERS: Record<CustomerId, CustomerDef> = {
       { rep: 2, text: 'Recycled Glass · 3 {i:gravel} → {i:glass} in the Kiln' },
       { rep: 3, text: '{u:mode} Precision yields {good:+35%}, was +25%' },
       { rep: 4, text: 'Specimen Jars · the Chute holds {good:60} of each item, was 20' },
+      { rep: 5, text: '{u:codex} Field Notes · on every island its exotic and tier 4 firsts pay the Codex\'s {coinc:30×} again' },
     ],
     derivation: '§18 Customers: Unit 7',
   },
@@ -74,6 +76,7 @@ export const CUSTOMERS: Record<CustomerId, CustomerDef> = {
       { rep: 2, text: 'Steam Engines {power:+25%}' },
       { rep: 3, text: 'Poles reach {good:+1} tile' },
       { rep: 4, text: 'Chem Vats and Greenhouses draw {power:half} the power' },
+      { rep: 5, text: 'High-Tension Lines · Poles join at {good:8} tiles, was 6' },
     ],
     derivation: '§18 Customers: Dame Voltaire',
   },
@@ -95,6 +98,7 @@ export const CUSTOMERS: Record<CustomerId, CustomerDef> = {
       { rep: 4, text: 'Pocketed Kits · a stamp needs 1 {i:machineKit} fewer' },
       { rep: 5, text: '{u:mega} the Great Drill\'s stage 3 opens' },
       { rep: 6, text: 'Pocket Skiffs · a route\'s first skiff costs nothing' },
+      { rep: 7, text: 'Rubble Rousers · on the Old Works a tile of rubble cleared clears the rubble touching it' },
     ],
     derivation: '§19 The Committee: met with the Great Drill research in the first run, or after the first Reorganize once Folding is done; its reputation (kept through every reset) opens the Great Drill\'s stages 2 and 3 at 3 and 5, two orders a run, so stage 2 is the second run\'s and stage 3 the third\'s; every reputation reward is a rule',
   },
@@ -148,6 +152,16 @@ export const ORDERS: OrderDef[] = [
   { id: 'sludgePond', customer: 'committee', name: 'The Sludge Pond', pitch: '"sludge." "a pond of it." "we will swim. one of us will swim."', wants: { sludge: 2000 }, pays: 30000, rep: 1, requires: ['chemistry'], derivation: '§21 Orders: 2,000 sludge, about 30 min of two Solvent groups\' waste at a Dock, valued at what fertilizer makes of it (2 sludge + gravel -> 12: 5 a sludge) x 2 / 0.7 -> 30,000 + 1 rep; while it wants sludge, either Dock takes it' },
   { id: 'spareParts', customer: 'committee', name: 'Spare Parts', pitch: '"bearings." "gearboxes." "the coat has been making a noise."', wants: { bearing: 600, gearbox: 200 }, pays: 180000, rep: 1, requires: ['bearings'], derivation: '§21 Orders: 600 bearings + 200 gearboxes (91,800) -> 180,000: 2x' },
   { id: 'engineer', customer: 'committee', name: 'The Engineer', pitch: '"one engineer." "the sandwich kind." "it will make sandwiches for the coat."', wants: { sandwichEngineer: 1 }, pays: 200000, rep: 1, requires: ['sandwichEngineering'], derivation: '§21 Orders: one Autonomous Sandwich Engineer (90,000) -> 200,000: 2.2x, the act\'s joke and its deepest product' },
+  // Act IV (DESIGN.md §22 Orders): each wants one island's goods (an order's progress is a run's, so
+  // none can be filled from two islands), about 2x what they fetch at the Dock (§7's rule), never timed
+  { id: 'lookout', customer: 'bramble', name: 'Lenses for the Lookout', pitch: 'A lookout on the rim! With lenses that see the next island. And the one after.', wants: { horizonLens: 60 }, pays: 500000, rep: 1, requires: ['horizonOptics'], derivation: '§22 Orders: 60 horizon lenses (240,000 at the Dock) -> 500,000: 2.1x; Pebble Isle\'s' },
+  { id: 'sunsetParty', customer: 'bramble', name: 'Sunset on Demand', pitch: 'A sunset whenever the council likes! The council likes them a lot.', wants: { sunsetGenerator: 3 }, pays: 1900000, rep: 1, requires: ['sunsetEngineering'], derivation: '§22 Orders: 3 Portable Sunset Generators (900,000) -> 1,900,000: 2.1x; Cinder Isle\'s' },
+  { id: 'relicCatalogue', customer: 'unit7', name: 'The Relic Catalogue', pitch: 'UNIT 7 HAS FOUND OLDER UNITS. UNIT 7 WISHES TO KNOW THEM.', wants: { relicGear: 300 }, pays: 140000, rep: 1, requires: ['relicStudy'], derivation: '§22 Orders: 300 relic gears (66,000) -> 140,000: 2.1x; the Old Works\'' },
+  { id: 'jarOfWeather', customer: 'unit7', name: 'A Jar of Weather', pitch: 'WEATHER, CONTAINED. FOR THE COLLECTION. DO NOT LET IT OUT.', wants: { pocketWeather: 4 }, pays: 540000, rep: 1, requires: ['pocketWeathers'], derivation: '§22 Orders: 4 Pocket Weathers (256,000) -> 540,000: 2.1x; Rime\'s' },
+  { id: 'frostBall', customer: 'voltaire', name: 'The Frost Ball', pitch: 'A ball on the ice, darling. Chandeliers of frost alloy. Nothing melts but hearts.', wants: { frostAlloy: 300 }, pays: 130000, rep: 1, requires: ['frostWorks'], derivation: '§22 Orders: 300 frost alloy (60,000) -> 130,000: 2.2x; Rime\'s' },
+  { id: 'stormTeacup', customer: 'voltaire', name: 'Storm in a Teacup', pitch: 'I want lightning at tea. Small lightning. Polite lightning.', wants: { stormCell: 60 }, pays: 190000, rep: 1, requires: ['stormCells'], derivation: '§22 Orders: 60 storm cells (90,000) -> 190,000: 2.1x; Rime\'s' },
+  { id: 'ashCoat', customer: 'committee', name: 'The Ash Coat', pitch: '"armour." "for the coat." "cinder alloy, the warm kind."', wants: { cinderAlloy: 500 }, pays: 95000, rep: 1, requires: ['cinderSmelting'], derivation: '§22 Orders: 500 cinder alloy (45,000) -> 95,000: 2.1x; Cinder Isle\'s' },
+  { id: 'skyMarbles', customer: 'committee', name: 'Sky Marbles', pitch: '"marbles." "made of sky." "we will lose them. that is the point."', wants: { skyglass: 2000, skyglassLens: 100 }, pays: 32000, rep: 1, requires: ['skyglassCutting'], derivation: '§22 Orders: 2,000 skyglass and 100 lenses (15,000) -> 32,000: 2.1x; Pebble Isle\'s' },
   { id: 'gizmoFestival', customer: 'bramble', name: 'The Gizmo Festival', pitch: 'A festival of Gizmos! Crates of them, from your Factory floor!', wants: { gizmo: 400 }, pays: 64000, rep: 1, requires: ['folding'], at: 'factory', derivation: '§7 400 Gizmos (32,000) -> 64,000 + 1 rep: 2x; §11 only the Factory Dock counts, so the slice ends with a Gizmo module fed by gear and wire modules running at rate (the Milestone 3 gate review)' },
 ];
 

@@ -17,6 +17,7 @@ import { offer, accepts } from '../transfer';
 import { powerFactor } from './power';
 import { isAudited } from './audits';
 import { note } from './stats';
+import { coldFactor } from './islands';
 
 const OK: ActResult = { ok: true };
 
@@ -80,9 +81,10 @@ export function runMachines(g: Game) {
   const bellows = g.has('bellows');
   for (const m of g.machines) {
     // stopped by the player (DESIGN.md §20): holds what it has, makes nothing, takes nothing
-    if (m.paused) {
+    // stopped, or a ruin of the Old Works waiting to be repaired (DESIGN.md §22)
+    if (m.paused || m.ruined) {
       m.state = 'idle';
-      m.why = 'paused';
+      m.why = m.ruined ? 'ruined' : 'paused';
       overdriveTick(m);
       note(m);
       continue;
@@ -96,7 +98,8 @@ export function runMachines(g: Game) {
       const hand = m.kind === 'furnace' && !bellows;
       if (!hand) {
         const pf = powerFactor(g, m);
-        const sp = baseSpeed(g, m) * veinBoost(g, m) * pf;
+        // Rime (DESIGN.md §22): a cold powered machine runs at half speed
+        const sp = baseSpeed(g, m) * veinBoost(g, m) * pf * coldFactor(m);
         if (sp > 0) {
           m.prog += sp;
           progressed = true;

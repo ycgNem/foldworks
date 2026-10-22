@@ -15,12 +15,14 @@ import { lineOf } from '../analysis';
 import { auditLock } from './audits';
 import { fauditLock } from './nested';
 import type { Ent, FEnt } from '../world';
+import type { HighFloorId } from '../../data/floors';
+import { hauditLock, hent, hentAt, highModules } from './high';
 
 export interface PauseCmd {
   k: 'pause';
   x: number;
   y: number;
-  floor?: 'factory';
+  floor?: 'factory' | HighFloorId;
   /** the whole line (Workshop) or every module joined to it by trunks (Factory) */
   line?: boolean;
   /** true stops, false restarts */
@@ -48,7 +50,41 @@ export function fpauseTargets(g: Game, m: FEnt, line: boolean): FEnt[] {
   return [...seen].map((id) => g.fById.get(id)!).filter((q) => !!q);
 }
 
+/** The modules a pause command reaches on a high floor: the module, or every module joined to it
+ * by skiff routes (DESIGN.md §22: the high floors pause as the Factory does). */
+export function hpauseTargets(g: Game, id: HighFloorId, m: FEnt, line: boolean): FEnt[] {
+  if (!line) return [m];
+  const st = g.s[id];
+  const seen = new Set<number>([m.id]);
+  const todo = [m.id];
+  while (todo.length) {
+    const cur = todo.pop()!;
+    for (const r of st?.routes ?? []) {
+      const other = r.from === cur ? r.to : r.to === cur ? r.from : null;
+      if (other === null || seen.has(other)) continue;
+      if (hent(g, id, other)?.kind === 'module') { seen.add(other); todo.push(other); }
+    }
+  }
+  return [...seen].map((eid) => hent(g, id, eid)).filter((q): q is FEnt => !!q);
+}
+
 export function setPause(g: Game, c: PauseCmd): ActResult {
+  if (c.floor === 'district' || c.floor === 'world') {
+    const id = c.floor;
+    const m = hentAt(g, id, c.x, c.y);
+    if (!m || m.kind !== 'module') return no('Only a module can be stopped here');
+    const ts = hpauseTargets(g, id, m, !!c.line);
+    for (const t of ts) {
+      const lock = hauditLock(g, id, t.x, t.y);
+      if (lock) return no(lock);
+    }
+    for (const t of ts) {
+      if (c.on) t.paused = true;
+      else delete t.paused;
+    }
+    g.emit({ type: c.on ? 'pause' : 'resume', x: m.x, y: m.y, value: ts.length, floor: id });
+    return OK;
+  }
   if (c.floor === 'factory') {
     const m = g.fentAt(c.x, c.y);
     if (!m || m.kind !== 'module') return no('Only a module can be stopped here');
@@ -86,6 +122,7 @@ export function pausedCount(g: Game): number {
   let n = 0;
   for (const e of g.s.ents) if (e.paused) n++;
   for (const m of g.s.factory.ents) if (m.paused) n++;
+  for (const m of highModules(g)) if (m.paused) n++;
   return n;
 }
 

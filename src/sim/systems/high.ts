@@ -29,6 +29,7 @@ import { hopperWantsWaste } from '../transfer';
 import { inBox, splusGate } from './audits';
 import { inspire } from './inspire';
 import { prules } from '../patents';
+import { lrules } from '../legacy';
 
 const DT = 1 / TICK_RATE;
 
@@ -46,7 +47,8 @@ export function highOpen(g: Game, id: HighFloorId): boolean {
 
 /** Lots the floor holds for good: the Floating City's second stage gives the District a fourth. */
 export function keptLots(g: Game, id: HighFloorId): number {
-  return id === 'district' && (g.s.megas?.city?.stage ?? 0) >= 2 ? 1 : 0;
+  if (id === 'world') return megaDone(g, 'lighthouse', 3) ? 1 : 0;
+  return (g.s.megas?.city?.stage ?? 0) >= 2 ? 1 : 0;
 }
 
 /** The floor's width now: its first width, the lots bought this run and those kept for good. */
@@ -121,18 +123,23 @@ export function routeDist(a: FEnt, b: FEnt): number {
 
 /** A skiff's load and speed on this floor now: Bramble's Skiff Club (rep 4) adds one to the load,
  * Long Skiffs (a Patent) a tile a second to the speed (DESIGN.md §21). */
-export function skiffStats(g: Game, id: HighFloorId): { load: number; speed: number } {
+export function skiffStats(g: Game, id: HighFloorId): { load: number; speed: number; dwell: number } {
   const f = HIGH[id];
   return {
     load: f.load + (g.s.orders.rep.bramble >= 4 ? RULES.brambleSkiffLoad.value : 0),
-    speed: f.speed + prules(g).skiffSpeed,
+    // Long Skiffs flies the District's; the Lighthouse's Lens Room the World's barges (DESIGN.md §22)
+    speed: f.speed + (id === 'district' ? prules(g).skiffSpeed : megaDone(g, 'lighthouse', 1) ? RULES.lighthouseSpeed.value : 0),
+    // the Lighthouse's Beacon: loading in half the time on every high floor
+    dwell: f.dwell * (megaDone(g, 'lighthouse', 2) ? RULES.lighthouseDwell.value : 1),
   };
 }
 
-/** Items a second one skiff carries on a route this long on this floor now. */
+/** Items a second one skiff carries on a route this long on this floor now (the Lighthouse's Light
+ * counts a route at most six tiles long). */
 export function skiffRateNow(g: Game, id: HighFloorId, dist: number): number {
   const k = skiffStats(g, id);
-  return skiffRate(HIGH[id], dist, k.load, k.speed);
+  const d = megaDone(g, 'lighthouse', 4) ? Math.min(dist, RULES.lighthouseReach.value) : dist;
+  return skiffRate(HIGH[id], d, k.load, k.speed, k.dwell);
 }
 
 /** Items a second this route can carry with its skiffs. */
@@ -172,8 +179,12 @@ export function maxRoutes(g: Game, id: HighFloorId): number {
 export function openHigh(g: Game, id: HighFloorId) {
   if (g.s[id]) return;
   g.s[id] = newHighFloor(id);
-  // District Deeds (a head start, DESIGN.md §21): it opens with its first lot
-  if (id === 'district' && g.s.headLots) g.s[id]!.lots = Math.min(HIGH[id].lots, g.s.headLots);
+  // District Deeds (a head start, DESIGN.md §21): it opens with its first lot; the Sky Anchor keeps
+  // the lots bought in earlier runs (§22)
+  const lots = Math.max(id === 'district' ? g.s.headLots ?? 0 : 0, g.s.meta.keptRoom?.[id] ?? 0);
+  if (lots) g.s[id]!.lots = Math.min(HIGH[id].lots, lots);
+  // the World floor has stood in this world: a Relocate is open from here (§22)
+  if (id === 'world' && g.s.meta.here) g.s.meta.here.opened = true;
   touch(g, id);
   g.emit({ type: 'floorOpen', id, floor: id });
 }
@@ -244,10 +255,13 @@ export function hremove(g: Game, id: HighFloorId, x: number, y: number): ActResu
 
 function dropRoute(g: Game, id: HighFloorId, r: SkiffRoute) {
   const st = g.s[id]!;
-  // a skiff the Committee gave (Pocket Skiffs, rep 6) is not refunded
-  g.s.coin = g.s.coin.add(HIGH[id].skiffCost * (r.skiffs - (r.free ? 1 : 0)));
+  // a skiff the Committee gave (Pocket Skiffs, rep 6) or the Skiff Guild's (§22) is not refunded
+  g.s.coin = g.s.coin.add(HIGH[id].skiffCost * Math.max(0, r.skiffs - unpaid(r)));
   st.routes = st.routes.filter((q) => q !== r);
 }
+
+/** The skiffs on a route nobody paid for: the Committee's and the Skiff Guild's. */
+const unpaid = (r: SkiffRoute) => (r.free ? 1 : 0) + (r.guild ? 1 : 0);
 
 /** Can `to` take `item` by skiff (the kind of thing it is, not whether it has room now)? */
 export function takes(g: Game, id: HighFloorId, to: FEnt, item: ItemId): boolean {
@@ -287,7 +301,9 @@ export function addRoute(g: Game, id: HighFloorId, fx: number, fy: number, tx: n
   const a = hentAt(g, id, fx, fy)!, b = hentAt(g, id, tx, ty)!;
   const free = pocketSkiff(g);
   if (!free) g.s.coin = g.s.coin.sub(HIGH[id].skiffCost);
-  st.routes.push({ id: st.nextRoute++, from: a.id, to: b.id, item, skiffs: 1, flow: 0, moved: 0, ...(free ? { free: true } : {}) });
+  // the Skiff Guild (a Legacy node, DESIGN.md §22): a second skiff, free, that stays with the route
+  const guild = lrules(g).skiffGuild;
+  st.routes.push({ id: st.nextRoute++, from: a.id, to: b.id, item, skiffs: guild ? 2 : 1, flow: 0, moved: 0, ...(free ? { free: true } : {}), ...(guild ? { guild: true } : {}) });
   g.bump('routes');
   g.emit({ type: 'route', x: a.x, y: a.y, x2: b.x, y2: b.y, id: item, floor: id });
   if (g.first('firstRoute')) g.emit({ type: 'firstRoute', x: a.x, y: a.y, floor: id });
@@ -308,6 +324,7 @@ export function setSkiffs(g: Game, id: HighFloorId, rid: number, delta: number):
     g.bump('skiffs');
   } else {
     if (r.skiffs <= 1) return no('A route keeps one skiff: take the route off to lift it');
+    if (r.skiffs <= unpaid(r)) return no('The free skiffs stay with the route: take the route off to lift them');
     g.s.coin = g.s.coin.add(f.skiffCost);
     r.skiffs--;
   }
@@ -390,8 +407,22 @@ export function hclick(g: Game, id: HighFloorId, x: number, y: number): ActResul
 
 /** The stage a project is building now, or null when it is done. */
 export function megaStageOf(g: Game, mid: MegaId): MegaStage | null {
-  const done = g.s.megas?.[mid]?.stage ?? 0;
-  return MEGAS[mid].stages.find((st) => st.stage === done + 1) ?? null;
+  const def = MEGAS[mid];
+  const ms = g.s.megas?.[mid];
+  // Megaprojects #4 and #5 (DESIGN.md §22): the stage of the island the town is on, if not built
+  if (def.anyOrder) {
+    const w = g.s.meta.world ?? 'home';
+    return def.stages.find((st) => st.world === w && !ms?.done?.includes(st.stage)) ?? null;
+  }
+  const done = ms?.stage ?? 0;
+  return def.stages.find((st) => st.stage === done + 1) ?? null;
+}
+
+/** Does this stage of a project stand (its reward is a rule kept for good)? */
+export function megaDone(g: Game, mid: MegaId, stage: number): boolean {
+  const ms = g.s.megas?.[mid];
+  if (!ms) return false;
+  return MEGAS[mid].anyOrder ? !!ms.done?.includes(stage) : ms.stage >= stage;
 }
 
 /** A project is open once its research is done this run, or for good once a stage of it stands
@@ -436,8 +467,13 @@ export function megaGiveX(g: Game, id: HighFloorId, bay: FEnt, item: ItemId, n: 
     g.emit({ type: 'megaGive', x: bay.x + 1, y: bay.y + 1, id: item, value: counted, floor: id });
     const complete = (Object.entries(st.wants) as [ItemId, number][]).every(([k, w]) => (ms.progress[k] ?? Num.ZERO).gte(w));
     if (complete) {
-      ms.stage = st.stage;
+      if (MEGAS[mid].anyOrder) {
+        (ms.done ??= []).push(st.stage);
+        ms.stage = ms.done.length;
+      } else ms.stage = st.stage;
       ms.progress = {};
+      // a stage done this world counts for its Legacy (DESIGN.md §22)
+      if (g.s.meta.here) g.s.meta.here.stages++;
       g.bump('megaStages');
       g.layoutDirty = true;
       g.factoryDirty = true;

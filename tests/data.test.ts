@@ -18,6 +18,11 @@ import { SPARKS } from '../src/data/sparks';
 import { TROPHIES } from '../src/data/trophies';
 import { IDLE, IDLE_UPGRADES } from '../src/data/idle';
 import { PATENT_LIST, PATENTS, PATENT_IDS } from '../src/data/patents';
+import { WORLDS, RUBBLE } from '../src/data/worlds';
+import { LEGACY, LEGACY_LIST } from '../src/data/legacy';
+
+/** every deposit on any island: the Workshop's and each island's own (DESIGN.md §22) */
+const ALL_PATCHES = [...PATCHES, ...Object.values(WORLDS).flatMap((w) => w.patches)];
 
 const DESIGN = fs.readFileSync('DESIGN.md', 'utf8');
 const SECTIONS = new Set([...DESIGN.matchAll(/^## (\d+)\./gm)].map((m) => m[1]));
@@ -52,6 +57,11 @@ function records(): [string, { derivation?: string } & Record<string, unknown>][
     ...Object.entries(IDLE).map(([k, d]) => ['idle rule ' + k, d] as [string, any]),
     ...IDLE_UPGRADES.map((d) => ['night shift ' + d.id, d] as [string, any]),
     ...PATENT_LIST.map((d) => ['patent ' + d.id, d] as [string, any]),
+    // Act IV (DESIGN.md §22)
+    ...Object.values(WORLDS).map((d) => ['island ' + d.id, d] as [string, any]),
+    ...Object.values(WORLDS).flatMap((w) => w.patches.map((d, i) => [`island ${w.id} patch ${i}`, d] as [string, any])),
+    ['rubble', RUBBLE as any],
+    ...LEGACY_LIST.map((d) => ['legacy ' + d.id, d] as [string, any]),
   ];
 }
 
@@ -97,6 +107,20 @@ describe('cross-references', () => {
     for (const m of MEGA) for (const it of Object.keys(m.wants)) expect(items.has(it), `mega ${m.stage}: ${it}`).toBe(true);
     for (const u of IDLE_UPGRADES) expect(research.has(u.requires), `night shift ${u.id}: ${u.requires}`).toBe(true);
   });
+  it('the Legacy tree points at real things, has flat prices and no cycles (DESIGN.md §22)', () => {
+    for (const d of LEGACY_LIST) {
+      for (const q of d.requires) expect(LEGACY[q], `${d.id}: ${q}`).toBeTruthy();
+      expect(Number.isInteger(d.cost) && d.cost > 0, d.id).toBe(true);
+      expect(d.text.length).toBeGreaterThan(10);
+      expect(d.flavor.length).toBeGreaterThan(10);
+    }
+    const done = new Set<string>();
+    for (let pass = 0; pass < 20; pass++) for (const d of LEGACY_LIST) if (d.requires.every((r) => done.has(r))) done.add(d.id);
+    expect(done.size).toBe(LEGACY_LIST.length);
+    // research gated to an island names a real one, and every island's exotic has its deposit
+    for (const d of Object.values(RESEARCH)) if (d.world) expect(WORLDS[d.world], d.id).toBeTruthy();
+    for (const w of Object.values(WORLDS)) if (w.exotic) expect(w.patches.some((p) => p.item === w.exotic), w.id).toBe(true);
+  });
   it('the Patent tree points at real things, has flat prices and no cycles (DESIGN.md §19)', () => {
     const ids = new Set<string>(PATENT_IDS);
     for (const d of PATENT_LIST) {
@@ -132,12 +156,12 @@ describe('cross-references', () => {
 describe('reachability', () => {
   it('every recipe and item is reachable from raw resources', () => {
     // start from what the patches give, then craft anything whose inputs are all known
-    const have = new Set<string>(PATCHES.map((p) => p.item));
+    const have = new Set<string>(ALL_PATCHES.map((p) => p.item));
     const crafted = new Set<string>();
     for (let pass = 0; pass < 20; pass++)
       for (const r of RECIPES) {
         if (!r.inputs.every((s) => have.has(s.item))) continue;
-        if (r.machine === 'miner' && !PATCHES.some((p) => p.item === r.outputs[0].item)) continue;
+        if (r.machine === 'miner' && !ALL_PATCHES.some((p) => p.item === r.outputs[0].item)) continue;
         crafted.add(r.id);
         for (const s of r.outputs) have.add(s.item);
         if (r.byproduct) have.add(r.byproduct.item);

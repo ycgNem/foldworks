@@ -28,7 +28,7 @@ function dominant(m: Ent): string {
 export function runStats(g: Game) {
   if ((g.s.tick + 1) % TICK_RATE !== 0) return;
   const win = RULES.statWindow.value;
-  for (const list of [g.miners, g.machines, g.power]) {
+  for (const list of [g.miners, g.machines, g.power, g.heaters]) {
     for (const m of list) {
       m.hist = (m.hist + dominant(m)).slice(-win);
       m.sec[0] = m.sec[1] = m.sec[2] = m.sec[3] = 0;
@@ -37,7 +37,7 @@ export function runStats(g: Game) {
   // the bills term's window (§19): each building's measured work, minute by minute
   if ((g.s.tick + 1) % (60 * TICK_RATE) === 0) {
     const n = RULES.billsWindow.value;
-    for (const list of [g.miners, g.machines, g.power]) for (const m of list) rollWork(m, n);
+    for (const list of [g.miners, g.machines, g.power, g.heaters]) for (const m of list) rollWork(m, n);
     for (const m of g.s.factory.ents) if (m.kind === 'module') rollWork(m, n);
   }
   checkTrophies(g);

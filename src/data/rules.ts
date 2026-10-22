@@ -124,6 +124,28 @@ export const RULES = {
   voltaireChemPower: r(0.5, '§21 Orders: Dame Voltaire rep 4: Chem Vats and Greenhouses draw half their kW, so a tier 3 line folds with a smaller power plant inside its box'),
   /** skiff routes a floor holds at most (a readable floor: DESIGN.md §17) */
   routesPerLot: r(20, '§21 Skiff routes (the second gate): each District lot adds 20 routes (two columns of 10 tiles, each a group with a route out); at 120 flat the cap was the real wall at 30 h with half the tiles used, and lots were worth nothing'),
+  // ---- Act IV (DESIGN.md §22): Relocate, Legacy, the islands
+  /** Legacy: the sum of the best value per floor this world over this, plus per stage, plus a new island */
+  legacyPerValue: r(4, '§22 Relocate: Legacy = floor(the best value per floor this world, summed over the Workshop, Factory, District and World, / 4 + 3 a Megaproject stage done this world + 5 for an island not visited before): a world built to its World floor holds about 30-40 of value (four floors at 7-10 each: steps x grade x tier, §19), so about 8-10 Legacy from its folds'),
+  legacyPerStage: r(3, '§22 Relocate: 3 Legacy a Megaproject stage done this world: the Home world\'s seven (the Great Drill\'s three, the City\'s and the Transmuter\'s two each) are 21 at the first Relocate, an island\'s two (one of #4, one of #5) 6'),
+  legacyNewIsland: r(5, '§22 Relocate: 5 Legacy for flying to an island not visited before, so the four islands are worth visiting once each for the tree as well as for the Megaprojects (§16: four by 60 h)'),
+  legacyMin: r(1, '§22 Relocate: at least one Legacy, so a Relocate is never a loss by accident (as patentMin, §19)'),
+  /** a high floor's module counts for its floor's Legacy once it has run this long at half speed or better */
+  legacyRunSeconds: r(60, '§22 Relocate: a module on the World floor counts for the World\'s term once it has run 60 s straight at half speed or better (the slice end\'s 30 s test, §11, twice over): it must be put to work, not only placed'),
+  /** filing (§19): a fold on a high floor files a step deeper per depth past 2 */
+  highFoldSteps: r(1, '§22 Filing (the second gate): a depth-3 fold (a District group of groups) files one step more than the steps its box holds, a depth-4 two, so a District fold of the same chain files a step deeper than the Factory\'s nested one (its routes are logistics folded away, as trunk tiles are, §18)'),
+  pebbleMiners: r(1.5, '§22 Pebble Isle: Miners dig 1.5x: half the land, and each deposit feeds half again the machines (two Miners fill three Smelters)'),
+  rimeCold: r(0.5, '§22 Rime: a cold powered machine runs at half speed'),
+  rimeTouch: r(2, '§22 Rime: two working machines touching a powered machine keep it warm (Warm Hands, a Legacy node: one)'),
+  heaterReach: r(2, '§22 Rime: a Heater warms what is within 2 tiles, a Pole\'s reach (§18)'),
+  ruinRepair: r(0.25, '§22 the Old Works: a ruin repairs for a quarter of its price (ceil), no research needed for the machine (its recipe it keeps)'),
+  legacyEvery: r(5, '§22 The Legacy tree: the Clerk, the Regrader and the Town Plan act every 5 s at most, as the Draughtsman (§19)'),
+  standingEvery: r(10, '§22 The Legacy tree: the Standing Committee reads the preview every 10 s'),
+  harbourClaims: r(2, '§22 Orders: Bramble rep 5, Harbour Rights: each island\'s exotic deposit holds 2 claims more (a deposit\'s own 2, §18, again)'),
+  highTensionLink: r(8, '§22 Orders: Dame Voltaire rep 5, High-Tension Lines: Poles join at 8 tiles, was 6 (§18)'),
+  lighthouseSpeed: r(1, '§22 Megaprojects: the Lighthouse\'s Lens Room, barges a tile a second faster (3 -> 4)'),
+  lighthouseDwell: r(0.5, '§22 Megaprojects: the Lighthouse\'s Beacon, skiffs and barges load in half the time'),
+  lighthouseReach: r(6, '§22 Megaprojects: the Lighthouse\'s Light, a route counts at most 6 tiles however far it flies'),
   maxRoutes: r(120, '§21 Skiff routes: at most 120 a floor, one for each tile of the District\'s first 12x10, so the floor stays readable (PLAN.md not-list: logistics readable on one screen)'),
 };
 

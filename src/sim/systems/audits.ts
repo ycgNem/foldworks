@@ -52,6 +52,8 @@ export function foldRefusal(g: Game, b: Box): string | null {
     // a Chute Mouth makes items out of nothing as far as the box can see: feed the line from one
     // outside it, through a port (DESIGN.md §21 The Chute)
     if (e.kind === 'chuteMouth') return 'A Chute Mouth stays out of the box: let it feed the line through a port';
+    // an Old Works ruin is not a working part (DESIGN.md §22): repair it, or leave it out
+    if (e.ruined) return `The ruined ${BUILD[e.kind].name} at ${e.x},${e.y} must be repaired before it folds`;
     if (e.x < b.x || e.y < b.y || e.x + e.w > b.x + b.w || e.y + e.h > b.y + b.h) return `${BUILD[e.kind].name} is only partly in the box`;
   }
   const ms = ents.filter((e) => isMachine(e.kind));

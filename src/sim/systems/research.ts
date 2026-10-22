@@ -5,11 +5,13 @@ import type { Game, ActResult } from '../Game';
 import { Num } from '../../engine/num';
 import { RESEARCH, RESEARCH_LIST, type ResearchId } from '../../data/research';
 import type { ItemId } from '../../data/items';
+import { worldOf } from './islands';
 
 /** Can this node be selected (requirements done, not done itself)? */
 export function available(g: Game, id: ResearchId): boolean {
   const d = RESEARCH[id];
-  return !g.done(id) && d.requires.every((r) => g.done(r)) && (g.s.mega.stage ?? 0) >= (d.drill ?? 0);
+  // an island's own research is offered only on that island (DESIGN.md §22)
+  return !g.done(id) && d.requires.every((r) => g.done(r)) && (g.s.mega.stage ?? 0) >= (d.drill ?? 0) && (!d.world || d.world === worldOf(g));
 }
 
 export function availableNodes(g: Game) {

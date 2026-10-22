@@ -11,6 +11,8 @@ import type { SparkKind } from '../data/sparks';
 import type { BuildKind } from '../data/machines';
 import type { PatentId } from '../data/patents';
 import { HIGH, type HighFloorId } from '../data/floors';
+import type { WorldId } from '../data/worlds';
+import type { LegacyId } from '../data/legacy';
 
 export type Dir = 0 | 1 | 2 | 3;
 /** E, S, W, N */
@@ -113,6 +115,11 @@ export interface Ent {
   wk?: number[];
   /** a belt or logistics part: the tick it last took an item */
   used?: number;
+  // ---- Act IV (DESIGN.md §22); absent elsewhere
+  /** a ruin of the Old Works: it does nothing until repaired */
+  ruined?: boolean;
+  /** a powered machine on Rime running cold this tick (half speed; the frost overlay) */
+  cold?: boolean;
 }
 
 /** A box on the Workshop, in tiles. */
@@ -165,6 +172,8 @@ export interface AuditState {
   kept?: number;
   chk?: Record<string, number>;
   chkOut?: number;
+  /** started by the Regrader (a Legacy node, DESIGN.md §22): it folds by itself when graded */
+  auto?: boolean;
 }
 
 export interface AuditResult {
@@ -290,6 +299,8 @@ export interface SkiffRoute {
   used?: number;
   /** its first skiff was the Committee's (Pocket Skiffs): not refunded */
   free?: boolean;
+  /** it holds the Skiff Guild's free skiff (a Legacy node, DESIGN.md §22): not refunded */
+  guild?: boolean;
 }
 
 /** A high floor's state: the District, the World (DESIGN.md §21, §22). */
@@ -368,6 +379,39 @@ export interface KeptDesign {
    * round). Absent for an imported string, a design kept before the final round, or one folded
    * with a machine out of its normal mode: those refold after a full audit */
   card?: { grade: GradeCard; ins: Partial<Record<ItemId, number>>; outs: Partial<Record<ItemId, number>> };
+  /** a nested Factory design kept by the Group Drawer (a Legacy node, DESIGN.md §22): its box is on
+   * the Factory floor, and each module tile is named by its product (filled from this run's spare
+   * copies of a depth-1 design making it); `parts` is empty */
+  nested?: { kind: 'module' | 'trunk'; item: ItemId | null; dx: number; dy: number; rot: Dir }[];
+}
+
+/** A District layout kept by the Town Plan (a Legacy node, DESIGN.md §22): each tile named by the
+ * product of the group that stood there, and the routes between the tiles (by position). */
+export interface TownPlan {
+  id: number;
+  name: string;
+  tiles: { x: number; y: number; item: ItemId; depth: number }[];
+  routes: { fx: number; fy: number; tx: number; ty: number; item: ItemId; skiffs: number }[];
+}
+
+/** The floors whose best design counts for Legacy (DESIGN.md §22). */
+export type LegacyFloor = 'workshop' | 'factory' | 'district' | 'world';
+
+/** A floor's best design this world, or an island's record: its value on the Patent Office's scale. */
+export interface FloorBest { value: number; item: ItemId; grade: string; steps: number; tier: number }
+
+/** This world: what has happened since the last Relocate (kept through every Reorganize). */
+export interface WorldRun {
+  /** the tick the world began on */
+  start: number;
+  /** each floor's best design this world (DESIGN.md §22 Legacy) */
+  best: Partial<Record<LegacyFloor, FloorBest>>;
+  /** Megaproject stages done this world */
+  stages: number;
+  /** the World floor has stood this world */
+  opened: boolean;
+  /** Reorganizes taken this world */
+  runs: number;
 }
 
 /** What the Patent Office has on file for a product (DESIGN.md §19): the best value filed so far,
@@ -390,6 +434,9 @@ export interface RunRecord {
   earned: Num;
   /** its best coin per minute over 5 minutes (a rate) */
   peakPerMin: number;
+  /** it ended with a Relocate to this island, banking this much Legacy (DESIGN.md §22) */
+  relocate?: WorldId;
+  legacy?: number;
 }
 
 /** What survives a Reorganize, beside the four kept fields that already lived in the run's state
@@ -418,13 +465,45 @@ export interface MetaState {
   perMinRing: number[];
   /** Challenges completed, for good (DESIGN.md §21); absent on older saves */
   challenges?: string[];
+  // ---- Relocate, layer 2 (DESIGN.md §22); absent on older saves (Home, nothing banked)
+  /** the island the town is on (absent: Home) */
+  world?: WorldId;
+  /** Legacy unspent, and ever earned; the Legacy tree's nodes bought */
+  legacy?: Num;
+  legacyEarned?: Num;
+  legacyNodes?: LegacyId[];
+  /** islands visited (Home included) */
+  visited?: WorldId[];
+  /** each island's best design per floor, ever (the worlds' records) */
+  worldRecords?: Partial<Record<WorldId, Partial<Record<LegacyFloor, FloorBest>>>>;
+  /** this world: since the last Relocate */
+  here?: WorldRun;
+  /** Relocates taken */
+  relocations?: number;
+  /** Old Habits: the Patent nodes kept through a Relocate */
+  habits?: PatentId[];
+  /** the Standing Committee: Reorganize by itself at this many Patents (null: off) */
+  standing?: number | null;
+  /** the Town Plan's kept District layouts */
+  plans?: TownPlan[];
+  nextPlan?: number;
+  /** room kept through a Reorganize (the Sky Anchor's stages): annex blocks, District and World lots */
+  keptRoom?: { annex?: number; district?: number; world?: number };
+  /** Field Notes (Unit 7's rep 5): `island:item` keys the Codex has paid on each island */
+  fieldNotes?: string[];
 }
 
 export function newMeta(): MetaState {
   return {
     runs: 0, runStart: 0, patents: Num.ZERO, patentsEarned: Num.ZERO, nodes: [], patented: {}, drawer: [], nextKept: 1, queue: [],
     lifetime: { earned: Num.ZERO, delivered: {}, folds: 0 }, history: [], peakPerMin: 0, perMinRing: [],
+    world: 'home', legacy: Num.ZERO, legacyEarned: Num.ZERO, legacyNodes: [], visited: ['home'], worldRecords: {}, here: newWorldRun(0), relocations: 0,
   };
+}
+
+/** A world just arrived at (DESIGN.md §22). */
+export function newWorldRun(tick: number): WorldRun {
+  return { start: tick, best: {}, stages: 0, opened: false, runs: 0 };
 }
 
 export interface State {
@@ -510,7 +589,9 @@ export interface State {
   chute?: Partial<Record<ItemId, number>>;
   /** Megaprojects #2 and on: stages done and what the current stage has been given, by project.
    * Survives every reset (DESIGN.md §21), like `mega`. */
-  megas?: Partial<Record<string, { stage: number; progress: Partial<Record<ItemId, Num>> }>>;
+  megas?: Partial<Record<string, MegaState>>;
+  /** the Old Works' rubble still lying this run (tile indices y x 24 + x, DESIGN.md §22) */
+  rubble?: number[];
   /** this run's Challenge, if it is one (DESIGN.md §21 Challenges): its rules hold until its goal
    * is met */
   challenge?: string | null;
@@ -520,6 +601,17 @@ export interface State {
   challengeBase?: number;
   /** lots a high floor opens with this run (District Deeds, a head start) */
   headLots?: number;
+}
+
+/** A Megaproject's progress (#2 on). `stage` counts the stages done; `progress` is the stage being
+ * built now. Megaprojects #4 and #5 build their stages in any order, one on each island (DESIGN.md
+ * §22): `done` lists the stages that stand, and `held` keeps another island's stage's progress
+ * while the town is elsewhere (a Relocate puts it back when the town returns). */
+export interface MegaState {
+  stage: number;
+  progress: Partial<Record<ItemId, Num>>;
+  done?: number[];
+  held?: Record<string, Partial<Record<ItemId, Num>>>;
 }
 
 /** A nested-fold audit on the Factory floor (DESIGN.md §18 Nested folds). */

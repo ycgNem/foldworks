@@ -9,19 +9,36 @@ import { ITEMS, type ItemId } from '../data/items';
 import { RECIPE, recipesFor, type RecipeDef } from '../data/recipes';
 import { RULES } from '../data/rules';
 import { RESEARCH } from '../data/research';
-import { ORDER } from '../data/orders';
+import { ORDER, ORDERS } from '../data/orders';
+import { lrules } from './legacy';
+import { customerMet } from './reorganize';
 import { prules } from './patents';
 import { wastePrice } from './systems/modules';
 
 /** Does the active special order still want this item at the Workshop Dock? */
 export function orderWants(g: Game, item: string): boolean {
-  const id = g.s.orders.active;
-  if (!id) return false;
-  const d = ORDER[id];
-  if (d.at) return false;
-  const want = d.wants[item as ItemId];
-  if (!want) return false;
-  return (g.s.orders.progress[id]?.[item as ItemId]?.toNumber() ?? 0) < want;
+  // Contract Runners (a Legacy node, DESIGN.md §22): every order on offer fills, from every Dock
+  const ids = lrules(g).runners ? orderQueue(g) : g.s.orders.active ? [g.s.orders.active] : [];
+  for (const id of ids) {
+    const d = ORDER[id];
+    if (d.at && !lrules(g).runners) continue;
+    const want = d.wants[item as ItemId];
+    if (want && (g.s.orders.progress[id]?.[item as ItemId]?.toNumber() ?? 0) < want) return true;
+  }
+  return false;
+}
+
+/** The orders Contract Runners fill (DESIGN.md §22): the active one first, then every other on
+ * offer, in the order list's order. */
+export function orderQueue(g: Game): string[] {
+  const o = g.s.orders;
+  const out = o.active ? [o.active] : [];
+  for (const d of ORDERS) {
+    if (d.id === o.active || o.done.includes(d.id)) continue;
+    if (!d.requires.every((r) => g.done(r)) || !customerMet(g, d.customer)) continue;
+    out.push(d.id);
+  }
+  return out;
 }
 
 /** Can `to` take `item`, arriving while travelling in direction `dir`? (No side effects.) */
@@ -48,7 +65,9 @@ export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
     case 'merger':
       return enterSide !== to.rot && to.store.length === 0 && mergerTurn(g, to, enterSide);
     case 'boiler':
-    case 'generator': {
+    case 'generator':
+    case 'heater': {
+      if (to.ruined) return false;
       // fuel, from any side but a boiler's front (its Steam Engine is there)
       if (to.kind === 'boiler' && enterSide === to.rot) return false;
       const f = BUILD[to.kind].fuel!;
@@ -61,6 +80,7 @@ export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
       // crafting machines (Mk1, Act II, Mk2); miners, engines and poles take nothing
       if (!isMachine(to.kind) || to.kind === 'miner') return false;
       if (to.paused) return false; // stopped by the player (DESIGN.md §20): its inputs route on
+      if (to.ruined) return false; // a ruin of the Old Works takes nothing until repaired (§22)
       if (enterSide === to.rot) return false; // the front is the output
       return machineTakes(g, to, item);
   }

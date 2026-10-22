@@ -11,14 +11,15 @@ import { odBoost, overdriveTick, veinBoost } from './machines';
 import { isAudited } from './audits';
 import { prules } from '../patents';
 import { scenarioMiners } from '../scenario';
+import { islandMiners } from './islands';
 
 export function runMiners(g: Game) {
   const cap = RULES.outputCap.value;
   for (const m of g.miners) {
     // stopped by the player (DESIGN.md §20): digs nothing
-    if (m.paused) {
+    if (m.paused || m.ruined) {
       m.state = 'idle';
-      m.why = 'paused';
+      m.why = m.ruined ? 'ruined' : 'paused';
       overdriveTick(m);
       note(m);
       continue;
@@ -32,6 +33,8 @@ export function runMiners(g: Game) {
       * odBoost(g, m)
       // Rich Ore (a Scenario's twist, DESIGN.md §21)
       * scenarioMiners(g)
+      // Pebble Isle (DESIGN.md §22): every Miner digs 1.5x
+      * islandMiners(g)
       // the Great Drill never reaches a miner being audited (a folded rate would count it twice)
       * (g.s.mega.stage >= 1 && !isAudited(g, m.id) ? 1 + RULES.drillBoost.value : 1);
     if (m.out < cap) {

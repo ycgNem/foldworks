@@ -1577,6 +1577,241 @@ Lessons, and the numbers they moved (each with its derivation in `src/data/resea
 
 ## 22. Act IV: Worlds and Relocate (Milestone 9, 40-80 h)
 
-Written when Milestone 9 is built (`docs/endgame.md` has the plan). The World floor's first-pass
-numbers (`src/data/floors.ts`): 16x12 of depth-3 modules, barges at 3 tiles/s with 12 a trip and
-1.5 s at the ends (8 a second beside, 0.9 across), against depth-3 rates of 0.5-10 a second.
+New thinking: **a fold is only as good as the ground it was folded on.** Acts I-III taught one
+Workshop; Act IV moves the town to islands whose Workshops have one rule each, so the line that
+folds best is a different line on each. Reset layer 2, **Relocate**, banks **Legacy** for what a
+world built, and the Legacy tree hands the chores of layer 1 to the town (pillar 2). The plan and
+the contract ids: `docs/endgame.md`. Data: `src/data/worlds.ts`, `legacy.ts`, the Act IV blocks
+of `items.ts`, `recipes.ts`, `research.ts`, `orders.ts`, `megaprojects.ts`, `floors.ts` and
+`rules.ts`. Sim: `src/sim/systems/islands.ts`, `worlds.ts`, `src/sim/relocate.ts`, `legacy.ts`,
+and the Legacy automation in `systems/automation.ts`. Tests: `tests/act4.test.ts`.
+
+### The islands
+The island the town is on is `meta.world` (absent on older saves: Home). Every island's Workshop
+is the same 24x16 of six chunks at the same prices (§9, §18) with the same Workshop deposits;
+each adds **one rule**, **one exotic deposit** (2x2, value 4: an ore, a little dearer than coal or
+sand because there is one patch of it) and its **tier 4 goods**. The ground is fixed per island
+and laid again at each run's start, like the start layout, so a kept design unfolds onto it as it
+was folded.
+
+| island | rule | exotic (where) | tier 4 |
+|---|---|---|---|
+| Home | none | none | none |
+| Pebble Isle | chunks C, D, F are **sky** (not land, not for sale); Miners dig **1.5x** | skyglass (9, 5), chunk B | skyglass lens, horizon lens |
+| Cinder Isle | **12 vents**: a machine beside one needs **no power**, a Generator or Boiler beside one burns **no fuel**; no belt, splitter, merger or crate stands **beside** one | cinderite (4, 13), chunk C | cinder alloy, sunset dye, Portable Sunset Generator |
+| Rime | a powered machine runs at **half speed** unless a **lit Heater within 2** tiles or **2 working machines touch** it | rime crystal (11, 13), chunk D | frost alloy, storm cell, Pocket Weather |
+| the Old Works | **rubble** on about half the free land, cleared tile by tile; **ruined machines**, repaired for **a quarter** of their price, two of them whole lines | relic (14, 1), chunk B | relic gear |
+
+Why each rule changes what a good fold looks like (the record each island keeps,
+`meta.worldRecords`, is beaten by a layout that would not work elsewhere):
+- **Pebble.** Half the land and one deposit of each ore, but each deposit feeds half again the
+  machines: two Miners fill three Smelters (1.5 x 2 = 3 ore a 2 s, three Smelters' worth), a
+  ratio no other island's line has, and the same box folds 1.5x the rate (a tier up sooner,
+  §19 Filing). Pebble's chunk-A-and-B Workshop is about the slice's (§9), so Act II's steel waits
+  on its one iron deposit unless Sky Moorings (a Legacy node) brings F back.
+- **Cinder.** A vent cluster is power-free and belt-free: machines beside a vent feed each other
+  face to face (no belt stands there), so the best Cinder fold is a compact cluster with no plant
+  in its box (C high, no Generator's coal as an input). Twelve vents, two a chunk, none beside the
+  start layout's belts. The rule is "beside": the four tiles on the faces of a footprint, so a
+  2x2 machine has eight tiles that can touch a vent.
+- **Rime.** Powered machines want company: two working machines touching (or a Heater, 3,000
+  coin, a Kiln's price, research Thermals) keep a machine at full speed, so a line laid out for
+  full speed elsewhere runs at half its ratios and a good Rime fold packs its machines together.
+  A Heater warms everything within 2 tiles (a 5x5, a Pole's reach, §18) and burns a coal every
+  10 s while a powered machine in reach is crafting (a fifth of a Generator's 3 s: heat, not
+  power). Warmth is read from the last tick's states (`runIslands`, before the machines run), so a
+  cluster starting cold warms itself within a second.
+- **the Old Works.** Rubble on about half the free tiles (a fixed hash of the tile, never on a
+  deposit, the start layout or a ruin), cleared for 5 + the chunk's price / 64 a tile (A 5, B
+  and C 21, D 193, E 943, F 1,880: half again a chunk's price to clear it all, as the chunk's
+  price per tile). Fourteen ruined machines: eight in two whole lines (iron plates in C, copper
+  wire in B, their belts and heaps whole) and six loose, some of them Act II's (a Smelter Mk2, an
+  Assembler Mk2). A repair costs `ceil(price x 0.25)` and needs **no research** for the machine (it keeps its
+  recipe), so the island's first hour can fold lines the others have not reached; a big ruin still
+  needs a grid. A ruin takes nothing, makes nothing, draws nothing, can't be in a fold box and is
+  removed for no refund.
+
+Island research (`world` on the node) is offered only on its island: Thermals on Rime, each
+island's own chain on it. The rules are read by the systems through `islands.ts` helpers, as
+Challenges are (`islandMiners`, `coldFactor`, `g.vented`, `islandTileRefusal`), and they run the
+same in offline replay (the same `tick`).
+
+### Tier 4: the islands' goods
+Values are **3-4x their inputs** (tier 3 was about 3x, §21), so an island's goods are what its
+World floor sells, and every tier 4 good sells only where its island's research is (the research is
+reset by every Reorganize and is offered only there).
+
+| good | recipe (machine, seconds) | value | x inputs |
+|---|---|---|---|
+| skyglass lens | 2 skyglass + glass (Kiln, 3) | 70 | 3.5 |
+| horizon lens | 2 lenses + sensor (Assembler, 8) | 4,000 | 3.5 |
+| cinder alloy | cinderite + steel, slag 1 per 2 (Smelter, 3) | 90 | 3.5 |
+| sunset dye | 2 cinderite + solvent (Chem Vat, 3) | 130 | 3.4 |
+| Portable Sunset Generator | 4 dye + an Autonomous Sandwich Engineer + 2 cinder alloy (Assembler Mk2, 30) | 300,000 | 3.3 |
+| frost alloy | rime crystal + steel + solvent (Chem Vat, 4) | 200 | 3.6 |
+| storm cell | frost alloy + battery (Chem Vat, 6) | 1,500 | 3.4 |
+| Pocket Weather | 2 storm cells + weather balloon + umbrella (Assembler Mk2, 24) | 64,000 | 3.3 |
+| relic gear | relic + 2 gears + bearing (Assembler, 4) | 220 | 3.4 |
+| Lighthouse lamp, anchor chain | parts for Megaprojects #4 and #5 (sell for nothing) | 0 | - |
+
+### Research, page 4
+Fourteen nodes, `act: 4`, after the Great Drill's stage 3 like Act III's. **Charting** (30 robot
+arms, 150 sensors, 60 processors after District Folds: 20-30 min of the District that researched
+District Folds) opens the World floor. Each island has its chain, paid in its exotic (600 of it,
+about 13 min of one Pebble Miner, 20 of a Home one): Skyglass Cutting and Horizon Optics on
+Pebble; Cinder Smelting, Sunset Dyes and Sunset Engineering on Cinder; Thermals (500 coal, 150
+steel, with Act II's first powered machines, so a Rime run is never cold for want of research),
+Frost Works, Storm Cells and Pocket Weather on Rime; Relic Study on the Old Works. The Lighthouse,
+the Sky Anchor and **Relocation** (3 Sandwich Engineers and 20 umbrellas: the end of Act III's
+chain) open with Charting on any island.
+
+### The World floor
+- The fourth floor (research Charting), **16x12** (192 tiles, 1.6x the District's 120) with three
+  lots of 2x12 at **10M x n** (linear: 10-20 min of the 0.5-1M a minute an Act IV floor makes) and
+  a fourth kept for good by the Lighthouse's stage 3. Dock, Hopper and Bay as on the District.
+- It takes **depth-3 modules only** (the District's folds). The District takes depth 2 and its own
+  depth 3 (the second gate); the World does **not** take its own depth-4 folds: a fold on the World
+  is the Last Fold, Act V's (`hfoldRefusal` asks for research `lastFold`). Decided so that a World
+  module is always a District group of groups, and the floor stays a floor of composition, not the
+  next stack of the same.
+- **Barges, ship value not bulk** (the second gate's principle for the District's skiffs, §21):
+  **3 tiles/s, 2 a trip, 1.5 s** at the ends. Beside its consumer a barge moves **0.92 a second**,
+  five tiles off **0.41**, across the floor with its lots **0.16**. Depth-3 flows are 0.02-0.3 a
+  second for finished goods (an Engineer group, a Robot Arm group) and 0.5-1 for an island's bulk
+  (alloys, lenses), so bulk stands beside what it feeds and finished goods fly anywhere. A barge
+  is **250,000** (flat; 15-30 s of an Act IV floor's income), 12 at most a route.
+- The rest is the District's: 120 routes and 20 a lot, waste with no route down the chute to the
+  Dock, Overdrive by click, the Dispatcher, pause (a module, or every module joined to it by
+  routes: `{ k: 'pause', floor: 'world', ... }`), offline tallies (`wdock`, `wbay`).
+
+### Filing a deeper fold (the second gate)
+A depth-3 fold files **one step more** than the steps its box holds (`designValue`: steps +
+(depth - 2) x `highFoldSteps`), since its routes are logistics folded away as a nested fold's
+trunks are (§18). So a District fold of a chain is worth more than the Factory's nested fold of the
+same chain, the Patent preview grows with Act III's folds, and the World's bests count a step
+deeper again for Legacy.
+
+### Megaprojects #4 and #5
+Built at the **World Bay**, four stages each, **one stage on each island**, in **any order**: the
+Bay builds the stage of the island the town is on (`megaStageOf`). Each stage wants 150 of the
+project's part (a Lamp or a Chain: a group at 0.1-0.2 a second, 15-25 min) and one island's good
+(about 40 min of its group). Progress is kept through every reset; a stage left half built waits
+on its island (`held`) and comes back when the town does. Each stage is worth 10 Patents to the
+run that finishes it and 3 Legacy to the world. Rewards are rules, kept for good:
+
+| | Pebble | Cinder | Rime | the Old Works |
+|---|---|---|---|---|
+| **the Lighthouse** (lamp 150 +) | horizon lens 200: barges **4 tiles/s** | sunset dye 800: skiffs and barges **dwell half** | storm cell 300: the World's **first lot for good** | relic gear 800: a route counts **at most 6 tiles** |
+| **the Sky Anchor** (chain 150 +) | lens 1,200: the **annex kept** through a Reorganize | cinder alloy 1,200: **District lots kept** | frost alloy 800: **World lots kept** | relic gear 800: annex and lots kept through a **Relocate** too |
+
+The Anchor is §19's open lever for rule 3 (room kept through a reset) and the Lighthouse the
+high floors' logistics answer; neither is a multiplier on income.
+
+### Relocate (layer 2)
+`{ k: 'relocate', world }`, from a card that says what it gives, keeps and loses (pillar 4).
+**Allowed** once research Relocation is done and the World floor has stood in this world, to an
+island other than this one, with no audit running, when the preview is at least 1 Legacy.
+
+- **Kept:** Legacy and the Legacy tree; every Megaproject's stages and progress; reputation; the
+  Codex and Field Notes; the Patent Drawer; trophies, lifetime statistics, Challenges won; the
+  worlds' records.
+- **Lost:** everything a Reorganize loses (§19), and the **Patents** (unspent and the tree: Old
+  Habits keeps the nodes chosen), the **record on file** (every product files again on the new
+  island), and the room the Sky Anchor kept through Reorganizes (until its last stage).
+
+**Legacy**, banked at the move:
+
+    Legacy = floor( (sum over the Workshop, Factory, District and World of
+                     the best value folded there this world) / 4
+                    + 3 x Megaproject stages done this world
+                    + 5 for an island not visited before )
+
+A floor's best value is its best design's steps x grade x rate tier, as filing (§19): the
+Workshop's best depth-1 fold, the Factory's best nested fold, the District's best fold of groups,
+and the World's best module **put to work** there (60 s straight at half speed or better: placing
+it is not enough). "This world" is since the last Relocate: its bests are kept through its
+Reorganizes (`meta.here`), so Legacy is the whole world's, not the last run's. No coin, no root of
+a currency, no log: it counts the best of what was folded on each floor, what was built, and where
+the town has been.
+
+The numbers: a world built to its World floor holds about 30-40 of value (four floors at 7-10:
+steps x grade x tier) and so **8-10 Legacy from its folds**. The first Relocate (from Home, about
+40-45 h) adds the Home world's seven stages (the Great Drill's three, the City's and the
+Transmuter's two each: 21) and 5 for a new island: **about 35**, a third of the tree. A first
+visit to each island: folds 8-12, two stages (one of each project) 6, the new island 5: **about
+20**. A revisit: **8-18**. The tree is 103 Legacy, so it is bought out after the four islands
+(35 + 3 x 20 = 95) and a revisit, about 75-80 h. Divisor, stage and island weights: `RULES.legacy*`.
+
+### The Legacy tree
+Seventeen nodes in three branches, **flat prices** with prerequisites (no geometric curve, no
+"+X% everything", PLAN.md); 103 Legacy in all. Pillar 2: Legacy automates layer 1. Pillar 1:
+every node changes how the next world plays (the gate: reset 3 felt like reset 1, a Patent preview
+of about 0 at 30-40 h).
+
+| node | Legacy | needs | effect |
+|---|---|---|---|
+| the Patent Purse | 4 | - | every island starts with 10 Patents (most of §19's head starts) |
+| Old Habits | 5 | - | keep 4 Patent nodes you choose through a Relocate (`{ k: 'habit', id }`) |
+| Second Nature | 7 | Old Habits | keep 12 (a third of the Patent tree) |
+| the Town Archive | 8 | the Purse | every run starts knowing Act I's research |
+| Standing Charts | 7 | the Archive | once the World floor stood in this world, later runs here know Charting |
+| the Patent Clerk | 6 | - | buys open Patent nodes in the tree's order as Patents allow, every 5 s |
+| the Standing Committee | 10 | the Clerk | Reorganizes by itself when the preview reaches the number set (`{ k: 'standing', at }`; never in a Challenge, waits for audits) |
+| the Regrader | 9 | - | kept designs unfold, audit and fold by themselves at a run's start (the 10 s refold check when the layout suits the island) |
+| the Town Plan | 9 | the Regrader | keep 2 District layouts (`keepPlan`, `forgetPlan`); each run places them again from spare copies of the best design of each tile's product and depth, routes and skiffs paid |
+| Contract Runners | 7 | - | every order on offer fills from every Dock at once |
+| the Skiff Guild | 5 | - | a route starts with a second skiff or barge, free, that stays with it |
+| A Longer Drawer | 4 | - | the Patent Drawer holds 4 more |
+| the Group Drawer | 6 | the Longer Drawer | the Drawer keeps nested Factory designs as their group's layout; they unfold from spare copies of this run's designs |
+| Sky Moorings | 4 | - | Pebble's chunk F is land again |
+| Heat Shields | 4 | - | on Cinder crates, splitters and mergers stand beside a vent (belts still melt) |
+| Warm Hands | 4 | - | on Rime one working machine touching is warmth enough |
+| Salvage Crews | 4 | - | on the Old Works ruins repair for nothing and clear the rubble around them |
+
+The automation runs in the automation stage (right after the input commands), every 5 s (10 s
+for the Committee), never as a logged command, so a replay does the same.
+
+### Orders and reputation, Act IV
+Eight orders, two a customer, each wanting one island's goods at about **2.1x** their Dock value
+(as Act III's, §21), so each island has two customers' orders. Rep thresholds, the existing four
+customers (no new customer):
+- **Bramble 5, Harbour Rights:** each island's exotic deposit holds 2 claims more (a deposit's
+  own 2, §18, again).
+- **Unit 7 5, Field Notes:** an island's exotic and tier 4 goods pay the Codex's 30x again on each
+  island they are first delivered on (`meta.fieldNotes`).
+- **Voltaire 5, High-Tension Lines:** Poles join at 8 tiles, was 6.
+- **the Committee 7, Rubble Rousers:** on the Old Works a tile cleared clears the rubble touching
+  it.
+
+### Offline and saves
+Island rules and the World floor run in offline replay through the same `tick`; the extrapolated
+part uses the replay's measured rates (rules included), with the World's Dock and Bay tallied apart
+(`wdock`, `wbay`) and Megaprojects #4 and #5 filled through `megaStageOf`. `SAVE_VERSION` 9: an
+older save is on Home with no Legacy, no node, Home the only island visited, this world begun at
+the save's first run.
+
+### Pacing targets (§16)
+- **Relocate first at 40-45 h**, when the World floor stands and Relocation is researched.
+- **Four islands by 60 h** (Home and three more): each island's climb back to its World floor in
+  **6-8 h**, faster than Home's 40 because Megaprojects, reputation, the Drawer and the Codex are
+  kept and the tree takes the chores (the Purse and the Archive skip Act I, the Clerk spends, the
+  Regrader refolds, the Town Plan rebuilds the District, the Committee resets).
+- **The island rules hold to 80 h:** every rule has a softener in the tree, but none removes its
+  rule (Pebble keeps C and D as sky, Cinder's belts still melt, Rime's lone machine still wants a
+  Heater, the Old Works' rubble stays); a run on a fifth visit still plays differently from Home.
+- **Not yet measured:** these are the model's numbers; the bots' Act IV policy measures them (no
+  pace test for Act IV yet).
+
+### Derivative, flagged and re-derived (CLAUDE.md)
+- **A prestige tree of automation bought with the second reset's currency** resembles Antimatter
+  Dimensions' Eternity upgrades and its autobuyers (auto-Crunch at a number: the Standing
+  Committee). Re-derived from the game's own chores: each node takes one action the player did in
+  Acts I-III (spending Patents, choosing when to Reorganize, refolding a kept design, placing the
+  District, filling orders, buying skiffs), flat prices with prerequisites, and no multiplier.
+- **Islands with one rule each** resemble Factorio: Space Age's planets. Re-derived from the fold:
+  each rule changes which layout folds best (ratio, power, adjacency, land), the record is per
+  island and per floor, and there is no travel, no logistics between islands, no new science.
+- **Megaprojects in any order across islands** are this game's own Megaprojects (§18, §21) spread
+  over islands; the reward table is rules, not output.
+- **Rubble cleared tile by tile** resembles any land-clearing tycoon; it is priced from the chunk
+  (§9), so it is the chunk's price again, not a new curve.

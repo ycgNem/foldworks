@@ -22,7 +22,13 @@ import { runDraughtsman } from '../drawer';
 import { shovel } from './machines';
 import { availableNodes, selectResearch } from './research';
 import { offeredOrders } from './orders';
-import { stamp, stampCost, stampRefusal } from './modules';
+import { foldAudited, mainItem, stamp, stampCost, stampRefusal } from './modules';
+import { buyPatent, openPatents, patentRefusal } from '../patents';
+import { lrules } from '../legacy';
+import { unfoldKept, unfoldKeptRefusal } from '../drawer';
+import { cancelAudit, startAudit } from './audits';
+import { addRoute, hentAt, hplace, hplaceRefusal, routeRefusal, setSkiffs } from './high';
+import { previewPatents, reorganize, reorganizeRefusal } from '../reorganize';
 
 export function runAutomation(g: Game) {
   const r = prules(g);
@@ -49,6 +55,99 @@ export function runAutomation(g: Game) {
     if (want[0]) stamp(g, want[0].id);
   }
   if (r.nightCrew && !g.s.visible && t % (RULES.nightCrewSeconds.value * TICK_RATE) === 0) for (const h of g.logistics) if (h.kind === 'heap' && h.count > 0) h.count--;
+  runLegacyAutomation(g);
+}
+
+// ------------------------------------------------------------------ the Legacy tree's (DESIGN.md §22)
+
+/** The Legacy tree's automation of layer 1 (pillar 2): the Patent Clerk, the Regrader and the Town
+ * Plan every 5 s, the Standing Committee every 10 s. None of it is a logged command. */
+export function runLegacyAutomation(g: Game) {
+  const L = lrules(g);
+  const t = g.s.tick;
+  if (g.s.scenario) return;
+  const every = RULES.legacyEvery.value * TICK_RATE;
+  if (L.clerk && t % every === 0) patentClerk(g);
+  if (L.regrader && t % every === 0) regrade(g);
+  if (L.regrader) foldRegraded(g);
+  if (L.plans && t % every === 0) townPlan(g);
+  if (L.standing && t % (RULES.standingEvery.value * TICK_RATE) === 0) standingCommittee(g);
+}
+
+/** The Patent Clerk: open nodes in the tree's order, as Patents allow; it saves for the first open
+ * node it can't yet afford (a node refused for another reason, the offline ceiling, is passed). */
+function patentClerk(g: Game) {
+  for (let n = 0; n < 50; n++) {
+    let bought = false;
+    for (const id of openPatents(g)) {
+      const why = patentRefusal(g, id);
+      if (!why) { bought = buyPatent(g, id).ok; break; }
+      if (why.startsWith('Costs')) return;
+    }
+    if (!bought) return;
+  }
+}
+
+/** The Regrader: the first kept design not unfolded this run that can be is unfolded and audited
+ * (a refold check when it still suits the island, else a full audit at its new grade). */
+function regrade(g: Game) {
+  if (g.s.audits.length >= prules(g).maxAudits) return;
+  const done = new Set(g.s.drafted ?? []);
+  for (const k of g.s.meta.drawer) {
+    if (done.has(k.id) || k.nested) continue;
+    if (unfoldKeptRefusal(g, k) || !unfoldKept(g, k.id).ok) continue;
+    g.bump('regraderUnfolds');
+    // the unfolded parts must be on the grid before the box is read
+    if (g.layoutDirty) g.rebuild();
+    if (startAudit(g, { x: k.x, y: k.y, w: k.w, h: k.h }).ok) g.s.audits[g.s.audits.length - 1].auto = true;
+    return;
+  }
+}
+
+/** A Regrader's audit, graded, folds by itself (named as kept); one graded F is cancelled and its
+ * layout left standing for the player. */
+function foldRegraded(g: Game) {
+  const a = g.s.audits.find((q) => q.auto && q.result);
+  if (!a || !a.result) return;
+  if (a.result.grade.mult <= 0) { cancelAudit(g, a.id); return; }
+  const k = g.s.meta.drawer.find((q) => q.x === a.box.x && q.y === a.box.y && q.w === a.box.w && q.h === a.box.h);
+  foldAudited(g, k?.name ?? null, a.id);
+}
+
+/** The Town Plan: each planned District tile empty is filled with a spare copy of the best graded
+ * design of its product and depth; each planned route between two filled tiles is flown, its
+ * skiffs bought up to the plan's. */
+function townPlan(g: Game) {
+  const st = g.s.district;
+  if (!st) return;
+  for (const p of g.s.meta.plans ?? []) {
+    for (const tile of p.tiles) {
+      if (hentAt(g, 'district', tile.x, tile.y)) continue;
+      const cands = g.s.designs
+        .filter((d) => d.spare >= 1 && (d.depth ?? 1) === tile.depth && mainItem(d) === tile.item)
+        .sort((a, b) => b.grade.mult - a.grade.mult || a.id - b.id);
+      for (const d of cands) if (!hplaceRefusal(g, 'district', d.id, tile.x, tile.y)) { if (hplace(g, 'district', d.id, tile.x, tile.y).ok) g.bump('planPlaced'); break; }
+    }
+    for (const r of p.routes) {
+      const a = hentAt(g, 'district', r.fx, r.fy), b = hentAt(g, 'district', r.tx, r.ty);
+      if (!a || !b || a.kind !== 'module') continue;
+      let route = st.routes.find((q) => q.from === a.id && q.to === b.id && q.item === r.item);
+      if (!route) {
+        if (routeRefusal(g, 'district', r.fx, r.fy, r.tx, r.ty, r.item) || !addRoute(g, 'district', r.fx, r.fy, r.tx, r.ty, r.item).ok) continue;
+        route = st.routes[st.routes.length - 1];
+      }
+      while (route.skiffs < r.skiffs && setSkiffs(g, 'district', route.id, 1).ok) { /* bought one */ }
+    }
+  }
+}
+
+/** The Standing Committee: Reorganize by itself once the preview reaches the player's number,
+ * never during a Challenge, and only when a Reorganize would be allowed (no audit running). */
+function standingCommittee(g: Game) {
+  const at = g.s.meta.standing;
+  if (at === null || at === undefined || g.s.challenge) return;
+  if (previewPatents(g).now < at || reorganizeRefusal(g)) return;
+  if (reorganize(g).ok) g.bump('standingReorganizes');
 }
 
 /** The node the bank pays the largest share of (the cheapest, on a tie). */

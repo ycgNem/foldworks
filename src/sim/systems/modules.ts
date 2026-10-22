@@ -36,7 +36,7 @@ export const BYPRODUCTS: ReadonlySet<string> = new Set(RECIPES.filter((r) => r.b
 
 /** Buildings whose price goes into a design's stamp bill (machines and power); belts and the
  * rest are refunded at the fold and paid again at Unfold. */
-export const inBill = (k: EntKind) => isMachine(k) || isPower(k);
+export const inBill = (k: EntKind) => isMachine(k) || isPower(k) || k === 'heater';
 
 /** A design's main product: its most valuable output that is not a byproduct. */
 export function mainItem(d: { outs: Partial<Record<ItemId, number>> }): ItemId | null {
@@ -718,6 +718,7 @@ function megaCheck(g: Game, bay: FEnt) {
   if (done) {
     g.s.mega.stage = st.stage;
     g.s.mega.progress = {};
+    if (g.s.meta.here) g.s.meta.here.stages++;
     g.bump('megaStages');
     // stages 2 and 3 change the Workshop's ground (miners beside patches, deep deposits)
     g.layoutDirty = true;

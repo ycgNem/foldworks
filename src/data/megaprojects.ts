@@ -5,6 +5,7 @@
 // every reset): until then the Bay counts nothing for them (it never jams: what it can't count goes
 // on to the Dock), and the Drill screen says what opens it.
 import type { ItemId } from './items';
+import type { WorldId } from './worlds';
 
 export interface MegaStage {
   stage: number;
@@ -17,6 +18,9 @@ export interface MegaStage {
   reward: string;
   /** Patents the whole stage is worth at Reorganize, earned in proportion as it is delivered (§19) */
   patents: number;
+  /** the island the stage is built on (Megaprojects #4 and #5, DESIGN.md §22): it wants that
+   * island's product, so only there can it be built */
+  world?: WorldId;
   derivation: string;
 }
 
@@ -58,7 +62,7 @@ export function megaStage(done: number): MegaStage | null {
 // reset like the Great Drill (`s.megas[id]`), built at the Bay of a higher floor. One Bay may hold
 // several projects: what it is given goes to the first open project that still wants it.
 
-export type MegaId = 'city' | 'transmuter';
+export type MegaId = 'city' | 'transmuter' | 'lighthouse' | 'anchor';
 
 export interface MegaProjectDef {
   id: MegaId;
@@ -68,8 +72,15 @@ export interface MegaProjectDef {
   /** the research that opens it */
   opens: string;
   stages: MegaStage[];
+  /** its stages are built in any order, each on its own island (`world`): the stage open is the one
+   * of the island the town stands on (Megaprojects #4 and #5, DESIGN.md §22) */
+  anyOrder?: boolean;
   derivation: string;
 }
+
+/** A stage of Megaprojects #4 and #5 (DESIGN.md §22): the island's product and the project's part. */
+const isle = (stage: number, world: WorldId, name: string, wants: Partial<Record<ItemId, number>>, reward: string, derivation: string): MegaStage =>
+  ({ stage, world, name, wants, reward, patents: 10, derivation: derivation + '; worth 10 Patents (§19, as the Transmuter\'s last stage) and 3 Legacy (§22)' });
 
 export const MEGAS: Record<MegaId, MegaProjectDef> = {
   city: {
@@ -103,6 +114,46 @@ export const MEGAS: Record<MegaId, MegaProjectDef> = {
       },
     ],
     derivation: '§21 Megaproject #3 (PLAN.md): the Scrap Transmuter, byproducts sell at 25% of the item that made them (§15)',
+  },
+  // Act IV (DESIGN.md §22): built at the World's Bay, one stage on each island, in any order; every
+  // stage wants the project's part (made of what every island makes) and one island's product, so
+  // the two projects are finished only by visiting all four islands (§16: four by 60 h). Their
+  // rewards are rules about distance (the Lighthouse) and room kept through resets (the Anchor)
+  lighthouse: {
+    id: 'lighthouse', name: 'The Lighthouse at the Edge', floor: 'world', opens: 'lighthouse', anyOrder: true,
+    stages: [
+      isle(1, 'pebble', 'The Lighthouse, the Lens Room (Pebble Isle)', { lighthouseLamp: 150, horizonLens: 200 },
+        'barges fly {good:4} tiles/s, was 3 · for good',
+        '§22 Megaprojects: 150 lamps (a Lamp group at 0.1-0.2 a second, 15-25 min) and 200 horizon lenses (a Horizon group at 0.05-0.1, 35-65 min) at the World Bay; barges a tile a second faster, as Long Skiffs on the District (§21)'),
+      isle(2, 'cinder', 'The Lighthouse, the Beacon (Cinder Isle)', { lighthouseLamp: 150, sunsetDye: 800 },
+        'every high floor\'s skiffs and barges spend {good:half} as long loading · for good',
+        '§22 Megaprojects: 150 lamps and 800 sunset dye (a Dye group at 0.3 a second, about 45 min); the dwell halved: a route beside its consumer carries most of the gain (the Lighthouse rewards a tight layout)'),
+      isle(3, 'rime', 'The Lighthouse, the Keeper\'s House (Rime)', { lighthouseLamp: 150, stormCell: 300 },
+        'the World floor gains its first lot · for good',
+        '§22 Megaprojects: 150 lamps and 300 storm cells (a Storm group at 0.1 a second, 50 min); a World lot kept for good, as the Floating City\'s District lot (§21)'),
+      isle(4, 'oldworks', 'The Lighthouse, the Light (the Old Works)', { lighthouseLamp: 150, relicGear: 800 },
+        'a route counts at most {good:6} tiles, however far it flies · for good',
+        '§22 Megaprojects: 150 lamps and 800 relic gears (a Relic group at 0.3 a second, 45 min); the far routes capped at six tiles\' length: the last stage frees the layout, as the Transmuter\'s last stage ends the byproduct lesson (§21)'),
+    ],
+    derivation: '§22 Megaproject #4 (docs/endgame.md): the Lighthouse at the Edge, rules about distance on the high floors',
+  },
+  anchor: {
+    id: 'anchor', name: 'The Sky Anchor', floor: 'world', opens: 'skyAnchor', anyOrder: true,
+    stages: [
+      isle(1, 'pebble', 'The Sky Anchor, the Mooring (Pebble Isle)', { anchorChain: 150, skyglassLens: 1200 },
+        'the Factory annex is kept through every Reorganize · for good',
+        '§22 Megaprojects: 150 chains (a Chain group at 0.1-0.2 a second) and 1,200 skyglass lenses (a Lens group at 0.5, 40 min); the annex kept: §19\'s open lever for rule 3 (room kept through a Reorganize)'),
+      isle(2, 'cinder', 'The Sky Anchor, the Chain (Cinder Isle)', { anchorChain: 150, cinderAlloy: 1200 },
+        'District lots bought are kept through every Reorganize · for good',
+        '§22 Megaprojects: 150 chains and 1,200 cinder alloy (an Alloy group at 0.5 a second, 40 min); the District\'s lots kept'),
+      isle(3, 'rime', 'The Sky Anchor, the Fluke (Rime)', { anchorChain: 150, frostAlloy: 800 },
+        'World lots bought are kept through every Reorganize · for good',
+        '§22 Megaprojects: 150 chains and 800 frost alloy (a Frost group at 0.3 a second, 45 min); the World\'s lots kept'),
+      isle(4, 'oldworks', 'The Sky Anchor, the Anchor (the Old Works)', { anchorChain: 150, relicGear: 800 },
+        'the annex and every lot kept are kept through a Relocate too · for good',
+        '§22 Megaprojects: 150 chains and 800 relic gears (45 min); the room the Anchor holds stays with the town when it flies'),
+    ],
+    derivation: '§22 Megaproject #5 (docs/endgame.md): the Sky Anchor, room kept through resets',
   },
 };
 

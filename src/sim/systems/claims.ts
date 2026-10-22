@@ -8,7 +8,8 @@
 import type { Game, ActResult } from '../Game';
 import { OK, no } from '../Game';
 import { Num } from '../../engine/num';
-import { CLAIM_PRICE, PATCHES, patchOpen } from '../../data/land';
+import { CLAIM_PRICE, patchOpen } from '../../data/land';
+import { islandDef, islandPatches } from './islands';
 import { prules } from '../patents';
 import { RECIPE } from '../../data/recipes';
 import { RULES } from '../../data/rules';
@@ -62,8 +63,10 @@ export function copiesOf(g: Game, d: ModuleDesign): number {
 /** Claims held on an ore. */
 export function claimsHeld(g: Game, ore: ItemId): number {
   let deposits = 0;
-  for (const p of PATCHES) if (p.item === ore && patchOpen(p, g.s.mega.stage) && g.owned(p.x, p.y)) deposits++;
-  return RULES.claimsBase.value + RULES.claimsPerDeposit.value * deposits + RULES.claimsPerBlock.value * (g.s.claimBlocks[ore] ?? 0);
+  for (const p of islandPatches(g)) if (p.item === ore && patchOpen(p, g.s.mega.stage) && g.owned(p.x, p.y)) deposits++;
+  // Harbour Rights (Bramble's rep 5, DESIGN.md §22): two more claims on the island's exotic
+  const harbour = g.s.orders.rep.bramble >= 5 && islandDef(g).exotic === ore ? RULES.harbourClaims.value : 0;
+  return harbour + RULES.claimsBase.value + RULES.claimsPerDeposit.value * deposits + RULES.claimsPerBlock.value * (g.s.claimBlocks[ore] ?? 0);
 }
 
 /** Claims in use on an ore: one per copy of every design that digs it. */

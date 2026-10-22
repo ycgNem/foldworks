@@ -48,16 +48,16 @@ export const HIGH: Record<HighFloorId, HighFloorDef> = {
     derivation: '§21 The District: 12x10 (120 tiles, 1.25x the Factory\'s 96, each holding a group of 2-6 modules), three lots of 2x10 east of it at 1M x n (linear, the annex pattern, §19; 45-55 min of the 18-21K a minute the floor makes when the District opens, the second gate\'s measure), Dock and Hopper at the east edge like the Factory\'s, the Bay at the south-west corner; skiffs fly 2 tiles/s with 1 item a trip and 1 s at the two ends (ship value, not bulk: the second gate): beside its consumer a skiff moves 0.5 a second, five tiles off 0.17, across the floor 0.08, against depth-2 flows of 0.06-1.1 a second, so a bulk feeder (glass, steel, solvent at 0.5-1 a second) must stand beside what it feeds, and a Servo group (0.1-0.2) can fly across the floor on two skiffs; a skiff is 40,000 (flat): 2 min of the floor\'s income when the District opens, 27 s at 15 h, 12 s at 30 h (the critic\'s 89K and 195K a minute), so a bad layout costs at the act\'s start and a dozen skiffs is a decision later',
   },
   world: {
-    id: 'world', name: 'World', opens: null, depth: 3,
-    w: 16, h: 12, lotCols: 2, lots: 3, lotBase: 40_000_000,
+    id: 'world', name: 'World', opens: 'charting', depth: 3,
+    w: 16, h: 12, lotCols: 2, lots: 3, lotBase: 10_000_000,
     dock: { x: 14, y: 1 }, hopper: { x: 14, y: 5 }, bay: { x: 0, y: 10 },
-    speed: 3, load: 12, dwell: 1.5, skiffCost: 400000, maxSkiffs: 12,
+    speed: 3, load: 2, dwell: 1.5, skiffCost: 250000, maxSkiffs: 12,
     foldMax: 16,
-    derivation: '§22 The World floor: 16x12 of depth-3 modules, barges (3 tiles/s, 12 a trip, 1.5 s at the ends: beside, 8/s; across 0.9) against depth-3 rates of 0.5-10/s; prices scaled by the Act IV factory (§22)',
+    derivation: '§22 The World floor: 16x12 of depth-3 modules (192 tiles, 1.6x the District\'s 120), three lots of 2x12 at 10M x n (linear: 10-20 min of the 0.5-1M a minute an Act IV floor makes); barges fly 3 tiles/s with 2 a trip and 1.5 s at the ends (ship value, not bulk, as the District\'s skiffs since the second gate): beside its consumer a barge moves 0.92 a second, five tiles off 0.41, across the floor 0.16, against depth-3 flows of 0.02-0.3 a second for finished goods (an Engineer group, a Robot Arm group) and 0.5-1 for an island\'s bulk (alloys, lenses), so bulk stands beside what it feeds and finished goods fly; a barge is 250,000 (flat), 15-30 s of an Act IV floor\'s income',
   },
 };
 
 /** Items a second one skiff carries on a route this long (tiles, centre to centre). */
-export function skiffRate(f: HighFloorDef, dist: number, load = f.load, speed = f.speed): number {
-  return load / ((2 * Math.max(1, dist)) / speed + f.dwell);
+export function skiffRate(f: HighFloorDef, dist: number, load = f.load, speed = f.speed, dwell = f.dwell): number {
+  return load / ((2 * Math.max(1, dist)) / speed + dwell);
 }

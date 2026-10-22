@@ -327,6 +327,13 @@ const TREE: Record<ResearchId, [number, number, number?]> = {
   sensors: [4, 0], recycling: [4, 0.8, 1], sandwiches: [4, 2.4, 1], floatingCity: [4, 3.2, 1],
   robotics: [5, 0.8, 1], scrapTransmuter: [5, 2.4, 1],
   districtFolds: [6, 0.2, 1], sandwichEngineering: [6, 1.8, 1],
+  // Act IV's page (placeholder positions from the sim agent: the UI agent lays the page out;
+  // each island's chain is a row, Charting's projects the top one)
+  charting: [0, 0], lighthouse: [1, 0], skyAnchor: [2, 0, 1], relocation: [3, 0],
+  skyglassCutting: [0, 0.8, 1], horizonOptics: [1, 0.8, 1],
+  cinderSmelting: [0, 1.6], sunsetDyes: [1, 1.6], sunsetEngineering: [2, 1.6, 1],
+  frostWorks: [0, 2.4, 1], stormCells: [1, 2.4, 1], pocketWeathers: [2, 2.4, 1], thermals: [3, 2.4, 1],
+  relicStudy: [0, 3.2, 1],
 };
 
 const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
@@ -338,6 +345,11 @@ const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
   zoning: 'district', chutes: 'chute', chemistry: 'solvent', bearings: 'bearing', vulcanizing: 'rubber', batteries: 'battery',
   servos: 'servo', sensors: 'sensor', processors: 'processor', recycling: 'mode', hydroponics: 'produce', sandwiches: 'sandwich',
   robotics: 'robotArm', floatingCity: 'mega', scrapTransmuter: 'mega', sandwichEngineering: 'sandwichEngineer', districtFolds: 'fold',
+  // Act IV (placeholders until the art director draws the islands' icons)
+  charting: 'district', thermals: 'power', skyglassCutting: 'skyglassLens', horizonOptics: 'horizonLens',
+  cinderSmelting: 'cinderAlloy', sunsetDyes: 'sunsetDye', sunsetEngineering: 'sunsetGenerator',
+  frostWorks: 'frostAlloy', stormCells: 'stormCell', pocketWeathers: 'pocketWeather', relicStudy: 'relicGear',
+  lighthouse: 'mega', skyAnchor: 'mega', relocation: 'mega',
 };
 
 /** nodes with their own drawing in ui_research (the art director's), by frame */

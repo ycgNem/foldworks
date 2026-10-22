@@ -48,6 +48,14 @@ import type { ScenarioId } from '../data/scenarios';
 import { runChallenges, quitChallenge, challengeBuildRefusal, buildPrice, ruled } from './systems/challenges';
 import type { ChallengeId } from '../data/challenges';
 import { runHigh, hplace, hremove, addRoute, setSkiffs, unroute, hclick, buyLot, startHAudit, cancelHAudit, foldHAudited } from './systems/high';
+// Act IV (DESIGN.md §22): the islands, Relocate and the Legacy tree
+import type { WorldId } from '../data/worlds';
+import type { LegacyId } from '../data/legacy';
+import { runIslands, islandCaches, islandPatches, islandTileRefusal, isSky, clearRubble, repair, repairPrice } from './systems/islands';
+import { relocate } from './relocate';
+import { buyLegacy, setHabit, setStanding, keepPlan, forgetPlan } from './legacy';
+import { runWorlds } from './systems/worlds';
+import type { PatchDef } from '../data/land';
 
 export interface Intake {
   to: 'dock' | 'hopper';
@@ -122,7 +130,19 @@ export type Cmd =
   | { k: 'hlot'; floor: HighFloorId }
   | { k: 'haudit'; floor: HighFloorId; x: number; y: number; w: number; h: number }
   | { k: 'hauditCancel' }
-  | { k: 'hfold'; name: string | null };
+  | { k: 'hfold'; name: string | null }
+  // Act IV (DESIGN.md §22): Relocate (layer 2) and the Legacy tree; the Old Works' rubble and ruins
+  | { k: 'relocate'; world: WorldId }
+  | { k: 'legacy'; id: LegacyId }
+  /** Old Habits: keep (or stop keeping) a Patent node through the next Relocate */
+  | { k: 'habit'; id: PatentId }
+  /** the Standing Committee: Reorganize by itself at this many Patents (null: off) */
+  | { k: 'standing'; at: number | null }
+  /** the Town Plan: keep the District's layout as a plan, or forget one */
+  | { k: 'keepPlan'; name?: string }
+  | { k: 'forgetPlan'; id: number }
+  | { k: 'clear'; x: number; y: number }
+  | { k: 'repair'; x: number; y: number };
 
 export interface Logged { t: number; c: Cmd }
 
@@ -181,6 +201,15 @@ export class Game {
   hversion = 0;
   /** deliveries by destination, counted while open (offline progress measures rates with it) */
   tally: Tally | null = null;
+  // ---- the island's caches (DESIGN.md §22, src/sim/systems/islands.ts), rebuilt with the layout
+  /** the deposits on this island (PATCHES, then its own); patchOf indexes it */
+  patches: PatchDef[] = PATCHES;
+  /** vent tiles and rubble tiles (1), and the buildings beside a vent */
+  vents = new Uint8Array(WORKSHOP.w * WORKSHOP.h);
+  rubbleMask = new Uint8Array(WORKSHOP.w * WORKSHOP.h);
+  vented = new Set<number>();
+  /** Rime's Heaters */
+  heaters: Ent[] = [];
 
   constructor(seed: number, opts: { keepHistory?: boolean; empty?: boolean; scenario?: ScenarioId } = {}) {
     this.s = newState(seed);
@@ -226,9 +255,13 @@ export class Game {
   private layOre() {
     this.ore.fill(null);
     this.patchOf.fill(-1);
-    for (let i = 0; i < PATCHES.length; i++) {
-      const p = PATCHES[i];
+    this.patches = islandPatches(this);
+    for (let i = 0; i < this.patches.length; i++) {
+      const p = this.patches[i];
       if (!patchOpen(p, this.s.mega?.stage ?? 0)) continue;
+      // no ore in the sky (Pebble Isle's C, D and F, DESIGN.md §22)
+      const ch = this.chunkAt(p.x, p.y);
+      if (ch && isSky(this, ch.id)) continue;
       for (let y = p.y; y < p.y + p.h; y++)
         for (let x = p.x; x < p.x + p.w; x++) {
           this.ore[y * this.W + x] = p.item;
@@ -243,7 +276,7 @@ export class Game {
 
   owned(x: number, y: number) {
     const c = this.chunkAt(x, y);
-    return !!c && this.s.land.includes(c.id);
+    return !!c && this.s.land.includes(c.id) && !isSky(this, c.id);
   }
 
   has(upgrade: string) {
@@ -343,6 +376,7 @@ export class Game {
     this.machines = [];
     this.logistics = [];
     this.power = [];
+    this.heaters = [];
     const belts: Ent[] = [];
     for (const e of this.s.ents) {
       this.byId.set(e.id, e);
@@ -352,7 +386,9 @@ export class Game {
       else if (isMachine(e.kind)) this.machines.push(e);
       else if (e.kind === 'splitter' || e.kind === 'merger' || e.kind === 'crate' || e.kind === 'heap' || e.kind === 'chuteMouth') this.logistics.push(e);
       else if (isPower(e.kind)) this.power.push(e);
+      else if (e.kind === 'heater') this.heaters.push(e);
     }
+    islandCaches(this);
     this.belts = this.orderBelts(belts);
     buildGrids(this);
     this.layoutDirty = false;
@@ -454,6 +490,14 @@ export class Game {
       case 'haudit': return startHAudit(this, c.floor, { x: c.x, y: c.y, w: c.w, h: c.h });
       case 'hauditCancel': return cancelHAudit(this);
       case 'hfold': return foldHAudited(this, c.name);
+      case 'relocate': return relocate(this, c.world);
+      case 'legacy': return buyLegacy(this, c.id);
+      case 'habit': return setHabit(this, c.id);
+      case 'standing': return setStanding(this, c.at);
+      case 'keepPlan': return keepPlan(this, c.name);
+      case 'forgetPlan': return forgetPlan(this, c.id);
+      case 'clear': return clearRubble(this, c.x, c.y);
+      case 'repair': return repair(this, c.x, c.y);
       default: return no('unknown command');
     }
   }
@@ -481,12 +525,16 @@ export class Game {
         if (!this.inb(xx, yy)) return 'off the map';
         if (!this.owned(xx, yy)) {
           const ch = this.chunkAt(xx, yy)!;
+          if (isSky(this, ch.id)) return 'Sky: nothing is built here on this island';
           return ch.requires && !this.done(ch.requires) ? `Land not yet surveyed (research ${RESEARCH[ch.requires].name})` : `Buy this chunk: ${Num.of(ch.cost).format()} coin`;
         }
         const lock = auditLock(this, xx, yy);
         if (lock) return lock;
         const e = this.entAt(xx, yy);
         if (e && !(kind === 'belt' && e.kind === 'belt')) return `${BUILD[e.kind].name} is in the way`;
+        // the island's ground: a vent, rubble, a belt beside a vent (DESIGN.md §22)
+        const isle = islandTileRefusal(this, kind, xx, yy);
+        if (isle) return isle;
       }
     if (kind === 'miner' && !this.minerOre(x, y)) return this.s.mega.stage >= 2 ? 'A Miner goes on an ore patch or beside one' : 'A Miner goes on an ore patch';
     const rule = challengeBuildRefusal(this, kind);
@@ -528,8 +576,9 @@ export class Game {
     if (lock) return no(lock);
     // a heap with slag in it can't be lifted (removing it would empty it for free)
     if (e.kind === 'heap' && e.count > 0) return no(`The heap holds ${e.count} slag: let it drain out its front first`);
-    // full refund in the slice (ROADMAP.md Milestone 1 step 2), at today's price
-    this.s.coin = this.s.coin.add(isMachine(e.kind) || e.kind === 'splitter' ? buildPrice(this, e.kind as BuildKind) : BUILD[e.kind].cost);
+    // full refund in the slice (ROADMAP.md Milestone 1 step 2), at today's price; a ruin of the Old
+    // Works is hauled away for nothing (it was never bought: DESIGN.md §22)
+    if (!e.ruined) this.s.coin = this.s.coin.add(isMachine(e.kind) || e.kind === 'splitter' ? buildPrice(this, e.kind as BuildKind) : BUILD[e.kind].cost);
     this.s.ents = this.s.ents.filter((q) => q !== e);
     this.layoutDirty = true;
     this.emit({ type: 'remove', x, y, id: e.kind });
@@ -578,6 +627,8 @@ export class Game {
       return catchSpark(this, spark);
     }
     const e = this.entAt(x, y);
+    // a ruin (the Old Works, DESIGN.md §22) does nothing until repaired: say what it costs
+    if (e?.ruined) return no(`A ruined ${BUILD[e.kind].name}: repair it for ${Num.of(repairPrice(this, e)).format()} coin`);
     if (e && e.by >= RULES.outputCap.value && e.byItem) {
       s.clicks++;
       return shovel(this, e);
@@ -613,14 +664,14 @@ export class Game {
   /** Hand-mining: 1 ore into a machine beside the patch that takes it (DESIGN.md §6). */
   private handMine(x: number, y: number, ore: ItemId): ActResult {
     const pi = this.patchOf[y * this.W + x];
-    const p = PATCHES[pi];
+    const p = this.patches[pi];
     let jammed: Ent | null = null;
     for (let yy = p.y - 1; yy <= p.y + p.h; yy++)
       for (let xx = p.x - 1; xx <= p.x + p.w; xx++) {
         const inside = xx >= p.x && yy >= p.y && xx < p.x + p.w && yy < p.y + p.h;
         if (inside) continue;
         const m = this.entAt(xx, yy);
-        if (!m || !isMachine(m.kind) || m.kind === 'miner' || m.paused) continue;
+        if (!m || !isMachine(m.kind) || m.kind === 'miner' || m.paused || m.ruined) continue;
         // which way does the ore travel from the patch into m? from the nearest patch tile
         const fx = Math.max(p.x, Math.min(p.x + p.w - 1, xx)), fy = Math.max(p.y, Math.min(p.y + p.h - 1, yy));
         if (fx !== xx && fy !== yy) continue; // diagonal: not beside the patch
@@ -668,6 +719,7 @@ export class Game {
     if (!ch) return no('no such land');
     if (this.s.land.includes(id)) return no('already yours');
     if (this.s.scenario) return no('A Scenario\'s land is fixed');
+    if (isSky(this, id)) return no('That chunk is sky on this island: nothing to buy');
     if (ch.requires && !this.done(ch.requires)) return no(`Needs research: ${RESEARCH[ch.requires].name}`);
     if (this.s.coin.lt(ch.cost)) return no(`Needs ${Num.of(ch.cost).format()} coin`);
     this.s.coin = this.s.coin.sub(ch.cost);
@@ -735,6 +787,7 @@ export class Game {
     runMiners(this);
     runBelts(this);
     runPower(this);
+    runIslands(this);
     runMachines(this);
     runModules(this);
     runHigh(this);
@@ -745,6 +798,7 @@ export class Game {
     runAudits(this);
     runFAudits(this);
     runChallenges(this);
+    runWorlds(this);
     runStats(this);
     this.s.tick++;
   }
@@ -789,6 +843,8 @@ export class Game {
 }
 
 /** The recipe a Miner runs on each ore. */
-const MINE: Partial<Record<ItemId, string>> = { ironOre: 'mineIron', copperOre: 'mineCopper', coal: 'mineCoal', sand: 'mineSand' };
+const MINE: Partial<Record<ItemId, string>> = { ironOre: 'mineIron', copperOre: 'mineCopper', coal: 'mineCoal', sand: 'mineSand',
+  // Act IV (DESIGN.md §22): the islands' exotic deposits
+  skyglass: 'mineSkyglass', cinderite: 'mineCinderite', rimeCrystal: 'mineRime', relic: 'mineRelic' };
 
 export { OK, no };

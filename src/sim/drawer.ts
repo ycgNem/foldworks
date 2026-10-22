@@ -15,12 +15,15 @@ import { BUILD, isMachine, type BuildKind, type EntKind } from '../data/machines
 import { RECIPE } from '../data/recipes';
 import { RULES } from '../data/rules';
 import { RESEARCH } from '../data/research';
-import { CHUNKS } from '../data/land';
-import type { ItemId } from '../data/items';
-import type { DesignPart, Dir, KeptDesign } from './world';
+import { CHUNKS, FACTORY } from '../data/land';
+import { itemName, type ItemId } from '../data/items';
+import type { DesignPart, Dir, KeptDesign, ModuleDesign } from './world';
 import { prules } from './patents';
+import { lrules } from './legacy';
 import { recipeKnown } from './transfer';
-import { mainItem } from './systems/modules';
+import { finb, fplace, mainItem } from './systems/modules';
+import { fauditLock } from './systems/nested';
+import { islandTileRefusal } from './systems/islands';
 import { inBox } from './systems/audits';
 import { chainSteps } from './reorganize';
 
@@ -32,11 +35,13 @@ const cleanName = (n: string) => n.replace(/[^\x20-\x7e]/g, '').trim().slice(0, 
 export function keepRefusal(g: Game, designId: number): string | null {
   const d = g.design(designId);
   if (!d) return 'No such module';
-  if (d.depth === 2 || d.fparts) return 'A nested design lives on the Factory floor: keep the Workshop lines it was folded from';
-  if (!d.parts.length) return 'Nothing in this design to unfold';
+  if ((d.depth ?? 1) >= 3) return 'A District or World group lives on its floor: keep the lines it was folded from';
+  // the Group Drawer (a Legacy node, DESIGN.md §22) keeps a nested design as its group's layout
+  if ((d.depth === 2 || d.fparts) && !(lrules(g).groupDrawer && d.fparts?.length)) return 'A nested design lives on the Factory floor: keep the Workshop lines it was folded from (the Group Drawer, a Legacy node, keeps it)';
+  if (!d.parts.length && !d.fparts?.length) return 'Nothing in this design to unfold';
   const m = g.s.meta;
   if (m.drawer.some((k) => k.src === d.id)) return 'Already in the Patent Drawer';
-  const slots = prules(g).drawerSlots;
+  const slots = drawerSlots(g);
   if (m.drawer.length >= slots) return `The drawer is full (${slots}): forget a design first`;
   return null;
 }
@@ -48,6 +53,28 @@ export function keepDesign(g: Game, designId: number): ActResult {
   const d = g.design(designId)!;
   const m = g.s.meta;
   const product = mainItem(d);
+  if (d.fparts?.length) {
+    // a nested design: its group's layout, each module tile named by its product (DESIGN.md §22)
+    const k: KeptDesign = {
+      id: m.nextKept++,
+      name: cleanName(d.name) || `Design ${m.nextKept - 1}`,
+      x: d.box.x, y: d.box.y, w: d.box.w, h: d.box.h,
+      parts: [],
+      nested: d.fparts.map((p) => {
+        const sub = p.kind === 'module' ? g.design(p.design) : undefined;
+        return { kind: p.kind, item: sub ? mainItem(sub) : null, dx: p.dx, dy: p.dy, rot: p.rot };
+      }),
+      product,
+      grade: d.grade.letter,
+      rate: product ? d.outs[product] ?? 0 : 0,
+      run: m.runs + 1,
+      src: d.id,
+    };
+    m.drawer.push(k);
+    g.bump('designsKept');
+    g.emit({ type: 'keep', id: k.name, value: k.id });
+    return OK;
+  }
   const k: KeptDesign = {
     id: m.nextKept++,
     name: cleanName(d.name) || `Design ${m.nextKept - 1}`,
@@ -120,6 +147,7 @@ export function keptBill(k: Pick<KeptDesign, 'parts'>): number {
 /** Why a kept design can't be unfolded with its top-left at (x, y) now, or null. `waits` says what
  * kind of reason it is (the Draughtsman waits on coin, skips the rest for now). */
 export function unfoldKeptRefusal(g: Game, k: KeptDesign, x = k.x, y = k.y): { why: string; waits: 'coin' | 'land' | 'research' | 'room' } | null {
+  if (k.nested) return nestedRefusal(g, k, x, y);
   if (x < 0 || y < 0 || x + k.w > g.W || y + k.h > g.H) return { why: 'It does not fit on the Workshop there', waits: 'room' };
   for (let yy = y; yy < y + k.h; yy++)
     for (let xx = x; xx < x + k.w; xx++) {
@@ -136,6 +164,9 @@ export function unfoldKeptRefusal(g: Game, k: KeptDesign, x = k.x, y = k.y): { w
       for (let xx = px; xx < px + d.w; xx++) {
         const e = g.entAt(xx, yy);
         if (e) return { why: `${BUILD[e.kind].name} at ${xx},${yy} is in the way of its ${d.name}: clear the ${k.w}x${k.h} box at ${x},${y}`, waits: 'room' };
+        // the island's ground (DESIGN.md §22): a vent, rubble, a belt beside a vent
+        const isle = islandTileRefusal(g, p.kind, xx, yy);
+        if (isle) return { why: `Its ${d.name} at ${xx},${yy}: ${isle}`, waits: 'room' };
       }
     if (d.unlock && !g.done(d.unlock)) return { why: `Its ${d.name} needs research: ${RESEARCH[d.unlock].name}`, waits: 'research' };
     if (p.recipe) {
@@ -156,6 +187,7 @@ export function unfoldKept(g: Game, id: number, x?: number, y?: number): ActResu
   const at = { x: x ?? k.x, y: y ?? k.y };
   const why = unfoldKeptRefusal(g, k, at.x, at.y);
   if (why) return no(why.why);
+  if (k.nested) return unfoldNested(g, k, at.x, at.y);
   g.s.coin = g.s.coin.sub(keptBill(k));
   for (const p of k.parts) {
     const e = g.addPart(p.kind as EntKind, at.x + p.dx, at.y + p.dy, p.rot);
@@ -164,6 +196,58 @@ export function unfoldKept(g: Game, id: number, x?: number, y?: number): ActResu
   (g.s.drafted ??= []).push(k.id);
   g.bump('keptUnfolds');
   g.emit({ type: 'unfold', x: at.x + k.w / 2, y: at.y + k.h / 2, value: k.id, d: k.w * k.h });
+  return OK;
+}
+
+/** The Patent Drawer's slots now: the Patent tree's, and A Longer Drawer's (a Legacy node). */
+export function drawerSlots(g: Game): number {
+  return prules(g).drawerSlots + lrules(g).drawerAdd;
+}
+
+/** The Group Drawer's nested design, matched to this run's spare copies: each module tile gets the
+ * best graded depth-1 design of its product with a copy to spare (null where none has). */
+function nestedPicks(g: Game, k: KeptDesign): (ModuleDesign | null)[] {
+  const used = new Map<number, number>();
+  return (k.nested ?? []).map((p) => {
+    if (p.kind !== 'module') return null;
+    const d = g.s.designs
+      .filter((q) => (q.depth ?? 1) === 1 && !q.fparts && mainItem(q) === p.item && q.spare - (used.get(q.id) ?? 0) >= 1)
+      .sort((a, b) => b.grade.mult - a.grade.mult || a.id - b.id)[0] ?? null;
+    if (d) used.set(d.id, (used.get(d.id) ?? 0) + 1);
+    return d;
+  });
+}
+
+const nestedTrunks = (k: KeptDesign) => (k.nested ?? []).filter((p) => p.kind === 'trunk').length;
+
+function nestedRefusal(g: Game, k: KeptDesign, x: number, y: number): { why: string; waits: 'coin' | 'land' | 'research' | 'room' } | null {
+  if (!g.flag('factoryOpen')) return { why: 'The Factory floor opens with your first fold', waits: 'research' };
+  const picks = nestedPicks(g, k);
+  for (let i = 0; i < k.nested!.length; i++) {
+    const p = k.nested![i];
+    const px = x + p.dx, py = y + p.dy;
+    if (!finb(g, px, py)) return { why: `Its box reaches off the Factory floor at ${px},${py}: buy the annex block first`, waits: 'land' };
+    if (g.fentAt(px, py)) return { why: `The Factory floor at ${px},${py} is not empty: clear the ${k.w}x${k.h} box at ${x},${y}`, waits: 'room' };
+    const lock = fauditLock(g, px, py);
+    if (lock) return { why: lock, waits: 'room' };
+    if (p.kind === 'module' && !picks[i]) return { why: `It needs a spare module making ${p.item ? itemName(p.item).toLowerCase() : 'something'}: fold or stamp one`, waits: 'research' };
+  }
+  const bill = nestedTrunks(k) * FACTORY.trunkCost;
+  if (g.s.coin.lt(bill)) return { why: `Its trunks cost ${bill.toLocaleString('en-US')} coin`, waits: 'coin' };
+  return null;
+}
+
+/** Unfold a Group Drawer design onto the Factory floor: its trunks bought, its tiles filled from
+ * spare copies of this run's designs of those products. */
+function unfoldNested(g: Game, k: KeptDesign, x: number, y: number): ActResult {
+  const picks = nestedPicks(g, k);
+  k.nested!.forEach((p, i) => {
+    if (p.kind === 'trunk') fplace(g, 'trunk', x + p.dx, y + p.dy, p.rot);
+    else if (picks[i]) fplace(g, 'module', x + p.dx, y + p.dy, p.rot, picks[i]!.id);
+  });
+  (g.s.drafted ??= []).push(k.id);
+  g.bump('keptUnfolds');
+  g.emit({ type: 'unfold', x: x + k.w / 2, y: y + k.h / 2, value: k.id, d: k.w * k.h, floor: 'factory' });
   return OK;
 }
 
@@ -204,7 +288,7 @@ export function keptLand(k: KeptDesign): string[] {
 
 export function importDesign(g: Game, code: string): ActResult {
   const m = g.s.meta;
-  const slots = prules(g).drawerSlots;
+  const slots = drawerSlots(g);
   if (m.drawer.length >= slots) return no(`The drawer is full (${slots}): forget a design first`);
   let d: Omit<KeptDesign, 'id' | 'run'>;
   try {
@@ -221,7 +305,7 @@ export function importDesign(g: Game, code: string): ActResult {
 // ------------------------------------------------------------------ share strings (FWD1)
 
 /** Building kinds by code (append only: old strings must keep decoding). */
-const KINDS: BuildKind[] = ['belt', 'miner', 'smelter', 'press', 'assembler', 'heap', 'splitter', 'merger', 'crate', 'boiler', 'steamEngine', 'generator', 'pole', 'kiln', 'mixer', 'refinery', 'smelterMk2', 'pressMk2', 'assemblerMk2'];
+const KINDS: BuildKind[] = ['belt', 'miner', 'smelter', 'press', 'assembler', 'heap', 'splitter', 'merger', 'crate', 'boiler', 'steamEngine', 'generator', 'pole', 'kiln', 'mixer', 'refinery', 'smelterMk2', 'pressMk2', 'assemblerMk2', 'heater'];
 /** Recipes by code, 1-based (0 = none; append only). */
 const RECIPES_BY_CODE = ['smeltIron', 'smeltCopper', 'pressPlate', 'drawWire', 'pressBrick', 'cutGear', 'gizmo', 'smeltSteel', 'fireGlass', 'recycledGlass', 'crushGravel', 'mixConcrete', 'refinePlastic', 'etchCircuit', 'packKit', 'buildMotor', 'forgeDrillBit'];
 const VERSION = 1;

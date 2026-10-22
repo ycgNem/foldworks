@@ -5,7 +5,7 @@
 // snapshot and the commands since it (src/sim/snapshot.ts).
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -109,6 +109,23 @@ export const MIGRATIONS: Record<number, Migration> = {
   // until it happens, so an old save needs nothing; the bump keeps an older build from loading a
   // save whose District it would silently drop.
   7: (d) => ({ ...d, v: 8 }),
+  // v9 (Milestone 9, Act IV, DESIGN.md §22): Relocate. The town is on Home, no Legacy banked, no
+  // Legacy node, Home the only island visited, no world's record yet; this world began with the
+  // save's first run (its bests are noted from the running designs within 10 s of loading).
+  8: (d) => {
+    if (typeof d.snap !== 'string') return { ...d, v: 9 };
+    const st = JSON.parse(d.snap);
+    const m = (st.meta ??= {});
+    m.world ??= 'home';
+    m.legacy ??= 'N:0';
+    m.legacyEarned ??= 'N:0';
+    m.legacyNodes ??= [];
+    m.visited ??= ['home'];
+    m.worldRecords ??= {};
+    m.here ??= { start: 0, best: {}, stages: 0, opened: !!st.world, runs: m.runs ?? 0 };
+    m.relocations ??= 0;
+    return { ...d, snap: JSON.stringify(st), v: 9 };
+  },
 };
 
 /** Bring any older save up to SAVE_VERSION; throws on a gap in the chain or a newer save. */
