@@ -10,6 +10,7 @@ import { HEADLINES } from '../data/gazette';
 import { RESEARCH } from '../data/research';
 import { ORDER } from '../data/orders';
 import { CHUNKS } from '../data/land';
+import { isSky } from '../sim/systems/islands';
 import { itemName } from '../data/items';
 import { entName } from '../sim/analysis';
 import { researchFrac } from '../sim/systems/research';
@@ -87,7 +88,7 @@ export class Gazette {
     if (rate > 0) news.push(`MARKETS: the Workshop earns ${Math.round(rate).toLocaleString('en-US')} coin a minute. Bramble: "Ribbit."`);
     if (s.research.selected) news.push(`SCIENCE: the Hopper is ${Math.round(researchFrac(g, s.research.selected) * 100)}% of the way to ${RESEARCH[s.research.selected].name}.`);
     if (s.orders.active) news.push(`CIVIC: ${ORDER[s.orders.active].name} is ${Math.round(orderFrac(g, s.orders.active) * 100)}% done. Townsfrogs gather to watch.`);
-    const forSale = CHUNKS.find((c) => !s.land.includes(c.id) && (!c.requires || g.done(c.requires)));
+    const forSale = CHUNKS.find((c) => !s.land.includes(c.id) && !isSky(g, c.id) && (!c.requires || g.done(c.requires)));
     if (forSale) news.push(`REAL ESTATE: ${forSale.name.replace(/\{[^}]*\}/g, '').trim()} still for sale, ${forSale.cost.toLocaleString('en-US')} coin. "A steal," says the seller, a heron.`);
     if (s.sparks.length) news.push(s.sparks[0].kind === 'inspector' ? 'ALERT: an Inspector is in the Workshop! Click them before they wander off.' : 'ALERT: a Lucky Vein glitters on an ore patch! Click it!');
     if (s.codex.length) news.push(`COLLECTING: Unit 7's Codex now holds ${s.codex.length} entries. "MORE," it says.`);

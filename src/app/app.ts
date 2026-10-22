@@ -58,6 +58,8 @@ import { initSound } from './soundopts';
 import { initKeys, keysDebug } from './keys';
 import { uiScaleFor } from './settings';
 import { lessonEvents, lessonDebug } from './lessons';
+import { isleEvents } from './islands';
+import { isSky, rubbleAt } from '../sim/systems/islands';
 import { whereStuck, findStuck } from './stuck';
 import { setUiScale } from './access';
 
@@ -449,6 +451,7 @@ export class App {
     if (!evs.length) return;
     this.renderer.consume(evs, this.game);
     lessonEvents(this, evs); // Milestone 13: lesson cards on firsts
+    isleEvents(this, evs); // Act IV: the Old Works' repairs (src/app/islands.ts)
     const a = this.audio;
     for (const e of evs) {
       switch (e.type) {
@@ -1021,9 +1024,12 @@ export class App {
     // idle: buy land, click the world, or open a report
     if (!g.owned(t.x, t.y)) {
       const ch = g.chunkAt(t.x, t.y);
-      if (ch) this.act({ k: 'land', id: ch.id });
+      // the sky (Pebble Isle, Act IV) is nothing to buy
+      if (ch && !isSky(g, ch.id)) this.act({ k: 'land', id: ch.id });
       return;
     }
+    // the Old Works: a click on rubble clears it (its hover tag says the price)
+    if (rubbleAt(g, t.x, t.y)) { this.act({ k: 'clear', x: t.x, y: t.y }); return; }
     const e = g.entAt(t.x, t.y);
     const r = g.act({ k: 'click', x: t.x, y: t.y });
     if (r.ok) return;

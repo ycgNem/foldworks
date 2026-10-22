@@ -9,7 +9,7 @@ import { DX, DY, opposite, type Dir, type Ent, type Floor } from '../sim/world';
 import { drawFactory, type FactoryOverlay } from './factory';
 import { auditTicks } from '../sim/systems/audits';
 import { poleReach } from '../sim/systems/power';
-import { CHUNKS, PATCHES } from '../data/land';
+import { CHUNKS } from '../data/land';
 import { BUILD, isMachine, isPower, type BuildKind } from '../data/machines';
 import { ITEMS } from '../data/items';
 import { RULES } from '../data/rules';
@@ -31,6 +31,8 @@ import { DistrictPlatform, drawDistrict, type DistrictOverlay } from './district
 import { HIGH } from '../data/floors';
 import { highW } from '../sim/systems/high';
 import { drawPip, shapeOf, stateShape, type PipShape } from './pips';
+import { drawIsleGround, drawOverlaid, drawHeatReach, workshopLand } from './isleground';
+import { isSky } from '../sim/systems/islands';
 
 /** seconds the paving takes to spread over a bought chunk */
 const PAVE_S = 0.7;
@@ -133,6 +135,8 @@ export class Renderer {
   /** chunks being paved over after a buy: the wave's centre (tile units), its age, which tiles
    *  it has reached (a dust puff as it reaches each) */
   private paving: { id: string; x: number; y: number; t: number; hit: Uint8Array }[] = [];
+  /** the Workshop's land rows on this island (Pebble Isle's south half is sky: 8), for the camera */
+  private landH = 0;
 
   constructor(public ctx: CanvasRenderingContext2D) {}
 
@@ -176,6 +180,8 @@ export class Renderer {
 
   clampCam(wTiles: number, hTiles: number) {
     const c = this.cam;
+    // the Workshop: only as far south as the island has land (Pebble Isle, Act IV)
+    if (this.floor === 'workshop' && this.landH) hTiles = Math.min(hTiles, this.landH);
     const mw = wTiles * TILE, mh = hTiles * TILE;
     const halfW = this.view.w / 2 / c.zoom, halfH = this.view.h / 2 / c.zoom;
     // the rim either side may be scrolled to; above, the town on the north rim (and a row of sky
@@ -290,6 +296,16 @@ export class Renderer {
           break;
         }
         case 'remove': fx.burst(px + 8, py + 8, 8, [C.steel, C.iron, C.fog], 40, 100); break;
+        // the Old Works (Act IV): rubble carted off in a cloud of grit, a ruin made whole
+        case 'clear': fx.burst(px + 8, py + 10, 10 + 4 * (e.d ?? 1), [C.steel2, C.earth1, C.fog, C.pave2], 45, 110); fx.ring(px + 8, py + 8, C.bone, 10, 0.25, 6); this.sfx('remove', 0.6, 0.8); break;
+        case 'repair': {
+          const big = e.id && e.id in BUILD ? BUILD[e.id as BuildKind].w : 1;
+          fx.burst(px + 8 * big, py + 8 * big, 18 * big, [C.brass2, C.bone, C.moss3, C.steel3], 60, 70, 1, 0.9);
+          fx.ring(px + 8 * big, py + 8 * big, C.brass2, 14 * big, 0.45, 5);
+          fx.text(px + 8 * big, py - 6, 'REPAIRED', C.brass3, 1, true);
+          this.sfx('place', 0.8, 1.15);
+          break;
+        }
         case 'land': {
           // the meadow is paved over in a wave from the middle out (drawn in draw()), a coin
           // shower out of the middle and a thump
@@ -441,11 +457,14 @@ export class Renderer {
       this.effects(dt);
       return;
     }
+    // the Workshop's island in its own look, its plot as its land runs (Act IV, isleground.ts)
+    const land = ov.floor === 'factory' ? null : workshopLand(g);
+    if (land) this.landH = land.h;
     if (ov.floor === 'factory') this.plat.draw(ctx, g.fw, g.fh, this.time);
-    else this.isle.draw(ctx, g.W, g.H, this.time);
+    else this.isle.draw(ctx, g.W, land!.h, this.time, land!.opts);
     // Bramble's Town on the north rim, behind the floor
     if (ov.floor === 'factory') this.town.draw(ctx, g, g.fw, g.fh, this.time, 'factory');
-    else this.town.draw(ctx, g, g.W, g.H, this.time, 'workshop');
+    else this.town.draw(ctx, g, g.W, land!.h, this.time, 'workshop');
     for (const n of this.town.news) {
       this.fx.burst(n.x, n.y, 30, [C.gold, C.leaf, C.bone, C.hot], 70, 40, 1, 1);
       this.fx.ring(n.x, n.y, C.gold, 28, 0.7, 4);
@@ -461,12 +480,15 @@ export class Renderer {
     }
 
     for (const ch of CHUNKS) {
+      // sky on this island (Pebble Isle's C, D, F): no ground at all
+      if (isSky(g, ch.id)) continue;
       const w = this.paving.length ? this.paving.find((p) => p.id === ch.id) : undefined;
       if (w) this.paveWave(ch, w, dt);
       else ctx.drawImage(this.ground.chunk(ch.id), ch.x * TILE, ch.y * TILE);
     }
     this.landLabels(g);
     this.veins(g);
+    drawIsleGround(ctx, g, this.time);
     drawOreFx(ctx, g, this.time, -ox / z, -oy / z, this.W / z, this.H / z);
 
     if (this.turnsV !== g.version) this.computeTurns(g);
@@ -480,6 +502,7 @@ export class Renderer {
     this.sparks(g);
     this.snapFold(g);
     this.overlays(g, ov);
+    drawHeatReach(ctx, g, this.time, ov, RULES.heaterReach.value);
     this.effects(dt);
     // a fizz when a grid starts browning out
     const brown = g.grids.some((gr) => gr.demand > 0 && gr.sat < 1);
@@ -519,7 +542,7 @@ export class Renderer {
 
   private landLabels(g: Game) {
     for (const ch of CHUNKS) {
-      if (g.s.land.includes(ch.id)) continue;
+      if (g.s.land.includes(ch.id) || isSky(g, ch.id)) continue;
       // centre the label on the part of the chunk inside the floor view; skip it if little shows
       const a = this.toScreen(ch.x, ch.y), b = this.toScreen(ch.x + ch.w, ch.y + ch.h), v = this.view;
       const x0 = Math.max(a.x, v.x), x1 = Math.min(b.x, v.x + v.w), y0 = Math.max(a.y, v.y), y1 = Math.min(b.y, v.y + v.h);
@@ -535,7 +558,8 @@ export class Renderer {
   private veins(g: Game) {
     const ctx = this.ctx;
     for (const k of Object.keys(g.s.veins)) {
-      const p = PATCHES[+k];
+      const p = g.patches[+k];
+      if (!p) continue;
       const a = 0.25 + 0.15 * Math.sin(this.time * 6);
       ctx.fillStyle = rgba(C.gold, a);
       ctx.fillRect(p.x * TILE, p.y * TILE, p.w * TILE, p.h * TILE);
@@ -821,17 +845,31 @@ export class Renderer {
         if (f >= 1) this.pip(x, y, C.pipRed, true);
         return;
       }
+      case 'heater': {
+        // Rime's Heater (DESIGN.md §22): its flame while it warms, a pip (green warming, yellow
+        // out of coal, grey with nothing cold in reach)
+        const s = sheet('heater');
+        drawRot(ctx, s, e.state === 'work' ? frameAt(s, this.time + e.id * 0.13) : 0, x, y, 0);
+        if (e.state === 'work') this.smoke(e, false, 0.9);
+        this.pip(x, y, e.state === 'work' ? C.pipGreen : e.state === 'starved' ? C.pipYellow : C.pipGrey, false);
+        return;
+      }
       default: {
         const s = sheet(spriteName(e.kind));
-        if (isPower(e.kind)) return this.powerBuilding(g, e, s);
-        const working = !isMachine(e.kind) || e.state === 'work';
+        if (isPower(e.kind) && !e.ruined) return this.powerBuilding(g, e, s);
+        const working = !e.ruined && (!isMachine(e.kind) || e.state === 'work');
         // a brownout slows the animation with the machine; Overdrive speeds it up
         const gi = powered(e.kind) ? g.gridOf.get(e.id) : undefined;
-        const sat = gi === undefined ? 1 : g.grids[gi].sat;
+        // a vent beside it (Cinder Isle) is all the power it needs
+        const sat = gi === undefined || g.vented.has(e.id) ? 1 : g.grids[gi].sat;
         const od = (e.od ?? 0) > 0;
         const speed = (od ? 2.5 : 1) * (sat < 1 ? Math.max(0.35, sat) : 1);
         const f = working ? frameAt(s, (this.time + e.id * 0.13) * speed) : 0;
-        drawRot(ctx, s, f, x, y, e.rot);
+        // the Old Works' ruins wear their cracks and moss, Rime's cold machines their frost
+        // (isleground.ts: the overlay composited over the machine's own frame)
+        if (e.ruined) drawOverlaid(ctx, s, f, e, x, y, 'ruin_overlay');
+        else if (e.cold) drawOverlaid(ctx, s, f, e, x, y, 'frost_overlay');
+        else drawRot(ctx, s, f, x, y, e.rot);
         // a craft just finished: a one-frame bright flash on the body
         const fl = this.flashes.get(e.id);
         if (fl !== undefined && this.time - fl < 0.08) {

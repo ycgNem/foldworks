@@ -29,6 +29,7 @@ import { rail, diegetic, type Cameo } from './rail';
 import { newspaper } from './gazette';
 import { floorTags } from './floortags';
 import { pinnedReport, hoverEnt, worldTip, zones, pinTop, bigSafe } from './tags';
+import { isleTileKey, isleTileTip, isleFrame } from './islands';
 import { drawWheel } from './wheel';
 import { nextGoal } from './goals';
 import { getHoverTags } from './settings';
@@ -171,6 +172,7 @@ export function drawHud(app: App, dt: number) {
   }
   slips(app, L, dt);
   if (!app.panel) hoverReport(app);
+  if (app.screen === 'play') isleFrame(app); // Act IV: the Old Works' lines running again (src/app/islands.ts)
   lessonFrame(app, L); // Milestone 13: lesson cards on firsts (src/app/lessons.ts)
   keysFrame(app);
   refusal(app, dt);
@@ -492,6 +494,9 @@ function hoverKeyOf(app: App): string | null {
   if (g.s.sparks.some((p) => p.x === h.x && p.y === h.y)) return `s${h.x},${h.y}`;
   const e = g.entAt(h.x, h.y);
   if (e) return e.id === app.selected ? null : 'e' + e.id;
+  // the island's ground (Act IV): rubble, a vent, the sky
+  const isle = isleTileKey(g, h.x, h.y);
+  if (isle) return isle;
   if (!g.owned(h.x, h.y)) return 'c' + (g.chunkAt(h.x, h.y)?.id ?? '');
   return g.oreAt(h.x, h.y) ? `o${h.x},${h.y}` : null;
 }
@@ -534,6 +539,7 @@ function hoverReport(app: App) {
     return;
   }
   if (!e) {
+    if (isleTileTip(app, h.x, h.y, at)) return;
     if (!g.owned(h.x, h.y)) {
       const ch = g.chunkAt(h.x, h.y)!;
       const ready = !ch.requires || g.done(ch.requires);

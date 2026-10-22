@@ -56,6 +56,15 @@ export function art(name: string): Art {
   return a;
 }
 
+/** The island's own look for a Home sheet (docs/endgame.md "Act IV art as built"): `isle_<world>_`
+ *  and the name with a leading `isle_` stripped (isle_edge → isle_cinder_edge, tile_grass →
+ *  isle_cinder_tile_grass), when that variant is drawn; else Home's sheet, sheet by sheet. */
+export function isle(name: string, world: string): string {
+  if (world === 'home') return name;
+  const v = `isle_${world}_${name.replace(/^isle_/, '')}`;
+  return hasArt(v) ? v : name;
+}
+
 /** A frame by its sidecar name (isle_vein: 'iron2'), or null when the sheet has no such frame. */
 export function named(a: Art, n: string): HTMLCanvasElement | null {
   const i = a.names ? a.names.indexOf(n) : -1;
