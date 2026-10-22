@@ -263,6 +263,39 @@ Ids every agent shares. Numbers are first passes; the sim agent sets them with d
   `world_dock`, `world_hopper`, `world_bay`), `mega_lighthouse` and `mega_anchor` (48x48, frames
   `p0a p0b p1a p1b p2a p2b p3a p3b p4a p4b run1 run2`), UI icons `world`, `legacy`, `relocate`.
 
+### Act IV art as built (2e312bc, `pixel-art/act4/`, 0 PixelLab generations): what the code needs
+Every sheet is `src/art/<name>.png` (1x, frames in one row) with a `<name>.json` sidecar; anchor
+[0,0] unless stated.
+- `items4`: 8x8, 15 frames with `names`, the contract's order.
+- `heater`: 16x16, one facing, 4 frames, 8 fps, on the standard skid.
+- `vent`: 16x16, 4 frames, 6 fps; ground, not a machine (no skid).
+- `rubble`: 16x16, 6 frames (`slab bricks girder mixed pipes heap`).
+- `ruin_overlay` (6 frames `s0 s1 s2 s3 b0 b1`) and `frost_overlay` (4 frames `s0 s1 b0 b1`): 32x32
+  cells; `s*` fill the top-left 16x16 (for 16x16 machines), `b*` the whole cell (32x32 machines).
+  Draw at the machine's top-left composited **source-atop** over the machine's own frame on a
+  scratch canvas (sidecar `"composite": "source-atop"`); the pip corner is left clear.
+- Exotic deposits `ore_skyglass`, `ore_cinderite`, `ore_rime`, `ore_relic`: laid out like
+  `tile_ore_*` (16x16, 9 frames: 0 the outcrop, 1-4 quadrants TL TR BL BR on paving, 5-8 on that
+  island's meadow; `glints`, `seats` in the sidecar); spills `ore_<x>_spill` (32 frames: 0-15 on
+  paving, 16-31 on meadow, frame = (dy+1)*4+(dx+1)). `ground.ts` needs `ORE_ART` entries;
+  `orefx.ts` globs `tile_ore_*.json` only, so widen it to `ore_*` for their glints.
+- **Island looks**: `isle_<world>_` + the Home sheet's name with a leading `isle_` stripped
+  (`isle_edge` → `isle_cinder_edge`, `tile_grass` → `isle_cinder_tile_grass`, `prop_tree` →
+  `isle_cinder_prop_tree`, `tile_ore_iron` → `isle_cinder_tile_ore_iron`); every variant copies the
+  Home sheet's frame size, count, order, anchor, fps and names; **a missing variant falls back to
+  Home's sheet**. `*_vein` variants have Home's 16 names then `skyglass0..3` / `cinderite0..3` /
+  `rime0..3` / `relic0..3`. Cinder and Rime have their own falls (`fall_top fall_head fall
+  fall_foam`: lava on Cinder). **Pebble's half land is the renderer's job** (bake chunks A, B, E
+  only; C, D, F are sky).
+- **The World platform**: `world_deck` (16 frames), `world_edge` (28), `world_under` (9) with the
+  `dist_*` names and order (the District renderer is reused with a prefix), `world_rotor` **64x32**,
+  4 frames, 16 fps, anchor **(32, 0)**, `world_rotor_side` (48x32, 8 frames `w0..w3 e0..e3`, anchor
+  (45, 15)), `world_dock`, `world_hopper` (32x32, 3 frames, 3 fps), `world_bay` (32x32, 5 frames
+  `empty stage1 stage2 run1 run2`, as `dist_bay`).
+- `mega_lighthouse`, `mega_anchor`: 48x48, 12 frames, 4 fps (`p0a p0b p1a p1b p2a p2b p3a p3b p4a
+  p4b run1 run2`).
+- UI icons `world` 36, `legacy` 37, `relocate` 38 in `ui_icons` (16x16) and `ui_icons_small` (8x8).
+
 ## Milestone 10: Act V, Beyond and the Last Fold
 - **The Last Fold** (research *The Last Fold*, both #4 and #5 done): audit the whole World floor;
   its grade and value give **Kernels** (floor(value / 10) + grade bonus, first pass); everything
