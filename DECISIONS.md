@@ -2455,7 +2455,8 @@ items are the bot's reach, not the model's).
   feeders found no room by the Chute; a Rubber II group placed, but its second Plastic copy's
   plastic comes down with the rubber and the full plastic stock stops it; a drain for the plastic
   jammed the Workshop corridor; a group sending both of one Plastic copy's goods into the Rubber
-  ("Rubber works") audited at nothing. **So the Sensors line starves for rubber: open.**
+  ("Rubber works") audited at nothing. (The Sensors line's rubber: solved in the second pass,
+  below.)
 - **Groups**: Rubber II (a Plastic copy's plastic into the Rubber, a second one's oil: a fold box
   wants a main route inside, and one copy sending both into the hub could not be laid), Processors
   II (Circuits, Glass and Plastic copies round it), Sensors II, Arms II (whose outside feeders may
@@ -2473,6 +2474,52 @@ items are the bot's reach, not the model's).
 - Batteries, Hydroponics, Sandwiches, umbrellas and the Engineer are **not taught yet**: Robotics,
   District Folds and Charting need none of them; Relocation (3 Engineers, 20 umbrellas) and the
   Scrap Transmuter do.
+
+### The second pass: rubber, Sensors and Arms (after merging `m9-worlds`)
+Each was a measured stall; none moved a data number.
+- **Coal claims, not layout, held Rubber II.** Its second Plastic copy could not be stamped: every
+  coal claim was held by the District's copies (Motors II alone holds 27), and the next block
+  (420,000 at the 13th) cost more than half the coin on hand, the bot's buying rule. A group the
+  bench waits on now buys its block when the coin covers it once, and saves for it: while every
+  missing member waits only on a stamp, the District stamps nothing new, for an hour at most
+  (`saving`). Then the oil feed's four Plastic copies are lifted once the corner's last line folds
+  (`unfeed`; the corner is the only oil user), and Processors II takes two of them.
+- **The research drain.** Sensors research waited 2.7 h on 200 rubber while the Rubber II feed
+  stood full at the Chute. A Chute Mouth at (5,8) now sends the Hopper the first item the selected
+  research still wants, when the Chute holds 5 and no running line draws it; the plastic drain
+  stands down while a line draws plastic.
+- **A lone machine is not a line.** The Sensors line (one assembler) was refused ("A module is a
+  line: box two kinds of machine, or one machine feeding another"), so it never folded. Sensors
+  now etch their own circuits (Circuit assembler into the Sensor assembler: wire, plastic and glass
+  from the Chute); Robot arms build their own sensors. Sensors II becomes Sensors with Glass, Copper
+  wire and Plastic copies, and a Rubber II from outside.
+- **A line's give-up clock stands while the Chute is short of one of its inputs** (an hour at most):
+  the arms line gave up 20 minutes before the Servos II feed's servos came. The plan's one-hour
+  chemistry give-up no longer applies to a line's fold, which has its own.
+- **The Robot arms line stands unfolded, feeding the Hopper.** Its group, Arms II, wants two
+  Servos II chains, a Circuits II and a Rubber II from outside the bench, more than the 12x8 round
+  the bench held (not laid, three tries), and the folded Robot arms copy alone made none. Unfolded,
+  starved of servos half the time (now two Servos II feeds), it paid District Folds and Charting.
+- **A group whose line was given up is given up too.** In a later run the Gears line never folded
+  (given up after its 45 minutes), and the plan waited 9 hours on "no design Gears II" (the Chute
+  feeder step): the 575-minute rule 1 gap from 21:31 in pace-act3's run 4, found with the bot's
+  status log. `abandoned` now follows a group's members.
+- **The Sky Anchor before the Lighthouse** on research page 4: the Lighthouse wants 200
+  batteries, which no line here makes yet.
+- **Measured** (seed 1000, 40 h, `tests/pace-act4.test.ts`, 5 passed): District 9:37, Chemistry
+  9:43, Robotics 13:57, **District Folds 15:02, Charting and the World 15:41** (run 3), 4 District
+  folds, 19 World modules at 0.84 ms a tick. No Relocate: Relocation wants 3 Sandwich Engineers
+  and 20 umbrellas, and batteries, sandwiches and umbrellas are not taught. Runs 3 and 4 now end at
+  the 12-hour cap, not the full-floor reset. Rules 1 and 2 got worse, and are open: 68.9 / 34.7 min
+  at 11:07-11:41 (the chemistry corner's first hour) and 302 min at 34:57 in run 5 (the bot idles:
+  not yet found). At 40 h the floor bests are 2.5, 4, 6.25 and 6.25 against "7-10 a floor"; the
+  Legacy preview is 21 against the model's ~35; the Patent preview over 30-40 h is 6.3-6.5 before
+  run 5's reset and about 1 after it.
+- **A number that may block honest play** (not changed; for the owner): coal claims. Nearly every
+  Act II-III design digs coal, the block's price grows by half its base a block (ง18), and the
+  District's growth takes every block. Rubber II, Processors II and Sensors II each waited on coal,
+  not on layout. Either coal claims should grow more slowly, or a depth-2 fold should hold fewer
+  claims than its parts.
 
 ### The Act IV bot (`src/sim/bot4.ts`, `tests/pace-act4.test.ts`)
 - **Opt-in** (`playCampaign`'s `act4`, with `act3`): the Act IV policy takes the Act III hand-over
@@ -2495,8 +2542,8 @@ items are the bot's reach, not the model's).
 - **Island chores** (`IslandHand`, from a run's first tick): on the Old Works a rubble tile cleared
   every 2 s at most, nearest the town first, while the coin covers four times its price. The other
   islands' rules act on the lines as laid (the bots' layouts are Home's): not yet adapted.
-- **Measured** (seed 1000, 40 h, `tests/pace-act4.test.ts`, 4 passed): the Act IV policy is never
-  reached. Charting wants District Folds, which wants robot arms and 120 sensors, and the Act III
+- **Measured, first pass** (before the second pass above; seed 1000, 40 h, 4 passed): the Act IV
+  policy was never reached. Charting wants District Folds, which wants robot arms and 120 sensors, and the Act III
   bot's Sensors line starves for rubber (above). What the campaign does measure holds as before:
   the District at 10:01, Robotics at 12:03, each Act III stretch's worst wait 10.4-10.7 min (the
   full-floor reset), a District of 130 groups at 0.93 ms a tick. Open: every ยง22 target; the

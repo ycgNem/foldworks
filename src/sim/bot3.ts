@@ -47,7 +47,7 @@ interface MachineSpec { kind: 'press' | 'assembler'; recipe: string; n?: ItemId;
 
 /** A tier 3 line drawn by the generic layout: machines in a row facing east, each fed through its
  * back by the one before (the first by the `w` Chute Mouth), and from above (`n`) and below (`s`). */
-export interface LineSpec { name: string; product: ItemId; w: ItemId; ms: MachineSpec[]; needs: ResearchId[] }
+export interface LineSpec { name: string; product: ItemId; w: ItemId; ms: MachineSpec[]; needs: ResearchId[]; stand?: boolean }
 
 export const LINES: Record<string, LineSpec> = {
   gears: { name: 'Gears', product: 'gear', w: 'ironIngot', needs: [], ms: [{ kind: 'press', recipe: 'pressPlate' }, { kind: 'assembler', recipe: 'cutGear' }] },
@@ -67,10 +67,22 @@ export const LINES: Record<string, LineSpec> = {
     name: 'Lift rotors', product: 'liftRotor', w: 'steel', needs: ['bearings', 'floatingCity'],
     ms: [{ kind: 'press', recipe: 'pressBearing' }, { kind: 'assembler', recipe: 'buildGearbox', n: 'gear', s: 'steel' }, { kind: 'assembler', recipe: 'buildLiftRotor', n: 'motor', s: 'steel' }],
   },
-  // chemistry's unpowered steps (the solvent and rubber come down the Chute from the Factory's
-  // chemistry feeders, CHEM_FEED and RUBBER_FEED)
-  sensors: { name: 'Sensors', product: 'sensor', w: 'glass', needs: ['sensors'], ms: [{ kind: 'assembler', recipe: 'buildSensor', n: 'circuit', s: 'rubber' }] },
-  arms: { name: 'Robot arms', product: 'robotArm', w: 'servo', needs: ['robotics'], ms: [{ kind: 'assembler', recipe: 'buildArm', n: 'sensor', s: 'steel' }] },
+  // chemistry's unpowered steps (the rubber comes down the Chute from the Factory's Rubber II feed).
+  // A fold box takes two kinds of machine or one feeding another, so each is a pair (measured: a
+  // lone Sensor assembler was refused, "A module is a line"): Sensors etch their own circuits from
+  // the Chute's wire, plastic and glass; Robot arms build their own sensors, the servos and steel
+  // from the Chute
+  sensors: {
+    name: 'Sensors', product: 'sensor', w: 'glass', needs: ['sensors'],
+    ms: [{ kind: 'assembler', recipe: 'etchCircuit', n: 'copperWire', s: 'plastic' }, { kind: 'assembler', recipe: 'buildSensor', n: 'glass', s: 'rubber' }],
+  },
+  arms: {
+    // (it stands unfolded, feeding the Hopper: its group, Arms II, takes two Servos II chains, a
+    // Circuits II and a Rubber II from outside, more than the bench round it holds, measured, and
+    // the folded copy alone on the Factory made no arms)
+    name: 'Robot arms', product: 'robotArm', w: 'glass', needs: ['robotics'], stand: true,
+    ms: [{ kind: 'assembler', recipe: 'buildSensor', n: 'circuit', s: 'rubber' }, { kind: 'assembler', recipe: 'buildArm', n: 'servo', s: 'steel' }],
+  },
 };
 
 /** The chemistry corner (chunk E's south-east, x 17-23, y 6-9, once the lab's concrete plant, its
@@ -138,10 +150,12 @@ export const FEEDS: Record<string, Feed[]> = {
   // rubber: a Rubber II group (its own Plastic copies inside: it takes nothing) into the Chute (a
   // Rubber copy with its Plastic feeders found no room by the Chute, measured)
   rubber: [{ design: 'Rubber II', to: 'chute', by: 'dock' }],
-  // servos for the arms line: a Servos II group fed by a Motors II and a Circuits II group
-  servos: [{ design: 'Servos II', to: 'chute', by: 'dock' }, { design: 'Motors II', to: 0, by: 'dock' }, { design: 'Circuits II', to: 0, by: 'dock' }],
-  // sensors for the arms line: a Sensors II group fed by a Circuits II and a Rubber II group
-  sensors: [{ design: 'Sensors II', to: 'chute' }, { design: 'Circuits II', to: 0, by: 'dock' }, { design: 'Rubber II', to: 0, by: 'dock' }],
+  // servos for the arms line: two Servos II groups, each fed by a Motors II and a Circuits II group
+  // (an arm takes 2 servos every 16 s; with one the line stood starved of servos, measured)
+  servos: [
+    { design: 'Servos II', to: 'chute', by: 'dock' }, { design: 'Motors II', to: 0, by: 'dock' }, { design: 'Circuits II', to: 0, by: 'dock' },
+    { design: 'Servos II', to: 'chute', by: 'dock' }, { design: 'Motors II', to: 3, by: 'dock' }, { design: 'Circuits II', to: 3, by: 'dock' },
+  ],
 };
 
 /** The Workshop's line slots: machine rows in chunk D (x 8-15, y 7-15, free once Act II's lab is
@@ -213,6 +227,20 @@ export const DRAINS: Pl[] = [
   ...[9, 8, 7].map((y): Pl => ({ kind: 'belt', x: 14, y, rot: N })),
 ];
 
+/** A plastic drain once the Rubber II group feeds the Chute: its second Plastic copy's plastic
+ * comes down with the rubber, and a full plastic stock stops the feed (measured: the Sensors line
+ * starved for rubber). A Chute Mouth at (5,7) side-loads the plastic onto the Act I belt up column
+ * 6 into the Hopper's south side, which banks it (a drain into the shared corridor jammed it,
+ * measured); the Mouth pushes only when the belt has room. */
+const NO_PARTS: Pl[] = [];
+export const PLASTIC_DRAIN: Pl[] = [{ kind: 'chuteMouth', x: 5, y: 7, rot: E, recipe: 'plastic' }];
+
+/** A research drain beside it, (5,8): a Chute Mouth sending the Hopper an item the selected research
+ * still wants while the Chute holds a stock of it and no running line draws it (measured: Sensors
+ * waited 2.7 h on 200 rubber while the Rubber II feed stood full at the Chute and the District's
+ * copies waited on coal claims). */
+const researchDrain = (item: ItemId): Pl[] => [{ kind: 'chuteMouth', x: 5, y: 8, rot: E, recipe: item }];
+
 /** The drains once the chemistry corner runs: the slag press only (the oil is the vats'). */
 export const DRAINS_C: Pl[] = DRAINS.filter((p) => !(p.x === 13));
 
@@ -263,17 +291,26 @@ export const GROUPS: Record<string, GroupSpec> = {
   // chemistry (DESIGN.md §21 Tier 3): oil is the bottleneck (a Plastic copy's 0.12 a second feeds
   // an eighth of a vat), so every group carries its own Plastic copies for their oil
   // (a Plastic copy's plastic into the Rubber, a second one's oil: a fold box wants a main route
-  // inside, and one copy sending both into the hub could not be laid, measured)
+  // inside, and one copy sending both into the hub could not be laid, measured; two Rubber copies
+  // and two Plastic copies crosswise, so the group would make nothing but rubber, could not be laid
+  // on the bench either, measured: its spare plastic is drained on the Workshop, PLASTIC_DRAIN)
   rubberII: { name: 'Rubber II', members: [{ design: 'Rubber', to: 'dock', by: 'dock' }, { design: 'Plastic', to: 0, by: 'dock' }, { design: 'Plastic', to: 'dock', by: 0 }] },
   processorsII: {
     name: 'Processors II',
     members: [{ design: 'Processors', to: 'dock', by: 'dock' }, { design: 'Circuits', to: 0 }, { design: 'Glass', to: 1 }, { design: 'Plastic', to: 1, by: 0 }, { design: 'Plastic', to: 'dock', by: 0 }],
   },
-  sensorsII: { name: 'Sensors II', members: [{ design: 'Sensors', to: 'dock' }, { design: 'Glass', to: 0 }], ext: [{ design: 'Circuits II', by: 'dock' }, { design: 'Rubber II', by: 'dock' }] },
+  // (the Sensors line etches its own circuits: its copy takes glass, wire, plastic and rubber)
+  sensorsII: {
+    name: 'Sensors II',
+    members: [{ design: 'Sensors', to: 'dock' }, { design: 'Glass', to: 0 }, { design: 'Copper wire', to: 0, by: 'dock' }, { design: 'Plastic', to: 0, by: 'dock' }],
+    ext: [{ design: 'Rubber II', by: 'dock' }],
+  },
+  // (the arms line builds its own sensors: its copy takes glass, circuits, rubber, servos and steel;
+  // the Servos II group's own feeders come too: alone it starves and the audit makes nothing)
   armsII: {
     name: 'Arms II',
-    members: [{ design: 'Robot arms', to: 'dock' }, { design: 'Steel', to: 0, by: 'dock' }],
-    ext: [{ design: 'Servos II', by: 'dock' }, { design: 'Sensors II', by: 'dock' }, { design: 'Motors II', by: 'dock', to: 0 }, { design: 'Circuits II', by: 'dock', to: 0 }],
+    members: [{ design: 'Robot arms', to: 'dock' }, { design: 'Steel', to: 0, by: 'dock' }, { design: 'Glass', to: 0 }],
+    ext: [{ design: 'Servos II', by: 'dock' }, { design: 'Motors II', by: 'dock', to: 0 }, { design: 'Circuits II', by: 'dock', to: 0 }, { design: 'Circuits II', by: 'dock' }, { design: 'Rubber II', by: 'dock' }],
   },
 };
 
@@ -307,6 +344,8 @@ export type Step3 =
   | { k: 'chemLab' }
   /** Factory modules placed by search to feed the Chute (FEEDS) */
   | { k: 'feed'; feed: string }
+  /** a feed's copies lifted back to the inventory (the oil feed once the corner's last line folds) */
+  | { k: 'unfeed'; feed: string }
   /** District folds (depth 3) made, at least n (blocking until made or given up) */
   | { k: 'dfold'; n: number }
   | { k: 'mark'; name: string };
@@ -376,6 +415,10 @@ export const PLAN3: Step3[] = [
   { k: 'need', r: 'processors' },
   { k: 'line', line: 'processors' },
   { k: 'lineDone', line: 'processors' },
+  // the corner's last line is folded: the oil feed's four Plastic copies back to the inventory, for
+  // the Processors II group (the District's copies hold every coal claim by then, and a block costs
+  // more than the coin on hand, measured: Processors II not laid, short of two Plastic copies)
+  { k: 'unfeed', feed: 'oil' },
   { k: 'group', group: 'processorsII' },
   { k: 'district', design: 'Processors II', n: 2 },
   { k: 'need', r: 'sensors' },
@@ -386,11 +429,8 @@ export const PLAN3: Step3[] = [
   { k: 'district', design: 'Circuits II', n: 4 },
   { k: 'need', r: 'robotics' },
   { k: 'feed', feed: 'servos' },
-  { k: 'feed', feed: 'sensors' },
+  // the arms line stands unfolded, feeding the Hopper (LINES.arms)
   { k: 'line', line: 'arms' },
-  { k: 'lineDone', line: 'arms' },
-  { k: 'group', group: 'armsII' },
-  { k: 'district', design: 'Arms II', n: 3 },
   { k: 'district', design: 'Sensors II', n: 5 },
   { k: 'need', r: 'districtFolds' },
   { k: 'dfold', n: 2 },
@@ -406,7 +446,7 @@ const HOOK = 'act3:';
 
 // ------------------------------------------------------------------ the bot
 
-type GroupRun = { spec: GroupSpec; n: number; ids: string[]; ext: string[]; pushed: boolean; tries: number; placedAt: number; empty: number; phase: 'build' | 'warm' | 'audit' | 'clean'; since: number };
+type GroupRun = { spec: GroupSpec; n: number; ids: string[]; ext: string[]; pushed: boolean; tries: number; placedAt: number; empty: number; phase: 'build' | 'warm' | 'audit' | 'clean'; since: number; born?: number; retryAt?: number };
 
 export class Act3Bot {
   readonly g: Game;
@@ -495,18 +535,48 @@ export class Act3Bot {
     if (!this.b.handReady) return;
     if (this.groupWork()) return;
     this.grow();
+    this.drain();
     this.freeSlots();
     this.runPlan();
   }
 
+  /** the bench is saving for a group's claims (groupWork): the District stamps nothing new */
+  private saving = false;
   private growAt = 0;
   private growNext = 0;
+  private drainAt = 0;
+  private drainItem: ItemId | null = null;
+
+  /** The research drain (researchDrain): once a minute, the first item the selected research still
+   * wants that the Chute holds 5 of and no line or corner running draws; relaid when it changes. */
+  private drain() {
+    const g = this.g;
+    if (g.s.tick < this.drainAt || !this.standing.includes(HOOK + 'plasticDrain')) return;
+    this.drainAt = g.s.tick + 60 * TICK_RATE;
+    const sel = g.s.research.selected;
+    const drawn = new Set<string>();
+    for (const q of [...this.slots, this.corner]) if (q) for (const p of this.b.found[HOOK + q] ?? []) if (p.kind === 'chuteMouth' && p.recipe) drawn.add(p.recipe);
+    // the plastic drain stands down while a running line draws the Chute's plastic
+    const pd = drawn.has('plastic') ? NO_PARTS : PLASTIC_DRAIN;
+    const pdChanged = this.b.found[HOOK + 'plasticDrain'] !== pd;
+    this.b.found[HOOK + 'plasticDrain'] = pd;
+    const chute = g.s.chute ?? {};
+    const item = sel ? ((Object.keys(RESEARCH[sel as ResearchId].cost) as ItemId[]).find((i) => i !== 'plastic' && !drawn.has(i) && (chute[i] ?? 0) >= 5 && this.researchNeed(i) > 0) ?? null) : null;
+    if (item === this.drainItem) {
+      if (pdChanged) this.b.plan.push({ k: 'parts', parts: this.layoutNow() });
+      return;
+    }
+    this.drainItem = item;
+    if (!this.standing.includes(HOOK + 'researchDrain')) this.standing.push(HOOK + 'researchDrain');
+    this.b.found[HOOK + 'researchDrain'] = item ? researchDrain(item) : [];
+    this.b.plan.push({ k: 'parts', parts: this.layoutNow() });
+  }
 
   /** One more copy wanted on the District, every 3 min once the plan is through, while every copy
    * wanted stands and the coin covers twice the stamp. */
   private grow() {
     const g = this.g;
-    if (this.step < this.chemStart || g.s.tick < this.growAt || !g.s.district) return;
+    if (this.step < this.chemStart || g.s.tick < this.growAt || !g.s.district || this.saving) return;
     this.growAt = g.s.tick + 180 * TICK_RATE;
     if (Object.entries(this.want).some(([n, k]) => this.placed(n) < k && this.b.designNamed(n))) return;
     // a copy the floor could not route is not placed (every lot bought and the routes at the cap)
@@ -606,7 +676,8 @@ export class Act3Bot {
         // chemistry is the plan's optional tail: a step it has waited on for an hour (research
         // short of goods no line here makes yet) ends it, logged, so the District's growth and the
         // full-floor reset are never held by it (the first measure held the District 7 h)
-        if (this.step >= this.chemStart && g.seconds - this.stepAt.t > 3600) {
+        // (a line's fold has its own give-up, its clock standing while the Chute is short: lineDone)
+        if (this.step >= this.chemStart && this.plan[this.step].k !== 'lineDone' && g.seconds - this.stepAt.t > 3600) {
           this.failed.push('chem:' + res);
           this.step = this.plan.length;
           this.waiting = 'plan done (chemistry stopped: ' + res + ')';
@@ -691,6 +762,20 @@ export class Act3Bot {
         if (this.b.designNamed(spec.name) || this.abandoned(spec.name)) return 'done';
         // a line not started (its research never came) is left out
         if (this.lineAt[s.line] === undefined) return 'done';
+        // the clock stands while the Chute is out of one of a slot line's inputs (its feed still
+        // being laid: the arms line gave up 20 min before the Servos II feed's servos came,
+        // measured), for an hour at most
+        if (LINES[s.line]) {
+          const ls = LINES[s.line];
+          const ins = [ls.w, ...ls.ms.flatMap((m) => [m.n, m.s])].filter((i): i is ItemId => !!i);
+          const last = this.lineSeen[s.line] ?? g.seconds;
+          this.lineSeen[s.line] = g.seconds;
+          const stall = Math.min(g.seconds - last, 3600 - (this.lineStall[s.line] ?? 0));
+          if (stall > 0 && ins.some((i) => (g.s.chute?.[i] ?? 0) < 1)) {
+            this.lineAt[s.line] += stall;
+            this.lineStall[s.line] = (this.lineStall[s.line] ?? 0) + stall;
+          }
+        }
         // a line that has not folded in 45 minutes (its Chute short of a feeder that never came) is
         // given up: its slot freed, what it would have fed left out
         if (g.seconds - (this.lineAt[s.line] ?? g.seconds) > (CORNER[s.line] ? 90 : 45) * 60) {
@@ -711,6 +796,14 @@ export class Act3Bot {
         return this.relayout('chemLab');
       case 'feed':
         return this.feedStep(s.feed);
+      case 'unfeed': {
+        for (let i = 0; i < FEEDS[s.feed].length; i++) {
+          const eid = this.b.mods[HOOK + `feed:${s.feed}:${i}`];
+          const e = eid !== undefined ? g.s.factory.ents.find((q) => q.id === eid) : undefined;
+          if (e) { this.act({ k: 'fremove', x: e.x, y: e.y }); return `lifting the ${s.feed} feed`; }
+        }
+        return 'done';
+      }
       case 'dfold':
         if (!g.done('districtFolds') || this.dfolds >= s.n || this.dfoldTries >= 20) return 'done';
         return `District fold ${this.dfolds + 1} of ${s.n}`;
@@ -765,11 +858,9 @@ export class Act3Bot {
     // what the line's own machines make on the way (plates, bearings, ...): an audit that saw any
     // come in measured a buffer of it drawing down (a line that stood blocked), and is taken again
     const pure = spec.ms.slice(0, -1).map((m) => RECIPE[m.recipe].outputs[0].item);
-    this.b.plan.push(
-      { k: 'parts', parts: this.layoutNow() },
-      // folded once its last machine runs: the Chute feeds it at speed
-      { k: 'fold', box: lay.box, name: spec.name, bg: true, nokeep: true, pure, ready: (gg) => working(gg, lay.last.x, lay.last.y, 30, 0.5) },
-    );
+    this.b.plan.push({ k: 'parts', parts: this.layoutNow() });
+    // folded once its last machine runs: the Chute feeds it at speed (a standing line is not)
+    if (!spec.stand) this.b.plan.push({ k: 'fold', box: lay.box, name: spec.name, bg: true, nokeep: true, pure, ready: (gg) => working(gg, lay.last.x, lay.last.y, 30, 0.5) });
     this.lineAt[line] = g.seconds;
     this.b.decide('line:' + spec.name);
     return 'done';
@@ -834,9 +925,13 @@ export class Act3Bot {
     for (const f of feed) if (!this.b.designNamed(f.design)) return this.abandoned(f.design) ? 'done' : `no design ${f.design} for the ${name} feed`;
     const id = (i: number) => `feed:${name}:${i}`;
     const dest = (t: 'chute' | 'dock' | number): Dest => (typeof t === 'number' ? { k: 'mod', id: HOOK + id(t) } : { k: t });
-    // (the first is the hub its feeders' trunks come round to, unless none feeds it)
-    const hub = feed.some((f) => f.to === 0 || f.by === 0);
-    return this.viaB2('feed:' + name, feed.map((f, i) => this.fmod(id(i), f.design, dest(f.to), feedZone(this.g), f.by === undefined ? undefined : dest(f.by), hub && i === 0)));
+    // (a member another feeds is a hub its feeders' trunks come round to)
+    if (name === 'rubber' && !this.standing.includes(HOOK + 'plasticDrain')) {
+      this.standing.push(HOOK + 'plasticDrain');
+      this.b.found[HOOK + 'plasticDrain'] = PLASTIC_DRAIN;
+      this.b.plan.push({ k: 'parts', parts: this.layoutNow() });
+    }
+    return this.viaB2('feed:' + name, feed.map((f, i) => this.fmod(id(i), f.design, dest(f.to), feedZone(this.g), f.by === undefined ? undefined : dest(f.by), feed.some((q) => q.to === i || q.by === i))));
   }
 
   // ---------------------------------------------------------------- District folds
@@ -906,13 +1001,18 @@ export class Act3Bot {
    * minute, audit and fold it, then lift what is left (its outside feeders, dangling trunks). */
   private groupWork(): boolean {
     const gr = this.group;
-    if (!gr) return false;
+    if (!gr) { this.saving = false; return false; }
     const g = this.g;
     const b = this.b;
     const placed = (id: string) => {
       const eid = b.mods[HOOK + id];
       return eid !== undefined && g.s.factory.ents.some((e) => e.id === eid);
     };
+    const memberDesign = (id: string) => {
+      const k = [...gr.ids, ...gr.ext].indexOf(id);
+      return b.designNamed(k < gr.ids.length ? gr.spec.members[k].design : (gr.spec.ext ?? [])[k - gr.ids.length].design);
+    };
+    if (gr.phase !== 'build') this.saving = false;
     if (gr.phase === 'build') {
       if (!gr.pushed) {
         // every design it takes must exist first
@@ -925,6 +1025,26 @@ export class Act3Bot {
       }
       if (b.step < b.plan.length) return false;
       const missing = [...gr.ids, ...gr.ext].filter((id) => !placed(id));
+      // a member short of a claim (the District's copies hold the ore's claims): a block for it,
+      // when the coin covers it
+      for (const id of missing) {
+        const d = memberDesign(id);
+        if (d && d.spare < 1 && this.buyClaims(d, false, 1)) return true;
+      }
+      // every member missing only for want of a stamp (claims or coin): the player saves for it, up
+      // to an hour, the District stamping nothing new meanwhile (measured: the District's growth
+      // took every coal block bought, and Sensors II waited on a Rubber II copy for good)
+      const stampShort = missing.every((id) => { const d = memberDesign(id); return !!d && d.spare < 1 && !!stampRefusal(g, d); });
+      gr.born ??= g.seconds;
+      if (missing.length && stampShort && g.seconds - gr.born < 60 * 60) {
+        this.saving = true;
+        if (g.seconds - (gr.retryAt ?? 0) > 60) {
+          gr.retryAt = g.seconds;
+          b.plan.push(...this.groupSteps(gr).filter((s) => s.k === 'fmod' && !placed(s.id.slice(HOOK.length))));
+        }
+        return false;
+      }
+      this.saving = false;
       if (missing.length && gr.tries < 4 && g.seconds - gr.since < 10 * 60) {
         // a copy waiting on kits or claims: try again in a minute
         if (g.seconds - gr.since > 60 * (gr.tries + 1)) {
@@ -936,7 +1056,7 @@ export class Act3Bot {
       if (missing.length) {
         // the bench can't hold it as drawn: give it up, lift what was placed (tried again in the
         // other order)
-        this.failed.push(gr.spec.name);
+        this.failed.push(`${gr.spec.name}: not laid (${missing.map((id) => { const k = [...gr.ids, ...gr.ext].indexOf(id); return k < gr.ids.length ? gr.spec.members[k].design : (gr.spec.ext ?? [])[k - gr.ids.length].design; }).join(', ')})`);
         gr.phase = 'clean';
         return false;
       }
@@ -1010,12 +1130,18 @@ export class Act3Bot {
     return this.tried(gr.spec.name) % 2 === 0 ? [...out, ...ext] : [out[0], ...ext, ...out.slice(1)];
   }
 
-  /** line start times, for giving a line up */
+  /** line start times, for giving a line up (moved on while the Chute is out of an input) */
   private lineAt: Record<string, number> = {};
+  private lineSeen: Record<string, number> = {};
+  private lineStall: Record<string, number> = {};
 
   /** A design this player gave up making (a line that never folded, a group the bench never held). */
-  private abandoned(name: string): boolean {
-    return this.tried(name) >= 3 || this.failed.includes('line:' + name);
+  private abandoned(name: string, depth = 0): boolean {
+    if (this.tried(name) >= 3 || this.failed.includes('line:' + name)) return true;
+    // a group one of whose designs was given up (measured: the Gears line never folded in a later
+    // run, and the plan waited 9 h on "no design Gears II")
+    const gr = depth < 3 ? Object.values(GROUPS).find((q) => q.name === name) : undefined;
+    return !!gr && [...gr.members, ...(gr.ext ?? [])].some((m) => !this.b.designNamed(m.design) && this.abandoned(m.design, depth + 1));
   }
 
   private tried(name: string): number {
@@ -1062,6 +1188,8 @@ export class Act3Bot {
       const d = this.b.designNamed(name);
       if (!d) continue;
       if (d.spare < 1) {
+        // (while the bench saves for a group's claims the floor stamps nothing new)
+        if (this.saving) continue;
         if (this.buyClaims(d, false)) return true;
         // once the plan is through, a copy that can't be stamped now (claims or coin short) is no
         // longer wanted: the growth round comes back to it (a want left standing held every later
@@ -1131,8 +1259,9 @@ export class Act3Bot {
   }
 
   /** Claims for a copy of `d` (stamping it, or placing it), a block bought when it costs at most
-   * half the coin on hand. True when a command went. */
-  private buyClaims(d: ModuleDesign, place: boolean): boolean {
+   * half the coin on hand (`spare` 2), or at most all of it for a group the bench is waiting on
+   * (`spare` 1: the player saves for the claim the next group needs). True when a command went. */
+  private buyClaims(d: ModuleDesign, place: boolean, spare = 2): boolean {
     const g = this.g;
     for (const [ore, n] of Object.entries(claimLoad(g, d)) as [ItemId, number][]) {
       let used = 0;
@@ -1140,7 +1269,7 @@ export class Act3Bot {
       else for (const q of g.s.designs) { const l = claimLoad(g, q)[ore] ?? 0; if (l) used += l * this.copies(q); }
       if (used + n <= claimsHeld(g, ore) + 1e-9) continue;
       const price = claimPrice(g, ore);
-      if (!g.done('surveying') || !price || g.s.coin.lt(price.mul(2))) return false;
+      if (!g.done('surveying') || !price || g.s.coin.lt(price.mul(spare))) return false;
       this.act({ k: 'claim', item: ore }, 'claim:' + ore);
       return true;
     }

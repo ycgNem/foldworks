@@ -32,7 +32,9 @@ import { hentAt, highW, lotPrice } from './systems/high';
 import type { PatentId } from '../data/patents';
 
 /** Act IV research, after Act III's (the island's own chain is added on its island). */
-export const WISH4: ResearchId[] = ['charting', 'lighthouse', 'skyAnchor', 'relocation'];
+// (the Sky Anchor before the Lighthouse: its gearboxes, bearings and steel are made by then; the
+// Lighthouse wants 200 batteries, which no line here makes yet)
+export const WISH4: ResearchId[] = ['charting', 'skyAnchor', 'lighthouse', 'relocation'];
 export const ISLAND_WISH: Record<WorldId, ResearchId[]> = {
   home: [],
   pebble: ['skyglassCutting', 'horizonOptics'],

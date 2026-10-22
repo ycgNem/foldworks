@@ -1542,8 +1542,8 @@ every route taken and every lot bought), or at the run's cap.
 | Routes; between modules (rule 5) | some | 176-180 on a full floor; up to 38 between modules | 119 of 120; 14 between |
 | Skiffs (rule 5) | more than one a route somewhere | 224 on 179 routes (1.25 a route), at most 3 on one | one each |
 | Lots bought | as the floor fills | all three, every Act III run | none |
-| Chemistry (Act III bot) | the act's chain | **Chemistry 10:03, Robotics 12:03** (run 3; Solvent, Rubber, Processors folded) | none |
-| District folds | some | **none** (open, below: no Sensors design) | none |
+| Chemistry (Act III bot) | the act's chain | **Chemistry 9:43, Robotics 13:57, District Folds 15:02** (run 3, the second pass; Solvent, Rubber, Processors, Sensors folded; the arms line stands) | none |
+| District folds | some | **4** by 40 h (Servos III, Sensors III first, 15:0x) | none |
 | A sim tick with the biggest District | under 4 ms (e2e/perf.mjs) | **0.95 ms (139 groups)** | 0.24 ms (49) |
 
 The runs: 1 0:00-4:24 (14 Patents), 2 4:24-7:26 (7), 3 7:26-16:52 (29, Act III from 9:53), 4 16:52-26:07 (6, Act III from 19:13), 5 26:07-35:33 (5, Act III from 28:24), 6 35:33-40:00 (Act III from 37:47).
@@ -1554,6 +1554,14 @@ campaign), 128 District groups at most (0.95 ms a tick), rule 1 and 2 at 10.4-10
 III stretches and **18.8 and 17.3 min from 36:22** in the last (run 6, 6 minutes after its
 hand-over: the same early-run wait as before's 20.1, still not looked into). Runs 1 0:00-4:24, 2
 4:24-7:26, 3 7:26-16:45 (33 Patents), 4 16:45-25:21 (6), 5 25:21-34:00 (6), 6 34:00-40:00.
+
+**Re-measured, the second pass** (rubber, Sensors and Arms reached; DECISIONS.md "The second pass"):
+the District 9:37, the City's stage 1 13:31-13:33, District Folds 15:02, Charting and the World
+15:41 (the Act IV campaign). Runs 3 and 4 now end at the 12-hour cap (7:07-19:07, 19:07-31:07),
+not the full-floor reset. **Rules 1 and 2 got worse and are open**: in the Act IV campaign 68.9 /
+34.7 min from 11:07 (the chemistry corner's first hour), 36.9 min from 22:34 and 302 min from 34:57
+(run 5: the bot idles, not yet found); in the Act III-only campaign 68.7 min in run 3 and 575 /
+553 min from 21:31 in run 4 (the same idle, earlier). The District peaks at 93-103 groups.
 
 Lessons:
 - **The waste chute and 1 a trip halve the routes and make distance cost.** With waste going to
@@ -1827,32 +1835,37 @@ the save's first run.
 - **Measured below** (the Act IV bot): the campaign does not reach the World yet.
 ### Pacing (measured, the Act IV bot)
 Measured by the campaign bot with the Act IV policy (`src/sim/bot4.ts` over `src/sim/bot3.ts`,
-`tests/pace-act4.test.ts`, seed 1000, `FOLD_ACT4_HOURS` = 40 h of play, 25 min of wall time; 80 h
-did not fit the time box). The Act IV policy is written and wired (research page 4, the World by
-the District's rules, Relocate when the preview pays, Legacy in a priority, the Old Works' rubble),
-but the campaign never reaches it: Charting wants District Folds, which wants robot arms and
-sensors the Act III bot cannot yet make (ยง21 Pacing, Open).
+`tests/pace-act4.test.ts`, seed 1000, `FOLD_ACT4_HOURS` = 40 h of play, 21 min of wall time; 80 h
+did not fit the time box). Second pass (DECISIONS.md "The second pass"): the Act III bot now makes
+rubber, sensors and robot arms, so the campaign reaches District Folds, Charting and the World in
+run 3. Relocation is still out of reach: it wants 3 Sandwich Engineers and 20 umbrellas, and no
+bot makes batteries, sandwiches or umbrellas yet.
 
-| Measure | Target | Measured (seed 1000, 40 h) |
-|---|---|---|
-| District open | about 11 h | 10:01 (run 3) |
-| Chemistry, Robotics | (Act III) | 10:03, 12:03 (run 3) |
-| District Folds, Charting, the World | before the first Relocate | **never** (open) |
-| First Relocate | 40-45 h | **none** (open: no World, and Relocation wants 3 Engineers and 20 umbrellas) |
-| Four islands | by 60 h | **Home only** (open) |
-| Megaproject stages | | the City's stage 1 at 11:41; no Act IV stage |
-| Legacy | the tree by 75-80 h | none banked |
-| Rule 1 per Act III stretch | 10 min | 10.4, 10.7, 10.4, 7.3 min (each the full-floor reset's 10-minute wait) |
-| Rule 2 per Act III stretch | 15 min | 10.4, 10.7, 10.4, 6.5 min |
-| Tick, the biggest floor | under 4 ms | 0.93 ms (a District of 130 groups; no World stood) |
+| Measure | Target | Measured (seed 1000, 40 h) | First pass |
+|---|---|---|---|
+| District open | about 11 h | 9:37 (run 3) | 10:01 |
+| Chemistry, Robotics | (Act III) | 9:43, 13:57 (run 3) | 10:03, 12:03 |
+| District Folds; Charting and the World | before the first Relocate | **15:02; 15:41** (run 3; 4 District folds by 40 h) | never |
+| World modules | | 19 at most (depth-3 copies of the District's folds) | none |
+| First Relocate | 40-45 h | **none** (open: Relocation's Engineers and umbrellas) | none |
+| Four islands | by 60 h | **Home only** (open) | Home only |
+| Megaproject stages | | the City's stage 1 at 13:33; no Act IV stage (the Sky Anchor is researched first now; the Lighthouse wants batteries) | 11:41 |
+| Legacy | the tree by 75-80 h | none banked; preview 21 at 40 h (model ~35 at the first move) | 18 |
+| Floor bests at 40 h | 7-10 a floor | Workshop 2.5, Factory 4, District 6.25, World 6.25 | 2.5, 4, none, none |
+| Patent preview 30-40 h | | 6.3-6.5 until run 5's reset at 31:07, then 0.1-1.5 (37 of 39 nodes) | 4.3-6.5, then 0-1.5 |
+| Rule 1 per stretch | 10 min | Act III 68.9 (11:07); Act IV 13.5 (18:44); III 36.9 (22:34); III 302 (34:57) | 10.4-10.7 |
+| Rule 2 per stretch | 15 min | 34.7; 13.5; 36.9; 302 | 10.4-10.7 |
+| Tick, the biggest floor | under 4 ms | **0.84 ms** (a World of 19 modules; the District peaks at 103) | 0.93 (District 130) |
 
-The runs: 1 0:00-4:24 (14 Patents), 2 4:24-7:26 (7), 3 7:26-16:36 (33, Act III from 9:53), 4
-16:36-25:37 (6, from 18:51), 5 25:37-34:36 (6, from 27:48), 6 34:36-40:00 (from 36:49). No number
-moved: every Act IV target is unmeasured for want of the Act III chain, not shown wrong.
+The runs: 1 0:00-4:22 (14 Patents), 2 4:22-7:07 (7), 3 7:07-19:07 (35, Act III from 9:30, Act IV
+from 15:41), 4 19:07-31:07 (6, from 21:11), 5 31:07-40:00 (from 33:04). Runs 3 and 4 end at the
+12-hour cap, not the full-floor reset. No number moved.
 
-**Open** (`[pace4] OPEN` in the test): the Sensors line's rubber (then Arms, District Folds,
-Charting), the Act IV targets above, and the islands' layouts (the Act I-II bots lay Home's
-lines; Pebble's sky chunks, Cinder's vents and the Old Works' ruins will refuse some of them).
+**Open** (`[pace4] OPEN` in the test): rules 1 and 2 (the chemistry corner's first hour, and run
+5's 5-hour idle from 34:57, not yet found), every ง22 target past the World (Relocation's chain:
+batteries, sandwiches, umbrellas and the Engineer), the floor bests, and the islands' layouts (the
+Act I-II bots lay Home's lines; Pebble's sky chunks, Cinder's vents and the Old Works' ruins will
+refuse some of them). Coal claims may be the number that blocks honest play (DECISIONS.md).
 
 ### Derivative, flagged and re-derived (CLAUDE.md)
 - **A prestige tree of automation bought with the second reset's currency** resembles Antimatter
