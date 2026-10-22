@@ -2676,3 +2676,8 @@ every older save).
   things to buy in universe 2 (a sink or new nodes are an owner decision: a new tree layer needs a
   DECISIONS entry naming its pillar). The Kernel and universe-2 hours are the model's; the Act V bot
   that would measure them does not exist yet.
+- **Legacy left over from universe 2 on** (the prestige agent's open item): with the Automation
+  branch kept, a universe's ~95 Legacy buys the 47 of head starts and softeners and ~50 is left.
+  Accepted: a deeper reset makes the earlier act faster (universe 2 finishes its Legacy tree in
+  about two Relocates); the later Relocates are taken for the islands (tier 5 research, the World's
+  Kernels), not for Legacy. Revisit if the Act IV-V bots show universe 2 dragging.

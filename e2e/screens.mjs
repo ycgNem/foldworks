@@ -1130,7 +1130,7 @@ export async function act5Setup(state) {
   m.kernelsEarned = N.of(state === 'kernels' ? 36 : 24);
   m.lastFolds = state === 'kernels' ? 1 : 0;
   m.kernelNodes = beyondOn ? ['beyond', 'endlessLedger', ...(state === 'kernels' ? ['keptIslands'] : [])] : state === 'lastFoldKeep' ? ['keptIslands', 'keptLegacy', 'endlessLedger'] : [];
-  m.keptLegacy = state === 'lastFoldKeep' ? ['standingCommittee', 'townPlan'] : [];
+  m.keptLegacy = state === 'lastFoldKeep' ? ['oldHabits', 'skyMoorings'] : []; // head starts and softeners (Automation is kept anyway)
   m.ledger = state === 'ledgerClosed' ? { n: 0, progress: {} } : { n: 23, progress: { sandwichEngineer: N.of(31) } };
   m.cosmetics = state === 'ledgerClosed' ? [] : ['gilded', 'candy'];
   if (state === 'ledgerClosed') m.kernelNodes = m.kernelNodes.filter((k) => k !== 'endlessLedger');
