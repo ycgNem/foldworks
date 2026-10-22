@@ -654,6 +654,9 @@ export async function act3Setup(state) {
   a.step(12);
   if (state === 'act3modes') g.entAt(19, 1).mode = 'recycling';
   g.events.drain();
+  // the setup's own firsts (the District opening, Codex entries) are not part of these screens
+  a.hud.celebs = [];
+  a.hud.rain = [];
   a.toasts = [];
   a.trophyPops = [];
   a.refusal = null;
