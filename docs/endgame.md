@@ -223,6 +223,46 @@ the first gate).
 - **Megaprojects #4 (the Lighthouse at the Edge) and #5 (the Sky Anchor)**, four stages each,
   one per island's product: every island is visited (§16: four by 60 h).
 
+### The contract for building Milestone 9 (2026-10-22: the sim and the art in parallel)
+Ids every agent shares. Numbers are first passes; the sim agent sets them with derivations.
+
+- **Islands** (`src/data/worlds.ts`, `WorldId = 'home' | 'pebble' | 'cinder' | 'rime' |
+  'oldworks'`; the island this world is on is `s.meta.world`, absent = `'home'`):
+  - `home`: no rule.
+  - `pebble` (Pebble Isle): chunks C, D and F are sky, not land (nothing is built there); Miners
+    dig 1.5x. Exotic deposit: **skyglass**.
+  - `cinder` (Cinder Isle): **vent** tiles (fixed per island); a machine with a vent beside it (4
+    sides) needs no power and burns no fuel; no belt can be laid on a tile beside a vent. Exotic:
+    **cinderite**.
+  - `rime` (Rime): a powered machine runs at half speed unless a **Heater** (a new 1x1 Workshop
+    building, kind `heater`, burns coal; research *Thermals*) is within 2 tiles, or two working
+    machines touch it. Exotic: **rime crystal** (`rimeCrystal`).
+  - `oldworks` (the Old Works): **rubble** on half the land (cleared tile by tile for coin, command
+    `clear`); **ruined machines** (an Ent flag `ruined`) repaired for a quarter of their price
+    (command `repair`); two ruins are whole lines. Exotic: **relics** (`relic`).
+- **Tier 4 items** (`ITEM_IDS` order after tier 3): the four exotics `skyglass`, `cinderite`,
+  `rimeCrystal`, `relic` (mined from their deposits), then `skyglassLens`, `cinderAlloy`,
+  `frostAlloy`, `relicGear` (one per island, made from its exotic), `stormCell`, `sunsetDye`,
+  `horizonLens`, `pocketWeather`, `sunsetGenerator` (the Portable Sunset Generator),
+  `lighthouseLamp`, `anchorChain` (Megaproject parts, refused at the Dock).
+- **Megaprojects #4 and #5** (`MEGAS.lighthouse`, the Lighthouse at the Edge; `MEGAS.anchor`, the
+  Sky Anchor): built at the World's Bay, four stages each, each stage wanting one island's
+  product (so all four islands are visited).
+- **The World floor**: `HIGH.world` (already in `src/data/floors.ts`), opened by research
+  *Charting* (Act IV page, `act: 4`); barges (`HIGH.world` speed 3, load 12).
+- **Relocate** (layer 2): command `{ k: 'relocate', world: WorldId }`; **Legacy** (`s.meta.legacy`,
+  a Num) and its tree (`src/data/legacy.ts`, nodes in `s.meta.legacyNodes`); islands visited in
+  `s.meta.visited`; each island's best fold records in `s.meta.worldRecords`. SAVE_VERSION 9.
+- **Art files** (`src/art/`): `items4` (the 15 tier 4 icons, 8x8, in that order, with `names`),
+  `heater` (16x16, one facing, 4 frames), the exotic deposits `ore_skyglass`, `ore_cinderite`,
+  `ore_rime`, `ore_relic` (as the existing ore patches are drawn), `vent` (16x16, animated),
+  `rubble` (16x16 variants), `ruin_overlay` (cracks and moss over any 16x16 or 32x32 machine),
+  `frost_overlay` (rime on a machine running cold), the island looks (Pebble's sky gaps, Cinder's
+  ash ground and lava rim, Rime's snow and ice, the Old Works' broken paving), the World platform
+  (`world_deck`, `world_edge`, `world_under`, `world_rotor`, grander than the District's;
+  `world_dock`, `world_hopper`, `world_bay`), `mega_lighthouse` and `mega_anchor` (48x48, frames
+  `p0a p0b p1a p1b p2a p2b p3a p3b p4a p4b run1 run2`), UI icons `world`, `legacy`, `relocate`.
+
 ## Milestone 10: Act V, Beyond and the Last Fold
 - **The Last Fold** (research *The Last Fold*, both #4 and #5 done): audit the whole World floor;
   its grade and value give **Kernels** (floor(value / 10) + grade bonus, first pass); everything
