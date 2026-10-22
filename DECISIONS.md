@@ -2781,3 +2781,12 @@ the numbers; `tests/longtail.test.ts` ("the long tail's rewards, after the revie
 - **Open**: the Ledger's rule list ends at the 120th order (by design, above); whether the four new
   kinds are felt is unmeasured (the Act IV bot doesn't reach the World yet, so no pace test plays
   them); the Codex's lore list hides shut folios past the next one to keep the ending on the page.
+- **Coal claims stay as they are** (the bot's "may block honest play"): a claim block costs its
+  base plus half the base for each block owned (linear, §18), so the 13th coal block is 420K: 2-5
+  minutes of Act III's measured 89-195K a minute (§21 Pacing). The wait the bot saw was its own
+  rule (never spend over half the coin on hand), which its `saving` step now answers. Revisit if a
+  bot that buys like a player still waits on coal.
+- **The Act III bot's rule 1-2 gaps grew in its second pass** (a 68.7 min wait at 11:07, a
+  324-minute idle in run 4): the bot's plan waiting on a step it gave up (the pattern it fixed for
+  Gears II), not the model; the second gate's 10.4-minute stretches came from the first pass.
+  Logged OPEN in the pace test; the next bot pass logs its waiting step through those windows.
