@@ -28,6 +28,7 @@ import { hopperWantsWaste } from '../transfer';
 import { fauditFlow, fauditLock } from './nested';
 import { prules } from '../patents';
 import { hunfold, hunfoldRefusal } from './high';
+import { krules } from '../kernels';
 
 const DT = 1 / TICK_RATE;
 
@@ -366,6 +367,8 @@ export interface Route {
 
 function follow(g: Game, m: FEnt, dir: Dir, by: boolean): Route {
   const sideIn = prules(g).sideIntake;
+  // Every Side a Port (a Kernel node, DESIGN.md §23): a module takes in from a trunk on any side
+  const anySide = krules(g).everySide;
   let x = m.x + DX[dir], y = m.y + DY[dir];
   const tiles: FEnt[] = [];
   const seen = new Set<number>();
@@ -384,7 +387,7 @@ function follow(g: Game, m: FEnt, dir: Dir, by: boolean): Route {
     }
     // a module takes in at its back: the item must travel the way it faces
     // Side Intakes (a Patent, §19): also from a trunk pointing into its left side
-    if (e.kind === 'module') to = (dir === e.rot || (sideIn && dir === cw(e.rot))) && e !== m ? e : null;
+    if (e.kind === 'module') to = (dir === e.rot || (sideIn && dir === cw(e.rot)) || anySide) && e !== m ? e : null;
     else to = e;
     break;
   }
@@ -395,12 +398,15 @@ function follow(g: Game, m: FEnt, dir: Dir, by: boolean): Route {
  * byproducts) to a module's back, the Dock, the Hopper or the Megaproject Bay. */
 export function buildRoutes(g: Game): Route[] {
   const routes: Route[] = [];
+  const anySide = krules(g).everySide;
   for (const m of g.s.factory.ents) {
     if (m.kind !== 'module') continue;
     routes.push(follow(g, m, m.rot, false));
-    for (const side of [ccw(m.rot), cw(m.rot)]) {
+    // a side trunk leading away carries byproducts; with Every Side a Port (DESIGN.md §23) a trunk
+    // leading away from any side (the back too) carries all its outputs, as the front does
+    for (const side of anySide ? [ccw(m.rot), cw(m.rot), opposite(m.rot)] : [ccw(m.rot), cw(m.rot)]) {
       const t = g.fentAt(m.x + DX[side], m.y + DY[side]);
-      if (t && t.kind === 'trunk' && t.rot === side) routes.push(follow(g, m, side, true));
+      if (t && t.kind === 'trunk' && t.rot === side) routes.push(follow(g, m, side, !anySide));
     }
   }
   return routes;

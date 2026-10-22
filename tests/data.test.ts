@@ -20,6 +20,7 @@ import { IDLE, IDLE_UPGRADES } from '../src/data/idle';
 import { PATENT_LIST, PATENTS, PATENT_IDS } from '../src/data/patents';
 import { WORLDS, RUBBLE } from '../src/data/worlds';
 import { LEGACY, LEGACY_LIST } from '../src/data/legacy';
+import { KERNELS, KERNEL_LIST, KERNEL_GRADE, LEDGER, LEDGER_RULES } from '../src/data/kernels';
 
 /** every deposit on any island: the Workshop's and each island's own (DESIGN.md §22) */
 const ALL_PATCHES = [...PATCHES, ...Object.values(WORLDS).flatMap((w) => w.patches)];
@@ -62,6 +63,11 @@ function records(): [string, { derivation?: string } & Record<string, unknown>][
     ...Object.values(WORLDS).flatMap((w) => w.patches.map((d, i) => [`island ${w.id} patch ${i}`, d] as [string, any])),
     ['rubble', RUBBLE as any],
     ...LEGACY_LIST.map((d) => ['legacy ' + d.id, d] as [string, any]),
+    // Act V (DESIGN.md §23)
+    ...KERNEL_LIST.map((d) => ['kernel ' + d.id, d] as [string, any]),
+    ['kernel grade bonus', KERNEL_GRADE as any],
+    ...LEDGER.map((d) => ['ledger ' + d.item, d] as [string, any]),
+    ['ledger rules', LEDGER_RULES as any],
   ];
 }
 
@@ -120,6 +126,19 @@ describe('cross-references', () => {
     // research gated to an island names a real one, and every island's exotic has its deposit
     for (const d of Object.values(RESEARCH)) if (d.world) expect(WORLDS[d.world], d.id).toBeTruthy();
     for (const w of Object.values(WORLDS)) if (w.exotic) expect(w.patches.some((p) => p.item === w.exotic), w.id).toBe(true);
+  });
+  it('the Kernel tree points at real things, has flat prices and no cycles; the Ledger wants real products (DESIGN.md §23)', () => {
+    for (const d of KERNEL_LIST) {
+      for (const q of d.requires) expect(KERNELS[q], `${d.id}: ${q}`).toBeTruthy();
+      expect(Number.isInteger(d.cost) && d.cost > 0, d.id).toBe(true);
+      expect(d.text.length).toBeGreaterThan(10);
+      expect(d.flavor.length).toBeGreaterThan(10);
+    }
+    const done = new Set<string>();
+    for (let pass = 0; pass < 20; pass++) for (const d of KERNEL_LIST) if (d.requires.every((r) => done.has(r))) done.add(d.id);
+    expect(done.size).toBe(KERNEL_LIST.length);
+    for (const d of Object.values(RESEARCH)) if (d.kernel) expect(KERNELS[d.kernel], d.id).toBeTruthy();
+    for (const p of LEDGER) expect(ITEMS[p.item].value, p.item).toBeGreaterThan(0);
   });
   it('the Patent tree points at real things, has flat prices and no cycles (DESIGN.md §19)', () => {
     const ids = new Set<string>(PATENT_IDS);

@@ -6,12 +6,14 @@ import type { Game } from '../Game';
 import { DX, DY, ccw, cw, type Dir, type Ent } from '../world';
 import { RULES } from '../../data/rules';
 import { DT } from '../../engine/time';
-import { offer } from '../transfer';
+import { BELT_GAP, offer } from '../transfer';
 
 export function runBelts(g: Game) {
   const step = RULES.beltSpeed.value * DT; // 0.1 tile per tick
   for (const b of g.belts) {
     b.mv = false;
+    // Wide Belts (a Kernel node, DESIGN.md §23): a second item rides half a tile or more behind
+    if (b.item === null && b.item2) promote(b, 0);
     if (b.item === null) continue;
     if (b.p < 1) {
       b.p = Math.min(1, b.p + step);
@@ -28,6 +30,16 @@ export function runBelts(g: Game) {
         b.p = 1;
       }
     }
+    if (b.item2) {
+      if (b.item === null) promote(b, step);
+      else {
+        const np = Math.min((b.p2 ?? 0) + step, b.p - BELT_GAP);
+        if (np > (b.p2 ?? 0) + 1e-12) {
+          b.p2 = np;
+          b.mv = true;
+        }
+      }
+    }
   }
   // the heat map: how loaded and how stuck each belt has been lately (saves from before have none)
   for (const b of g.belts) {
@@ -36,6 +48,15 @@ export function runBelts(g: Game) {
     b.jam = (b.jam ?? 0) * 0.99 + stuck * 0.01;
   }
   for (const e of g.logistics) handOn(g, e);
+}
+
+/** A wide belt's second item moves up to lead once the first has left (and on by `step`). */
+function promote(b: Ent, step: number) {
+  b.item = b.item2 ?? null;
+  b.p = Math.min(1, (b.p2 ?? 0) + step);
+  b.item2 = null;
+  b.p2 = 0;
+  b.mv = true;
 }
 
 function tryOut(g: Game, e: Ent, d: Dir, item: string): boolean {

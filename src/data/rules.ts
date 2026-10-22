@@ -146,6 +146,14 @@ export const RULES = {
   lighthouseSpeed: r(1, '§22 Megaprojects: the Lighthouse\'s Lens Room, barges a tile a second faster (3 -> 4)'),
   lighthouseDwell: r(0.5, '§22 Megaprojects: the Lighthouse\'s Beacon, skiffs and barges load in half the time'),
   lighthouseReach: r(6, '§22 Megaprojects: the Lighthouse\'s Light, a route counts at most 6 tiles however far it flies'),
+  // ---- Act V (DESIGN.md §23): the Last Fold, Kernels, the Seed
+  /** Kernels: floor(the World's value / this) + the grade's bonus (src/data/kernels.ts KERNEL_GRADE) */
+  kernelPerValue: r(10, '§23 Kernels: floor(value / 10) + the grade bonus, value = the summed value (steps x grade x tier, §19) of every module put to work on the World and Beyond: a World of 25 District groups at about 8 each (§22: 7-10 a depth-3 design) is 200, 20 Kernels, and with a B the first Last Fold banks about 22: two or three of the tree\'s nodes (2-8 each)'),
+  kernelMin: r(1, '§23 The Last Fold: at least one Kernel, so the reset is never a loss by accident (as patentMin, §19)'),
+  /** the Seed: seconds between digs on each side, and its tile in chunk A */
+  seedSeconds: r(4, '§23 The Seed: one of each raw ore every 4 s a side, 15 a minute, half a Miner\'s 30 (§4): a little of each, so the new universe\'s Act I has copper, coal and sand in chunk A before chunk B or E, and its Miners are still the main supply'),
+  seedX: r(4, '§23 The Seed: at (4, 6) in chunk A, below the start belt: four free sides on Home, clear of the Hand Furnace\'s patch, the head-start Miner (§19), the Old Works\' ruins (§22) and the Dock and Hopper'),
+  seedY: r(6, '§23 The Seed: at (4, 6) in chunk A (seedX)'),
   maxRoutes: r(120, '§21 Skiff routes: at most 120 a floor, one for each tile of the District\'s first 12x10, so the floor stays readable (PLAN.md not-list: logistics readable on one screen)'),
 };
 

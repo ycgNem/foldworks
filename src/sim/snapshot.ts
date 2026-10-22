@@ -77,8 +77,11 @@ export function replay(seed: number, history: Logged[], until: number): Game {
 /** A stable fingerprint of a state, for determinism checks. */
 export function fingerprint(g: Game): string {
   const s = g.s;
-  const ents = s.ents.map((e) => `${e.id}${e.kind}${e.x},${e.y}${e.rot}|${e.item ?? ''}${e.p.toFixed(3)}|${JSON.stringify(e.inBuf)}${e.out}${e.by}${e.prog}${e.count}${e.store.join(',')}`).join(';');
-  return [s.tick, s.coin.toString(), s.earned.toString(), s.rng, s.research.done.join(','), ents, JSON.stringify(s.research.bank)].join('#');
+  const ents = s.ents.map((e) => `${e.id}${e.kind}${e.x},${e.y}${e.rot}|${e.item ?? ''}${e.p.toFixed(3)}${e.item2 ? e.item2 + (e.p2 ?? 0).toFixed(3) : ''}|${JSON.stringify(e.inBuf)}${e.out}${e.by}${e.prog}${e.count}${e.store.join(',')}`).join(';');
+  // the layer-3 state (DESIGN.md §23): Kernels, the universe, the Ledger
+  const m = s.meta;
+  const meta = `${m.kernels?.toString() ?? ''}:${(m.kernelNodes ?? []).join(',')}:${m.lastFolds ?? 0}:${m.ledger?.n ?? 0}`;
+  return [s.tick, s.coin.toString(), s.earned.toString(), s.rng, s.research.done.join(','), ents, JSON.stringify(s.research.bank), meta].join('#');
 }
 
 export { Num };

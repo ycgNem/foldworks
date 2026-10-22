@@ -758,7 +758,7 @@ describe('Act IV away and in saves (DESIGN.md §12, §22)', () => {
   });
 
   it('a v8 save migrates to v9: Home, no Legacy, Home the only island seen', () => {
-    expect(SAVE_VERSION).toBe(9);
+    expect(SAVE_VERSION).toBeGreaterThanOrEqual(9);
     const g = new Game(3);
     g.step(100);
     const p = savePayload(g, 0) as unknown as { v: number; snap: string };
@@ -766,7 +766,7 @@ describe('Act IV away and in saves (DESIGN.md §12, §22)', () => {
     for (const k of ['world', 'legacy', 'legacyEarned', 'legacyNodes', 'visited', 'worldRecords', 'here', 'relocations']) delete st.meta[k];
     const old = { ...p, v: 8, snap: JSON.stringify(st) };
     const m = migrate(old) as unknown as { v: number; snap: string };
-    expect(m.v).toBe(9);
+    expect(m.v).toBe(SAVE_VERSION);
     const meta = JSON.parse(m.snap).meta;
     expect(meta.world).toBe('home');
     expect(meta.legacy).toBe('N:0');

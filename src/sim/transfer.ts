@@ -14,6 +14,11 @@ import { lrules } from './legacy';
 import { customerMet } from './reorganize';
 import { prules } from './patents';
 import { wastePrice } from './systems/modules';
+import { krules } from './kernels';
+
+/** Wide Belts (DESIGN.md §23): a belt tile holds two items, at least half a tile apart. */
+export const BELT_GAP = 0.5;
+export const wideBelt = (g: Game) => krules(g).beltItems > 1;
 
 /** Does the active special order still want this item at the Workshop Dock? */
 export function orderWants(g: Game, item: string): boolean {
@@ -46,8 +51,10 @@ export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
   const enterSide = opposite(dir); // the side of `to` the item comes in through
   switch (to.kind) {
     case 'belt':
-      // never head-on into a belt that comes back at us
-      return to.item === null && to.rot !== opposite(dir);
+      // never head-on into a belt that comes back at us; Wide Belts (a Kernel node, DESIGN.md §23):
+      // a second item behind the first once it is half a tile on
+      if (to.rot === opposite(dir)) return false;
+      return to.item === null || (wideBelt(g) && !to.item2 && to.p >= BELT_GAP - 1e-9);
     case 'dock':
       // what the Dock refuses it takes while the active order wants it (the Committee's slag)
       // and waste once the Scrap Transmuter buys it (DESIGN.md §21)
@@ -112,8 +119,14 @@ export function offer(g: Game, x: number, y: number, dir: Dir, item: string, car
   const enterSide = opposite(dir);
   switch (to.kind) {
     case 'belt':
-      to.item = item;
-      to.p = carry;
+      if (to.item === null) {
+        to.item = item;
+        to.p = carry;
+      } else {
+        // the second item of a wide belt, behind the first
+        to.item2 = item;
+        to.p2 = Math.min(carry, to.p - BELT_GAP);
+      }
       to.mv = true;
       break;
     case 'dock':
@@ -156,6 +169,8 @@ export function machineRecipes(g: Game, m: Ent): RecipeDef[] {
 /** Researched, and taught (an alternate recipe needs its customer's reputation, §18). */
 export function recipeKnown(g: Game, r: RecipeDef): boolean {
   if (r.unlock !== null && !g.s.research.done.includes(r.unlock)) return false;
+  // the Second Cookbook's alternate recipes (a Kernel node, DESIGN.md §23)
+  if (r.alt && !krules(g).cookbook) return false;
   return !r.rep || (g.s.orders.rep[r.rep.customer] ?? 0) >= r.rep.level;
 }
 

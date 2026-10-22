@@ -6,12 +6,23 @@ import { Num } from '../../engine/num';
 import { RESEARCH, RESEARCH_LIST, type ResearchId } from '../../data/research';
 import type { ItemId } from '../../data/items';
 import { worldOf } from './islands';
+import { MEGAS, type MegaId } from '../../data/megaprojects';
+import { hasKernel } from '../kernels';
 
 /** Can this node be selected (requirements done, not done itself)? */
 export function available(g: Game, id: ResearchId): boolean {
   const d = RESEARCH[id];
   // an island's own research is offered only on that island (DESIGN.md §22)
-  return !g.done(id) && d.requires.every((r) => g.done(r)) && (g.s.mega.stage ?? 0) >= (d.drill ?? 0) && (!d.world || d.world === worldOf(g));
+  return !g.done(id) && d.requires.every((r) => g.done(r)) && (g.s.mega.stage ?? 0) >= (d.drill ?? 0) && (!d.world || d.world === worldOf(g))
+    // Act V (DESIGN.md §23): the Last Fold once the Lighthouse and the Sky Anchor stand; tier 5 with Beyond
+    && (d.megas ?? []).every((m) => megaComplete(g, m)) && (!d.kernel || hasKernel(g, d.kernel));
+}
+
+/** Every stage of a Megaproject stands (#2 on; kept through every reset). */
+export function megaComplete(g: Game, m: MegaId): boolean {
+  const ms = g.s.megas?.[m];
+  const n = MEGAS[m].stages.length;
+  return !!ms && (MEGAS[m].anyOrder ? (ms.done?.length ?? 0) >= n : ms.stage >= n);
 }
 
 export function availableNodes(g: Game) {

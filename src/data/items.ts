@@ -11,6 +11,9 @@ export const ITEM_IDS = [
   // Act IV (DESIGN.md §22), in the order of src/art/items4.png: the four exotics, then the islands' goods
   'skyglass', 'cinderite', 'rimeCrystal', 'relic', 'skyglassLens', 'cinderAlloy', 'frostAlloy', 'relicGear', 'stormCell',
   'sunsetDye', 'horizonLens', 'pocketWeather', 'sunsetGenerator', 'lighthouseLamp', 'anchorChain',
+  // Act V (DESIGN.md §23), in the order of src/art/items5.png: the impossible inventions
+  'bottledTuesday', 'mapOfEverywhere', 'verySmallSun', 'pocketIsland', 'quietEngine', 'foldedUniverse',
+  'everlastingSandwich', 'infiniteStaircase',
 ] as const;
 export type ItemId = (typeof ITEM_IDS)[number];
 
@@ -92,6 +95,16 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   sunsetGenerator: { id: 'sunsetGenerator', name: 'Portable Sunset Generator', value: 300000, color: 'gold', flavor: 'Fits in a cart. Ends the day whenever you like. Requires an Engineer to supervise.', derivation: '§22 Tier 4: 4 sunset dye + an Autonomous Sandwich Engineer + 2 cinder alloy (90,700) -> 300,000 (x3.3), Assembler Mk2 only: Cinder Isle\'s absurd product, one step past the Engineer' },
   lighthouseLamp: { id: 'lighthouseLamp', name: 'Lighthouse Lamp', value: 0, refused: true, color: 'gold', flavor: 'Bright enough to be seen from the next island. That is the point.', derivation: '§22 Megaprojects: the Lighthouse at the Edge\'s part, not for sale' },
   anchorChain: { id: 'anchorChain', name: 'Anchor Chain', value: 0, refused: true, color: 'steel', flavor: 'Each link is a promise not to drift.', derivation: '§22 Megaprojects: the Sky Anchor\'s part, not for sale' },
+  // Act V (DESIGN.md §23 Tier 5): the impossible inventions, each made on one island of its tier 4
+  // goods at about 3.5x their inputs (§18's rule), so Beyond's Dock sells what the islands fold
+  bottledTuesday: { id: 'bottledTuesday', name: 'Bottled Tuesday', value: 250000, color: 'sky', flavor: 'A whole Tuesday, corked. Open it on a Monday to skip ahead.', derivation: '§23 Tier 5: Pocket Weather + 4 storm cells + a processor (72,200) -> 250,000 (x3.5), Assembler Mk2, Rime' },
+  mapOfEverywhere: { id: 'mapOfEverywhere', name: 'A Map of Everywhere', value: 70000, color: 'cream', flavor: 'Folds down to the size of a stamp. Unfolds to the size of everywhere. Do not unfold it indoors.', derivation: '§23 Tier 5: 4 horizon lenses + 2 processors (20,400) -> 70,000 (x3.4), Assembler Mk2, Pebble Isle' },
+  verySmallSun: { id: 'verySmallSun', name: 'A Very Small Sun', value: 1050000, color: 'gold', flavor: 'About the size of a grapefruit. Please do not eat it.', derivation: '§23 Tier 5: a Portable Sunset Generator + 6 cinder alloy + 4 sunset dye (301,060) -> 1,050,000 (x3.5), Assembler Mk2, Cinder Isle' },
+  pocketIsland: { id: 'pocketIsland', name: 'The Pocket Island', value: 100000, color: 'moss', flavor: 'Comes with its own frog. The frog has its own pocket island.', derivation: '§23 Tier 5: 20 relic gears + a robot arm + 10 fertilizer (29,520) -> 100,000 (x3.4), Assembler Mk2, the Old Works' },
+  quietEngine: { id: 'quietEngine', name: 'The Quiet Engine', value: 34000, color: 'steel', flavor: 'It runs. You can tell because nothing else is quite so silent.', derivation: '§23 Tier 5: 8 relic gears + 2 servos + 2 gearboxes (9,680) -> 34,000 (x3.5), Assembler Mk2, the Old Works' },
+  foldedUniverse: { id: 'foldedUniverse', name: 'The Folded Universe Replica', value: 3600000, color: 'violet', flavor: 'A scale model of everything, folded. The scale is 1:1. It is also a lot smaller.', derivation: '§23 Tier 5: each island folds it its own way, about 1.06M of that island\'s tier 5 goods -> 3,600,000 (x3.4), Assembler Mk2, 120 s' },
+  everlastingSandwich: { id: 'everlastingSandwich', name: 'The Everlasting Sandwich', value: 320000, color: 'amber', flavor: 'Take a bite and it is whole again. The Engineer is very proud and very tired.', derivation: '§23 Tier 5: an Autonomous Sandwich Engineer + 10 sandwiches + 4 frost alloy (92,800) -> 320,000 (x3.4), Assembler Mk2, Rime (the frost keeps it fresh)' },
+  infiniteStaircase: { id: 'infiniteStaircase', name: 'The Infinite Staircase', value: 56000, color: 'ice', flavor: 'Every step is the first step. The view is excellent all the way up.', derivation: '§23 Tier 5: 20 skyglass lenses + 4 servos + 10 steel (16,020) -> 56,000 (x3.5), Assembler Mk2, Pebble Isle' },
 };
 
 export function itemName(id: string): string {

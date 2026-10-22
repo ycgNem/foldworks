@@ -30,10 +30,15 @@ import { inBox, splusGate } from './audits';
 import { inspire } from './inspire';
 import { prules } from '../patents';
 import { lrules } from '../legacy';
+import { hasKernel } from '../kernels';
+import { KERNELS } from '../../data/kernels';
 
 const DT = 1 / TICK_RATE;
 
-export const HIGH_IDS: HighFloorId[] = ['district', 'world'];
+export const HIGH_IDS: HighFloorId[] = ['district', 'world', 'beyond'];
+
+/** Each high floor's Bay tally (offline progress measures what reached it). */
+const BAY_TALLY = { district: 'dbay', world: 'wbay', beyond: 'bbay' } as const;
 
 /** The floor's state, if it is open this run. */
 export function hfloor(g: Game, id: HighFloorId): HighFloorState | undefined {
@@ -48,6 +53,7 @@ export function highOpen(g: Game, id: HighFloorId): boolean {
 /** Lots the floor holds for good: the Floating City's second stage gives the District a fourth. */
 export function keptLots(g: Game, id: HighFloorId): number {
   if (id === 'world') return megaDone(g, 'lighthouse', 3) ? 1 : 0;
+  if (id === 'beyond') return 0;
   return (g.s.megas?.city?.stage ?? 0) >= 2 ? 1 : 0;
 }
 
@@ -128,7 +134,8 @@ export function skiffStats(g: Game, id: HighFloorId): { load: number; speed: num
   return {
     load: f.load + (g.s.orders.rep.bramble >= 4 ? RULES.brambleSkiffLoad.value : 0),
     // Long Skiffs flies the District's; the Lighthouse's Lens Room the World's barges (DESIGN.md §22)
-    speed: f.speed + (id === 'district' ? prules(g).skiffSpeed : megaDone(g, 'lighthouse', 1) ? RULES.lighthouseSpeed.value : 0),
+    // (Beyond's couriers: neither, DESIGN.md §23)
+    speed: f.speed + (id === 'district' ? prules(g).skiffSpeed : id === 'world' && megaDone(g, 'lighthouse', 1) ? RULES.lighthouseSpeed.value : 0),
     // the Lighthouse's Beacon: loading in half the time on every high floor
     dwell: f.dwell * (megaDone(g, 'lighthouse', 2) ? RULES.lighthouseDwell.value : 1),
   };
@@ -181,7 +188,7 @@ export function openHigh(g: Game, id: HighFloorId) {
   g.s[id] = newHighFloor(id);
   // District Deeds (a head start, DESIGN.md §21): it opens with its first lot; the Sky Anchor keeps
   // the lots bought in earlier runs (§22)
-  const lots = Math.max(id === 'district' ? g.s.headLots ?? 0 : 0, g.s.meta.keptRoom?.[id] ?? 0);
+  const lots = Math.max(id === 'district' ? g.s.headLots ?? 0 : 0, id === 'beyond' ? 0 : g.s.meta.keptRoom?.[id] ?? 0);
   if (lots) g.s[id]!.lots = Math.min(HIGH[id].lots, lots);
   // the World floor has stood in this world: a Relocate is open from here (§22)
   if (id === 'world' && g.s.meta.here) g.s.meta.here.opened = true;
@@ -193,7 +200,9 @@ export function openHigh(g: Game, id: HighFloorId) {
 function checkOpen(g: Game) {
   for (const id of HIGH_IDS) {
     const r = HIGH[id].opens;
-    if (r && !g.s[id] && g.done(r)) openHigh(g, id);
+    // Beyond also needs its Kernel node (DESIGN.md §23)
+    const k = HIGH[id].kernel;
+    if (r && !g.s[id] && g.done(r) && (!k || hasKernel(g, k))) openHigh(g, id);
   }
 }
 
@@ -202,7 +211,7 @@ function checkOpen(g: Game) {
 /** Why this design can't be placed on the floor here, or null. */
 export function hplaceRefusal(g: Game, id: HighFloorId, design: number, x: number, y: number): string | null {
   const f = HIGH[id];
-  if (!g.s[id]) return `The ${f.name} opens with research ${f.opens ? RESEARCH[f.opens].name : 'later'}`;
+  if (!g.s[id]) return f.kernel && !hasKernel(g, f.kernel) ? `${f.name} opens with the Kernel node ${KERNELS[f.kernel].name} (and research ${f.opens ? RESEARCH[f.opens].name : 'later'})` : `The ${f.name} opens with research ${f.opens ? RESEARCH[f.opens].name : 'later'}`;
   if (!highInb(g, id, x, y)) {
     const lot = x >= highW(g, id) && x < highMaxW(id) && y >= 0 && y < f.h;
     return lot ? `Buy this lot first (${lotPrice(g, id)?.format() ?? '?'} coin)` : 'off the floor';
@@ -459,7 +468,7 @@ export function megaGiveX(g: Game, id: HighFloorId, bay: FEnt, item: ItemId, n: 
     if (counted <= 0) continue;
     ms.progress[item] = (ms.progress[item] ?? Num.ZERO).add(counted);
     if (g.tally) {
-      const t = g.tally[id === 'district' ? 'dbay' : 'wbay'];
+      const t = g.tally[BAY_TALLY[id]];
       t[item] = (t[item] ?? Num.ZERO).add(counted);
     }
     g.s.megaPatents += (st.patents * counted) / want / Object.keys(st.wants).length;
@@ -648,15 +657,19 @@ export function hentsIn(g: Game, id: HighFloorId, b: Box): FEnt[] {
   return out;
 }
 
-/** The research a fold on this floor needs (the World's is the Last Fold, Act V). */
-const FOLD_RESEARCH: Record<HighFloorId, string> = { district: 'districtFolds', world: 'lastFold' };
+/** The research a fold on this floor needs (the World's is the Last Fold, Act V; nothing folds on
+ * Beyond, the top of the world: DESIGN.md §23). */
+const FOLD_RESEARCH: Record<HighFloorId, string | null> = { district: 'districtFolds', world: 'lastFold', beyond: null };
 
 /** Why this box on a high floor can't be folded, or null. */
 export function hfoldRefusal(g: Game, id: HighFloorId, b: Box): string | null {
   const need = FOLD_RESEARCH[id];
+  if (!need) return 'Nothing folds on Beyond: it is the top of the world';
   if (!g.done(need as never)) return `Research ${(RESEARCH as Record<string, { name: string } | undefined>)[need]?.name ?? 'the next fold'} first`;
   if (!g.s[id]) return 'not open';
-  if (g.s.haudit) return g.s.haudit.result ? 'Fold or cancel the audited group first' : 'An audit is already running up here';
+  // a World group folds up to Beyond (depth 4, DESIGN.md §23): with nowhere to put it, no fold
+  if (id === 'world' && !g.s.beyond) return 'A World group folds up to Beyond: open it first (the Kernel node Beyond)';
+  if (g.s.haudit) return g.s.haudit.last ? 'The whole World is being audited for the Last Fold: take it or cancel it first' : g.s.haudit.result ? 'Fold or cancel the audited group first' : 'An audit is already running up here';
   const max = Math.max(HIGH[id].foldMax, id === 'district' ? prules(g).highFoldMax : 0);
   if (b.w > max || b.h > max) return `Too big: a fold here is at most ${max}x${max}`;
   if (b.w < 1 || b.h < 1) return 'Drag a box over a group of modules';
@@ -702,7 +715,10 @@ const windowTicks = (g: Game) => prules(g).auditWindow * TICK_RATE;
 function hauditFlow(g: Game, id: HighFloorId, from: FEnt, to: FEnt, item: string, amt: number) {
   const a = g.s.haudit;
   if (!a || a.floor !== id || a.result || a.t < warmTicks(g)) return;
-  const fi = inBox(a.box, from.x, from.y), ti = inBox(a.box, to.x, to.y);
+  // the Last Fold's audit boxes the whole World: "inside" is a module, and what reaches the Dock,
+  // Hopper or Bay is the World's output (DESIGN.md §23)
+  const fi = a.last ? from.kind === 'module' : inBox(a.box, from.x, from.y);
+  const ti = a.last ? to.kind === 'module' : inBox(a.box, to.x, to.y);
   if (fi && !ti) a.outs[item] = (a.outs[item] ?? 0) + amt;
   else if (!fi && ti) a.ins[item] = (a.ins[item] ?? 0) + amt;
   else if (fi && ti && BYPRODUCTS.has(item)) a.inside += amt;
@@ -732,6 +748,14 @@ function runHAudit(g: Game) {
   }
 }
 
+/** The World's tiles a module could stand on: the floor less its Dock, Hopper and Bay (the Last
+ * Fold's C, DESIGN.md §23). */
+export function lastTiles(g: Game): number {
+  let fixed = 0;
+  for (const e of g.s.world?.ents ?? []) if (e.kind !== 'module') fixed += e.w * e.h;
+  return Math.max(1, highW(g, 'world') * HIGH.world.h - fixed);
+}
+
 /** Grade the high-floor audit's window so far (or all of it): U, W, C as a nested fold's. */
 export function gradeHAudit(g: Game): AuditResult {
   const a = g.s.haudit!;
@@ -750,7 +774,9 @@ export function gradeHAudit(g: Game): AuditResult {
   const byMade = a.made + a.missed;
   const byHandled = Math.min(byMade, byOut + a.inside);
   const w = byMade > 1e-6 ? byHandled / byMade : 1;
-  const c = Math.min(1, mods.length / (a.box.w * a.box.h) / RULES.compactFull.value);
+  // the Last Fold's C is the World's free tiles filled (its Dock, Hopper and Bay are no tiles to fill)
+  const tiles = a.last ? lastTiles(g) : a.box.w * a.box.h;
+  const c = Math.min(1, mods.length / tiles / RULES.compactFull.value);
   const score = SCORE_WEIGHTS.u * u + SCORE_WEIGHTS.w * w + SCORE_WEIGHTS.c * c;
   const gr = splusGate(gradeFor(score), score, byMade, a.inside);
   const rate = (t: Record<string, number>) => {
@@ -768,10 +794,10 @@ export function gradeHAudit(g: Game): AuditResult {
     lines.push({ lost: SCORE_WEIGHTS.u * (1 - u), text: `${hname(g, m)} ran ${Math.round(busy[m.id] * 100)}% (${why}). A skiff more on its route, or the feeder moved beside it.` });
   }
   if (byMade > 1e-6 && byHandled < byMade - 1e-6) lines.push({ lost: SCORE_WEIGHTS.w * (1 - w), text: `${Math.round(byMade - byHandled)} of ${Math.round(byMade)} byproducts went nowhere. Fly them out of the box, or to a module inside that uses them.` });
-  if (c < 1) lines.push({ lost: SCORE_WEIGHTS.c * (1 - c), text: `${mods.length} of ${a.box.w * a.box.h} tiles are modules; ${Math.ceil(a.box.w * a.box.h * RULES.compactFull.value)} would be fully compact. Draw the box tighter.` });
+  if (c < 1) lines.push({ lost: SCORE_WEIGHTS.c * (1 - c), text: `${mods.length} of ${tiles} tiles are modules; ${Math.ceil(tiles * RULES.compactFull.value)} would be fully compact. ${a.last ? 'Fill the World.' : 'Draw the box tighter.'}` });
   return {
     grade: { letter: gr.letter, score, u, w, c, mult: gr.mult },
-    ins, outs, byMade, byHandled, machineTiles: mods.length, boxTiles: a.box.w * a.box.h, busy,
+    ins, outs, byMade, byHandled, machineTiles: mods.length, boxTiles: tiles, busy,
     advice: lines.sort((p, q) => q.lost - p.lost).map((l) => l.text),
   };
 }
@@ -782,6 +808,7 @@ export function foldHAudited(g: Game, name: string | null): ActResult {
   const a = g.s.haudit;
   if (!a) return no('Nothing is being audited');
   if (!a.result) return no('The audit is still running');
+  if (a.last) return no('The whole World folds only into the Seed: take the Last Fold from its card');
   const id = a.floor;
   const st = g.s[id]!;
   const res = a.result;

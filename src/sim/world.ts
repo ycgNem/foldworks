@@ -13,6 +13,7 @@ import type { PatentId } from '../data/patents';
 import { HIGH, type HighFloorId } from '../data/floors';
 import type { WorldId } from '../data/worlds';
 import type { LegacyId } from '../data/legacy';
+import type { KernelId } from '../data/kernels';
 
 export type Dir = 0 | 1 | 2 | 3;
 /** E, S, W, N */
@@ -120,6 +121,11 @@ export interface Ent {
   ruined?: boolean;
   /** a powered machine on Rime running cold this tick (half speed; the frost overlay) */
   cold?: boolean;
+  // ---- Act V (DESIGN.md §23); absent elsewhere
+  /** Wide Belts (a Kernel node): a belt's second item, half a tile or more behind `item`, and its
+   * progress along the tile (it moves up into `item` when that one leaves) */
+  item2?: string | null;
+  p2?: number;
 }
 
 /** A box on the Workshop, in tiles. */
@@ -316,6 +322,9 @@ export interface HighFloorState {
 /** A fold audit on a high floor: a group of modules joined by routes (DESIGN.md §21 District folds). */
 export interface HAuditState extends FAuditState {
   floor: 'district' | 'world';
+  /** the Last Fold's audit (DESIGN.md §23): every module on the World at once; what leaves a module
+   * for the Dock, Hopper or Bay is its output, and it folds the whole World into the Seed */
+  last?: boolean;
 }
 
 export interface Spark {
@@ -437,6 +446,28 @@ export interface RunRecord {
   /** it ended with a Relocate to this island, banking this much Legacy (DESIGN.md §22) */
   relocate?: WorldId;
   legacy?: number;
+  /** it ended with the Last Fold, banking this many Kernels (DESIGN.md §23) */
+  lastFold?: number;
+}
+
+/** What the Last Fold folded (DESIGN.md §23): the Seed's card, kept for good. */
+export interface SeedCard {
+  /** the universe it ended (1 = the first) */
+  universe: number;
+  grade: string;
+  value: number;
+  kernels: number;
+  /** modules counted, and the most valuable product among them */
+  modules: number;
+  item: ItemId | null;
+  /** the island it was folded on */
+  world: WorldId;
+}
+
+/** The Endless Ledger (DESIGN.md §23): orders filled so far, and what the open one has been given. */
+export interface LedgerState {
+  n: number;
+  progress: Partial<Record<ItemId, Num>>;
 }
 
 /** What survives a Reorganize, beside the four kept fields that already lived in the run's state
@@ -491,6 +522,19 @@ export interface MetaState {
   keptRoom?: { annex?: number; district?: number; world?: number };
   /** Field Notes (Unit 7's rep 5): `island:item` keys the Codex has paid on each island */
   fieldNotes?: string[];
+  // ---- the Last Fold, layer 3 (DESIGN.md §23); absent on older saves (nothing folded yet)
+  /** Kernels unspent, and ever earned; the Kernel tree's nodes bought */
+  kernels?: Num;
+  kernelsEarned?: Num;
+  kernelNodes?: KernelId[];
+  /** Last Folds taken (the universe is lastFolds + 1); the Seed's card from each */
+  lastFolds?: number;
+  seeds?: SeedCard[];
+  /** Kept Legacy: the Legacy nodes kept through the next Last Fold */
+  keptLegacy?: LegacyId[];
+  /** the Endless Ledger, and the cosmetics it has paid (machine skin ids), kept through every reset */
+  ledger?: LedgerState;
+  cosmetics?: string[];
 }
 
 export function newMeta(): MetaState {
@@ -498,6 +542,7 @@ export function newMeta(): MetaState {
     runs: 0, runStart: 0, patents: Num.ZERO, patentsEarned: Num.ZERO, nodes: [], patented: {}, drawer: [], nextKept: 1, queue: [],
     lifetime: { earned: Num.ZERO, delivered: {}, folds: 0 }, history: [], peakPerMin: 0, perMinRing: [],
     world: 'home', legacy: Num.ZERO, legacyEarned: Num.ZERO, legacyNodes: [], visited: ['home'], worldRecords: {}, here: newWorldRun(0), relocations: 0,
+    kernels: Num.ZERO, kernelsEarned: Num.ZERO, kernelNodes: [], lastFolds: 0, seeds: [], keptLegacy: [], ledger: { n: 0, progress: {} }, cosmetics: [],
   };
 }
 
@@ -582,6 +627,8 @@ export interface State {
   district?: HighFloorState;
   /** the World floor (Act IV) */
   world?: HighFloorState;
+  /** Beyond, the fifth floor (Act V, DESIGN.md §23: the Kernel node Beyond and research The Last Fold) */
+  beyond?: HighFloorState;
   /** a fold audit on a high floor (one at a time, like the Factory's) */
   haudit?: HAuditState | null;
   /** what the Factory Chute has dropped to the Workshop and the Chute Mouths have not pushed out

@@ -9,7 +9,7 @@ import { OK, no } from '../Game';
 import { isMachine } from '../../data/machines';
 import { RESEARCH } from '../../data/research';
 import { IDLE, IDLE_UPGRADE, type IdleUpgradeId } from '../../data/idle';
-import { offlineEfficiency, offlineEfficiencyUncapped } from '../offline';
+import { offlineCeiling, offlineEfficiency, offlineEfficiencyUncapped } from '../offline';
 import { Num } from '../../engine/num';
 import { lineOf } from '../analysis';
 import { auditLock } from './audits';
@@ -132,7 +132,7 @@ export function idleUpgradeGain(g: Game, id: IdleUpgradeId): number {
   const u = IDLE_UPGRADE[id];
   if (!u || g.has(id)) return 0;
   const now = offlineEfficiency(g);
-  return Math.max(0, Math.round((Math.min(IDLE.offlineEffMax.value, offlineEfficiencyUncapped(g) + u.eff) - now) * 1e6) / 1e6);
+  return Math.max(0, Math.round((Math.min(offlineCeiling(g), offlineEfficiencyUncapped(g) + u.eff) - now) * 1e6) / 1e6);
 }
 
 /** Why a Night Shift upgrade can't be bought now, or null. One that would add nothing (the
@@ -142,7 +142,7 @@ export function idleUpgradeRefusal(g: Game, id: IdleUpgradeId): string | null {
   if (!u) return 'no such upgrade';
   if (g.has(id)) return 'already bought';
   if (!g.done(u.requires)) return `Needs research: ${RESEARCH[u.requires].name}`;
-  if (idleUpgradeGain(g, id) <= 0) return `Offline efficiency is at its ${Math.round(IDLE.offlineEffMax.value * 100)}% ceiling already (your Patents): this would add nothing`;
+  if (idleUpgradeGain(g, id) <= 0) return `Offline efficiency is at its ${Math.round(offlineCeiling(g) * 100)}% ceiling already (your Patents): this would add nothing`;
   if (g.s.coin.lt(u.cost)) return `Needs ${Num.of(u.cost).format()} coin`;
   return null;
 }

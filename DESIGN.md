@@ -1815,3 +1815,203 @@ the save's first run.
   over islands; the reward table is rules, not output.
 - **Rubble cleared tile by tile** resembles any land-clearing tycoon; it is priced from the chunk
   (§9), so it is the chunk's price again, not a new curve.
+
+## 23. Act V: Beyond and the Last Fold (Milestone 10, 80-100+ h)
+
+New thinking: **bending the rules.** Acts I-IV taught the rules a layout is built under (a belt's
+120 a minute, a module's back and front, an 8x8 box, four floors, one recipe a product, the night's
+0.75). Act V folds the whole World into one tile and spends what it was worth on **changing those
+rules**, so every line the player knows is drawn again in the next universe. Reset layer 3, **the
+Last Fold**, banks **Kernels**; the Kernel tree buys base-rule changes; **Beyond**, the fifth floor,
+takes the World's own folds; **tier 5** is what the islands make for it; the **Endless Ledger** keeps a
+next goal forever. The plan and the contract ids: `docs/endgame.md` (Milestone 10). Data:
+`src/data/kernels.ts` (the tree, the Ledger, the grade bonus), the Act V blocks of `items.ts`,
+`recipes.ts`, `research.ts`, `floors.ts`, `machines.ts` and `rules.ts`. Sim: `src/sim/lastfold.ts`,
+`src/sim/kernels.ts`, `src/sim/systems/seed.ts`, `src/sim/systems/ledger.ts`, and the Act V parts of
+`systems/high.ts`, `belts.ts`, `modules.ts`, `transfer.ts`, `offline.ts`. Tests: `tests/act5.test.ts`.
+
+### The Last Fold (layer 3)
+- **Research The Last Fold** (`lastFold`, Act V page, `act: 5`) is offered once **every stage of the
+  Lighthouse and the Sky Anchor** stands (the research's `megas`; both are built across the four islands,
+  done by about 75-80 h, §22) and Charting is known. It costs 6 Engineers, 60 robot arms and 40
+  umbrellas: what every island's World floor makes, about 1-1.5 h of an Act IV floor's Engineer and Arm
+  groups. So the Last Fold is **available at about 80 h** (§16). It also opens depth-4 folds on the
+  World (once Beyond stands: a World group has nowhere to go before).
+- **The whole-World audit** (`{ k: 'lastFoldAudit' }`): every module on the World at once, the
+  high-floor audit (§21) over the whole floor (`haudit.last`): the warm-up and window of every audit
+  (§10, 10 + 60 s), the World locked while it runs. Inside is "a module"; what reaches the Dock, Hopper
+  or Bay is the World's output; byproducts down the waste chute count as handled. U, W and C as a fold's
+  (§10); **C counts the floor's free tiles** (less the Dock, Hopper and Bay), so a full World grades
+  better. Its card offers the reset (`{ k: 'lastFold' }`), or `hauditCancel`. A plain `hfold` refuses it.
+- **Kernels**, banked at the fold (`previewKernels`, the card's lines and goals):
+
+      Kernels = floor( value / 10 ) + the grade bonus (S+ 5, S 4, A 3, B 2, C 1, D 0)
+
+  `value` sums the value (steps folded x grade x rate tier, as filing, §19) of **every module at
+  work**: on the World each module the audit found at half speed or better; on Beyond each module run
+  60 s straight at half speed or better (`legacyRunSeconds`, §22). A depth-4 module counts the World
+  group folded into it (`lastFoldValue`: the sum of its parts), so folding a group up to Beyond never
+  loses Kernels. Before the audit the preview counts modules by their 60 s and no grade.
+- **The numbers.** A depth-3 group is worth 6-9 (a Robot Arm group fed steel: 4 steps + 1 for its
+  depth x S 1.25 = 6.25; a whole Engineer chain, 7 + 1 at S, 10: §22's "7-10"). A World of 25 groups at
+  about 8 is 200 of value, **20 Kernels**, and a B adds 2: **about 22 at the first Last Fold**, enough
+  for two or three nodes (the tree's 2-8 each; 51 in all). The bonus is one Kernel a letter: a grade,
+  not a multiplier, so a bigger World always counts for more than a better-graded small one, and filling
+  the World (C) is what raises the grade. No coin, no root, no log of a currency: §15's sketch ("log10 of
+  the World's output value") is replaced, as Patents and Legacy count folds, never coin.
+- **Kept:** Kernels and the Kernel tree; every Megaproject (so the next universe's Last Fold research
+  is open as soon as Charting is); reputation, the Codex and Field Notes, trophies, the counters and
+  lifetime statistics, the run history; the Patent Drawer; Challenges won; the Night Shift; the Endless
+  Ledger and its cosmetics. With **Kept Islands** the worlds' records, with **Kept Legacy** up to four
+  chosen Legacy nodes (`{ k: 'keepLegacy', id }`).
+- **Lost:** everything a Relocate loses (§22: every floor, coin, items, land, research, designs,
+  claims, Patents and the Patent tree, the record on file, the room the Sky Anchor kept), plus **Legacy**
+  (unspent and the tree; the Standing Committee's number and the Town Plan's layouts go with their
+  nodes), **the worlds' records** and **the islands visited** (each is new again: +5 Legacy each, §22).
+- **The new universe starts on Home** (decided): the Seed is planted where the town began, on the
+  island with no rule, so the new base rules are met on plain ground first; and every island is a first
+  visit again. The Seed's card (`meta.seeds`: universe, grade, value, Kernels, modules, the top product,
+  the island folded on) is kept for good.
+- **The Seed** (kind `seed`, 1x1, at (4, 6) in chunk A, not removable, in every run's start layout once
+  a Last Fold is taken): every **4 s** it digs one of each raw ore out of its four sides, **iron out of
+  the side it faces, then copper, coal and sand clockwise**, each handed to whatever takes it there (a
+  belt, a machine, the Dock) and held while that side refuses. 15 a minute each, half a Miner (§4): a
+  little of each, so the new universe's chunk A has copper, coal and sand before chunk B or E (Copper
+  Smelting's 80 ore from the Seed alone), and Miners are still the supply. Rotating it turns which side
+  gets which ore. It never goes in a fold box (it makes ore out of nothing, as a Chute Mouth, §21); its
+  pip is working while any side takes its ore, blocked when all four hold one, and `why` names the first
+  ore waiting. The Old Works' rubble never lies on its tile.
+
+### The Kernel tree
+Ten nodes in three branches, **flat prices**, one prerequisite; 51 Kernels in all. Every node is a
+rule the universe is built under; none is "+X% everything" (PLAN.md). Read through `krules`.
+
+| node | Kernels | needs | the rule |
+|---|---|---|---|
+| Wide Belts | 8 | - | a belt tile carries **2 items**, at least half a tile apart: **240 a minute** (§4's 120): a Miner line feeds a Mk2 from one belt and a box holds half the belts it did |
+| Every Side a Port | 6 | - | a Factory module takes in from a trunk on **any side** and gives out of **any side** a trunk leads away from (all its outputs, as the front): modules pack face to face in a nested box |
+| the Bigger Box | 5 | - | the Workshop fold box is **12x12** (a chunk and a half: a tier 3 line with its feeds and its plant), under the Drawer's 16x16 share string |
+| the Second Cookbook | 6 | - | five **alternate recipes** (below) |
+| Beyond | 8 | - | the **fifth floor** (with research The Last Fold in the run) and the islands' tier 5 research |
+| the Endless Ledger | 2 | - | **infinite orders** (below); the cheapest node, so the first Last Fold always buys it |
+| Seedling | 3 | - | the Seed digs every **2 s** a side (a Miner's pace) |
+| Long Nights | 3 | - | the offline ceiling **0.85** (was 0.75, §20) and **+0.1** toward it: a closed game still pays less than open idle (§16 rule 4) |
+| Kept Islands | 4 | - | the worlds' records survive a Last Fold, and an island's record stands as a floor's best of a world begun there (its Legacy counts from the first visit, about 8-10 a world, §22) |
+| Kept Legacy | 6 | Kept Islands | keep **4** Legacy nodes you choose through a Last Fold (as Old Habits keeps four Patent nodes through a Relocate) |
+
+The first Last Fold's ~22 buys, for instance, the Ledger, Beyond, Wide Belts and Seedling (21); the
+second (about 110-120 h, a universe rebuilt with its Megaprojects, reputation, Drawer and Codex kept)
+another 25-30, and the tree is bought out at the third.
+
+### The Second Cookbook
+Learned with the Kernel and the research of the product (`alt` on the recipe; `recipeKnown`). Each is
+a different **shape** of line for a product already made, never counted for chain steps (filing is the
+same in every universe: `chainSteps` and `designScale` skip them).
+
+| recipe | machine | in -> out | time | the shape it changes |
+|---|---|---|---|---|
+| Steel from ore | Smelter | 2 iron ore + coal -> steel, a slag every craft | 4 s | no ingot step; twice steel's slag to route |
+| Glass from slag | Kiln | 2 slag + sand -> glass | 2.5 s | a steel line's slag feeds its own Kiln: zero waste without a Press |
+| Circuit on a brick | Assembler | 4 wire + 2 slag bricks -> circuit | 6 s | no plastic, no glass: no Refinery or Kiln in the box |
+| Plastic from oil | Refinery | 3 oil -> plastic | 4 s | a Refinery's oil feeds a second: no oil out of the box |
+| Cast gearbox | Assembler | 3 steel + 2 gears -> gearbox | 8 s | no bearings: no bearing Press |
+
+### Beyond (the fifth floor)
+- `HIGH.beyond`: research The Last Fold **and** the Kernel node Beyond. **14x10** of **depth-4 modules
+  only** (140 tiles: a module is a World group of 2-6 groups), two lots of 2x10 at **100M x n** (linear:
+  10-50 min of the 2-10M a minute an Act V floor makes), Dock and Hopper on the east edge, a Bay
+  position at the south-west (no project builds there: below). **Nothing folds on Beyond**: the top of
+  the world (the whole World's fold is the Last Fold).
+- **Couriers, ship value not bulk** (the second gate's principle a third time): **4 tiles/s, 1 a trip,
+  2 s** at the ends: beside its consumer **0.4 a second**, five tiles off 0.22, across the floor with
+  its lots 0.09, against depth-4 flows of 0.005-0.05 a second for tier 5 goods and 0.1-0.5 for the tier 4
+  bulk between groups. Tier 4 stands beside what it feeds; tier 5 flies anywhere on one courier. A
+  courier is **2,500,000** (flat: 15-75 s of an Act V floor's income), 12 at most a route. The
+  Lighthouse's Beacon (dwell half) and Light (6 tiles) reach Beyond; its Lens Room (speed) is the
+  World's barges' only. The rest is the District's (routes, the waste chute, Overdrive, pause, the
+  Dispatcher).
+- **Depth-4 folds** happen on the World (research The Last Fold, Beyond open): a World group folds as a
+  District group does (§21), one step more again for filing (`highFoldSteps`, §22).
+
+### Tier 5: the impossible inventions
+`ITEM_IDS` after tier 4, in the contract's order. Each is made on **one island** from its tier 4 goods,
+Assembler Mk2 only, at **3.4-3.5x its inputs** (§18's rule), taught by that island's Act V research
+(each offered only there, with the Kernel Beyond, after the island's deep node and The Last Fold; paid
+in the island's deep good, 20-40 min of its group). The lines are designed on the Workshop with Chute
+Mouths as tier 3 and 4 are (§21), folded up the floors, and sold at Beyond's Dock.
+
+| good | island | recipe (Mk2, base seconds) | value |
+|---|---|---|---|
+| a Map of Everywhere | Pebble | 4 horizon lenses + 2 processors (30) | 70,000 |
+| the Infinite Staircase | Pebble | 20 skyglass lenses + 4 servos + 10 steel (24) | 56,000 |
+| a Very Small Sun | Cinder | a Sunset Generator + 6 cinder alloy + 4 dye (60) | 1,050,000 |
+| Bottled Tuesday | Rime | Pocket Weather + 4 storm cells + a processor (40) | 250,000 |
+| the Everlasting Sandwich | Rime | an Engineer + 10 sandwiches + 4 frost alloy (40) | 320,000 |
+| the Quiet Engine | the Old Works | 8 relic gears + 2 servos + 2 gearboxes (20) | 34,000 |
+| the Pocket Island | the Old Works | 20 relic gears + a robot arm + 10 fertilizer (40) | 100,000 |
+| **the Folded Universe Replica** | every island, its own way | Pebble 12 maps + 4 staircases; Cinder a Sun + 2 processors; Rime 3 Tuesdays + a Sandwich; the Old Works 8 Islands + 8 Engines (120) | 3,600,000 |
+
+Research (Act V page): **Cartography of Everywhere** (Pebble: 100 horizon lenses, 100 processors),
+**Star Forging** (Cinder: 4 Sunset Generators, 400 cinder alloy), **Weather Bottling** (Rime: 6 Pocket
+Weathers, 100 storm cells), **Relic Engines** (the Old Works: 600 relic gears, 60 servos).
+
+### The Endless Ledger (infinite orders)
+With its Kernel node, order **n** (from 0) wants **(n + 1) x the base** of the n-th product in turn:
+Gizmos 300, steel 600, circuits 200, motors 60, sensors 40, servos 20, robot arms 6, Engineers 2 (each
+base 10-20 min of one module of it). **Linear** (no curve: CLAUDE.md), **never timed** (pillar 4), from
+**any Dock** (after the special orders, before the sale: `fillOrder`), completed with the orders
+(`runOrders`), so offline fills it through the same code. It pays **twice its items' Dock value** (the
+special orders' 2.1x, §18: it takes what would have sold, so one value back and one more), and **every
+tenth order a cosmetic**: the skins `gilded` (Miners), `candy` (Presses), `starlit` (Assemblers), then
+numbered ribbons (`ribbon4`, `ribbon5`...), so there is always a next one (`meta.cosmetics`). Its count
+and progress are kept through every reset. The order's products are Acts I-III's, made on every island,
+so it never waits on a Relocate.
+
+### Offline and saves
+Beyond runs in offline replay through the same `tick`; its Dock and Bay are tallied apart (`bdock`,
+`bbay`) like the World's, and the extrapolated part pays their measured rates at the offline efficiency
+through `fillOrder` (the Ledger included). The Seed and wide belts run in the replay as they do live.
+`SAVE_VERSION` 10: an older save has no Kernel, no node, no Last Fold (no Seed: the first universe), no
+Legacy node kept, the Ledger at its first order and no cosmetic. The determinism test replays a
+whole-World audit, a Last Fold and Kernel nodes from the command log.
+
+### Pacing targets (§16)
+- **The Last Fold available at about 80 h**: the Lighthouse and the Sky Anchor done on the fourth
+  island (75-80 h, §22), then its research (1-1.5 h).
+- **The first Kernel spend at about 85-100 h**: the fold is worth 0.1 Kernel a unit of value standing,
+  so a player fills the World (each group about +0.8, the grade +1 a letter) before folding; the spend
+  follows the fold at once.
+- **A next goal forever**: the Ledger's open order (10-20 min of one line at first), a cosmetic every
+  tenth, tier 5 research on each island, Beyond's lots, and the tree's next node. **Open:** at a fixed
+  factory the Ledger's wait grows linearly (order n wants n + 1 bases); it stays inside §16 rule 1's hour
+  idle only while the factory grows with it (stamps, Beyond's modules). Not measured: there is no Act V
+  bot yet; these are the model's numbers.
+- **Resets get faster (rule 3)**: a universe keeps its Megaprojects (the Great Drill's +50% and deep
+  seams, the Factory's ninth row, every Lighthouse and Anchor rule), reputation, the Codex and the
+  Drawer, and the Kernels bend the rules in its favour; the second universe's climb to its World is the
+  model's 25-35 h against the first's 80.
+
+### Not built (decided)
+- **No Megaproject #6** at Beyond's Bay. A sixth project would need a reward that is a rule and a reason
+  to build at Beyond rather than sell there; tier 5 already has its Dock, the Ledger and the Replica, and
+  every candidate reward was a multiplier on income. Beyond's Bay position is reserved (its art exists);
+  `placeHBay` places it only when a project's floor is Beyond.
+
+### Derivative, flagged and re-derived (CLAUDE.md)
+- **A third prestige layer with its own tree** resembles Antimatter Dimensions' Reality (its Perks and
+  Glyphs) and Universal Paperclips' last stage (the universe folded into the next). Re-derived from the
+  game's own fold: the reset *is* the signature mechanic applied to the whole top floor (the same audit,
+  the same U, W, C), Kernels count the folds standing on the same steps x grade x tier scale as Patents
+  and Legacy (no log of a currency), and the tree changes the rules a layout is built under (belt
+  capacity, ports, box size, recipes, floors), never a multiplier.
+- **Infinite orders** resemble shapez's endless freeplay levels and Factorio's infinite research.
+  Re-derived: linear amounts (shapez's and Factorio's grow geometrically), a fixed turn of the game's own
+  products, never timed, paying the Dock value back twice (no multiplier), cosmetics every tenth.
+- **Wide Belts** resemble Factorio's two-lane belts. Re-derived: one lane holding two items a tile (no
+  lanes, no side-loading), a change to §4's belt ratio, bought as a rule.
+- **Alternate recipes** resemble Satisfactory's alternates. Re-derived: five, each turning a byproduct
+  into an input or removing a step (the byproduct lesson of Acts I-II), one Kernel node, no hard-drive
+  hunt, never counted for filing.
+- **The Seed** resembles a roguelite's carried-over starting item. Re-derived from the fold: it is the
+  World folded into one tile, it digs the four raw ores the Workshop is built from, and its sides are a
+  routing puzzle (which ore leaves which side).

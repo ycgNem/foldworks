@@ -28,7 +28,7 @@ function dominant(m: Ent): string {
 export function runStats(g: Game) {
   if ((g.s.tick + 1) % TICK_RATE !== 0) return;
   const win = RULES.statWindow.value;
-  for (const list of [g.miners, g.machines, g.power, g.heaters]) {
+  for (const list of [g.miners, g.machines, g.power, g.heaters, g.seeds]) {
     for (const m of list) {
       m.hist = (m.hist + dominant(m)).slice(-win);
       m.sec[0] = m.sec[1] = m.sec[2] = m.sec[3] = 0;

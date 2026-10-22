@@ -52,6 +52,8 @@ export function foldRefusal(g: Game, b: Box): string | null {
     // a Chute Mouth makes items out of nothing as far as the box can see: feed the line from one
     // outside it, through a port (DESIGN.md §21 The Chute)
     if (e.kind === 'chuteMouth') return 'A Chute Mouth stays out of the box: let it feed the line through a port';
+    // the Seed likewise digs ore out of nothing (DESIGN.md §23): it feeds a box from outside
+    if (e.kind === 'seed') return 'The Seed stays out of the box: let it feed the line through a port';
     // an Old Works ruin is not a working part (DESIGN.md §22): repair it, or leave it out
     if (e.ruined) return `The ruined ${BUILD[e.kind].name} at ${e.x},${e.y} must be repaired before it folds`;
     if (e.x < b.x || e.y < b.y || e.x + e.w > b.x + b.w || e.y + e.h > b.y + b.h) return `${BUILD[e.kind].name} is only partly in the box`;
@@ -105,7 +107,7 @@ export function stockIn(g: Game, b: Box): Record<string, number> {
   const st: Record<string, number> = {};
   const add = (k: string | null, n: number) => { if (k && n > 0) st[k] = (st[k] ?? 0) + n; };
   for (const e of entsIn(g, b)) {
-    if (e.kind === 'belt') add(e.item, 1);
+    if (e.kind === 'belt') { add(e.item, 1); add(e.item2 ?? null, 1); }
     else if (e.kind === 'heap') add('slag', e.count);
     else if (e.kind === 'crate' || e.kind === 'splitter' || e.kind === 'merger') for (const it of e.store) add(it, 1);
     else {

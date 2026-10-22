@@ -2,6 +2,8 @@
 // time and fills from matching deliveries; items delivered with nothing selected are banked.
 import type { ItemId } from './items';
 import type { WorldId } from './worlds';
+import type { MegaId } from './megaprojects';
+import type { KernelId } from './kernels';
 
 export const RESEARCH_IDS = [
   'pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding',
@@ -14,6 +16,8 @@ export const RESEARCH_IDS = [
   // Act IV (DESIGN.md §22): the World floor, the islands' own nodes, Megaprojects #4 and #5, Relocation
   'charting', 'thermals', 'skyglassCutting', 'horizonOptics', 'cinderSmelting', 'sunsetDyes', 'sunsetEngineering',
   'frostWorks', 'stormCells', 'pocketWeathers', 'relicStudy', 'lighthouse', 'skyAnchor', 'relocation',
+  // Act V (DESIGN.md §23): the Last Fold, and each island's tier 5 node (with the Kernel Beyond)
+  'lastFold', 'cartography', 'starForging', 'weatherBottling', 'relicEngines',
 ] as const;
 export type ResearchId = (typeof RESEARCH_IDS)[number];
 
@@ -33,6 +37,11 @@ export interface ResearchDef {
   drill?: number;
   /** offered only on this island (Act IV, DESIGN.md §22: each island's own goods and rules) */
   world?: WorldId;
+  /** Megaprojects that must be complete (every stage) before it is offered (the Last Fold: the
+   * Lighthouse and the Sky Anchor, DESIGN.md §23) */
+  megas?: MegaId[];
+  /** a Kernel node that must be owned before it is offered (tier 5: Beyond, §23) */
+  kernel?: KernelId;
   derivation: string;
 }
 
@@ -97,6 +106,12 @@ export const RESEARCH: Record<ResearchId, ResearchDef> = {
   lighthouse: { id: 'lighthouse', num: 55, act: 4, drill: 3, name: 'The Lighthouse at the Edge', cost: { sensor: 150, battery: 200, glass: 2000 }, requires: ['charting'], unlocks: '{u:mega} the World Bay · {i:lighthouseLamp} · Megaproject #4', derivation: '§22 Megaprojects: the Lighthouse, paid in what every island makes (its stages are built on four islands)' },
   skyAnchor: { id: 'skyAnchor', num: 56, act: 4, drill: 3, name: 'The Sky Anchor', cost: { gearbox: 200, bearing: 800, steel: 3000 }, requires: ['charting'], unlocks: '{u:mega} the World Bay · {i:anchorChain} · Megaproject #5', derivation: '§22 Megaprojects: the Sky Anchor, paid in what every island makes' },
   relocation: { id: 'relocation', num: 57, act: 4, drill: 3, name: 'Relocation', cost: { sandwichEngineer: 3, umbrella: 20 }, requires: ['charting', 'sandwichEngineering'], unlocks: '{u:relocate} Relocate · fly the town to another island · bank {u:legacy} Legacy', derivation: '§22 Relocate: the town packs up (an Engineer to pack the sandwiches, umbrellas for the flight); about an hour of an Act IV Engineer group, so a world is played to its World floor before it is left' },
+  // Act V (DESIGN.md §23): its page; every node needs the Great Drill's stage 3, as Acts III and IV
+  lastFold: { id: 'lastFold', num: 58, act: 5, drill: 3, megas: ['lighthouse', 'anchor'], name: 'The Last Fold', cost: { sandwichEngineer: 6, robotArm: 60, umbrella: 40 }, requires: ['charting'], unlocks: '{u:lastFold} audit the whole World · fold it into the Seed · bank {u:kernel} Kernels · World groups fold (depth 4)', derivation: "§23 The Last Fold: open once the Lighthouse and the Sky Anchor stand (both done by about 75-80 h, §22: four islands), paid in what every island's World floor makes: 6 Engineers, 60 arms and 40 umbrellas are about 1-1.5 h of an Act IV floor's Engineer and Arm groups, so the Last Fold is available at about 80 h (§16)" },
+  cartography: { id: 'cartography', num: 59, act: 5, drill: 3, world: 'pebble', kernel: 'beyond', name: 'Cartography of Everywhere', cost: { horizonLens: 100, processor: 100 }, requires: ['horizonOptics', 'lastFold'], unlocks: '4 {i:horizonLens} + 2 {i:processor} → {i:mapOfEverywhere} · {i:infiniteStaircase} · {i:foldedUniverse} · Mk2 only', derivation: "§23 Tier 5: Pebble Isle's node, paid in its deep good (100 horizon lenses, 20-40 min of a Horizon group)" },
+  starForging: { id: 'starForging', num: 60, act: 5, drill: 3, world: 'cinder', kernel: 'beyond', name: 'Star Forging', cost: { sunsetGenerator: 4, cinderAlloy: 400 }, requires: ['sunsetEngineering', 'lastFold'], unlocks: '{i:sunsetGenerator} + 6 {i:cinderAlloy} + 4 {i:sunsetDye} → {i:verySmallSun} · {i:foldedUniverse} · Mk2 only', derivation: "§23 Tier 5: Cinder Isle's node, paid in its deep good (4 Sunset Generators, 20-40 min of a Sunset group)" },
+  weatherBottling: { id: 'weatherBottling', num: 61, act: 5, drill: 3, world: 'rime', kernel: 'beyond', name: 'Weather Bottling', cost: { pocketWeather: 6, stormCell: 100 }, requires: ['pocketWeathers', 'lastFold'], unlocks: '{i:pocketWeather} + 4 {i:stormCell} + {i:processor} → {i:bottledTuesday} · {i:everlastingSandwich} · {i:foldedUniverse} · Mk2 only', derivation: "§23 Tier 5: Rime's node, paid in its deep good (6 Pocket Weathers, 20-40 min of a Weather group)" },
+  relicEngines: { id: 'relicEngines', num: 62, act: 5, drill: 3, world: 'oldworks', kernel: 'beyond', name: 'Relic Engines', cost: { relicGear: 600, servo: 60 }, requires: ['relicStudy', 'robotics', 'lastFold'], unlocks: '8 {i:relicGear} + 2 {i:servo} + 2 {i:gearbox} → {i:quietEngine} · {i:pocketIsland} · {i:foldedUniverse} · Mk2 only', derivation: "§23 Tier 5: the Old Works' node, paid in its one good (600 relic gears, 20-40 min of two Relic Gear groups)" },
   folding: { id: 'folding', num: 10, name: 'Folding', cost: { gizmo: 50, gear: 500 }, requires: ['gizmoTheory'], unlocks: '{u:fold} the Fold tool · Chunk D for sale', derivation: '§8 #10; 500 gears: chunk C\'s gear lines on the Hopper put Folding at 22-30 min and the Dock-only player 5+ min behind (§13 checks 6, 11); §16 first fold by 40 min' },
 };
 

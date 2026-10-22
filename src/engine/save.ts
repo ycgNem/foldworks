@@ -5,7 +5,7 @@
 // snapshot and the commands since it (src/sim/snapshot.ts).
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -125,6 +125,23 @@ export const MIGRATIONS: Record<number, Migration> = {
     m.here ??= { start: 0, best: {}, stages: 0, opened: !!st.world, runs: m.runs ?? 0 };
     m.relocations ??= 0;
     return { ...d, snap: JSON.stringify(st), v: 9 };
+  },
+  // v10 (Milestone 10, Act V, DESIGN.md §23): the Last Fold. No Kernel banked or node bought, no Last
+  // Fold taken (so no Seed: the first universe), no Legacy node kept, the Endless Ledger at its first
+  // order, no cosmetic; Beyond is absent until it opens. Belts' second items (Wide Belts) are absent.
+  9: (d) => {
+    if (typeof d.snap !== 'string') return { ...d, v: 10 };
+    const st = JSON.parse(d.snap);
+    const m = (st.meta ??= {});
+    m.kernels ??= 'N:0';
+    m.kernelsEarned ??= 'N:0';
+    m.kernelNodes ??= [];
+    m.lastFolds ??= 0;
+    m.seeds ??= [];
+    m.keptLegacy ??= [];
+    m.ledger ??= { n: 0, progress: {} };
+    m.cosmetics ??= [];
+    return { ...d, snap: JSON.stringify(st), v: 10 };
   },
 };
 
