@@ -2,6 +2,44 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
+## Status (2026-10-22, night): the second gate's fixes, Act IV's sim and islands, Act V's sim
+
+Built on `m9-worlds` (not yet merged into `main`), autonomously, overnight. DECISIONS.md "The
+second gate", "Milestone 9: Act IV's sim", "Act IV's islands on the Workshop", "Milestone 10:
+Act V's sim", "Milestone 12".
+
+### What exists
+- **The second gate's fixes (Milestone 8)**: District skiffs carry 1 a trip at 40,000 coin (ship
+  value, not bulk), 20 more routes a lot, the waste chute, depth 3 on the District, the Drill's
+  boost in a route's want, Act III research and Megaproject bills cut to their derivations,
+  Challenges re-goaled to things done this run with rewards that matter in Act III, and the
+  District UI fixes (routes n/max on the strip, the starved report, the coach, skiff crowding).
+- **Act IV's sim (Milestone 9)**: four islands (Pebble, Cinder, Rime, the Old Works) with their
+  rules, tier 4, the World floor and its barges, Megaprojects #4 (the Lighthouse) and #5 (the Sky
+  Anchor), Relocate and Legacy with its 17-node tree (`src/sim/worlds.ts`, `legacy.ts`,
+  `islands.ts`, `relocate.ts`; tests/act4.test.ts).
+- **Act IV's islands on the Workshop**: each island's ground and props, Pebble's sky chunks,
+  vents, rubble (click to Clear), ruins (Repair), frost and the Heater, the island slip under the
+  Purse, a lesson card per island.
+- **Act V's sim (Milestone 10)**: the Last Fold (the whole-World audit and its reset), Kernels and
+  the 10-node Kernel tree, the Seed, Beyond (couriers, depth 4), tier 5, the second cookbook, wide
+  belts, the Endless Ledger (`src/sim/lastfold.ts`, `kernels.ts`, `systems/seed.ts`,
+  `systems/ledger.ts`; tests/act5.test.ts). SAVE_VERSION 10.
+- **Sound (Milestone 12)**: the mix, ambience per floor, reset stings, sound options.
+- Act IV and Act V art (`pixel-art/act4`, `pixel-art/act5`), 0 PixelLab generations.
+
+### Stubbed / not done
+- The World floor's screen, Relocate's card and the Legacy tree (being built); Act V's screens
+  (the Last Fold card and sequence, the Kernel tree, Beyond, the Seed, the Ledger) after them.
+- No Act IV or Act V bot: Act IV and V pacing are model estimates (DESIGN.md §22, §23). The Act
+  III bot is being re-measured under the gate's new numbers.
+- The owner's own play from the 15 h checkpoint (the second gate's condition).
+
+### Next
+Merge the World UI and the Act III re-measure; mark the second gate passed with conditions; build
+Act V's screens and the Act IV bot; Milestone 11's long tail (its sim and data being built);
+Milestone 14 (pace to 100 h, perf, saves, README, GitHub Pages; no itch.io, no desktop build).
+
 ## Status (2026-10-22, later): Milestone 13, onboarding, UX and accessibility, built
 
 Built in a worktree off `m9-worlds` while Act IV's sim and the District's UI were worked on
