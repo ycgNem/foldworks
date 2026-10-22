@@ -2341,7 +2341,9 @@ Smelter rather than heap room (§12's offline lesson is a furnace filling the fi
 0:47, the first fold at 23:12 mean, the slice end at 30:00 mean (greedy 27:37, Dock-only 38:11); the
 first Reorganize at 4:22 and 4:17 with 14 Patents (seeds 1000 and 8919), run 1's peak 15.2K and 14.5K a
 minute (was 14.8K and 14.3K), run 2 passing it at 0:16 on both seeds (was 0:27 and 0:16; limit about
-0:43), run 3 passing run 2's at 1:11 and 1:19 (still open, §19: limits 0:55).
+0:43), run 3 passing run 2's at 1:11 and 1:19 (still open, §19: limits 0:55); after the review's
+start-coin cap (20,000, the long-tail fixes) run 3 is back at 1:22 on both seeds, §19's own number
+before the shelf: the start coin had been doing some of run 3's work.
 
 ### The Codex
 **Completion** (`codexCompletion`): the items first delivered (`s.codex`, Unit 7's collection: an item
