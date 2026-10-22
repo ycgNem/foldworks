@@ -228,7 +228,7 @@ function factoryCauses(g: Game): { cause: Cause; cost: number }[] {
 // ------------------------------------------------------------------ the District (and the World, DESIGN.md §22)
 
 /** the high floor being traced */
-let HF: 'district' | 'world' = 'district'; // the UI's high floors (Beyond joins with its screen)
+let HF: 'district' | 'world' | 'beyond' = 'district'; // the UI's high floors
 
 function routeCause(g: Game, r: SkiffRoute): Cause | null {
   const a = hent(g, HF, r.from), b = hent(g, HF, r.to);
@@ -239,7 +239,7 @@ function routeCause(g: Game, r: SkiffRoute): Cause | null {
   return {
     key: 'r' + r.id, floor: HF, kind: 'route', id: r.id, x: (a.x + a.w / 2 + b.x + b.w / 2) / 2, y: (a.y + a.h / 2 + b.y + b.h / 2) / 2,
     name: `${hname(g, a)} to ${hname(g, b)}`,
-    say: `The route from ${hname(g, a)} carries ${plain(cap, 2)} of ${plain(want, 2)} ${lc(r.item)} a second. ${more} ${HF === 'world' ? 'barge' : 'skiff'}${more > 1 ? 's' : ''} more, or move them closer.`,
+    say: `The route from ${hname(g, a)} carries ${plain(cap, 2)} of ${plain(want, 2)} ${lc(r.item)} a second. ${more} ${HF === 'beyond' ? 'courier' : HF === 'world' ? 'barge' : 'skiff'}${more > 1 ? 's' : ''} more, or move them closer.`,
     chips: [`{pip:starved} ${ic(r.item)} ${Math.round((cap / Math.max(1e-6, want)) * 100)}%`],
   };
 }
@@ -268,7 +268,7 @@ function districtCause(g: Game, m: FEnt, seen: Set<number>): Cause {
   return c(`${name}: its ${ic(item)} ${lc(item)} backs up. Another route out, or a group that uses it.`, [`{pip:blocked} ${ic(item)}`]);
 }
 
-function districtCauses(g: Game, f: 'district' | 'world'): { cause: Cause; cost: number }[] {
+function districtCauses(g: Game, f: 'district' | 'world' | 'beyond'): { cause: Cause; cost: number }[] {
   HF = f;
   const st = g.s[HF];
   if (!st) return [];
@@ -294,7 +294,7 @@ function districtCauses(g: Game, f: 'district' | 'world'): { cause: Cause; cost:
 
 /** The bottleneck on a floor that costs the most output, or what the next goal needs. */
 export function findStuck(g: Game, floor: Floor): Stuck {
-  const all = floor === 'factory' ? factoryCauses(g) : floor === 'district' || floor === 'world' ? districtCauses(g, floor) : workshopCauses(g);
+  const all = floor === 'factory' ? factoryCauses(g) : floor === 'district' || floor === 'world' || floor === 'beyond' ? districtCauses(g, floor) : workshopCauses(g);
   all.sort((a, b) => b.cost - a.cost || a.cause.key.localeCompare(b.cause.key));
   const top = all[0];
   if (top && top.cost > 0) {

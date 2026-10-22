@@ -997,6 +997,219 @@ export async function isleSetup(state) {
 
 export const ISLES = ['islePebble', 'isleCinder', 'isleCinderBelt', 'isleCinderLesson', 'isleRime', 'isleRimeHeater', 'isleOldworks', 'isleOldworksRubble', 'isleRimeWheel'];
 
+// ---------------------------------------------------------------- Act V (Milestone 10's screens)
+/** Runs in the page (Act V, DESIGN.md §23). A late universe: every Act IV research done, the
+ * Lighthouse and the Sky Anchor complete, The Last Fold researched, a World of District folds at
+ * work. States: lastFoldWorld (the World's strip with its Last Fold and Fold keys), lastFoldAudit
+ * (the whole-World audit under way: the slip under the strip), lastFoldCard (the card, graded),
+ * lastFoldKeep (the card with Kept Legacy's picker), lastFoldSeq and lastFoldLand (the moment,
+ * folding and landed), kernels (the Kernel tree, a node pinned), research5 (Act V's research page),
+ * beyond (Beyond with couriers flying), beyondPinned, beyondHover, beyondRoute, lessonLastFold and
+ * lessonBeyond; seed, seedPinned and seedHover (a new universe's Workshop: the Seed, wide belts, a
+ * side waiting), lessonSeed; ledger and ledgerClosed (the Endless Ledger's page). */
+export async function act5Setup(state) {
+  const a = window.__app;
+  const mod = async (p) => { for (const c of ['/src/app/hud.ts', '/src/app/screens.ts', '/src/app/app.ts', '/src/render/renderer.ts']) { const m = (await (await fetch(c)).text()).match(new RegExp(`["'](${p.replace(/\./g, '\\.')}\\?[^"']*)["']`)); if (m) return import(m[1]); } return import(p); };
+  (await mod('/src/app/wheel.ts')).closeWheel(a);
+  const clean = () => {
+    a.game.events.drain();
+    a.toasts = [];
+    a.trophyPops = [];
+    a.refusal = null;
+    a.hud.celebs = [];
+    a.hud.rain = [];
+    a.hud.confetti = 0;
+    a.renderer.fx.flyers = [];
+    a.renderer.fx.pops = [];
+    a.renderer.fx.parts = [];
+  };
+  const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
+  const { RESEARCH_LIST } = await import('/src/data/research.ts');
+  // ---- a new universe's Workshop: the Seed in chunk A, Wide Belts, a side with nowhere to go
+  if (state.startsWith('seed') || state === 'lessonSeed') {
+    a.newGame(77);
+    a.freeze();
+    const g = a.game;
+    const N = g.s.coin.constructor;
+    const m = g.s.meta;
+    m.lastFolds = 1;
+    m.kernels = N.of(4);
+    m.kernelsEarned = N.of(22);
+    m.kernelNodes = ['endlessLedger', 'beyond', 'wideBelts'];
+    m.seeds = [{ universe: 1, grade: 'B', value: 196, kernels: 22, modules: 24, item: 'sandwichEngineer', world: 'rime' }];
+    g.s.coin = N.of(2600);
+    g.s.earned = N.of(9000);
+    g.s.land = ['A', 'B'];
+    g.s.upgrades.push('bellows');
+    g.s.research.done = ['pressing', 'surveyEast', 'copperSmelting'];
+    g.s.flags.push('ordersSeen');
+    if (!g.s.ents.some((e) => e.kind === 'seed')) g.addPart('seed', 4, 6, 0);
+    g.rebuild();
+    a.renderer.ground = null;
+    // north (sand) and east (iron ore) run to the Hopper; south (copper) and west (coal) have
+    // nothing yet: copper waits on its side
+    for (const [x, y, rot] of [[4, 5, 3], [4, 4, 0], [5, 4, 0], [5, 6, 0], [6, 6, 3]]) act({ k: 'place', kind: 'belt', x, y, rot });
+    // a Miner line off an ore patch in chunk B, whichever way has four free tiles (south first: the
+    // Hopper's floor tag stands east of it, over a westward line)
+    let line = null;
+    for (let y = 0; y < 8 && !line; y++)
+      for (let x = 8; x < 16 && !line; x++) {
+        if (!g.oreAt(x, y) || g.entAt(x, y)) continue;
+        for (const [rot, dx, dy] of [[1, 0, 1], [0, 1, 0], [2, -1, 0], [3, 0, -1]]) {
+          let ok = true;
+          for (let k = 1; k <= 4; k++) { const tx = x + dx * k, ty = y + dy * k; if (!g.inb(tx, ty) || g.entAt(tx, ty) || g.oreAt(tx, ty) || !g.owned(tx, ty)) ok = false; }
+          if (ok) { line = { x, y, rot, dx, dy }; break; }
+        }
+      }
+    if (line) {
+      act({ k: 'place', kind: 'miner', x: line.x, y: line.y, rot: line.rot });
+      for (let k = 1; k <= 4; k++) act({ k: 'place', kind: 'belt', x: line.x + line.dx * k, y: line.y + line.dy * k, rot: line.rot });
+    }
+    a.step(20 * 9);
+    // wide belts as a full line holds them: two a tile, half a tile apart
+    if (line) for (let k = 1; k <= 4; k++) { const b = g.entAt(line.x + line.dx * k, line.y + line.dy * k); const it = g.oreAt(line.x, line.y); b.item = it; b.p = 0.85; b.item2 = it; b.p2 = 0.3; }
+    clean();
+    a.panel = null;
+    a.setFloor('workshop', true);
+    a.fitCamera(true);
+    // close enough to read the Seed's side arrows and the wide belts' two-a-tile items
+    a.renderer.cam.zoom = 3;
+    a.lookAt(line ? Math.min(9, (4 + line.x + line.dx * 2) / 2) : 6, line ? Math.max(5, line.y + line.dy * 2) : 5.5);
+    const seed = g.s.ents.find((e) => e.kind === 'seed');
+    a.selected = state === 'seedPinned' ? seed.id : null;
+    if (state === 'lessonSeed') a.onboarding.lessons.show(a, 'seed');
+    return state === 'seedHover' ? { hover: [4, 6] } : null;
+  }
+  // ---- a late universe: the World of District folds, the Megaprojects done, the Last Fold known
+  a.newGame(53);
+  a.freeze();
+  const g = a.game;
+  const N = g.s.coin.constructor;
+  g.s.coin = N.of(4.2e10);
+  g.s.earned = N.of(8.8e11);
+  g.s.land = ['A', 'B', 'E'];
+  g.s.upgrades.push('bellows');
+  const beyondOn = state.startsWith('beyond') || state === 'lessonBeyond' || state === 'lastFoldWorld' || state === 'research5' || state === 'kernels' || state.startsWith('ledger');
+  g.s.research.done = [...RESEARCH_LIST.filter((d) => (d.act ?? 1) <= 4).map((d) => d.id), 'lastFold'];
+  g.s.research.selected = state === 'research5' ? 'weatherBottling' : null;
+  if (state === 'research5') g.s.research.progress = { weatherBottling: { pocketWeather: N.of(2), stormCell: N.of(64) } };
+  g.s.mega = { stage: 3, progress: {} };
+  g.s.flags.push('factoryOpen', 'factorySeen', 'sliceEnd', 'ordersSeen', 'districtSeen', 'worldSeen', 'beyondSeen');
+  g.s.orders.done = ['boardwalk', 'lampPosts', 'gizmoFestival', 'calibration', 'streetlamps', 'lensArray'];
+  g.s.orders.rep = { bramble: 5, unit7: 5, voltaire: 5, committee: 7 };
+  g.s.income = Array(60).fill(6.2e6);
+  const m = g.s.meta;
+  m.world = 'rime';
+  m.visited = ['home', 'pebble', 'cinder', 'rime', 'oldworks'];
+  m.relocations = 4;
+  m.runs = 14;
+  m.legacy = N.of(9);
+  m.legacyNodes = ['patentPurse', 'oldHabits', 'patentClerk', 'standingCommittee', 'regrader', 'townPlan', 'skiffGuild', 'contractRunners'];
+  m.kernels = N.of(state === 'kernels' ? 14 : 2);
+  m.kernelsEarned = N.of(state === 'kernels' ? 36 : 24);
+  m.lastFolds = state === 'kernels' ? 1 : 0;
+  m.kernelNodes = beyondOn ? ['beyond', 'endlessLedger', ...(state === 'kernels' ? ['keptIslands'] : [])] : state === 'lastFoldKeep' ? ['keptIslands', 'keptLegacy', 'endlessLedger'] : [];
+  m.keptLegacy = state === 'lastFoldKeep' ? ['standingCommittee', 'townPlan'] : [];
+  m.ledger = state === 'ledgerClosed' ? { n: 0, progress: {} } : { n: 23, progress: { sandwichEngineer: N.of(31) } };
+  m.cosmetics = state === 'ledgerClosed' ? [] : ['gilded', 'candy'];
+  if (state === 'ledgerClosed') m.kernelNodes = m.kernelNodes.filter((k) => k !== 'endlessLedger');
+  g.s.megas = {
+    city: { stage: 2, progress: {} }, transmuter: { stage: 2, progress: {} },
+    lighthouse: { stage: 4, done: [1, 2, 3, 4], progress: {} },
+    anchor: { stage: 4, done: [1, 2, 3, 4], progress: {} },
+  };
+  g.s.ents = g.s.ents.filter((e) => e.kind === 'dock' || e.kind === 'hopper' || e.kind === 'furnace');
+  g.rebuild();
+  a.renderer.ground = null;
+  const gr = (letter, mult) => ({ letter, score: 0.86, u: 0.9, w: 1, c: 0.8, mult });
+  let nid = 1;
+  const D = (name, ins, outs, letter = 'A', mult = 1.1, depth = 3) => ({ id: nid++, name, box: { x: 2, y: 2, w: 5, h: 4 }, parts: [], ins, outs, grade: gr(letter, mult), bill: depth === 4 ? 4.1e8 : 3.2e6, stamped: 0, spare: 8, depth, hfloor: depth === 4 ? 'world' : 'district', hparts: [], hroutes: [] });
+  const T = {
+    lens: D('Skyglass Lenses III', {}, { skyglassLens: 0.8 }, 'S', 1.25),
+    sensor: D('Sensors III', {}, { sensor: 0.3 }),
+    horizon: D('Horizon Optics III', { skyglassLens: 0.4, sensor: 0.2 }, { horizonLens: 0.1 }),
+    storm: D('Storm Cells III', {}, { stormCell: 0.2 }, 'S', 1.25),
+    weather: D('Pocket Weather III', { stormCell: 0.15 }, { pocketWeather: 0.02 }),
+    engineer: D('Engineers III', {}, { sandwichEngineer: 0.02 }, 'S', 1.25),
+    arm: D('Robot Arms III', {}, { robotArm: 0.06 }),
+    proc: D('Processors III', {}, { processor: 0.25 }),
+    frost: D('Frost Alloy III', {}, { frostAlloy: 0.4 }, 'B', 1),
+    steel: D('Steel works III', {}, { steel: 1.6 }, 'S', 1.25),
+  };
+  const Q = {
+    weather: D('Pocket Weather IV', {}, { pocketWeather: 0.06 }, 'S', 1.25, 4),
+    storm: D('Storm Front IV', {}, { stormCell: 0.4 }, 'A', 1.1, 4),
+    proc: D('Processors IV', {}, { processor: 0.4 }, 'A', 1.1, 4),
+    tuesday: D('Bottled Tuesdays IV', { pocketWeather: 0.02, stormCell: 0.08, processor: 0.02 }, { bottledTuesday: 0.02 }, 'S', 1.25, 4),
+    frost: D('Frost Alloy IV', {}, { frostAlloy: 0.5 }, 'B', 1, 4),
+    sandwich: D('Everlasting Sandwiches IV', { frostAlloy: 0.08, sandwichEngineer: 0.02 }, { everlastingSandwich: 0.02 }, 'A', 1.1, 4),
+    engineer: D('Engineers IV', {}, { sandwichEngineer: 0.06 }, 'A', 1.1, 4),
+    replica: D('Folded Universe IV', { bottledTuesday: 0.006, everlastingSandwich: 0.002 }, { foldedUniverse: 0.002 }, 'B', 1, 4),
+  };
+  g.s.designs = [...Object.values(T), ...Object.values(Q)];
+  g.s.nextDesign = nid;
+  a.step(2);
+  a.step(20);
+  const put = (f, d, x, y) => act({ k: 'hplace', floor: f, design: d.id, x, y });
+  const fly = (f, fx, fy, tx, ty, item, n = 1) => {
+    act({ k: 'route', floor: f, fx, fy, tx, ty, item });
+    const st = g.s[f];
+    const r = st.routes[st.routes.length - 1];
+    for (let i = r.skiffs; i < n; i++) act({ k: 'skiff', floor: f, id: r.id, n: 1 });
+  };
+  // the World: lenses and sensors into horizon lenses, storm cells into pocket weather, finished
+  // goods to the Dock and the Hopper, steel beside the Dock, a lone module joined to nothing
+  put('world', T.lens, 3, 2); put('world', T.horizon, 4, 2); put('world', T.sensor, 4, 3);
+  fly('world', 3, 2, 4, 2, 'skyglassLens'); fly('world', 4, 3, 4, 2, 'sensor'); fly('world', 4, 2, 14, 5, 'horizonLens');
+  put('world', T.storm, 6, 7); put('world', T.weather, 7, 7); put('world', T.storm, 6, 8);
+  fly('world', 6, 7, 7, 7, 'stormCell'); fly('world', 6, 8, 7, 7, 'stormCell'); fly('world', 7, 7, 14, 1, 'pocketWeather');
+  put('world', T.engineer, 10, 3); put('world', T.arm, 11, 6); put('world', T.proc, 9, 7); put('world', T.frost, 2, 9);
+  fly('world', 10, 3, 14, 1, 'sandwichEngineer'); fly('world', 11, 6, 14, 5, 'robotArm'); fly('world', 9, 7, 14, 5, 'processor'); fly('world', 2, 9, 14, 1, 'frostAlloy', 2);
+  put('world', T.steel, 12, 1); put('world', T.steel, 12, 2);
+  fly('world', 12, 1, 14, 1, 'steel', 2); fly('world', 12, 2, 14, 1, 'steel', 2);
+  put('world', T.proc, 7, 10);
+  if (g.s.beyond) {
+    // Beyond: Rime's two impossible inventions and the Replica, tier 4 beside what it feeds, tier 5
+    // flown across the floor to the Dock on one courier each
+    put('beyond', Q.storm, 2, 2); put('beyond', Q.weather, 2, 3); put('beyond', Q.proc, 3, 4); put('beyond', Q.tuesday, 3, 3);
+    fly('beyond', 2, 2, 3, 3, 'stormCell'); fly('beyond', 2, 3, 3, 3, 'pocketWeather'); fly('beyond', 3, 4, 3, 3, 'processor');
+    put('beyond', Q.frost, 6, 6); put('beyond', Q.engineer, 6, 7); put('beyond', Q.sandwich, 7, 7);
+    fly('beyond', 6, 6, 7, 7, 'frostAlloy'); fly('beyond', 6, 7, 7, 7, 'sandwichEngineer');
+    put('beyond', Q.replica, 9, 4);
+    fly('beyond', 3, 3, 9, 4, 'bottledTuesday'); fly('beyond', 7, 7, 9, 4, 'everlastingSandwich');
+    fly('beyond', 9, 4, 12, 1, 'foldedUniverse');
+    fly('beyond', 3, 3, 12, 1, 'bottledTuesday');
+    // the Replica's Tuesdays are wanted faster than one courier across the floor carries
+    fly('beyond', 2, 3, 12, 5, 'pocketWeather');
+  }
+  a.step(20 * 40);
+  if (state === 'lastFoldAudit' || state.startsWith('lastFoldCard') || state === 'lastFoldKeep' || state === 'lessonLastFold') {
+    act({ k: 'lastFoldAudit' });
+    a.step(state === 'lastFoldAudit' || state === 'lessonLastFold' ? 20 * 26 : 20 * 75);
+  }
+  clean();
+  a.panel = null;
+  const DS = a.districtUI;
+  const floor = state.startsWith('beyond') || state === 'lessonBeyond' ? 'beyond' : 'world';
+  a.setFloor(floor, true);
+  a.fitCamera(true);
+  DS.game = g; DS.floor = floor;
+  DS.route = null; DS.pick = null; DS.from = null; DS.sel = null; DS.hoverRoute = null; DS.page = 0;
+  clean();
+  if (state === 'beyondPinned') DS.sel = g.s.beyond.ents.find((e) => e.x === 9 && e.y === 4).id;
+  if (state === 'beyondRoute') { const from = g.s.beyond.ents.find((e) => e.x === 3 && e.y === 3); DS.route = g.s.beyond.routes.find((r) => r.from === from.id && r.item === 'bottledTuesday' && g.s.beyond.ents.find((e) => e.id === r.to)?.kind === 'fdock').id; }
+  if (state === 'lessonBeyond') a.onboarding.lessons.show(a, 'beyond');
+  if (state === 'lessonLastFold') a.onboarding.lessons.show(a, 'lastFold');
+  if (state.startsWith('lastFoldCard') || state === 'lastFoldKeep') { a.panel = 'lastfold'; a.gradeAt = a.ui.time - 2; a.hud.stamped = true; }
+  if (state === 'lastFoldSeq' || state === 'lastFoldLand') { (await mod('/src/app/lastfold.ts')).lastFoldDebug(a, 23, 'B', state === 'lastFoldSeq' ? 2.55 : 5.2); }
+  if (state === 'kernels') { (await mod('/src/app/kernels.ts')).pinKernel('wideBelts'); a.panel = 'kernels'; }
+  if (state === 'research5') { (await mod('/src/app/screens.ts')).setTreePage(a, 5); a.panel = 'research'; }
+  if (state.startsWith('ledger')) a.panel = 'ledger';
+  return state === 'beyondHover' ? { hover: [9, 4] } : state === 'lastFoldCard' ? { hoverId: 'lastFoldGo' } : state === 'kernels' ? { hoverId: 'kernel_beyond' } : state === 'research5' ? { hoverId: 'node:weatherBottling' } : state === 'lastFoldWorld' ? { hoverId: 'dLastFold' } : null;
+}
+
+export const ACT5 = ['lastFoldWorld', 'lastFoldAudit', 'lastFoldCard', 'lastFoldCardRest', 'lastFoldKeep', 'lastFoldSeq', 'lastFoldLand', 'kernels', 'research5', 'beyond', 'beyondPinned', 'beyondHover', 'beyondRoute', 'lessonBeyond', 'lessonLastFold', 'seed', 'seedPinned', 'seedHover', 'lessonSeed', 'ledger', 'ledgerClosed'];
+
 const SIZES = [[1280, 720], [1920, 1080], [1024, 640]];
 // each state: a function run in the page that puts the app there (frozen); it may return
 // { hover: [x, y] } to put the mouse over that tile instead of the board's top edge
@@ -1162,6 +1375,7 @@ for (const s of WORLD) STATES[s] = { w: s }; // Act IV
 for (const s of ACT3) STATES[s] = { a3: s }; // Act III
 Object.assign(STATES, ACT3_M5); // Act III
 for (const s of ISLES) STATES[s] = { isle: s }; // Act IV
+for (const s of ACT5) STATES[s] = { a5: s }; // Act V
 
 async function main() {
   const only = process.argv.slice(2);
@@ -1179,7 +1393,7 @@ async function main() {
     for (const [state, fn] of Object.entries(STATES)) {
       if (only.length && !only.includes(state)) continue;
       const name = `${w}x${h}-${state}`;
-      const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.d ? await page.evaluate(districtSetup, f.d) : f.w ? await page.evaluate(worldSetup, f.w) : f.a3 ? await page.evaluate(act3Setup, f.a3) : f.isle ? await page.evaluate(isleSetup, f.isle) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post)) : await page.evaluate(f));
+      const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.d ? await page.evaluate(districtSetup, f.d) : f.w ? await page.evaluate(worldSetup, f.w) : f.a3 ? await page.evaluate(act3Setup, f.a3) : f.isle ? await page.evaluate(isleSetup, f.isle) : f.a5 ? await page.evaluate(act5Setup, f.a5) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post)) : await page.evaluate(f));
       // Milestone 13: lesson cards held off (a state asks for its own), the keys and the UI scale
       // as they came (the states that change them come last in a size's run, or put them back here)
       await page.evaluate(() => { const o = window.__app.onboarding; o.lessons.hold(true); o.keys.reset(window.__app); let st = {}; try { st = JSON.parse(localStorage.getItem('foldworks_settings') || '{}'); } catch {} if (st.uiScale) o.setUiScale(0); });

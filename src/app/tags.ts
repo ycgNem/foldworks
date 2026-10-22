@@ -24,6 +24,8 @@ import { shares } from '../sim/systems/stats';
 import { powerFactor, poleReach, drawKw } from '../sim/systems/power';
 import { modeSpeed, baseSpeed, veinBoost, byEvery } from '../sim/systems/machines';
 import { islandDef, islandMiners, isWarm, heaterLit, repairPrice, softened, workingNeighbours, coldFactor } from '../sim/systems/islands';
+import { SEED_ORES, seedSide } from '../sim/systems/seed';
+import { krules } from '../sim/kernels';
 import { fname, feedsDock, mainItem, chuteCap, BYPRODUCTS } from '../sim/systems/modules';
 import { megaFrac, mainOutput } from '../render/factory';
 import { ITEM_IDS } from '../data/items';
@@ -65,6 +67,8 @@ export interface Report {
   picker?: { e: Ent; items: ItemId[] };
   /** a ruin of the Old Works: its Repair button under the rows (pinned; Act IV, DESIGN.md §22) */
   repair?: Ent;
+  /** the Seed: its labelled Turn button under the rows (pinned; Act V, DESIGN.md §23) */
+  turn?: Ent;
 }
 
 const rich = (s: string, opt = false): Row => ({ t: 'rich', s, opt });
@@ -177,6 +181,32 @@ function ruinReport(app: App, e: Ent): Report {
   if (r) more.push(rich(`set for ${r.inputs.map((i) => icon(i.item)).join(' ')}${r.inputs.length ? ' → ' : ''}${icon(main)} · no research needed`));
   more.push(rich('{soft:removed: no refund}'));
   return { title: `Ruined ${BUILD[e.kind].name}`, item: main, rows, more, repair: e, verbs: '{k:LMB} pin  {k:X} remove' };
+}
+
+const SIDE_NAME = ['east', 'south', 'west', 'north'];
+
+/** The Seed (Act V, DESIGN.md §23): digging or blocked, which ore leaves which side (and which one
+ * waits there), its pace, and (pinned) the Turn button. */
+function seedReport(app: App, e: Ent): Report {
+  const g = app.game;
+  const rows: Row[] = [];
+  const more: Row[] = [];
+  const secs = krules(g).seedSeconds;
+  const held = SEED_ORES.filter((it) => (e.inBuf[it] ?? 0) >= 1);
+  if (e.state === 'blocked') rows.push(rich('{chip:bad:BLOCKED} every side holds its ore'));
+  else rows.push(rich(`{chip:good:DIGGING} one of each every ${secs} s`));
+  // which ore leaves which side; an ore waiting on its side in warn ink
+  rows.push(rich(SEED_ORES.map((it, k) => {
+    const side = SIDE_NAME[seedSide(e.rot, k)];
+    return e.state === 'blocked' || (held.includes(it) && e.why === it) ? `{warn:${side}} ${icon(it)}` : `${side} ${icon(it)}`;
+  }).join(' · ')));
+  if (e.why && e.why in ITEMS) {
+    const k = SEED_ORES.indexOf(e.why as ItemId);
+    rows.push(rich(`${icon(e.why)} {warn:waits on its ${SIDE_NAME[seedSide(e.rot, Math.max(0, k))]} side} · nothing takes it there`));
+  }
+  more.push(rich(`${pm(60 / secs)}/min of each · ${secs <= 2 ? 'a Miner\'s pace' : 'half a Miner'}`));
+  more.push(rich('{soft:the World folded into one tile · it stays, and never folds}'));
+  return { title: 'The Seed', uicon: 'kernel', rows, more, turn: e, verbs: '{k:R} turn  {k:LMB} pin' };
 }
 
 /** A Heater (Rime, DESIGN.md §22): whether it warms, its coal, what is in its reach. */
@@ -649,6 +679,11 @@ const ROW_GAP = 1;
 const BAR_H = 9;
 const MODES_H = 15;
 const REPAIR_H = 17;
+/** After a Repair the report's mode keys stand where the Repair button was: they ignore clicks this
+ * long (a double click on Repair would otherwise switch the mode). */
+const REPAIR_GUARD = 0.4;
+/** when the last Repair went through (UI time) */
+let repairedAt = -10;
 const MIN_CW = 116;
 /** the brief hover's narrowest content and most rows */
 const BRIEF_CW = 64;
@@ -684,7 +719,7 @@ function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: 
   const natural = Math.max(...rows.map((r) => (r.t === 'rich' ? richWidth(r.s) : r.t === 'bar' ? 150 : 0)), rep.verbs ? richWidth(rep.verbs) : 0);
   const cw = Math.min(maxCw, Math.max(brief ? BRIEF_CW : MIN_CW, titleW, natural));
   const modesH = full && rep.modes ? modeGrid(rep.modeList?.length ?? 4).rows * MODES_H + ROW_GAP : 0;
-  const pickH = (full && rep.picker ? pickGrid(rep.picker.items.length, cw).h + ROW_GAP : 0) + (full && rep.repair ? REPAIR_H + ROW_GAP : 0);
+  const pickH = (full && rep.picker ? pickGrid(rep.picker.items.length, cw).h + ROW_GAP : 0) + (full && (rep.repair || rep.turn) ? REPAIR_H + ROW_GAP : 0);
   const verbsH = rep.verbs ? layoutRich(rep.verbs, cw).h + 4 : 0;
   const measure = (rs: Row[]) => {
     const hs = rs.map((row) => ({ row, h: rowH(row, cw) }));
@@ -741,7 +776,7 @@ function drawLaid(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: nu
     list.forEach((m, i) => {
       const cur = (e.mode ?? 'normal') === m;
       const bx = r.x + (i % grid.per) * (bw + 3), by = yy + Math.floor(i / grid.per) * MODES_H;
-      if (button(ui, 'mode_' + m, bx, by, bw, MODES_H - 1, richWidth(MODE_NAME[m]) + 8 <= bw ? MODE_NAME[m] : MODE_SHORT[m], { active: cur, tip: modeTip(m, BUILD[e.kind].kw ?? 0, cur, r0) }) && !cur) app.act({ k: 'mode', x: e.x, y: e.y, mode: m });
+      if (button(ui, 'mode_' + m, bx, by, bw, MODES_H - 1, richWidth(MODE_NAME[m]) + 8 <= bw ? MODE_NAME[m] : MODE_SHORT[m], { active: cur, tip: modeTip(m, BUILD[e.kind].kw ?? 0, cur, r0) }) && !cur && ui.time - repairedAt > REPAIR_GUARD) app.act({ k: 'mode', x: e.x, y: e.y, mode: m });
     });
     yy += L.modesH;
   }
@@ -756,7 +791,14 @@ function drawLaid(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: nu
     const afford = app.game.s.coin.gte(p);
     const label = p ? `Repair · {coin:${p.toLocaleString('en-US')}}` : 'Repair · free';
     const tip = [{ text: `{big:Repair}` }, { text: `${p ? `{coin:${p.toLocaleString('en-US')}}` : 'free'} · a quarter of a new one` }, { text: afford ? '{k:LMB} it runs as it was set' : '{bad:not enough coin yet}' }];
-    if (button(ui, 'repairRuin', r.x, yy, L.cw, REPAIR_H - 1, label, { gold: afford, tip })) app.act({ k: 'repair', x: e.x, y: e.y });
+    if (button(ui, 'repairRuin', r.x, yy, L.cw, REPAIR_H - 1, label, { gold: afford, tip }) && app.act({ k: 'repair', x: e.x, y: e.y }).ok) repairedAt = ui.time;
+    yy += REPAIR_H + ROW_GAP;
+  }
+  if (L.pickH && rep.turn) {
+    // the Seed: a labelled Turn button (the owner: core actions get a visible button, not only R)
+    const e = rep.turn;
+    const tip = [{ text: '{big:Turn it}' }, { text: 'a quarter turn clockwise: each ore moves one side round' }, { text: '{k:R} with the mouse on it does the same' }];
+    if (button(ui, 'seedTurn', r.x, yy, L.cw, REPAIR_H - 1, 'Turn it {k:R}', { icon: 'rotate', tip })) app.act({ k: 'rotate', x: e.x, y: e.y });
     yy += REPAIR_H + ROW_GAP;
   }
   if (rep.verbs) {
@@ -848,6 +890,7 @@ export function place(app: App, near: Rect, w: number, h: number, also: Rect[] =
 
 /** The report for a Workshop entity (machines and power buildings), or null. */
 export function entReport(app: App, e: Ent): Report | null {
+  if (e.kind === 'seed') return seedReport(app, e);
   if (e.kind === 'chuteMouth') return chuteMouthReport(app, e);
   if (e.kind === 'heater') return heaterReport(app, e);
   if (isPower(e.kind)) return powerReport(app, e);

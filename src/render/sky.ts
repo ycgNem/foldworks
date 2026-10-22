@@ -20,7 +20,83 @@ const LOOK: Record<Floor, { bands: number[]; far: number; near: number; sun: [nu
   // the high floors (DESIGN.md §21, §22): higher still, the zenith deeper, the cloud sea further down
   district: { bands: [0.46, 0.64, 0.76, 0.84], far: 0.8, near: 0.9, sun: [0.13, 0.08], refY: 40 },
   world: { bands: [0.56, 0.72, 0.82, 0.89], far: 0.85, near: 0.93, sun: [0.12, 0.07], refY: 20 },
+  // Beyond (DESIGN.md §23) has its own sky (drawNight): these are unused but keep the record whole
+  beyond: { bands: [0.7, 0.84, 0.92, 0.97], far: 0.96, near: 0.99, sun: [0.12, 0.07], refY: 10 },
 };
+
+// ---------------------------------------------------------------- Beyond: the night
+
+/** stars: x, y (fractions of a wrap span and the height), size (0 a pixel, 1 a cross, 2 a big
+ * cross), twinkle phase, colour index */
+const STARS: { x: number; y: number; s: number; ph: number; c: number }[] = [];
+for (let i = 0; i < 140; i++) {
+  const r = hh(i, 3, 231);
+  STARS.push({ x: hh(i, 1, 232), y: Math.pow(hh(i, 2, 233), 1.4) * 0.92, s: r < 0.78 ? 0 : r < 0.95 ? 1 : 2, ph: hh(i, 4, 234) * 6.28, c: Math.floor(hh(i, 5, 235) * 3) });
+}
+let night: { c: HTMLCanvasElement; w: number; h: number } | null = null;
+
+/** The night's gradient, baked at low res: ink at the zenith down to ink2, then a thin dusk glow
+ * (violet, then a little lamp light) at the very foot: Beyond is the highest platform, with almost
+ * no sky below it and no cloud sea at all. */
+function bakeNight(w: number, h: number): HTMLCanvasElement {
+  const c = canvas(w, h);
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(w, h);
+  const ramp = [C.ink, C.ink1, C.ink2, C.slag0, C.violet].map(rgb);
+  const bands = [0.38, 0.7, 0.9, 0.975];
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const th = BAYER[(y & 3) * 4 + (x & 3)];
+      let band = 0;
+      for (const b of bands) {
+        const d = (y - b * h) / 10 + 0.5;
+        if (d >= 1 || (d > 0 && th < d)) band++;
+      }
+      const col = ramp[Math.min(ramp.length - 1, band)];
+      const k = (y * w + x) * 4;
+      img.data[k] = col[0];
+      img.data[k + 1] = col[1];
+      img.data[k + 2] = col[2];
+      img.data[k + 3] = 255;
+    }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+/** Beyond's sky: the night, its stars twinkling (parallax 0.05), now and then a shooting star. */
+function drawNight(ctx: CanvasRenderingContext2D, W: number, H: number, cam: Cam, time: number) {
+  const s = Math.max(1, cam.zoom);
+  const w = Math.ceil(W / s), h = Math.ceil(H / s);
+  if (w <= 0 || h <= 0) return;
+  if (!night || night.w !== w || night.h !== h) night = { c: bakeNight(w, h), w, h };
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(night.c, 0, 0, w * s, h * s);
+  const span = w + 40;
+  const px = (x: number, y: number, col: string) => { ctx.fillStyle = col; ctx.fillRect(Math.round(x) * s, Math.round(y) * s, s, s); };
+  const cols = [C.bone, C.lamp3, C.iron2];
+  for (const st of STARS) {
+    const x = ((st.x * span - cam.x * 0.05) % span + span) % span - 20;
+    const y = st.y * h - cam.y * 0.05 + 10;
+    if (y < -2 || y > h * 0.93) continue;
+    const tw = Math.sin(time * (1.3 + st.c * 0.4) + st.ph);
+    if (st.s === 0) { if (tw > -0.6) px(x, y, tw > 0.5 ? cols[st.c] : C.steel2); continue; }
+    const col = cols[st.c];
+    px(x, y, col);
+    if (tw > -0.2) { px(x - 1, y, C.steel2); px(x + 1, y, C.steel2); px(x, y - 1, C.steel2); px(x, y + 1, C.steel2); }
+    if (st.s === 2 && tw > 0.4) { px(x - 2, y, C.steel1); px(x + 2, y, C.steel1); px(x, y - 2, C.steel1); px(x, y + 2, C.steel1); }
+  }
+  // a shooting star: 1.2 s of every 23
+  const cyc = Math.floor(time / 23), t = time - cyc * 23;
+  if (t < 1.2) {
+    const x0 = w * (0.2 + hh(cyc, 0, 236) * 0.6), y0 = h * (0.08 + hh(cyc, 1, 237) * 0.25);
+    const f = t / 1.2;
+    for (let i = 0; i < 9; i++) {
+      const q = f * 60 - i * 2;
+      if (q < 0) continue;
+      px(x0 + q, y0 + q * 0.45, i < 2 ? C.bone : i < 5 ? C.lamp3 : C.steel2);
+    }
+  }
+}
 
 let grad: { c: HTMLCanvasElement; w: number; h: number; floor: Floor } | null = null;
 let banks: { far: HTMLCanvasElement; near: HTMLCanvasElement; below: HTMLCanvasElement } | null = null;
@@ -138,6 +214,7 @@ function belowIsle(): HTMLCanvasElement {
 
 /** Draw the sky over the whole canvas (screen space, identity transform). */
 export function drawSky(ctx: CanvasRenderingContext2D, W: number, H: number, cam: Cam, time: number, floor: Floor) {
+  if (floor === 'beyond') return drawNight(ctx, W, H, cam, time);
   const s = Math.max(1, cam.zoom);
   const w = Math.ceil(W / s), h = Math.ceil(H / s);
   if (w <= 0 || h <= 0) return;

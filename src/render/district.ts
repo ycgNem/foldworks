@@ -51,15 +51,17 @@ export interface DistrictOverlay {
   floor?: HighFloorId;
 }
 
-/** A high floor's sheet: the World's `world_*` art is frame-compatible with the District's `dist_*`
- *  (docs/endgame.md, Act IV art as built), so the World draws with its own where it has it. */
+/** A high floor's sheet: the World's `world_*` and Beyond's `beyond_*` art are frame-compatible with
+ *  the District's `dist_*` (docs/endgame.md, Act IV and Act V art as built), so each high floor
+ *  draws with its own where it has it. */
 export function hart(f: HighFloorId, name: string): string {
-  const w = 'world_' + name;
-  return f === 'world' && hasArt(w) ? w : 'dist_' + name;
+  const w = f + '_' + name;
+  return f !== 'district' && hasArt(w) ? w : 'dist_' + name;
 }
 
-/** What flies a high floor's routes: skiffs on the District, barges on the World (DESIGN.md §22). */
-export const carrier = (f: HighFloorId) => (f === 'world' ? 'barge' : 'skiff');
+/** What flies a high floor's routes: skiffs on the District, barges on the World (DESIGN.md §22),
+ *  couriers on Beyond (§23). */
+export const carrier = (f: HighFloorId) => (f === 'beyond' ? 'courier' : f === 'world' ? 'barge' : 'skiff');
 
 /** The deck round the build floor, in tiles: the plaza north (two rows of 32 px plates), a walk
  *  `w` west, `e` east (the next lot for sale stands there), `s` south; the plaza a `wing` wider. */
@@ -179,8 +181,8 @@ export class DistrictPlatform {
     ctx.fillRect(-this.ox + fw * TILE, -this.oy - 1, 1, fh * TILE + 2);
     this.c = c;
     const span = BX1 - BX0 - 2;
-    // the World's rotors are broader (64 px): one about every six tiles
-    const n = Math.max(2, Math.round(span / (F === 'world' ? 6 : 5)));
+    // the World's rotors and Beyond's star pods are broader (64 px): one about every six tiles
+    const n = Math.max(2, Math.round(span / (F !== 'district' ? 6 : 5)));
     this.rotors = [];
     for (let i = 0; i < n; i++) this.rotors.push({ x: Math.round((BX0 + 1 + ((i + 0.5) * span) / n) * TILE), y: (Y1 + 2) * TILE - 3 });
     const rows = fh >= 6 ? [2, fh - 2] : [Math.floor(fh / 2)];
@@ -434,7 +436,8 @@ function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: n
       else { ctx.fillStyle = C.ink; ctx.fillRect(px - 6, py - 4, 12, 5); ctx.fillStyle = C.brass1; ctx.fillRect(px - 5, py - 3, 10, 3); }
       // loaded on the outbound leg (and loading at the source): the item rides on the deck (a
       // barge's hold sits a little higher: it is 12 px tall to the skiff's 10)
-      if (out && busy) ctx.drawImage(itemIcon(r.item), px - 4, py - (kind === 'barge' ? 14 : 12));
+      // (a courier carries it in the pouch under its wings, the item standing in for the pouch)
+      if (out && busy) ctx.drawImage(itemIcon(r.item), px - 4, py - (kind === 'barge' ? 14 : kind === 'courier' ? 7 : 12));
       ctx.globalAlpha = 1;
     }
   }
@@ -535,7 +538,19 @@ function hauditBox(ctx: CanvasRenderingContext2D, g: Game, time: number, fl: Hig
   if (!a || a.floor !== fl) return;
   const b = a.box;
   const col = a.result ? C.gold : C.teal1;
-  antsBox(ctx, b.x, b.y, b.w, b.h, col, rgba(col, 0.1), time);
+  antsBox(ctx, b.x, b.y, b.w, b.h, col, rgba(col, a.last ? 0.06 : 0.1), time);
+  // the Last Fold's audit (DESIGN.md §23) boxes the whole floor: the Inspector's beam sweeps across
+  // it, west to east, every three seconds while it measures
+  if (a.last && !a.result) {
+    const W = b.w * TILE, H = b.h * TILE;
+    const sx = b.x * TILE + Math.floor(((time / 3) % 1) * W);
+    for (let i = 0; i < 10; i++) {
+      ctx.fillStyle = rgba(C.teal1, 0.22 * (1 - i / 10));
+      ctx.fillRect(sx - i * 2, b.y * TILE, 2, H);
+    }
+    ctx.fillStyle = rgba(C.bone, 0.5);
+    ctx.fillRect(sx, b.y * TILE, 1, H);
+  }
   const warm = prules(g).auditWarmup * TICK_RATE;
   const total = warm + prules(g).auditWindow * TICK_RATE;
   const f = Math.min(1, a.t / total);

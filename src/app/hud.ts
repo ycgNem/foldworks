@@ -35,6 +35,7 @@ import { nextGoal } from './goals';
 import { getHoverTags } from './settings';
 import { calm } from './soundopts';
 import { districtHud, districtHover, districtHoverKey, districtZones } from './district';
+import { lastFoldPlaying } from './lastfold';
 import { lessonFrame, lessonZones } from './lessons';
 import { stuckButton } from './stuck';
 import { keysFrame } from './keys';
@@ -134,7 +135,7 @@ export function newHudState(): HudState {
 }
 
 /** The pages the notebook reopens at (not the grade cards, the offline letter, the slice's end). */
-const NOT_PAGES = new Set(['grade', 'fgrade', 'offline', 'sliceEnd']);
+const NOT_PAGES = new Set(['grade', 'fgrade', 'offline', 'sliceEnd', 'lastfold']);
 
 export function drawHud(app: App, dt: number) {
   const ui = app.ui;
@@ -142,6 +143,7 @@ export function drawHud(app: App, dt: number) {
   app.layout = L;
   app.hud.fieldSeen = false;
   presentation(app);
+  lastFoldPlaying(app); // a Last Fold moment whose page was shut ends here
   // the floor's tags and the reports keep off the corners
   zones.length = 0;
   zones.push(...cornerZones(app, L, app.hud.purseBottom));
@@ -161,9 +163,10 @@ export function drawHud(app: App, dt: number) {
     districtHud(app, L);
   } else {
     // a page lies open on the desk: the floor goes behind dark wood
-    if (!NOT_PAGES.has(app.panel)) desk(app);
+    if (!NOT_PAGES.has(app.panel) || app.panel === 'lastfold') desk(app);
     drawScreen(app, L);
-    sectionTabs(app, L);
+    // the Last Fold's moment has the whole screen (src/app/lastfold.ts)
+    if (!lastFoldPlaying(app)) sectionTabs(app, L);
   }
   // a text field that is no longer drawn lets go of the keyboard
   if (!app.hud.fieldSeen && app.hud.focus) {

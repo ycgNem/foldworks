@@ -40,6 +40,7 @@
 //     "An {big:S}. I shall tell no one. Fine, everyone."
 //     "Auditing your group. Watch the projected grade."
 //     "Fold me a Gizmo line. Assembler, belts, the lot. {k:F}"
+import { previewKernels } from '../sim/lastfold';
 import type { Game } from '../sim/Game';
 import { Num } from '../engine/num';
 import { BUILD, UPGRADES } from '../data/machines';
@@ -349,8 +350,40 @@ function worldGoal(g: Game): Goal | null {
     const fed = st.routes.some((r) => r.to === bay.id);
     return say('bramble', fed ? `${stg.name.split(', ')[1]?.split(' (')[0] ?? stg.name}! Keep them flying in!` : `Fly the ${mid === 'lighthouse' ? 'lamps' : 'chains'} and this island's goods to the World Bay!`, { bar: frac(have, need), chips, ui: 'mega' });
   }
+  // Act V (DESIGN.md §23): the Last Fold, once researched: audit the whole World for its card
+  if (g.done('lastFold') && !s.haudit) {
+    const k = previewKernels(g);
+    return say('inspector', 'The Last Fold. Audit the whole World: its grade and its value bank Kernels.', { chips: ['{u:lastFold} Last Fold, on the strip', `{u:kernel} about ${k.now} now`], ui: 'world' });
+  }
   if (!relocateRefusalAny(g)) return say('committee', '"psst." "a new island." "for Legacy." The Relocate card.', { chips: ['{u:relocate} Relocate'], ui: 'relocate' });
-  return ordersGoal(g) ?? researchToward(g, 'relocation') ?? researchToward(g, 'lighthouse') ?? researchToward(g, 'skyAnchor');
+  return ordersGoal(g) ?? researchToward(g, 'relocation') ?? researchToward(g, 'lighthouse') ?? researchToward(g, 'skyAnchor') ?? researchToward(g, 'lastFold');
+}
+
+/** The coach on Beyond (DESIGN.md §23): a World fold up, courier routes, its Dock, a route short of
+ *  couriers, the cap, then orders and the islands' tier 5 research. */
+function beyondGoal(g: Game): Goal | null {
+  const s = g.s;
+  const st = s.beyond!;
+  const f = HIGH.beyond;
+  const courier = `a courier {coin:${big(f.skiffCost)}}`;
+  const mods = st.ents.filter((e) => e.kind === 'module');
+  if (!mods.length) {
+    if (!s.designs.some((d) => d.depth === 4 && d.spare > 0)) return say('inspector', 'Only World folds go up here. Fold a group on the World. {k:F}', { chips: ['{u:fold} depth 4 → Beyond'], ui: 'world' });
+    return say('bramble', 'Beyond! Put a World fold up, from the strip.', { chips: ['{u:fold} depth-4 modules', '{k:Tab} the lift'], ui: 'beyond' });
+  }
+  if (!st.routes.length) return say('bramble', 'Now the couriers! Route, a source, then where it goes.', { chips: [courier, `${f.speed} tiles/s · ${f.load} a trip`], ui: 'route' });
+  if (!st.routes.some((r) => hent(g, 'beyond', r.to)?.kind === 'fdock')) return say('bramble', 'Fly something to the Dock up here! The impossible sells dear.', { chips: [courier], ui: 'route' });
+  const max = maxRoutes(g, 'beyond');
+  if (st.routes.length >= max - 10) {
+    const price = lotPrice(g, 'beyond');
+    return say('inspector', 'Routes nearly at the cap. Buy a lot.', { chips: [`{warn:routes ${st.routes.length}/${max}}`, ...(price ? [`a lot {coin:${price.format()}} +${RULES.routesPerLot.value} routes`] : [])] });
+  }
+  const short = st.routes.find((r) => { const w = routeWant(g, 'beyond', r); return w > 1e-9 && routeCap(g, 'beyond', r) < w * 0.9; });
+  if (short) {
+    const w = routeWant(g, 'beyond', short), c = routeCap(g, 'beyond', short);
+    return say('bramble', 'A route is short of couriers! Click its orange line, then + courier.', { bar: frac(c, w), chips: [`{i:${short.item}} ${c.toFixed(2)}/s of ${w.toFixed(2)}/s`, courier], ui: 'beyond' });
+  }
+  return ordersGoal(g) ?? researchToward(g, 'cartography') ?? researchToward(g, 'starForging') ?? researchToward(g, 'weatherBottling') ?? researchToward(g, 'relicEngines');
 }
 
 /** Can the town fly to any island now (DESIGN.md §22)? null when it can. */
@@ -507,6 +540,7 @@ export function nextGoal(g: Game, floor?: string): Goal | null {
   const s = g.s;
   if (floor === 'district' && s.district) return districtGoal(g);
   if (floor === 'world' && s.world) return worldGoal(g);
+  if (floor === 'beyond' && s.beyond) return beyondGoal(g);
   const furnace = g.machines.find((m) => m.kind === 'furnace');
   const hasBellows = g.has('bellows');
   const count = (k: string) => s.ents.filter((e) => e.kind === k).length;

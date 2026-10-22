@@ -150,6 +150,30 @@ for (const [state, name, note] of [
 }
 // ---------------------------------------------------------------- (end of Act III)
 
+// ---------------------------------------------------------------- Act V (Milestone 10)
+// Set up by screens.mjs's act5Setup: the Last Fold's grade card, the sequence mid-fold, the Kernel
+// tree, Beyond with its courier routes, the Seed on a new universe's Workshop (pinned) and the
+// Endless Ledger.
+for (const [state, name, note] of [
+  ['lastFoldCardRest', '14-last-fold-card', "the Last Fold's grade card: the bank, what is kept and lost, the Seed"],
+  ['lastFoldSeq', '15-last-fold-sequence', 'the Last Fold mid-sequence: the World folding into the Seed'],
+  ['kernels', '16-kernel-tree', 'the Kernel tree: Rules, Further, Kept'],
+  ['beyondRoute', '17-beyond', 'Beyond: depth-4 modules, courier routes, a route clicked'],
+  ['seedPinned', '18-seed', "the Seed on a new universe's Workshop, pinned, wide belts beside it"],
+  ['ledger', '19-endless-ledger', 'the Endless Ledger: the order under way, next in turn, the shelf'],
+]) {
+  const { act5Setup } = await import('./screens.mjs');
+  // lesson cards held off (their own states are in screens.mjs); the mouse off the board
+  await page.evaluate(() => window.__app.onboarding.lessons.hold(true));
+  await page.mouse.move(2, Math.floor(h * 0.3));
+  const f = await page.evaluate(act5Setup, state);
+  await frames(page, 4);
+  if (f?.hover) await hoverTile(page, f.hover[0], f.hover[1]);
+  await shot(name, note);
+}
+await page.evaluate(() => window.__app.onboarding.lessons.hold(false));
+// ---------------------------------------------------------------- (end of Act V)
+
 fs.writeFileSync(`${OUT}/shots.md`, `# Shots at ${w}x${h}\n\n${log.join('\n')}\n\n${errors.length ? '## Console\n\n' + errors.map((e) => '- ' + e).join('\n') : 'No console errors.'}\n`);
 console.log(log.join('\n'));
 if (errors.length) console.log(errors.join('\n'));

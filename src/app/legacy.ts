@@ -44,6 +44,8 @@ const SHORT: Record<LegacyId, string[]> = {
   skiffGuild: ['Guild'], longerDrawer: ['Drawer+', 'Drawer'], groupDrawer: ['Groups', 'Group'],
   skyMoorings: ['Moorings', 'Moor'], heatShields: ['Shields', 'Heat'], warmHands: ['Hands', 'Warm'], salvageCrews: ['Salvage', 'Crew'],
 };
+/** A Legacy node's short name (the Last Fold's Keep-Legacy picker uses it). */
+export const legacyShort = (id: LegacyId) => SHORT[id][0];
 const shortLabel = (d: LegacyDef, room: number) => SHORT[d.id].find((s) => smallWidth(s.toUpperCase()) <= room) ?? SHORT[d.id][SHORT[d.id].length - 1];
 
 const BRANCH_ROLE: Record<LegacyBranch, Role> = { start: 'coin', auto: 'good', soften: 'research' };

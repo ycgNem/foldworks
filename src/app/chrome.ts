@@ -34,6 +34,8 @@ export const UICON = {
   district: 34, chute: 35,
   // Act IV (append-only): pixel-art/act4
   world: 36, legacy: 37, relocate: 38,
+  // Act V (append-only): pixel-art/act5
+  kernel: 39, beyond: 40, lastFold: 41, ledger: 42,
 } as const;
 export type UIconName = keyof typeof UICON;
 
@@ -46,6 +48,7 @@ const GLYPH: Record<UIconName, string> = {
   patents: ICON.star, blueprint: ICON.module, reset: '@', overnight: ICON.clock,
   district: ICON.module, chute: ICON.down,
   world: ICON.star, legacy: ICON.star, relocate: ICON.right,
+  kernel: ICON.pip, beyond: ICON.up, lastFold: ICON.module, ledger: ICON.crate,
 };
 
 /** What each accent colour means (docs/ui-redesign.md): gold is coin and "you can buy this", teal
