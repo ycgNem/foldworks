@@ -243,10 +243,12 @@ function stickerGrid(app: App, list: TrophyDef[], page: Rect): TrophyDef | null 
       const pct = `${Math.floor(f * 100)}%`;
       ui.text(ellipsize(t.name, cw - textWidth(pct) - 6), rx, ry, T.ink);
       ui.text(pct, rx + cw, ry, T.coin, { align: 'right' });
-      ui.clip(rx, ry + 10, cw - 46, 11);
+      // the goal gets the row's whole width (beside a meter it was cut mid-word: "by han"), and the
+      // meter runs under it
+      ui.clip(rx, ry + 10, cw, 10);
       drawRich(ui, t.desc, rx, ry + 10, Infinity, T.inkSoft);
       ui.unclip();
-      meter(ui, rx + cw - 42, ry + 12, 42, 5, f, { role: 'coin', glint: false });
+      meter(ui, rx, ry + 19, cw, 3, f, { role: 'coin', glint: false });
       ui.hint(rx, ry, cw, rowH - 2, [{ text: `{big:${t.name}}` }, { text: t.desc }, { text: trophyFace(t, false).bonus }], 190);
       if (ui.hover(rx, ry, cw, rowH - 2) && ui.clicked) { ui.eat(); st.focus = t.id; }
     });

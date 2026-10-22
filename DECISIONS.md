@@ -2368,3 +2368,14 @@ UI drawing, the save layer's storage and encoding, e2e, CI and docs only (no `sr
   (Electron, as in Pegwork) was only "if wanted"; the game is a static web page published to
   GitHub Pages. `Package for web.bat` stays for zipping `dist/` for any static host.
 - Derivative check: nothing player-facing changed (the same pixels, faster), so nothing to flag.
+
+### After Milestones 11 and 14 merged (2026-10-22)
+- **A crowded high floor draws a carrier over a building as a pulse** (more than 48 routes; the
+  short hop's 4x4 pulse), and as a sprite over the open deck. Why: Milestone 14's 213-module World
+  read as a brown haze of see-through barges over every module (DESIGN.md §17, readability over
+  detail). The full World's frame went 5.1 -> 4.2 ms with it.
+- **The shelf's "almost there" rows** give the goal the row's width and put the meter under it
+  (beside a meter the goal was cut mid-word).
+- **H reads "Photo mode"** on the Keys page (it was "HUD on/off" with no handler; photo mode took it).
+- **The high floors' tick**: route groups, skiff numbers and the Dock cached (DESIGN.md §25): the
+  full late game's tick 1.52 -> 0.90 ms, the same fingerprint after 2,000 ticks.

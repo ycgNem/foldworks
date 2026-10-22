@@ -428,6 +428,8 @@ function drawModule(ctx: CanvasRenderingContext2D, g: Game, e: FEnt, x: number, 
 
 /** Routes this short (tiles, centre to centre) show a pulse on the line, not skiff sprites. */
 const SHORT_HOP = 2;
+/** More routes than this on a floor and a carrier over a building draws as a pulse. */
+const CROWDED_ROUTES = 48;
 
 /** The skiffs: each route's skiffs spaced along its round trip (2 x distance / speed + dwell),
  *  half the dwell at each end; outbound with a crate of the item while the route carries; over a
@@ -441,6 +443,10 @@ function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: n
   const k = skiffStats(g, F);
   const dwell = k.dwell;
   const shadow = rgba(C.ink, 0.25);
+  // a crowded floor: a carrier over a building is a pulse, not a see-through sprite (a full World's
+  // hundreds of them over its modules read as a brown haze: Milestone 14's 213-module screenshot;
+  // DESIGN.md §17, readability over detail); over the open deck it stays a sprite
+  const crowded = st.routes.length > CROWDED_ROUTES;
   for (const r of st.routes) {
     const e = routeEnds(g, r, F);
     if (!e) continue;
@@ -478,6 +484,14 @@ function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: n
       const left = out ? e.bx < e.ax : e.ax < e.bx;
       // over a building it goes see-through, so the module under it still reads
       const over = hentAt(g, F, Math.floor(px / TILE), Math.floor((py + lift) / TILE));
+      if (over && crowded) {
+        if (!busy) continue;
+        ctx.fillStyle = C.ink;
+        ctx.fillRect(px - 2, py + lift - 4, 4, 4);
+        ctx.fillStyle = C.lamp2;
+        ctx.fillRect(px - 1, py + lift - 3, 2, 2);
+        continue;
+      }
       ctx.globalAlpha = over ? 0.45 : 1;
       // its shadow on the deck
       ctx.fillStyle = shadow;
