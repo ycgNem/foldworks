@@ -174,6 +174,46 @@ for (const [state, name, note] of [
 await page.evaluate(() => window.__app.onboarding.lessons.hold(false));
 // ---------------------------------------------------------------- (end of Act V)
 
+// ---------------------------------------------------------------- Milestone 11 (the long tail)
+// Set up by screens.mjs's tailSetup over its base state (a late game, or a busy Act II Workshop):
+// the Trophy Shelf, a Codex lore page, Unit 7's ending, the Challenges page, a Scenario board's
+// efficiency board, the skin picker in a Miner's report, skinned machines, photo mode and the PNG
+// it exports (saved from the download).
+{
+  const { STATES, tailSetup, act5Setup } = await import('./screens.mjs');
+  await page.evaluate(() => window.__app.onboarding.lessons.hold(true));
+  for (const [state, name, note] of [
+    ['shelf', '20-trophy-shelf', 'the Trophy Shelf: the index of groups, Act I\'s stickers, the one in hand with its bonus'],
+    ['shelfBonuses', '20b-shelf-bonuses', "the shelf's bonuses summed against their caps"],
+    ['codexLore', '21-codex-lore', "the Codex's Lore: Unit 7's page on the Factory"],
+    ['ending', '22-unit7-ending', "Unit 7's ending, its own moment after the first Last Fold"],
+    ['challengeList', '23-challenges', 'the Challenges page: all fifteen by act, Headwinds picked for the next run'],
+    ['boardNight', '24-scenario-board', "the Scenarios page: Night Market's efficiency board"],
+    ['skinPicker', '25-skin-picker', "a Miner's pinned report with its Skin list open"],
+    ['skinned', '26-skinned-machines', 'gilded Miners, candy Presses, starlit Assemblers (a skin without art falls back)'],
+    ['photo', '27-photo-mode', 'photo mode: the HUD hidden, the snap strip'],
+  ]) {
+    await page.mouse.move(2, Math.floor(h * 0.3));
+    const base = STATES[STATES[state].base];
+    if (base.a5) await page.evaluate(act5Setup, base.a5);
+    else await page.evaluate(base);
+    await page.evaluate(tailSetup, state);
+    await frames(page, 6);
+    await shot(name, note);
+  }
+  // the photo itself: snapped at 1x, saved from the download
+  const dl = page.waitForEvent('download', { timeout: 30000 }).catch(() => null);
+  await page.evaluate(() => window.__app.longtail.snap(1));
+  const d = await dl;
+  if (d) {
+    await d.saveAs(`${OUT}/27b-photo-export.png`);
+    const info = await page.evaluate(() => window.__lastPhoto);
+    log.push(`- 27b-photo-export: the PNG photo mode exported (${info ? `${info.name}, ${info.w}x${info.h}` : 'saved'})`);
+  } else log.push('- 27b-photo-export: NO DOWNLOAD');
+  await page.evaluate(() => { window.__app.longtail.photo(false); window.__app.onboarding.lessons.hold(false); });
+}
+// ---------------------------------------------------------------- (end of Milestone 11)
+
 fs.writeFileSync(`${OUT}/shots.md`, `# Shots at ${w}x${h}\n\n${log.join('\n')}\n\n${errors.length ? '## Console\n\n' + errors.map((e) => '- ' + e).join('\n') : 'No console errors.'}\n`);
 console.log(log.join('\n'));
 if (errors.length) console.log(errors.join('\n'));

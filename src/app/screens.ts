@@ -48,6 +48,9 @@ import { drawerScreen } from './drawer';
 import './m5bar'; // Patents and Reorganize on the top bar, the Drawer and the Office as menus
 // Act III (DESIGN.md §21): the Scenario boards
 import { scenariosScreen, scenariosOpen } from './scenarios';
+// Milestone 11 (DESIGN.md §24): the Trophy Shelf in groups, its Bonuses and the Wardrobe
+import { shelfPage } from './shelf';
+import { codexBook } from './codexbook';
 
 export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options' | 'modules' | 'grade' | 'offline' | 'sliceEnd'
   // Act II (Milestone 4): the Factory floor's grade card, the Codex, the Survey Office, the Megaproject
@@ -64,16 +67,21 @@ export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options
   | 'relocate' | 'legacy'
   // Act V (DESIGN.md §23): the Last Fold's card and sequence, the Kernel tree, the Endless Ledger
   // (src/app/lastfold.ts, kernels.ts, endless.ts)
-  | 'lastfold' | 'kernels' | 'ledger';
+  | 'lastfold' | 'kernels' | 'ledger'
+  // Milestone 11 (DESIGN.md §24): the Challenges page, Unit 7's ending (src/app/challenges.ts, ending.ts)
+  | 'challenges' | 'ending';
 
 /** Screens added from other files (Milestones 5 and 6): drawn in the overlay rect like the rest. */
-const EXTRA = new Map<string, (app: App, r: Rect, L: Layout) => void>();
+// (a `var` without an initializer: hoisted, so a page may register while this module is still loading,
+// as a page imported by one of the imports below does; Milestone 11)
+// eslint-disable-next-line no-var
+var EXTRA: Map<string, (app: App, r: Rect, L: Layout) => void> | undefined;
 
 /** Register a full-screen menu drawn by another file; open it with app.togglePanel(name).
  *    registerScreen('patents', (app, r) => { const { body } = menuTemplate(app, r, { ... }); ... });
  */
 export function registerScreen(name: ScreenName, draw: (app: App, r: Rect, L: Layout) => void) {
-  EXTRA.set(name, draw);
+  (EXTRA ??= new Map()).set(name, draw);
 }
 
 /** UI px kept free along the overlay's right edge: the notebook's section tabs hang there. */
@@ -82,20 +90,20 @@ export const SECTION_TABS_W = 14;
 export function drawScreen(app: App, L: Layout) {
   const o = L.overlay;
   const r = { x: o.x, y: o.y, w: o.w - SECTION_TABS_W, h: o.h };
-  const extra = app.panel ? EXTRA.get(app.panel) : undefined;
+  const extra = app.panel ? EXTRA?.get(app.panel) : undefined;
   if (extra) return extra(app, r, L);
   switch (app.panel) {
     case 'research': return researchTree(app, r);
     case 'orders': return ordersScreen(app, r);
     case 'stats': return statsScreen(app, r);
-    case 'trophies': return trophyPage(app, r);
+    case 'trophies': return shelfPage(app, r); // Milestone 11: src/app/shelf.ts
     case 'options': return optionsScreen(app, r);
     case 'modules': return modulesScreen(app, r);
     case 'grade': return gradeCard(app, L);
     case 'offline': return offlineReportCard(app, L); // Milestone 6 (was fold.ts offlineCard)
     case 'sliceEnd': return sliceEndCard(app, L);
     case 'fgrade': return fgradeCard(app, L);
-    case 'codex': return codexScreen(app, r);
+    case 'codex': return codexBook(app, r); // Milestone 11: src/app/codexbook.ts
     case 'survey': return surveyScreen(app, r);
     case 'mega': return megaScreen(app, r);
     case 'overnight': return overnightScreen(app, r);
@@ -305,7 +313,7 @@ export function backTabs(app: App): MenuTab[] {
 }
 
 /** A chip beside the page's title (its count), when the header has room for it. */
-function titleChip(app: App, r: Rect, title: string, free: number, text: string, role: Role) {
+export function titleChip(app: App, r: Rect, title: string, free: number, text: string, role: Role) {
   const w = chipWidth(text);
   if (free < w + 8) return;
   chip(app.ui, r.x + 29 + bigWidth(title) + 6, r.y + Math.floor((20 - CHIP_H) / 2) + 2, text, { role });
@@ -996,16 +1004,9 @@ function statsScreen(app: App, r: Rect) {
 
 // ================================================================== trophies
 
-/** Bramble's line on the sticker page. */
-function brambleTrophyLine(have: number, all: number): string {
-  if (have === 0) return 'An empty page! Go win me a sticker, ribbit.';
-  if (have >= all) return 'Every sticker! The whole island salutes you!';
-  return 'Glory now! Later each one adds a little bonus.';
-}
-
 /** A trophy's sticker centred on (cx, cy): earned, a gold-rimmed paper sticker with its icon and a
  * glint; not yet, its place pencilled in, the icon traced. */
-function sticker(app: App, t: TrophyDef, cx: number, cy: number, have: boolean, i: number, R = 13) {
+export function sticker(app: App, t: TrophyDef, cx: number, cy: number, have: boolean, i: number, R = 13) {
   const ui = app.ui;
   const ctx = ui.ctx;
   const src = t.icon ? itemIcon(t.icon) : null;
@@ -1031,101 +1032,6 @@ function sticker(app: App, t: TrophyDef, cx: number, cy: number, have: boolean, 
     if (src) pencilIcon(ui, 'item:' + t.icon, src, cx - hs, cy - hs, hs * 2, T.inkSoft);
     else if (hasArt('ui_icons')) pencilIcon(ui, 'ui:trophies', sheet('ui_icons').frames[4], cx - hs, cy - hs, hs * 2, T.inkSoft);
     else ui.text('?', cx - 2, cy - 4, T.inkSoft);
-  }
-}
-
-function trophyPage(app: App, r: Rect) {
-  const ui = app.ui;
-  const g = app.game;
-  const got = (id: string) => g.flag('trophy:' + id);
-  const have = TROPHIES.filter((t) => got(t.id)).length;
-  const sideW = Math.min(190, Math.floor(r.w * 0.34));
-  const title = 'The Trophy Shelf';
-  const { body, detail, free } = menuTemplate(app, r, { title, accent: T.coin, icon: 'trophies', tabs: backTabs(app), detail: sideW });
-  titleChip(app, r, title, free, `${have} of ${TROPHIES.length}`, 'coin');
-  // the sticker page: every trophy's place in a grid, pencil boxes ruled round them
-  const progress = (t: TrophyDef) => Math.min(1, trophyValue(g, t) / t.n);
-  let cell = 40;
-  const rowsFor = (c: number) => Math.ceil(TROPHIES.length / Math.max(1, Math.floor(body.w / c)));
-  while (cell > 32 && rowsFor(cell) * cell > body.h * 0.55) cell -= 2;
-  const cols = Math.max(1, Math.floor(body.w / cell));
-  const x0 = body.x + Math.floor((body.w - cols * cell) / 2), y0 = body.y + 2;
-  let hovered: TrophyDef | null = null;
-  TROPHIES.forEach((t, i) => {
-    const cx = x0 + (i % cols) * cell, cy = y0 + Math.floor(i / cols) * cell;
-    if (cy + cell > body.y + body.h) return;
-    const earned = got(t.id);
-    // the box the sticker goes in, ruled in faint pencil
-    const ctx = ui.ctx;
-    ctx.fillStyle = rgba(T.paperLo, 0.8);
-    ctx.fillRect(cx + 2, cy + cell - 2, cell - 4, 1);
-    ctx.fillRect(cx + cell - 2, cy + 2, 1, cell - 4);
-    sticker(app, t, cx + Math.floor(cell / 2), cy + Math.floor(cell / 2) - 1, earned, i);
-    const hv = ui.hover(cx, cy, cell, cell);
-    ui.mark('trophy:' + t.id, cx, cy, cell, cell);
-    if (!earned && progress(t) > 0) meter(ui, cx + 6, cy + cell - 7, cell - 12, 3, progress(t), { role: 'coin', glint: false });
-    if (hv) {
-      hovered = t;
-      penCircle(ui, cx + Math.floor(cell / 2), cy + Math.floor(cell / 2) - 1, 16, Math.floor(ui.time * 2.5) % 3);
-      const v = Math.min(t.n, trophyValue(g, t));
-      ui.tip([{ text: `{big:${t.name}}` }, { text: t.desc }, { text: earned ? `{good:${ICON.check} earned}` : `${Math.floor(v).toLocaleString('en-US')} of ${t.n.toLocaleString('en-US')}` }], 180);
-    }
-  });
-  const gridH = Math.ceil(TROPHIES.length / cols) * cell;
-  // under the stickers: the closest ones still to earn, each with its condition and how far
-  let y = y0 + gridH + 6;
-  const next = TROPHIES.filter((t) => !got(t.id)).map((t) => ({ t, f: progress(t) })).sort((p, q) => q.f - p.f);
-  if (next.length && y + 30 <= body.y + body.h) {
-    rule(ui, body.x, y - 3, body.w, true);
-    y += caption(ui, 'almost there', body.x + 2, y);
-    const two = body.w >= 360;
-    const cw = two ? Math.floor((body.w - 14) / 2) : body.w - 4;
-    const rowH = 22;
-    const fit = Math.floor((body.y + body.h - y) / rowH) * (two ? 2 : 1);
-    next.slice(0, Math.max(0, fit)).forEach(({ t, f }, i) => {
-      const col = two ? i % 2 : 0, row = two ? Math.floor(i / 2) : i;
-      const rx = body.x + 2 + col * (cw + 10), ry = y + row * rowH;
-      const pct = `${Math.floor(f * 100)}%`;
-      ui.text(ellipsize(t.name, cw - textWidth(pct) - 6), rx, ry, T.ink);
-      ui.text(pct, rx + cw, ry, T.coin, { align: 'right' });
-      ui.clip(rx, ry + 10, cw - 46, 11);
-      drawRich(ui, t.desc, rx, ry + 10, Infinity, T.inkSoft);
-      ui.unclip();
-      meter(ui, rx + cw - 42, ry + 12, 42, 5, f, { role: 'coin', glint: false });
-      if (hovered === t) pencil(ui, rx, ry + 9, textWidth(t.name), T.bad);
-    });
-  }
-  // the right page: Bramble, and the trophy in hand (hovered, else the closest)
-  const dp = detail!;
-  const dx = dp.x + 4, dw = dp.w - 8;
-  let dy = dp.y + 2;
-  dy += speaker(app, 'bramble', brambleTrophyLine(have, TROPHIES.length), dx, dy, dw) + 8;
-  const focus: TrophyDef | null = hovered ?? next[0]?.t ?? TROPHIES[TROPHIES.length - 1] ?? null;
-  if (focus && dy + 60 <= dp.y + dp.h) {
-    const earned = got(focus.id);
-    const i = TROPHIES.indexOf(focus);
-    const big = dw >= 150 && dp.h >= 200;
-    const SR = big ? 22 : 15;
-    sticker(app, focus, dx + SR + 1, dy + SR, earned, i, SR);
-    const nx = dx + SR * 2 + 7, nw = dw - SR * 2 - 7;
-    if (bigWidth(focus.name) <= nw) ui.big(focus.name, nx, dy + 2, T.ink);
-    else ui.text(ellipsize(focus.name, nw), nx, dy + 3, T.ink);
-    drawRich(ui, earned ? `{chip:good:EARNED}` : `{chip:soft:TO EARN}`, nx, dy + 16, nw, T.ink);
-    dy += SR * 2 + 6;
-    dy += drawRich(ui, focus.desc, dx, dy, dw, T.ink) + 4;
-    const v = Math.min(focus.n, trophyValue(g, focus));
-    const s = `${Math.floor(v).toLocaleString('en-US')}/${focus.n.toLocaleString('en-US')}`;
-    meter(ui, dx, dy + 2, dw - textWidth(s) - 6, 6, earned ? 1 : v / focus.n, { role: earned ? 'good' : 'coin' });
-    ui.text(s, dx + dw, dy, earned ? T.good : T.ink, { align: 'right' });
-    dy += 16;
-  }
-  // the latest stickers, along the page's foot
-  const latest = TROPHIES.filter((t) => got(t.id)).slice(-Math.max(1, Math.floor((dw - 2) / 24)));
-  if (latest.length && dy + 40 <= dp.y + dp.h) {
-    const fy = dp.y + dp.h - 30;
-    rule(ui, dx, fy - 4, dw, true);
-    caption(ui, 'on the page', dx, fy);
-    latest.forEach((t, i) => sticker(app, t, dx + 11 + i * 24, fy + 18, true, TROPHIES.indexOf(t), 10));
   }
 }
 

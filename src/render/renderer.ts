@@ -21,6 +21,7 @@ import { paperRaw, tagRaw, chipRaw, coinRaw, COIN_W, outlinedText } from '../ui/
 import { Ground, TILE } from './ground';
 import { drawOreFx } from './orefx';
 import { sheet, drawRot, frameAt, itemIcon, hasArt, spriteName } from './sprites';
+import { skinned, skinnedName } from './skins'; // Milestone 11: a chosen skin's sheet
 import { Fx, FOLD_DUR, FOLD_FLASH } from './fx';
 import { onGridKind, powered, gridIndex, cheb, wirePairs, reached, capacity } from './powerview';
 import { Town, TOWN_ROWS } from './town';
@@ -840,7 +841,8 @@ export class Renderer {
     switch (e.kind) {
       case 'dock':
       case 'hopper': {
-        const s = sheet(e.kind === 'dock' && g.s.orders.rep.bramble >= 3 ? 'dock_lily' : e.kind);
+        const sk = skinnedName(g, e.kind);
+        const s = sk ? sheet(sk) : sheet(e.kind === 'dock' && g.s.orders.rep.bramble >= 3 ? 'dock_lily' : e.kind);
         const ss = s.placeholder && e.kind === 'dock' ? sheet('dock') : s;
         ctx.drawImage(ss.frames[frameAt(ss, this.time)], x, y);
         return;
@@ -848,7 +850,7 @@ export class Renderer {
       case 'heap': {
         // the pile grows with its count: art has five fill frames (0, 25, 50, 75, 100%)
         const f = Math.min(1, e.count / (BUILD.heap.capacity ?? 100));
-        const hs = sheet('heap');
+        const hs = skinned(g, 'heap', 'heap');
         if (!hs.placeholder) drawRot(ctx, hs, Math.round(f * (hs.frames.length - 1)), x, y, 0);
         else {
           drawRot(ctx, hs, 0, x, y, 0);
@@ -884,7 +886,7 @@ export class Renderer {
         return;
       }
       default: {
-        const s = sheet(spriteName(e.kind));
+        const s = skinned(g, e.kind, spriteName(e.kind));
         if (isPower(e.kind) && !e.ruined) return this.powerBuilding(g, e, s);
         const working = !e.ruined && (!isMachine(e.kind) || e.state === 'work');
         // a brownout slows the animation with the machine; Overdrive speeds it up
@@ -1268,7 +1270,7 @@ export class Renderer {
     const ok = !why || onBelt;
     const d = BUILD[kind];
     ctx.globalAlpha = 0.6;
-    const s = sheet(spriteName(kind));
+    const s = skinned(g, kind, spriteName(kind));
     drawRot(ctx, s, 0, x * TILE, y * TILE, rot);
     ctx.globalAlpha = 1;
     // tint each tile on its own: the ones that are blocked (off the land, in the way) show red

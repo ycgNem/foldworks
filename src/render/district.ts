@@ -25,6 +25,7 @@ import { drawText, textWidth } from '../ui/font';
 import { paperRaw } from '../ui/paper';
 import { onPaper } from '../ui/theme';
 import { sheet, itemIcon, hasArt, drawSprite } from './sprites';
+import { skinnedName } from './skins'; // Milestone 11: a chosen skin's sheet
 import { mainOutput } from './factory';
 import { TILE } from './ground';
 import { drawPip, type PipShape } from './pips'; // Milestone 13: pips with shapes
@@ -366,7 +367,7 @@ export function drawDistrict(ctx: CanvasRenderingContext2D, g: Game, time: numbe
 /** A District module: its building (lit and working while it runs), its main output in the window. */
 function drawModule(ctx: CanvasRenderingContext2D, g: Game, e: FEnt, x: number, y: number, time: number, f: HighFloorId) {
   const out = mainOutput(g, e.design);
-  const mn = hart(f, 'module');
+  const mn = skinnedName(g, 'module') ?? hart(f, 'module');
   if (hasArt(mn)) {
     const s = sheet(mn);
     const f = e.state === 'work' ? 1 + ((Math.floor(time * (s.fps || 6)) + e.id) % Math.max(1, s.frames.length - 1)) : 0;
@@ -387,7 +388,8 @@ const SHORT_HOP = 2;
 function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: number, y: number, w: number, h: number) => boolean, F: HighFloorId) {
   const st = g.s[F]!;
   const kind = carrier(F);
-  const s = sheet(kind);
+  const skin = skinnedName(g, kind);
+  const s = sheet(skin ?? kind);
   const k = skiffStats(g, F);
   const dwell = k.dwell;
   for (const r of st.routes) {
@@ -432,7 +434,7 @@ function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: n
       ctx.fillStyle = rgba(C.ink, 0.25);
       ctx.fillRect(px - 4, py + lift + 1, 8, 1);
       const frame = Math.floor(time * (s.fps || 16)) + i;
-      if (hasArt(kind)) drawSprite(ctx, s, frame, px, py, left);
+      if (skin || hasArt(kind)) drawSprite(ctx, s, frame, px, py, left);
       else { ctx.fillStyle = C.ink; ctx.fillRect(px - 6, py - 4, 12, 5); ctx.fillStyle = C.brass1; ctx.fillRect(px - 5, py - 3, 10, 3); }
       // loaded on the outbound leg (and loading at the source): the item rides on the deck (a
       // barge's hold sits a little higher: it is 12 px tall to the skiff's 10)

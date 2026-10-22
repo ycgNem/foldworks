@@ -5,7 +5,8 @@
 // order n wants n + 1 times a base, never timed). The right page is the shelf of cosmetics owned,
 // each skin shown as its `skin_<id>_<kind>` sprites where the sheet exists (gilded Miners, candy
 // Presses, starlit Assemblers), a ribbon drawn in code for the numbered ones after them, and the
-// next one traced in pencil. No skin picker yet: wearing a skin is Milestone 11's screen. Before
+// next one traced in pencil; at its foot, the Wardrobe (Milestone 11: the Trophy Shelf's page, where
+// skins are worn; a building's report has a Skin key too). Before
 // the node is owned the page says what it would do and points at the Kernel tree. Presentation only.
 import { C } from '../data/palette';
 import { ITEMS } from '../data/items';
@@ -18,6 +19,7 @@ import { ribbonRaw } from '../ui/paper';
 import { sheet, hasArt, itemIcon } from '../render/sprites';
 import { currentLedger, ledgerFrac, ledgerOpen, ledgerOrder, ledgerState, nextCosmetic, cosmeticAt } from '../sim/systems/ledger';
 import { button, chip, chipWidth, meter, rule } from './chrome';
+import { shelfTab } from './shelf';
 import { menuTemplate, type IconName } from './widgets';
 import { pencilIcon } from './screens';
 import { bookArea, speak, heading, ROW_H } from './ledger';
@@ -138,12 +140,14 @@ function shelf(app: App, page: Rect) {
   const next = nextCosmetic(g).order.cosmetic;
   const list: { id: string; owned: boolean }[] = [...(next && !owned.includes(next) ? [{ id: next, owned: false }] : []), ...owned.slice().reverse().map((id) => ({ id, owned: true }))];
   if (!list.length) list.push({ id: LEDGER_COSMETICS[0], owned: false });
+  const foot = 20;
   for (const c of list) {
-    if (y + 40 > end) { drawRich(ui, `{soft:+${list.length - list.indexOf(c)} more}`, x, y, w, T.inkSoft); break; }
+    if (y + 40 > end - foot) { drawRich(ui, `{soft:+${list.length - list.indexOf(c)} more}`, x, y, w, T.inkSoft); break; }
     y = cosmeticRow(app, c.id, c.owned, x, y, w) + 4;
   }
-  const kept = ['{soft:kept for good through every reset}', '{soft:kept through every reset}', '{soft:kept for good}'].find((q) => richWidth(q) <= w);
-  if (kept && y + 20 <= end) drawRich(ui, kept, x, end - 10, Infinity, T.inkSoft);
+  // Milestone 11: skins are worn in the Wardrobe (the Trophy Shelf's page)
+  const tip = [{ text: '{big:The Wardrobe}' }, { text: 'every kind a skin dresses · wear one' }, { text: '{soft:kept for good through every reset}' }];
+  if (button(ui, 'ledgerWardrobe', x, end - 17, w, 17, 'Wear them: the Wardrobe', { icon: 'trophies', gold: owned.length > 0, tip })) { shelfTab('wardrobe'); app.panel = 'trophies'; app.audio.sfx('open'); }
 }
 
 /** One cosmetic: its name, what it dresses, and its sprites (or ribbon). Returns the y under it. */

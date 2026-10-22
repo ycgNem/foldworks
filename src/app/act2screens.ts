@@ -139,7 +139,7 @@ export function codexScreen(app: App, r: Rect) {
 }
 
 /** One specimen pinned to the Codex page. Returns true while hovered. */
-function specimen(app: App, id: ItemId, x: number, y: number, w: number, h: number, isNew: boolean, mult: number): boolean {
+export function specimen(app: App, id: ItemId, x: number, y: number, w: number, h: number, isNew: boolean, mult: number): boolean {
   const ui = app.ui;
   const g = app.game;
   const ctx = ui.ctx;

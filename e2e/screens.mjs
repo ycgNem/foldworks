@@ -1210,10 +1210,100 @@ export async function act5Setup(state) {
 
 export const ACT5 = ['lastFoldWorld', 'lastFoldAudit', 'lastFoldCard', 'lastFoldCardRest', 'lastFoldKeep', 'lastFoldSeq', 'lastFoldLand', 'kernels', 'research5', 'beyond', 'beyondPinned', 'beyondHover', 'beyondRoute', 'lessonBeyond', 'lessonLastFold', 'seed', 'seedPinned', 'seedHover', 'lessonSeed', 'ledger', 'ledgerClosed'];
 
+// ---------------------------------------------------------------- Milestone 11's screens
+/** Runs in the page, after a base state (`ledger`: a late game; `act2power`: a busy Act II
+ * Workshop): the long tail's data laid over it, then one of the long tail's screens. State: shelf |
+ * shelfHidden | shelfBonuses | shelfWardrobe | codexTier | codexLore | codexEnding | ending |
+ * endingTyping | challengeList | challengeShut | challengeSlip | reorgNext | boards | boardNight |
+ * skinPicker | skinned | photo | trophyToast */
+export async function tailSetup(state) {
+  const a = window.__app;
+  const g = a.game;
+  const L = a.longtail;
+  const N = g.s.coin.constructor;
+  const { TROPHIES } = await import('/src/data/trophies.ts');
+  const { CODEX_ITEMS } = await import('/src/data/codex.ts');
+  a.toasts = [];
+  a.trophyPops = [];
+  a.hud.celebs = [];
+  // two of every three of the first 150 trophies, four of the hidden ones
+  TROPHIES.forEach((t, i) => { if (i % 3 !== 2 && i < 150 && !g.s.flags.includes('trophy:' + t.id)) g.s.flags.push('trophy:' + t.id); });
+  TROPHIES.filter((t) => t.hidden).slice(0, 4).forEach((t) => { if (!g.s.flags.includes('trophy:' + t.id)) g.s.flags.push('trophy:' + t.id); });
+  const m = g.s.meta;
+  m.cosmetics = [...new Set([...(m.cosmetics ?? []), 'gilded', 'candy', 'starlit', 'chrome', 'vintage', 'lilypad', 'mayoral', 'kite', 'triad', 'origami', 'bunting', 'filigree'])];
+  m.skins = { miner: 'gilded', module: 'origami' };
+  // the Codex: most of tier I, some of II and III, a little of IV and V
+  const take = { 1: 8, 2: 6, 3: 5, 4: 3, 5: 1 };
+  g.s.codex = Object.entries(take).flatMap(([t, n]) => CODEX_ITEMS[t].slice(0, n));
+  g.s.counters.folds = Math.max(1, g.s.counters.folds ?? 0);
+  g.s.counters.districtPlaced = Math.max(1, g.s.counters.districtPlaced ?? 0);
+  g.s.counters['visit:pebble'] = 1;
+  m.runs = Math.max(2, m.runs ?? 0);
+  m.challenges = ['noSplitters', 'handsOff', 'cleanHands'];
+  m.boards = {
+    tinyIsland: { score: 3.42, grade: 'S', perTile: 3.42, perKw: 0, waste: 0 },
+    richOre: { score: 41.5, grade: 'A', perTile: 2.6, perKw: 0.52, waste: 0.12 },
+    pocketWorkshop: { score: 12.8, grade: 'S+', perTile: 0.8, perKw: 0, waste: 0 },
+    nightMarket: { score: 0.31, grade: 'B', perTile: 1.9, perKw: 0.31, waste: 0.25 },
+  };
+  if (state === 'ending' || state === 'endingTyping' || state === 'codexEnding') m.lastFolds = Math.max(1, m.lastFolds ?? 0);
+  const ent = (k) => g.s.ents.find((e) => e.kind === k);
+  switch (state) {
+    case 'shelf': L.shelf('act1'); break;
+    case 'shelfHidden': L.shelf('hidden'); break;
+    case 'shelfBonuses': L.shelf('bonuses'); break;
+    case 'shelfWardrobe': L.shelf('wardrobe', null, 'miner'); break;
+    case 'codexTier': L.codex(2); break;
+    case 'codexLore': L.codex('lore', 'floorFactory'); break;
+    case 'codexEnding': L.codex('lore', 'ending'); break;
+    case 'ending': L.ending(99); break;
+    case 'endingTyping': L.ending(4.2); break;
+    case 'challengeList': L.pickNext('headwinds'); L.challenges('headwinds'); break;
+    case 'challengeShut': g.s.counters.worldPlaced = 0; L.challenges('roughSeas'); break;
+    case 'challengeSlip': {
+      g.s.challenge = 'beltBudget';
+      g.s.challengeBase = 0;
+      g.s.delivered.steel = N.of(412);
+      a.panel = null;
+      a.selected = null;
+      break;
+    }
+    case 'reorgNext': L.pickNext('headwinds'); a.panel = 'reorganize'; break;
+    case 'boards': L.scenario('richOre'); break;
+    case 'boardNight': L.scenario('nightMarket'); break;
+    case 'skinPicker': {
+      const e = ent('miner');
+      a.panel = null;
+      a.selected = e ? e.id : null;
+      if (e) a.lookAt(e.x + 0.5, e.y + 0.5);
+      L.skinList('miner');
+      break;
+    }
+    case 'skinned': {
+      a.panel = null;
+      a.selected = null;
+      g.s.research.done.push('heavyMachines', 'circuits');
+      const act = (c) => { try { a.act(c); } catch { /* a place that does not fit is skipped */ } };
+      act({ k: 'place', kind: 'press', x: 3, y: 2, rot: 0 });
+      act({ k: 'place', kind: 'assembler', x: 5, y: 2, rot: 0 });
+      act({ k: 'place', kind: 'pressMk2', x: 3, y: 4, rot: 0 });
+      act({ k: 'place', kind: 'assemblerMk2', x: 6, y: 4, rot: 0 });
+      g.events.drain();
+      m.skins = { miner: 'gilded', press: 'candy', pressMk2: 'candy', assembler: 'starlit', assemblerMk2: 'starlit', steamEngine: 'filigree' };
+      a.toasts = [];
+      a.lookAt(5, 4);
+      break;
+    }
+    case 'photo': a.panel = null; a.selected = null; L.photo(true); break;
+    case 'trophyToast': a.panel = null; a.selected = null; a.trophyPops = [{ id: 'tenThousandTeeth', t: 0.3 }]; break;
+  }
+  return null;
+}
+
 const SIZES = [[1280, 720], [1920, 1080], [1024, 640]];
 // each state: a function run in the page that puts the app there (frozen); it may return
 // { hover: [x, y] } to put the mouse over that tile instead of the board's top edge
-const STATES = {
+export const STATES = {
   title: () => { const a = window.__app; a.screen = 'title'; },
   start: () => { const a = window.__app; a.newGame(7); a.freeze(); a.toasts = []; },
   // the first minute: one ore fed by hand, the goal now says to crank the furnace, the ore hovered
@@ -1376,6 +1466,13 @@ for (const s of ACT3) STATES[s] = { a3: s }; // Act III
 Object.assign(STATES, ACT3_M5); // Act III
 for (const s of ISLES) STATES[s] = { isle: s }; // Act IV
 for (const s of ACT5) STATES[s] = { a5: s }; // Act V
+// Milestone 11: the long tail's screens (tailSetup over a late game or a busy Act II Workshop)
+export const TAIL = {
+  shelf: 'ledger', shelfHidden: 'ledger', shelfBonuses: 'ledger', shelfWardrobe: 'ledger', codexTier: 'ledger', codexLore: 'ledger', codexEnding: 'ledger',
+  ending: 'ledger', endingTyping: 'ledger', challengeList: 'ledger', challengeShut: 'ledger', challengeSlip: 'act2power', reorgNext: 'ledger', boards: 'ledger',
+  boardNight: 'ledger', skinPicker: 'act2power', skinned: 'act2power', photo: 'act2power', trophyToast: 'act2power',
+};
+for (const [s, base] of Object.entries(TAIL)) STATES[s] = { base, post: tailSetup, arg: s };
 
 async function main() {
   const only = process.argv.slice(2);
@@ -1393,7 +1490,7 @@ async function main() {
     for (const [state, fn] of Object.entries(STATES)) {
       if (only.length && !only.includes(state)) continue;
       const name = `${w}x${h}-${state}`;
-      const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.d ? await page.evaluate(districtSetup, f.d) : f.w ? await page.evaluate(worldSetup, f.w) : f.a3 ? await page.evaluate(act3Setup, f.a3) : f.isle ? await page.evaluate(isleSetup, f.isle) : f.a5 ? await page.evaluate(act5Setup, f.a5) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post)) : await page.evaluate(f));
+      const run = async (f) => (typeof f === 'string' ? await page.evaluate(act2Setup, f) : f.ws ? await page.evaluate(workshopSetup, f.ws) : f.idle ? await page.evaluate(idleSetup, f.idle) : f.m5 ? await page.evaluate(m5Setup, f.m5) : f.d ? await page.evaluate(districtSetup, f.d) : f.w ? await page.evaluate(worldSetup, f.w) : f.a3 ? await page.evaluate(act3Setup, f.a3) : f.isle ? await page.evaluate(isleSetup, f.isle) : f.a5 ? await page.evaluate(act5Setup, f.a5) : f.base ? (await run(STATES[f.base]), await page.evaluate(f.post, f.arg)) : await page.evaluate(f));
       // Milestone 13: lesson cards held off (a state asks for its own), the keys and the UI scale
       // as they came (the states that change them come last in a size's run, or put them back here)
       await page.evaluate(() => { const o = window.__app.onboarding; o.lessons.hold(true); o.keys.reset(window.__app); let st = {}; try { st = JSON.parse(localStorage.getItem('foldworks_settings') || '{}'); } catch {} if (st.uiScale) o.setUiScale(0); });

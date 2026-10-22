@@ -24,7 +24,8 @@ import { bookArea, speak, heading, struck, ROW_H } from './ledger';
 import { smallWidth } from '../ui/font';
 // Act III (DESIGN.md §21 Challenges): from the second Reorganize on, the next run may be one
 import { CHALLENGES, CHALLENGE_IDS, CHALLENGE_AFTER_RUNS, type ChallengeId } from '../data/challenges';
-import { won } from '../sim/systems/challenges';
+import { won, challengeRefusal } from '../sim/systems/challenges';
+import { openChallenges } from './challenges';
 import { scenariosOpen } from './scenarios';
 
 /** the confirm's first click arms it until this UI time; the next run picked on the card (null:
@@ -35,11 +36,15 @@ const st = { armedUntil: -1, pick: null as ChallengeId | null };
 export function challengesOffered(app: App): ChallengeId[] {
   const g = app.game;
   if (g.s.meta.runs < CHALLENGE_AFTER_RUNS || g.s.scenario) return [];
-  return CHALLENGE_IDS.filter((id) => !won(g, id));
+  // Milestone 11: one whose floor has never stood (`needs`) is listed on the page, not offered
+  return CHALLENGE_IDS.filter((id) => !won(g, id) && !challengeRefusal(g, id));
 }
 
-/** Pick the next run on the card (the e2e states). */
-export function pickNextRun(id: ChallengeId | null) { st.pick = id; }
+/** Pick the next run on the card (the e2e states, and the Challenges page's "Take it next run"). */
+export function pickNextRun(id: ChallengeId | null) { st.pick = id; st.armedUntil = -1; }
+
+/** The Challenge picked for the next run, or null. */
+export const nextRunPick = () => st.pick;
 
 const hm = (sec: number) => `${Math.floor(sec / 3600)}:${String(Math.floor((sec % 3600) / 60)).padStart(2, '0')}`;
 const p1 = (v: number) => (v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, ''));
@@ -62,7 +67,9 @@ export function reorganizeCard(app: App, r0: Rect) {
   // ---- the contract: a sheet on the page, three ruled columns
   const foot = 26;
   // the next run, under the contract: an ordinary one or a Challenge (DESIGN.md §21)
-  const nextH = offered.length ? nextRunHeight(offered, body.w - 4) : 0;
+  // the strip once Challenges are open (Milestone 11: even with none offered, the page lists all)
+  const strip = g.s.meta.runs >= CHALLENGE_AFTER_RUNS && !g.s.scenario;
+  const nextH = strip ? nextRunHeight(offered, body.w - 4) : 0;
   const sheet = { x: body.x + 2, y, w: body.w - 4, h: body.y + body.h - foot - y - nextH };
   ui.panel(sheet.x, sheet.y, sheet.w, sheet.h, 'paper', true);
   const ix = sheet.x + 6, iy = sheet.y + 5, iw = sheet.w - 12, ih = sheet.h - 9;
@@ -115,13 +122,16 @@ const NEXT_KEYS_H = 15;
 const NEXT_CAP = 'NEXT RUN';
 const nextLabel = (id: ChallengeId | null) => (id ? CHALLENGES[id].name : 'Ordinary run');
 
-/** The choices laid out in rows (a second row when one is too narrow): each one's place. */
-function nextKeys(offered: ChallengeId[], x: number, w: number): { id: ChallengeId | null; x: number; row: number; w: number }[] {
-  const out: { id: ChallengeId | null; x: number; row: number; w: number }[] = [];
+/** The keys on the strip: "Ordinary run", the Challenge picked (if any), and the page of all of
+ * them (Milestone 11: fifteen do not fit as keys; the page lists each with its rule, goal, reward
+ * and what it needs). */
+function nextKeys(offered: ChallengeId[], x: number, w: number): { id: ChallengeId | null | 'all'; x: number; row: number; w: number }[] {
+  const out: { id: ChallengeId | null | 'all'; x: number; row: number; w: number }[] = [];
   const x0 = x + smallWidth(NEXT_CAP) + 6;
   let bx = x0, row = 0;
-  for (const id of [null, ...offered]) {
-    const bw = textWidth(nextLabel(id)) + 12;
+  const ids: (ChallengeId | null | 'all')[] = [null, ...(st.pick ? [st.pick] : []), 'all'];
+  for (const id of ids) {
+    const bw = textWidth(id === 'all' ? allLabel(offered) : nextLabel(id)) + (id === 'all' ? 22 : 12);
     if (bx + bw > x + w && bx > x0) { row++; bx = x0; }
     out.push({ id, x: bx, row, w: bw });
     bx += bw + 3;
@@ -129,26 +139,35 @@ function nextKeys(offered: ChallengeId[], x: number, w: number): { id: Challenge
   return out;
 }
 
+const allLabel = (offered: ChallengeId[]) => `Challenges (${offered.length} open)`;
+
 /** The room the next-run strip takes: its rows of choices, then two lines on the one picked. */
 function nextRunHeight(offered: ChallengeId[], w: number): number {
   const rows = Math.max(...nextKeys(offered, 0, w).map((k) => k.row)) + 1;
   return rows * (NEXT_KEYS_H + 2) + 1 + 22 + 3;
 }
 
-/** The next run: "Ordinary run" or one of the Challenges not yet won, each a labelled choice, and
- * under them the pick's rule, goal and reward (pillar 4: the card says what the run will cost). */
+/** The next run: "Ordinary run", the Challenge picked, and "Challenges" (the page of all fifteen,
+ * where one is picked); under them the pick's rule, goal and reward (pillar 4: the card says what
+ * the run will cost). */
 function nextRun(app: App, offered: ChallengeId[], x: number, y: number, w: number) {
   const ui = app.ui;
   ui.small(NEXT_CAP, x, y + 5, T.reset);
   let rows = 1;
   for (const k of nextKeys(offered, x, w)) {
     const id = k.id;
+    const ky = y + k.row * (NEXT_KEYS_H + 2);
+    rows = Math.max(rows, k.row + 1);
+    if (id === 'all') {
+      const tip = [{ text: '{big:Challenges}' }, { text: `${CHALLENGE_IDS.length} in all · ${offered.length} open for the next run` }, { text: '{soft:each with its rule, goal, reward and what it needs}' }];
+      if (button(ui, 'nextRun_all', k.x, ky, k.w, NEXT_KEYS_H, allLabel(offered), { icon: 'star', tip })) openChallenges(app, st.pick, 'reorganize');
+      continue;
+    }
     const on = st.pick === id;
     const tip = id
       ? [{ text: `{big:${CHALLENGES[id].name}}` }, { text: `{bad:rule} ${CHALLENGES[id].rule}` }, { text: `{good:goal} ${CHALLENGES[id].goalText}` }, { text: `{coinc:reward} ${CHALLENGES[id].reward}` }]
       : [{ text: '{big:An ordinary run}' }, { text: '{soft:no restriction}' }];
-    if (button(ui, 'nextRun_' + (id ?? 'ordinary'), k.x, y + k.row * (NEXT_KEYS_H + 2), k.w, NEXT_KEYS_H, nextLabel(id), { active: on, tip }) && !on) { st.pick = id; st.armedUntil = -1; }
-    rows = Math.max(rows, k.row + 1);
+    if (button(ui, 'nextRun_' + (id ?? 'ordinary'), k.x, ky, k.w, NEXT_KEYS_H, nextLabel(id), { active: on, tip }) && !on) { st.pick = id; st.armedUntil = -1; }
   }
   const id = st.pick;
   const ly = y + rows * (NEXT_KEYS_H + 2) + 1;

@@ -26,10 +26,12 @@ import { fplaceRefusal } from '../sim/systems/modules';
 import { scenarioOf } from '../sim/scenario';
 import type { Game } from '../sim/Game';
 import { slip, button, tag, tagSize } from './chrome';
+import { SHORT, openChallenges } from './challenges';
+import { challengeProgress } from '../sim/systems/challenges';
 import { registerCounter } from './topbar';
 import { banner } from './hud';
 import { sampleMouth, type MouthLook } from './mouths';
-import { noteBest, records, scoreText, backToTown, twist, liveBest } from './scenarios';
+import { scoreText, backToTown, twist, liveBest, townRecord, watchBest } from './scenarios';
 import type { App } from './app';
 
 // ------------------------------------------------------------------ the frame
@@ -152,42 +154,11 @@ function watch(app: App) {
     }
     watched.won = won.length;
   }
-  // a Scenario's best fold beating the record on file
-  const d = scenarioOf(g);
-  if (d && g.s.tick % 10 === 0) {
-    const b = liveBest(g);
-    if (b) {
-      const name = g.design(b.design)?.name;
-      if (noteBest(d.id, { score: b.score, grade: b.grade, date: Date.now(), design: name })) {
-        app.audio.sfx('fanfare', 0.7);
-        banner(app, 'NEW BEST!', `${d.name} · ${scoreText(b.score)} ${d.unit}`, C.gold);
-        app.toast('A new personal best', `${scoreText(b.score)} ${d.unit} · grade ${b.grade}`, C.gold, 'trophies');
-      }
-    }
-  }
+  // a Scenario's best fold beating the town's record (Milestone 11: the sim's boards, scenarios.ts)
+  if (scenarioOf(g) && g.s.tick % 10 === 0) watchBest(app);
 }
 
 // ------------------------------------------------------------------ the slips under the Purse
-
-/** A Challenge's rule and goal in a few words (Pip capitals), for the slip. */
-const SHORT: Record<ChallengeId, [string, string]> = {
-  noSplitters: ['no Splitters', 'Gizmo Festival'],
-  handsOff: ['clicks do nothing', 'Folding'],
-  leanPower: ['power ×0.5', 'Circuits'],
-  threeKinds: ['3 kinds of machine', 'a fold at S'],
-  smallBoxes: ['boxes 4×4', 'Gizmo Festival'],
-  // Milestone 11's ten (placeholders added by the sim agent for the typecheck; the UI agent owns them)
-  cleanHands: ['no Slag Heaps', '400 concrete'],
-  mk1Only: ['no Mk2', '100 motors'],
-  handMade: ['no stamping', '8 modules'],
-  strictInspector: ['grades -1', 'a fold at A'],
-  beltBudget: ['60 belts', '1,000 steel'],
-  headwinds: ['skiffs ×0.5', '30 robot arms'],
-  shortHaul: ['routes max 5', '10 Engineers'],
-  zoningFreeze: ['no District lots', 'Specimen Drawer'],
-  roughSeas: ['barges carry 1', '10 World modules'],
-  lightFleet: ['3 skiffs a route', 'a Megaproject stage'],
-};
 
 const quit = { armedUntil: -1 };
 const SLIP_H = 26;
@@ -220,12 +191,16 @@ function challengeSlip(app: App, x: number, y: number): number {
   if (!c) return 0;
   const [rule, goal] = SHORT[id] ?? [c.rule, c.goalText];
   const armed = ui.time < quit.armedUntil;
+  // Milestone 11: how far the goal is, on the slip itself
+  const p = challengeProgress(app.game, id);
+  const far = p.want > 1 ? ` ${Math.floor(p.have).toLocaleString('en-US')}/${p.want.toLocaleString('en-US')}` : '';
   const r = counterSlip(app, 'challengeSlip', x, y, c.name, T.reset, (ix, iy) => { ui.ctx.fillStyle = T.reset; ui.ctx.fillRect(ix + 1, iy + 2, 5, 5); },
-    [[rule.toUpperCase(), T.bad], ['→', T.inkSoft], [goal.toUpperCase(), T.good]],
+    [[rule.toUpperCase(), T.bad], ['→', T.inkSoft], [goal.toUpperCase() + far, T.good]],
     armed ? 'Sure?' : 'Give up',
     [{ text: `{big:${c.name}}` }, { text: `{bad:the rule} ${c.rule}` }, { text: `{good:the goal} ${c.goalText}` }, { text: `{coinc:the reward} ${c.reward}` }],
     armed ? [{ text: '{bad:click again} · the run goes on ordinary' }, { text: '{soft:no reward · Patents as ever}' }] : [{ text: '{u:remove} give the Challenge up' }, { text: '{soft:two clicks · the first asks}' }],
     armed);
+  if (r.over && ui.clicked) { ui.eat(); openChallenges(app, id); }
   if (r.click) {
     if (!armed) quit.armedUntil = ui.time + 4;
     else {
@@ -246,17 +221,16 @@ function scenarioSlip(app: App, x: number, y: number): number {
   const d = scenarioOf(g);
   if (!d) return 0;
   const best = liveBest(g);
-  const rec = records()[d.id as ScenarioId];
+  const rec = townRecord(d.id as ScenarioId);
   const beat = !!best && (!rec || best.score >= rec.score - 1e-9);
   const parts: [string, string][] = [[(best ? `BEST ${scoreText(best.score)}` : 'NO FOLD YET') + (rec ? ',' : ''), beat ? T.coin : T.inkSoft]];
   if (rec) parts.push([`RECORD ${scoreText(rec.score)}`, T.inkSoft]);
-  const date = rec ? new Date(rec.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
   const r = counterSlip(app, 'scenarioSlip', x, y, d.name, T.ink, (ix, iy) => ui.ctx.drawImage(itemIcon(d.product), ix, iy),
     parts, 'To town',
     [{ text: `{big:${d.name}}` }, { text: `{reset:the twist} ${twist(g, d)}` }, { text: `{soft:scored by} ${d.unit}` },
       { text: best ? `{good:best fold} ${scoreText(best.score)} · grade ${best.grade}` : `{soft:fold a line of} {i:${d.product}} {soft:to score}` },
-      ...(rec ? [{ text: `{coinc:record} ${scoreText(rec.score)} · ${date}` }] : []), { text: '{k:LMB} the Scenarios page' }],
-    [{ text: '{u:workshop} back to your town' }, { text: '{soft:this board is saved where it stands}' }]);
+      ...(rec ? [{ text: `{coinc:record} ${scoreText(rec.score)} · grade ${rec.grade}` }] : []), { text: '{k:LMB} the Scenarios page' }],
+    [{ text: '{u:workshop} back to your town' }, { text: '{soft:this board is saved where it stands · its bests go on file}' }]);
   if (r.over && ui.clicked) { ui.eat(); app.togglePanel('scenarios'); }
   if (r.click) backToTown(app);
   return r.w;

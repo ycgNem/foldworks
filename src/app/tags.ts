@@ -15,7 +15,10 @@ import { FACTORY } from '../data/land';
 import { megaStage } from '../data/megaprojects';
 import { TICK_RATE } from '../engine/time';
 import { plain, pct, duration } from '../engine/fmt';
-import { bigWidth, textWidth, hasBigGlyph, BIG_LINE_H, LINE_H } from '../ui/font';
+import { ICON, bigWidth, textWidth, hasBigGlyph, BIG_LINE_H, LINE_H } from '../ui/font';
+import { SKIN_SLOTS, cosmeticDef, type SkinSlot } from '../data/cosmetics';
+import { ownedCosmetics, skinFor } from '../sim/longtail';
+import { skinArt } from '../render/skins';
 import { layoutRich, drawLayout, richWidth, CHIP_H } from '../ui/rich';
 import { T, type Role } from '../ui/theme';
 import { itemIcon } from '../render/sprites';
@@ -69,6 +72,8 @@ export interface Report {
   repair?: Ent;
   /** the Seed: its labelled Turn button under the rows (pinned; Act V, DESIGN.md §23) */
   turn?: Ent;
+  /** Milestone 11: a labelled Skin key under the rows (pinned), when a skin for this kind is owned */
+  skin?: SkinSlot;
 }
 
 const rich = (s: string, opt = false): Row => ({ t: 'rich', s, opt });
@@ -719,7 +724,7 @@ function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: 
   const natural = Math.max(...rows.map((r) => (r.t === 'rich' ? richWidth(r.s) : r.t === 'bar' ? 150 : 0)), rep.verbs ? richWidth(rep.verbs) : 0);
   const cw = Math.min(maxCw, Math.max(brief ? BRIEF_CW : MIN_CW, titleW, natural));
   const modesH = full && rep.modes ? modeGrid(rep.modeList?.length ?? 4).rows * MODES_H + ROW_GAP : 0;
-  const pickH = (full && rep.picker ? pickGrid(rep.picker.items.length, cw).h + ROW_GAP : 0) + (full && (rep.repair || rep.turn) ? REPAIR_H + ROW_GAP : 0);
+  const pickH = (full && rep.picker ? pickGrid(rep.picker.items.length, cw).h + ROW_GAP : 0) + (full && (rep.repair || rep.turn) ? REPAIR_H + ROW_GAP : 0) + (full && rep.skin ? skinKeysH(rep.skin) : 0);
   const verbsH = rep.verbs ? layoutRich(rep.verbs, cw).h + 4 : 0;
   const measure = (rs: Row[]) => {
     const hs = rs.map((row) => ({ row, h: rowH(row, cw) }));
@@ -801,11 +806,61 @@ function drawLaid(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: nu
     if (button(ui, 'seedTurn', r.x, yy, L.cw, REPAIR_H - 1, 'Turn it {k:R}', { icon: 'rotate', tip })) app.act({ k: 'rotate', x: e.x, y: e.y });
     yy += REPAIR_H + ROW_GAP;
   }
+  if (L.pickH && rep.skin) yy += skinKeys(app, rep.skin, r.x, yy, L.cw);
   if (rep.verbs) {
     rule(ui, r.x, yy, L.cw);
     drawLayout(ui, layoutRich(rep.verbs, L.cw), r.x, yy + 3, T.ink);
   }
   return r;
+}
+
+// ------------------------------------------------------------------ the skin picker (Milestone 11)
+
+/** the kind whose skin list is open under its report's Skin key (null: shut) */
+let skinOpen: SkinSlot | null = null;
+/** Open (or shut) the Skin list of a kind's report (e2e). */
+export function openSkinList(slot: SkinSlot | null) { skinOpen = slot; }
+const SKIN_ROW = 15;
+
+/** The skins owned that fit a kind (the Wardrobe lists the rest). */
+const ownedFor = (app: App, slot: SkinSlot) => ownedCosmetics(app.game).filter((c) => c.slots.includes(slot));
+
+/** Does this kind get a Skin key (a skin for it is owned)? */
+export const skinKeyFor = (app: App, slot: string): SkinSlot | undefined => (SKIN_SLOTS.includes(slot as SkinSlot) && ownedFor(app, slot as SkinSlot).length ? (slot as SkinSlot) : undefined);
+
+/** The room the Skin key takes, and its list when open. */
+function skinKeysH(slot: SkinSlot): number {
+  const n = skinOpen === slot ? skinCount + 1 : 0;
+  return REPAIR_H + ROW_GAP + n * SKIN_ROW;
+}
+/** how many owned skins the open list had last frame (its height is laid out before it draws) */
+let skinCount = 0;
+
+/** The Skin key ("Skin: Gilded ▾"), and under it, when open, Plain and each owned skin as keys:
+ * a click wears it on every building of the kind (the `skin` command). Returns the height used. */
+function skinKeys(app: App, slot: SkinSlot, x: number, y: number, cw: number): number {
+  const ui = app.ui;
+  const g = app.game;
+  const owned = ownedFor(app, slot);
+  const worn = skinFor(g, slot);
+  const open = skinOpen === slot;
+  if (open) skinCount = owned.length;
+  const wornName = worn ? cosmeticDef(worn)?.name ?? worn : 'Plain';
+  const label = `Skin: ${wornName} ${open ? ICON.up : ICON.down}`;
+  const tip = [{ text: '{big:Skin}' }, { text: `${owned.length} owned for this kind · every one of them wears it` }, { text: '{soft:looks only · the Wardrobe lists them all}' }];
+  if (button(ui, 'skinKey', x, y, cw, REPAIR_H - 1, label, { icon: 'trophies', active: open, tip })) { skinOpen = open ? null : slot; skinCount = owned.length; }
+  let h = REPAIR_H + ROW_GAP;
+  if (!open) return h;
+  for (const c of [null, ...owned]) {
+    const on = (c?.id ?? null) === worn;
+    const art = c ? !!skinArt(c.id, slot) : true;
+    const t2 = c ? [{ text: `{big:${c.name}}` }, { text: c.flavor }, ...(art ? [] : [{ text: '{soft:its art is still being drawn: the plain sprite stands in}' }])] : [{ text: '{big:Plain}' }, { text: "the building's own look" }];
+    if (button(ui, 'skin_' + (c?.id ?? 'plain'), x + 8, y + h, cw - 8, SKIN_ROW - 1, c ? c.name : 'Plain', { active: on, tip: t2 }) && !on) {
+      if (app.act({ k: 'skin', kind: slot, id: c?.id ?? null }).ok) app.audio.sfx('place', 0.6);
+    }
+    h += SKIN_ROW;
+  }
+  return h;
 }
 
 function modeTip(m: Mode, base: number, cur: boolean, r: RecipeDef | null = null) {
@@ -890,6 +945,13 @@ export function place(app: App, near: Rect, w: number, h: number, also: Rect[] =
 
 /** The report for a Workshop entity (machines and power buildings), or null. */
 export function entReport(app: App, e: Ent): Report | null {
+  const rep = entReport0(app, e);
+  // Milestone 11: a Skin key once a skin for this kind is owned
+  if (rep && !e.ruined) rep.skin = skinKeyFor(app, e.kind);
+  return rep;
+}
+
+function entReport0(app: App, e: Ent): Report | null {
   if (e.kind === 'seed') return seedReport(app, e);
   if (e.kind === 'chuteMouth') return chuteMouthReport(app, e);
   if (e.kind === 'heater') return heaterReport(app, e);
@@ -916,6 +978,7 @@ export function pinnedReport(app: App, L: Layout) {
     const e = g.fById.get(app.fselected);
     if (!e || e.kind === 'trunk') return;
     rep = factoryReport(app, e);
+    if (e.kind === 'module') rep.skin = skinKeyFor(app, 'module'); // Milestone 11
     near = worldRect(app, e.x, e.y, e.w, e.h);
     close = () => { app.fselected = null; };
   }

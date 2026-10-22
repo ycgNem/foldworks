@@ -69,6 +69,19 @@ import './legacy';
 import './lastfold';
 import './kernels';
 import './endless';
+import './ending'; // Milestone 11: Unit 7's ending, its own moment
+import './challenges'; // Milestone 11: the Challenges page
+import { openChallenges } from './challenges';
+import { shelfTab, type ShelfTab } from './shelf';
+import { codexTab, type CodexTab } from './codexbook';
+import { scenarioPick } from './scenarios';
+import { openEnding, endingState } from './endingstate';
+import { setPhoto, snap } from './photo';
+import { pickNextRun } from './reorganize';
+import { openSkinList } from './tags';
+import type { SkinSlot } from '../data/cosmetics';
+import type { ChallengeId } from '../data/challenges';
+import type { ScenarioId } from '../data/scenarios';
 
 export type Mode =
   | { k: 'idle' }
@@ -1331,5 +1344,20 @@ export class App {
   /** the District's UI state (src/app/district.ts DS): e2e opens a route card or the item list */
   get districtUI() { return DS; }
   /** Milestone 13, for e2e: lesson cards, the stuck-finder, the UI scale */
+  /** Milestone 11's pages, for the e2e states (window.__app.longtail) */
+  get longtail() {
+    return {
+      shelf: (tab: ShelfTab, focus: string | null = null, slot: SkinSlot | null = null) => { shelfTab(tab, focus, slot); this.panel = 'trophies'; },
+      codex: (tab: CodexTab, page: string | null = null) => { codexTab(tab, page); this.panel = 'codex'; },
+      challenges: (id: ChallengeId | null) => openChallenges(this, id, 'reorganize'),
+      scenario: (id: ScenarioId | null) => { scenarioPick(id); this.panel = 'scenarios'; },
+      ending: (t = 99) => { openEnding(this); endingState.at = this.ui.time - t; },
+      photo: (on: boolean) => setPhoto(this, on),
+      snap: (k: 1 | 2) => snap(this, k),
+      pickNext: (id: ChallengeId | null) => pickNextRun(id),
+      skinList: (slot: SkinSlot | null) => openSkinList(slot),
+    };
+  }
+
   get onboarding() { return { lessons: lessonDebug, keys: keysDebug, whereStuck: () => whereStuck(this), findStuck: () => findStuck(this.game, this.floor), setUiScale: (v: number) => setUiScale(this, v) }; }
 }
