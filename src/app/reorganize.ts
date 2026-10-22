@@ -21,9 +21,25 @@ import { T } from '../ui/theme';
 import type { App } from './app';
 import type { Rect, UI } from '../ui/ui';
 import { bookArea, speak, heading, struck, ROW_H } from './ledger';
+import { smallWidth } from '../ui/font';
+// Act III (DESIGN.md §21 Challenges): from the second Reorganize on, the next run may be one
+import { CHALLENGES, CHALLENGE_IDS, CHALLENGE_AFTER_RUNS, type ChallengeId } from '../data/challenges';
+import { won } from '../sim/systems/challenges';
+import { scenariosOpen } from './scenarios';
 
-/** the confirm's first click arms it until this UI time */
-const st = { armedUntil: -1 };
+/** the confirm's first click arms it until this UI time; the next run picked on the card (null:
+ * an ordinary run) */
+const st = { armedUntil: -1, pick: null as ChallengeId | null };
+
+/** The Challenges the card offers now: from the second Reorganize on, those not yet won. */
+export function challengesOffered(app: App): ChallengeId[] {
+  const g = app.game;
+  if (g.s.meta.runs < CHALLENGE_AFTER_RUNS || g.s.scenario) return [];
+  return CHALLENGE_IDS.filter((id) => !won(g, id));
+}
+
+/** Pick the next run on the card (the e2e states). */
+export function pickNextRun(id: ChallengeId | null) { st.pick = id; }
 
 const hm = (sec: number) => `${Math.floor(sec / 3600)}:${String(Math.floor((sec % 3600) / 60)).padStart(2, '0')}`;
 const p1 = (v: number) => (v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, ''));
@@ -37,13 +53,17 @@ export function reorganizeCard(app: App, r0: Rect) {
   const { body } = menuTemplate(app, r, { title: 'Reorganize', accent: C.violet, icon: 'star' });
   const why = reorganizeRefusal(g);
   const armed = ui.time < st.armedUntil;
+  const offered = challengesOffered(app);
+  if (st.pick && !offered.includes(st.pick)) st.pick = null;
   // ---- the Committee, sliding the contract over
-  const line = why ? '"not yet." "come back with a fold." "or two."' : armed ? '"sure?" "sign again." "no take-backs."' : `"psst." "sign here." {chip:reset:+${p.now} ${p.now === 1 ? 'Patent' : 'Patents'}}`;
+  const line = why ? '"not yet." "come back with a fold." "or two."' : armed ? '"sure?" "sign again." "no take-backs."' : st.pick ? `"a Challenge?" "bold." "sign here." {chip:reset:+${p.now} ${p.now === 1 ? 'Patent' : 'Patents'}}` : `"psst." "sign here." {chip:reset:+${p.now} ${p.now === 1 ? 'Patent' : 'Patents'}}`;
   let y = body.y;
   y += speak(app, 'committee', line, body.x, y, Math.min(body.w, 300), { size: 24, fallback: committeeFallback }) + 6;
   // ---- the contract: a sheet on the page, three ruled columns
   const foot = 26;
-  const sheet = { x: body.x + 2, y, w: body.w - 4, h: body.y + body.h - foot - y };
+  // the next run, under the contract: an ordinary one or a Challenge (DESIGN.md §21)
+  const nextH = offered.length ? nextRunHeight(offered, body.w - 4) : 0;
+  const sheet = { x: body.x + 2, y, w: body.w - 4, h: body.y + body.h - foot - y - nextH };
   ui.panel(sheet.x, sheet.y, sheet.w, sheet.h, 'paper', true);
   const ix = sheet.x + 6, iy = sheet.y + 5, iw = sheet.w - 12, ih = sheet.h - 9;
   const gw = Math.floor((iw - 16) * 0.44), kw = Math.floor((iw - 16 - gw) / 2);
@@ -55,6 +75,7 @@ export function reorganizeCard(app: App, r0: Rect) {
   const lx = kx + kw + 8;
   ui.ctx.fillRect(lx - 4, iy, 1, ih);
   loseColumn(ui, { x: lx, y: iy, w: iw - (lx - ix), h: ih });
+  if (nextH) nextRun(app, offered, body.x + 2, sheet.y + sheet.h + 4, body.w - 4);
   // ---- the run so far, the runs before, and the signature
   const fy = body.y + body.h - foot + 6;
   const m = g.s.meta;
@@ -82,9 +103,61 @@ export function reorganizeCard(app: App, r0: Rect) {
     if (!armed) st.armedUntil = ui.time + 4;
     else {
       st.armedUntil = -1;
-      if (app.act({ k: 'reorganize' }).ok) afterReorganize(app, p.now);
+      const challenge = st.pick;
+      if (app.act(challenge ? { k: 'reorganize', challenge } : { k: 'reorganize' }).ok) { st.pick = null; afterReorganize(app, p.now, challenge); }
     }
   }
+}
+
+// ------------------------------------------------------------------ the next run: a Challenge?
+
+const NEXT_KEYS_H = 15;
+const NEXT_CAP = 'NEXT RUN';
+const nextLabel = (id: ChallengeId | null) => (id ? CHALLENGES[id].name : 'Ordinary run');
+
+/** The choices laid out in rows (a second row when one is too narrow): each one's place. */
+function nextKeys(offered: ChallengeId[], x: number, w: number): { id: ChallengeId | null; x: number; row: number; w: number }[] {
+  const out: { id: ChallengeId | null; x: number; row: number; w: number }[] = [];
+  const x0 = x + smallWidth(NEXT_CAP) + 6;
+  let bx = x0, row = 0;
+  for (const id of [null, ...offered]) {
+    const bw = textWidth(nextLabel(id)) + 12;
+    if (bx + bw > x + w && bx > x0) { row++; bx = x0; }
+    out.push({ id, x: bx, row, w: bw });
+    bx += bw + 3;
+  }
+  return out;
+}
+
+/** The room the next-run strip takes: its rows of choices, then two lines on the one picked. */
+function nextRunHeight(offered: ChallengeId[], w: number): number {
+  const rows = Math.max(...nextKeys(offered, 0, w).map((k) => k.row)) + 1;
+  return rows * (NEXT_KEYS_H + 2) + 1 + 22 + 3;
+}
+
+/** The next run: "Ordinary run" or one of the Challenges not yet won, each a labelled choice, and
+ * under them the pick's rule, goal and reward (pillar 4: the card says what the run will cost). */
+function nextRun(app: App, offered: ChallengeId[], x: number, y: number, w: number) {
+  const ui = app.ui;
+  ui.small(NEXT_CAP, x, y + 5, T.reset);
+  let rows = 1;
+  for (const k of nextKeys(offered, x, w)) {
+    const id = k.id;
+    const on = st.pick === id;
+    const tip = id
+      ? [{ text: `{big:${CHALLENGES[id].name}}` }, { text: `{bad:rule} ${CHALLENGES[id].rule}` }, { text: `{good:goal} ${CHALLENGES[id].goalText}` }, { text: `{coinc:reward} ${CHALLENGES[id].reward}` }]
+      : [{ text: '{big:An ordinary run}' }, { text: '{soft:no restriction}' }];
+    if (button(ui, 'nextRun_' + (id ?? 'ordinary'), k.x, y + k.row * (NEXT_KEYS_H + 2), k.w, NEXT_KEYS_H, nextLabel(id), { active: on, tip }) && !on) { st.pick = id; st.armedUntil = -1; }
+    rows = Math.max(rows, k.row + 1);
+  }
+  const id = st.pick;
+  const ly = y + rows * (NEXT_KEYS_H + 2) + 1;
+  const s = id
+    ? `{bad:rule} ${CHALLENGES[id].rule} · {good:goal} ${CHALLENGES[id].goalText} · {coinc:reward} ${CHALLENGES[id].reward}`
+    : '{soft:no restriction} · {reset:a Challenge} {soft:holds a rule until its goal, then keeps a small reward for good · Patents as ever}';
+  ui.clip(x, ly, w, 22);
+  drawLayout(ui, layoutRich(s, w), x, ly, T.ink);
+  ui.unclip();
 }
 
 /** The left column: the Patents a Reorganize gives now, term by term, and what would raise it. */
@@ -238,7 +311,7 @@ function drawNote(ui: UI, s: string, x: number, y: number, w: number): number {
 
 /** The app's side of a reset: nothing of the old run stays selected or open, the new run is framed,
  * and the Patent tree opens to spend what was banked. */
-export function afterReorganize(app: App, patents: number) {
+export function afterReorganize(app: App, patents: number, challenge: ChallengeId | null = null) {
   app.selected = null;
   app.fselected = null;
   app.gradeId = null;
@@ -248,6 +321,10 @@ export function afterReorganize(app: App, patents: number) {
   app.fitCamera(true);
   app.panel = 'patents';
   app.toast('Reorganized', `{reset:+${patents}} ${patents === 1 ? 'Patent' : 'Patents'} banked · spend them on the tree`, C.violet);
+  // Act III (DESIGN.md §21): the run taken as a Challenge says its rule; the first Reorganize
+  // opens the Scenario boards (Options) and, from the next one, Challenges
+  if (challenge) app.toast(`Challenge: ${CHALLENGES[challenge].name}`, `{bad:${CHALLENGES[challenge].rule}} · {good:goal} ${CHALLENGES[challenge].goalText}`, C.violet, 'star');
+  else if (app.game.s.meta.runs === CHALLENGE_AFTER_RUNS && scenariosOpen(app)) app.toast('Scenarios open', '{u:options} Options → Scenarios · puzzle boards · Challenges at the next Reorganize', C.violet, 'trophies');
   app.audio.sfx('milestone');
   app.save();
 }

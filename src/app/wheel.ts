@@ -31,6 +31,9 @@ import { GRADE_COL } from './fold';
 import type { Layout } from './layout';
 import type { App } from './app';
 import type { Dir } from '../sim/world';
+// Act III (DESIGN.md §21): the Chute Mouths' look, the Factory Chute in hand, the watchers
+import { act3Frame, holdChute, holdingChute } from './act3';
+import { chuteCap } from '../sim/systems/modules';
 
 // ---------------------------------------------------------------- geometry
 
@@ -184,6 +187,7 @@ export function wheelFrameStart(app: App): void {
   else if (m.k === 'ftrunk') W.hubF = { k: 'trunk' };
   else if (m.k === 'fmodule') W.hubF = { k: 'module', id: m.design };
   bookkeeping(app);
+  act3Frame(app);
   if (!W.open) return;
   if (app.panel || app.screen !== 'play' || app.offlineJob) { closeWheel(app); return; }
   W.mx = ui.mx;
@@ -295,10 +299,17 @@ function frameOf(app: App, s: SpriteSheet, anim: boolean) {
   return anim ? Math.floor(app.ui.time * (s.fps || 6)) : 0;
 }
 
+/** Act III's Workshop buildings (DESIGN.md §21): kept off the wheel, even as locked silhouettes,
+ * until Act III opens (the Great Drill's stage 3) or one is unlocked, so an Act II wheel stays as
+ * it was. They sit at the end of the Heavy petal, so the number keys of the rest never move. */
+const ACT3_KINDS = new Set<BuildKind>(['chemVat', 'greenhouse', 'chuteMouth']);
+const act3Open = (app: App) => (app.game.s.mega.stage ?? 0) >= 3 || [...ACT3_KINDS].some((k) => app.game.unlocked(k));
+
 function storeItems(app: App, tabId: 'build' | 'power' | 'heavy'): Item[] {
   const g = app.game;
   const hs = app.hud;
-  const kinds = STORE_TABS.find((t) => t.id === tabId)!.kinds;
+  const all = STORE_TABS.find((t) => t.id === tabId)!.kinds;
+  const kinds = act3Open(app) ? all : all.filter((k) => !ACT3_KINDS.has(k));
   const goalUi = hs.goalUi ?? '';
   return kinds.map((kind, i): Item => {
     const d = BUILD[kind];
@@ -479,6 +490,34 @@ function trunkItems(app: App): Item[] {
     rows: ["a module's gold front → the next one's back", 'or the Factory Dock, the Hopper, the Bay', 'off a side · its {i:slag} or {i:oil}'],
     verbs: '{k:LMB} drag to lay  {k:R} turn',
     pick: () => { if (app.mode.k !== 'ftrunk') app.setMode({ k: 'ftrunk' }); return true; },
+  }, ...chuteItems(app)];
+}
+
+/** The Factory Chute (DESIGN.md §21): one on the floor, once Chutes is researched (a padlock from
+ * Zoning on). Picked, it follows the mouse until a click puts it down (src/app/act3.ts). */
+function chuteItems(app: App): Item[] {
+  const g = app.game;
+  const open = g.done('chutes');
+  if (!open && !g.done('zoning')) return [];
+  const placed = g.s.factory.ents.some((e) => e.kind === 'fchute');
+  const afford = g.s.coin.gte(FACTORY.chuteCost);
+  const fs = sheet('factory_chute');
+  return [{
+    id: 'wheel_item_fchute', name: open ? 'Factory Chute' : '???',
+    draw: (x, y, k, hov) => drawKind(app, 'factory_chute', x, y, k, 0, frameOf(app, fs, hov || k === 2), !open),
+    price: open ? (placed ? 'BUILT' : short(FACTORY.chuteCost)) : null, priceRole: placed ? 'good' : afford ? 'coin' : 'soft',
+    afford: open && !placed && afford, locked: !open, active: holdingChute(), fresh: false, goal: false,
+    chips: open ? [{ text: Num.of(FACTORY.chuteCost).format(), o: { role: afford ? 'coin' : 'bad', icon: 'coin' } }, { text: placed ? 'one standing' : 'one a floor', o: { role: 'soft' } }] : [],
+    rows: open
+      ? ['trunks end in it → down to the Workshop', `{u:workshop} a Chute Mouth pushes it out`, `holds ${chuteCap(g)} of each item`, ...(placed ? ['{good:standing} · {k:X} lifts it, refunded'] : [])]
+      : [`{u:lock} {research:${RESEARCH.chutes.name}}`],
+    verbs: open ? (placed ? '{k:X} remove' : '{k:LMB} pick up  then click the floor') : '{k:T} research',
+    pick: () => {
+      if (!open) { app.refuse(`needs {research:${RESEARCH.chutes.name}}`); return false; }
+      if (placed) { app.refuse('The Factory has its Chute already: run more trunks into it'); return false; }
+      holdChute(app);
+      return true;
+    },
   }];
 }
 
@@ -931,7 +970,8 @@ function chipRows(chips: Item['chips'], w = INFO_W - 36): Item['chips'][] {
 /** With nothing hovered: the open petal's name and its icons in a row, the verbs to open it. */
 function petalTag(app: App, p: Petal, anchor: { x: number; y: number }) {
   const ui = app.ui;
-  const verbs = PETAL_VERBS[p.id];
+  // the Heavy petal grows with Act III: its number keys run as far as its items do
+  const verbs = p.id === 'heavy' ? `{k:1}-{k:${Math.min(9, p.items.length)}} pick` : PETAL_VERBS[p.id];
   const afford = p.items.filter((q) => q.afford && !q.locked).length;
   const fresh = p.items.filter((q) => q.fresh).length;
   const counts = [afford ? `{coinc:${afford} to buy}` : '', fresh ? `{bad:${fresh} new}` : '', p.items.some((q) => q.goal) ? '{warn:the goal}' : ''].filter(Boolean).join('  ');
@@ -949,7 +989,7 @@ function petalTag(app: App, p: Petal, anchor: { x: number; y: number }) {
 
 /** What a petal's tag says you can do, as keycap verbs. */
 const PETAL_VERBS: Record<PetalId, string> = {
-  build: '{k:1}-{k:9} pick', power: '{k:1}-{k:4} pick', heavy: '{k:1}-{k:6} pick',
+  build: '{k:1}-{k:9} pick', power: '{k:1}-{k:4} pick', heavy: '{k:1}-{k:9} pick',
   tools: '{k:R} {k:X} {k:F} {k:L}', upgrades: '{k:LMB} buy',
   trunk: '{k:1} trunk  {k:LMB} drag', modules: '{k:2}-{k:9} place  {k:SHIFT}{k:LMB} stamp',
 };

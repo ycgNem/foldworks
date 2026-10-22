@@ -45,7 +45,7 @@ export function ffoldRefusal(g: Game, b: Box): string | null {
   if (b.x < 0 || b.y < 0 || b.x + b.w > g.fw || b.y + b.h > g.fh) return 'The box is off the floor';
   const ents = fentsIn(g, b);
   for (const e of ents) {
-    if (e.kind === 'fdock' || e.kind === 'fhopper' || e.kind === 'fbay') return `The box holds the ${fname(g, e)}, which stays on the floor`;
+    if (e.kind === 'fdock' || e.kind === 'fhopper' || e.kind === 'fbay' || e.kind === 'fchute') return `The box holds the ${fname(g, e)}, which stays on the floor`;
     if (e.x < b.x || e.y < b.y || e.x + e.w > b.x + b.w || e.y + e.h > b.y + b.h) return `${fname(g, e)} is only partly in the box`;
   }
   const mods = ents.filter((e) => e.kind === 'module');

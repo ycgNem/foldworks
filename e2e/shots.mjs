@@ -4,6 +4,7 @@
 // the offline report). Needs the dev server. Usage: npm run shots [-- 1920 1080]
 import fs from 'node:fs';
 import { launch, openGame, frames, hoverTile } from './launch.mjs';
+import { districtSetup, dragTiles } from './screens.mjs';
 
 const [w = 1280, h = 720] = process.argv.slice(2).map(Number);
 const OUT = 'e2e/out/shots';
@@ -108,6 +109,46 @@ await page.evaluate(() => {
 r = await until("g.machines.some((m) => m.state === 'blocked' && m.why === 'slag')", 300);
 const jam = await hoverFirst("e.state === 'blocked'");
 await shot('04-slag-jam', `the Hand Furnace blocked by slag, its report hovered (${r.ok && jam ? 'ok' : 'NOT REACHED'})`);
+
+// 8 (its own game, Milestone 7): the District. 23 groups joined by skiff routes into the Dock, the
+// Hopper and the Floating City's Bay, run half a minute so the skiffs carry (e2e/screens.mjs builds it)
+const rest = async () => { await page.evaluate(() => { window.__app.hud.goalKey = null; }); await page.mouse.move(Math.floor(w * 0.6), Math.floor(h * 0.92)); };
+await page.evaluate(() => window.__app.attachBot(null));
+await page.evaluate(districtSetup, 'district');
+await rest();
+await shot('08-district', 'the District: groups, skiff routes, the orange short route, the Bay');
+await page.evaluate(districtSetup, 'districtRoute');
+await rest();
+await shot('08b-district-route', 'a short route clicked: its card, the readout, + skiff and - skiff with the price');
+await page.evaluate(districtSetup, 'districtBox');
+await page.evaluate(() => { window.__app.hud.goalKey = null; });
+await dragTiles(page, [[4, 6], [7, 8]]);
+await shot('08c-district-fold-box', 'a District fold box dragged over the sensor works');
+await page.mouse.up();
+await page.evaluate(districtSetup, 'districtGrade');
+await rest();
+await shot('08d-district-grade', "the District fold's grade card");
+
+// ---------------------------------------------------------------- Act III (Milestone 7)
+// Set up by screens.mjs's act3Setup (a late game, not the bot's): the Chem Vat, the Greenhouse and
+// three Chute Mouths on the Workshop, a Mouth's report with its picker, the Factory Chute full (its
+// hover report), Act III's research page and the Floating City under way.
+await page.evaluate(() => window.__app.attachBot(null));
+for (const [state, name, note] of [
+  ['act3ws', '09-act3-workshop', 'Act III on the Workshop: a Chem Vat, a Greenhouse, three Chute Mouths (the last empty)'],
+  ['act3mouth', '10-chute-mouth', "a Chute Mouth's report with the item picker"],
+  ['act3chuteHover', '11-factory-chute', 'the Factory Chute fed by two modules, steel full, its hover report'],
+  ['research3open', '12-research-act3', "Act III's research page, Sensors under way"],
+  ['megaCity', '13-floating-city', 'the Floating City: stage 1 built, stage 2 under way'],
+]) {
+  const { act3Setup } = await import('./screens.mjs');
+  const f = await page.evaluate(act3Setup, state);
+  await frames(page, 4);
+  if (f?.hover) await hoverTile(page, f.hover[0], f.hover[1]);
+  await shot(name, note);
+  await page.mouse.move(Math.floor(w * 0.6), Math.floor(h * 0.45));
+}
+// ---------------------------------------------------------------- (end of Act III)
 
 fs.writeFileSync(`${OUT}/shots.md`, `# Shots at ${w}x${h}\n\n${log.join('\n')}\n\n${errors.length ? '## Console\n\n' + errors.map((e) => '- ' + e).join('\n') : 'No console errors.'}\n`);
 console.log(log.join('\n'));

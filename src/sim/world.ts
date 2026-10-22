@@ -10,6 +10,7 @@ import type { CustomerId } from '../data/orders';
 import type { SparkKind } from '../data/sparks';
 import type { BuildKind } from '../data/machines';
 import type { PatentId } from '../data/patents';
+import { HIGH, type HighFloorId } from '../data/floors';
 
 export type Dir = 0 | 1 | 2 | 3;
 /** E, S, W, N */
@@ -19,15 +20,19 @@ export const opposite = (d: Dir): Dir => ((d + 2) % 4) as Dir;
 export const cw = (d: Dir): Dir => ((d + 1) % 4) as Dir;
 export const ccw = (d: Dir): Dir => ((d + 3) % 4) as Dir;
 
-export type Floor = 'workshop' | 'factory';
+export type Floor = 'workshop' | 'factory' | 'district' | 'world';
+/** The floors of modules (rate functions): the Factory and the high floors above it. */
+export type ModFloor = Exclude<Floor, 'workshop'>;
 
 /** What a machine is doing this tick (DESIGN.md §4 status pips). A powered machine with no power
  * is 'starved' with why = 'power' (the blue pip, §18). */
 export type MState = 'work' | 'starved' | 'blocked' | 'idle';
 
 /** A powered machine's mode (DESIGN.md §18 Modes, research Tuning). */
-export type Mode = 'normal' | 'efficient' | 'overclock' | 'precision';
-export const MODES: Mode[] = ['normal', 'efficient', 'overclock', 'precision'];
+export type Mode = 'normal' | 'efficient' | 'overclock' | 'precision'
+  // Act III (DESIGN.md §21 Modes, research Recycling): half the byproduct, or twice it
+  | 'recycling' | 'byproduct';
+export const MODES: Mode[] = ['normal', 'efficient', 'overclock', 'precision', 'recycling', 'byproduct'];
 
 /** The tiles just outside a footprint's face in direction d: one for a 1x1, two for a 2x2. */
 export function faceTiles(e: { x: number; y: number; w: number; h: number }, d: Dir): [number, number][] {
@@ -192,10 +197,17 @@ export interface ModuleDesign {
   grade: GradeCard;
   /** the price of the machines (and power buildings) inside, in coin (the stamp bill) */
   bill: number;
-  /** 2 for a design folded on the Factory floor out of modules (DESIGN.md §18 Nested folds) */
-  depth?: 1 | 2;
+  /** 2 for a design folded on the Factory floor out of modules (DESIGN.md §18 Nested folds), 3 for
+   * one folded on the District out of depth-2 modules (§21), 4 on the World (§22) */
+  depth?: 1 | 2 | 3 | 4;
   /** a depth-2 design: the modules and trunks it was folded from, relative to its box */
   fparts?: { kind: 'module' | 'trunk'; design: number; dx: number; dy: number; rot: Dir }[];
+  /** a depth-3 (or 4) design: the modules it was folded from on its high floor, relative to its
+   * box, and the skiff routes between them (indices into hparts) */
+  hparts?: { design: number; dx: number; dy: number }[];
+  hroutes?: { from: number; to: number; item: ItemId; skiffs: number }[];
+  /** the floor a depth-3+ design was folded on (it unfolds back there) */
+  hfloor?: 'district' | 'world';
   /** copies made by stamping so far (n in bill x (1 + 0.5 n)) */
   stamped: number;
   /** copies in the inventory, not placed (a count of modules) */
@@ -207,7 +219,9 @@ export interface ModuleDesign {
   normal?: boolean;
 }
 
-export type FKind = 'module' | 'trunk' | 'fdock' | 'fhopper' | 'fbay';
+/** What stands on a floor of modules. The Factory has trunks and its Chute (DESIGN.md §21); the
+ * high floors have only modules, a Dock, a Hopper and a Bay (skiff routes join them). */
+export type FKind = 'module' | 'trunk' | 'fdock' | 'fhopper' | 'fbay' | 'fchute';
 
 /** One thing on the Factory floor (DESIGN.md §11): modules run as rate functions. */
 export interface FEnt {
@@ -256,6 +270,41 @@ export interface FEnt {
 export interface FactoryState {
   ents: FEnt[];
   nextId: number;
+}
+
+/** A skiff route on a high floor (DESIGN.md §21): one item from a module's output to a module, the
+ * floor's Dock, Hopper or Bay, flown by `skiffs` skiffs. Throughput: skiffs x load / (2 x distance /
+ * speed + dwell). */
+export interface SkiffRoute {
+  id: number;
+  /** entity ids on the floor */
+  from: number;
+  to: number;
+  item: ItemId;
+  skiffs: number;
+  /** items a second moved, smoothed over about 5 s (the route's readout) */
+  flow: number;
+  /** this tick's move, items (for the bills term and the drawing) */
+  moved: number;
+  /** the tick it last carried anything (the bills term counts a route by its use, like a trunk) */
+  used?: number;
+  /** its first skiff was the Committee's (Pocket Skiffs): not refunded */
+  free?: boolean;
+}
+
+/** A high floor's state: the District, the World (DESIGN.md §21, §22). */
+export interface HighFloorState {
+  ents: FEnt[];
+  nextId: number;
+  routes: SkiffRoute[];
+  nextRoute: number;
+  /** lots bought this run, east of its first width */
+  lots: number;
+}
+
+/** A fold audit on a high floor: a group of modules joined by routes (DESIGN.md §21 District folds). */
+export interface HAuditState extends FAuditState {
+  floor: 'district' | 'world';
 }
 
 export interface Spark {
@@ -367,6 +416,8 @@ export interface MetaState {
   /** this run's best 5-minute coin per minute so far, and the minutes it is averaged over (rates) */
   peakPerMin: number;
   perMinRing: number[];
+  /** Challenges completed, for good (DESIGN.md §21); absent on older saves */
+  challenges?: string[];
 }
 
 export function newMeta(): MetaState {
@@ -447,6 +498,28 @@ export interface State {
   annex?: number;
   /** kept designs unfolded from the Patent Drawer this run (ids), so the Draughtsman does each once */
   drafted?: number[];
+  // ---- Act III (DESIGN.md §21); absent on older saves
+  /** the District, once Zoning is researched this run */
+  district?: HighFloorState;
+  /** the World floor (Act IV) */
+  world?: HighFloorState;
+  /** a fold audit on a high floor (one at a time, like the Factory's) */
+  haudit?: HAuditState | null;
+  /** what the Factory Chute has dropped to the Workshop and the Chute Mouths have not pushed out
+   * yet, by item (fractional items: modules hand over rates) */
+  chute?: Partial<Record<ItemId, number>>;
+  /** Megaprojects #2 and on: stages done and what the current stage has been given, by project.
+   * Survives every reset (DESIGN.md §21), like `mega`. */
+  megas?: Partial<Record<string, { stage: number; progress: Partial<Record<ItemId, Num>> }>>;
+  /** this run's Challenge, if it is one (DESIGN.md §21 Challenges): its rules hold until its goal
+   * is met */
+  challenge?: string | null;
+  /** the Scenario this game is (DESIGN.md §21 Scenarios): a separate game in its own save slot */
+  scenario?: string;
+  /** the Challenge's starting count of S folds (its goal is one more, DESIGN.md §21) */
+  challengeBase?: number;
+  /** lots a high floor opens with this run (District Deeds, a head start) */
+  headLots?: number;
 }
 
 /** A nested-fold audit on the Factory floor (DESIGN.md §18 Nested folds). */
@@ -479,6 +552,15 @@ export function newFactory(): FactoryState {
   return {
     ents: [newFEnt(1, 'fdock', FACTORY.dock.x, FACTORY.dock.y, 0), newFEnt(2, 'fhopper', FACTORY.hopper.x, FACTORY.hopper.y, 0)],
     nextId: 3,
+  };
+}
+
+/** A high floor as it opens: its Dock and Hopper on the east edge, nothing else (DESIGN.md §21). */
+export function newHighFloor(id: HighFloorId): HighFloorState {
+  const f = HIGH[id];
+  return {
+    ents: [newFEnt(1, 'fdock', f.dock.x, f.dock.y, 0), newFEnt(2, 'fhopper', f.hopper.x, f.hopper.y, 0)],
+    nextId: 3, routes: [], nextRoute: 1, lots: 0,
   };
 }
 

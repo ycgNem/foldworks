@@ -12,7 +12,7 @@ import { BUILD } from '../data/machines';
 import { RESEARCH } from '../data/research';
 import { TROPHIES } from '../data/trophies';
 import { itemName, ITEMS, type ItemId } from '../data/items';
-import { MEGA } from '../data/megaprojects';
+import { MEGA, MEGAS, type MegaId } from '../data/megaprojects';
 import { TITLE } from '../game-info';
 import { ICON, textWidth, bigWidth, drawText, LINE_H, BIG_H } from '../ui/font';
 import { layoutRich, drawLayout, richWidth } from '../ui/rich';
@@ -32,6 +32,7 @@ import { pinnedReport, hoverEnt, worldTip, zones, pinTop, bigSafe } from './tags
 import { drawWheel } from './wheel';
 import { nextGoal } from './goals';
 import { getHoverTags } from './settings';
+import { districtHud, districtHover, districtHoverKey, districtZones } from './district';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
 
@@ -108,6 +109,8 @@ export interface HudState {
   /** the notebook's bookmarks up the left edge, last frame (floor tags and a report docked on the
    * left keep off them) */
   marksRect: Rect | null;
+  /** the audit clipboards on the floor this frame (the Gazette's slip yields to them) */
+  clipRects: Rect[];
   // ---- the hover delay (the owner, 2026-10-21: hover tags everywhere were overstimulating)
   /** what the mouse is over on the floor, since when, and when a floor tag was last up */
   hoverKey: string | null;
@@ -121,7 +124,7 @@ export function newHudState(): HudState {
     tabSeen: new Set(), tabRung: new Set(), opened: new Set(), codexSeen: 0, celebs: [], rain: [], coinLast: -1, glints: [], firstMiner: false,
     collapsed: new Set(), goalKey: null, goalAt: -10, goalUi: null, crawlHot: false,
     foldedAt: -10, cameos: [], offerSeen: null, codexHeard: -1, ordersHeard: -1, bellIds: new Set(), bellAt: -10, liftAngle: 180, lastPage: null, purseBottom: 70, cornerRect: null,
-    marksRect: null, hoverKey: null, hoverSince: 0, hoverShown: -10,
+    marksRect: null, clipRects: [], hoverKey: null, hoverSince: 0, hoverShown: -10,
   };
 }
 
@@ -138,15 +141,19 @@ export function drawHud(app: App, dt: number) {
   zones.length = 0;
   zones.push(...cornerZones(app, L, app.hud.purseBottom));
   if (app.hud.cornerRect) zones.push(app.hud.cornerRect);
+  zones.push(...districtZones(app, L));
   if (!app.panel) {
     // the floor's own markers first (under every piece of the HUD)
     floorTags(app, L);
     diegetic(app, L);
     panArrows(app, L);
-    auditBadge(app, L);
+    // the District's audit hangs its own clipboard (src/app/district.ts)
+    app.hud.clipRects = [];
+    if (app.floor !== 'district') auditBadge(app, L);
     corners(app, L, dt);
     edgeArrows(app);
     pinnedReport(app, L);
+    districtHud(app, L);
   } else {
     // a page lies open on the desk: the floor goes behind dark wood
     if (!NOT_PAGES.has(app.panel)) desk(app);
@@ -394,8 +401,10 @@ function celebrations(app: App, L: Layout, dt: number) {
       // the ribbon drops in, bounces, holds, then lifts away
       const k = Math.min(1, c.t * 3);
       const drop = c.t < 0.33 ? (1 - k) * -60 : c.t > 3.8 ? (c.t - 3.8) * -120 : Math.round(Math.sin(Math.min(1, (c.t - 0.33) * 4) * Math.PI) * 4);
-      const st = MEGA.find((m) => m.stage === c.value);
-      const title = `${(st?.name ?? 'The Great Drill').split(':')[0]}!`;
+      // a District project (the Floating City, the Scrap Transmuter) or the Great Drill
+      const proj = c.id && c.id in MEGAS ? MEGAS[c.id as MegaId] : null;
+      const st = proj ? proj.stages.find((m) => m.stage === c.value) : MEGA.find((m) => m.stage === c.value);
+      const title = `${(st?.name ?? proj?.name ?? 'The Great Drill').split(/[:,]/)[0]}!`;
       const sub = `stage ${c.value ?? 1} built · ${st?.reward ?? ''}`;
       const sc = bigWidth(title) * 3 + 60 <= ui.w ? 3 : 2;
       bannerRibbon(app, Math.floor(ui.w / 2), Math.round(30 + drop), title, sub, 'gold', sc);
@@ -467,6 +476,7 @@ const HOVER_FADE = 0.1;
 function hoverKeyOf(app: App): string | null {
   const g = app.game;
   const h = app.hud.hoverTile;
+  if (app.floor === 'district') return districtHoverKey(app);
   if (!h) return app.townTip ? 'town:' + app.townTip : null;
   // the pinned thing has its whole report up already: no hover tag for it
   if (app.floor === 'factory') { const fe = g.fentAt(h.x, h.y); return fe && fe.id !== app.fselected ? 'f' + fe.id : null; }
@@ -494,6 +504,7 @@ function hoverReport(app: App) {
   const alpha = Math.min(1, age / HOVER_FADE);
   ui.tipAlpha = alpha;
   const brief = mode === 'brief';
+  if (app.floor === 'district') { districtHover(app, { brief, alpha }); return; }
   const h = app.hud.hoverTile;
   if (!h && app.townTip) { ui.tip([{ text: app.townTip }], 240); return; }
   if (!h) return;

@@ -145,19 +145,28 @@ export function frameAt(s: SpriteSheet, t: number) {
 
 let itemCells: Map<string, HTMLCanvasElement> | null = null;
 
-/** The 8x8 icon for an item: from src/art/items.png (the slice's items, ITEM_IDS order) and
- *  src/art/items2.png (Act II's, continuing the same order), or code. */
+/** The item atlases in ITEM_IDS order: the slice's (items.png), Act II's (items2.png), Act III's
+ *  (items3.png, whose sidecar names each cell). */
+const ITEM_SHEETS: [string, number][] = [['items', 10], ['items2', 12], ['items3', 19]];
+
+/** The 8x8 icon for an item: from src/art/items.png, items2.png and items3.png (each continuing
+ *  ITEM_IDS's order; a sheet whose sidecar lists `names` is looked up by name), or code. */
 export function itemIcon(id: string): HTMLCanvasElement {
   if (!itemCells) {
     itemCells = new Map();
-    const art = sheets.get('items');
-    const art2 = sheets.get('items2');
-    const n1 = art && !art.placeholder ? art.frames.length : 10;
-    ITEM_IDS.forEach((it, i) => {
-      if (i < n1 && art && !art.placeholder && art.frames[i]) itemCells!.set(it, art.frames[i]);
-      else if (i >= n1 && art2 && !art2.placeholder && art2.frames[i - n1]) itemCells!.set(it, art2.frames[i - n1]);
-      else itemCells!.set(it, drawItem(it));
-    });
+    let base = 0;
+    for (const [name, n] of ITEM_SHEETS) {
+      const art = sheets.get(name);
+      if (art && !art.placeholder) {
+        art.frames.forEach((f, i) => {
+          // by name when the sidecar has them (items3), else by position after the sheets before
+          const it = art.order ? art.order[i] : ITEM_IDS[base + i];
+          if (it && (ITEM_IDS as readonly string[]).includes(it)) itemCells!.set(it, f);
+        });
+      }
+      base += art && !art.placeholder && !art.order ? art.frames.length : n;
+    }
+    for (const it of ITEM_IDS) if (!itemCells.has(it)) itemCells.set(it, drawItem(it));
   }
   return itemCells.get(id) ?? itemCells.get('slag')!;
 }

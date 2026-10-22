@@ -37,6 +37,8 @@ import { entName, lines as workshopLines } from './analysis';
 import { restore } from './snapshot';
 import { prules } from './patents';
 import type { Ent, FEnt } from './world';
+import { HIGH, type HighFloorId } from '../data/floors';
+import { HIGH_IDS, bayProjects, megaStageOf, megaGiveX } from './systems/high';
 
 /** The offline efficiency now (DESIGN.md §12, §20): the base 0.5 plus the Patent tree's offline
  * nodes (§19) plus the Night Shift bought with coin, capped at 0.75. The one function every
@@ -134,23 +136,32 @@ export interface OfflineReport {
  * they are item amounts (CLAUDE.md). */
 export interface Tally {
   dock: Partial<Record<ItemId, Num>>;
-  /** the Factory Dock, apart: Factory-only orders fill from it */
+  /** each floor's Dock apart (the Factory's, the District's, the World's): an order for one
+   * floor fills only from its Dock */
   fdock: Partial<Record<ItemId, Num>>;
+  ddock: Partial<Record<ItemId, Num>>;
+  wdock: Partial<Record<ItemId, Num>>;
   hopper: Partial<Record<ItemId, Num>>;
+  /** the Factory's Bay (the Great Drill), and the District's and World's (Megaprojects #2 on) */
   bay: Partial<Record<ItemId, Num>>;
+  dbay: Partial<Record<ItemId, Num>>;
+  wbay: Partial<Record<ItemId, Num>>;
 }
 
+type Kind = keyof Tally;
 /** Delivery rates, items a second, by destination (rates may be plain numbers). */
-interface Rates {
-  dock: Partial<Record<ItemId, number>>;
-  fdock: Partial<Record<ItemId, number>>;
-  hopper: Partial<Record<ItemId, number>>;
-  bay: Partial<Record<ItemId, number>>;
-}
+type Rates = Record<Kind, Partial<Record<ItemId, number>>>;
 
-const KINDS = ['dock', 'fdock', 'hopper', 'bay'] as const;
-const newTally = (): Tally => ({ dock: {}, fdock: {}, hopper: {}, bay: {} });
-const copyTally = (t: Tally): Tally => ({ dock: { ...t.dock }, fdock: { ...t.fdock }, hopper: { ...t.hopper }, bay: { ...t.bay } });
+const KINDS = ['dock', 'fdock', 'ddock', 'wdock', 'hopper', 'bay', 'dbay', 'wbay'] as const;
+const DOCKS = ['dock', 'fdock', 'ddock', 'wdock'] as const;
+/** the floor an order must be for to fill from this Dock (undefined: the Workshop's) */
+const DOCK_FLOOR = { dock: undefined, fdock: 'factory', ddock: 'district', wdock: 'world' } as const;
+const HBAYS = { district: 'dbay', world: 'wbay' } as const;
+const newTally = (): Tally => ({ dock: {}, fdock: {}, ddock: {}, wdock: {}, hopper: {}, bay: {}, dbay: {}, wbay: {} });
+const copyTally = (t: Tally): Tally => Object.fromEntries(KINDS.map((k) => [k, { ...t[k] }])) as unknown as Tally;
+/** The tally a delivery to a floor's Dock goes into. */
+export const dockTally = (floor: 'factory' | 'district' | 'world' | undefined): 'dock' | 'fdock' | 'ddock' | 'wdock' =>
+  floor === 'factory' ? 'fdock' : floor === 'district' ? 'ddock' : floor === 'world' ? 'wdock' : 'dock';
 const addTo = (rec: Partial<Record<ItemId, Num>>, item: ItemId, n: Num | number) => { rec[item] = (rec[item] ?? Num.ZERO).add(n); };
 
 /** Blocked `n` seconds straight, by the per-second history ('b' output, 'x' byproduct). */
@@ -166,7 +177,7 @@ const heapCap = (g: Game) => prules(g).heapCap; // Deep Heaps (§19)
 const COUNTED = ['ingot', 'plate', 'gear', 'gizmo', 'circuit', 'motor', 'kit', 'bit', 'brick'];
 const plural = (name: string) => (COUNTED.includes(name.split(' ').pop()!) ? name + 's' : name);
 
-type Cause = { heap: Ent } | { bay: ItemId } | { order: string } | { research: ResearchId };
+type Cause = { heap: Ent } | { bay: ItemId } | { hbay: HighFloorId; item: ItemId } | { order: string } | { research: ResearchId };
 
 interface LineAcc {
   key: string;
@@ -366,7 +377,7 @@ export class OfflineRun {
 
   /** Delivery rates per second over the last measuring window. */
   private rates(): Rates {
-    const out: Rates = { dock: {}, fdock: {}, hopper: {}, bay: {} };
+    const out: Rates = { dock: {}, fdock: {}, ddock: {}, wdock: {}, hopper: {}, bay: {}, dbay: {}, wbay: {} };
     if (!this.mark || this.measureSecs <= 0) return out;
     for (const k of KINDS)
       for (const [item, n] of Object.entries(this.tally[k]) as [ItemId, Num][]) {
@@ -414,11 +425,27 @@ export class OfflineRun {
         const tb = rem / (r * this.eff);
         if (tb < dt) { dt = tb; cause = { bay: item }; }
       }
+    // a high floor's Bay: the first open project's want of an item met
+    if (this.eff > 0)
+      for (const id of HIGH_IDS) {
+        const r0 = rates[HBAYS[id]];
+        for (const mid of bayProjects(g, id)) {
+          const st3 = megaStageOf(g, mid)!;
+          const p = s.megas?.[mid]?.progress ?? {};
+          for (const [item, want] of Object.entries(st3.wants) as [ItemId, number][]) {
+            const r = r0[item] ?? 0;
+            const rem = want - (p[item]?.toNumber() ?? 0);
+            if (r <= 0 || rem <= 0) continue;
+            const tb = rem / (r * this.eff);
+            if (tb < dt) { dt = tb; cause = { hbay: id, item }; }
+          }
+        }
+      }
     const act = s.orders.active;
     if (act && this.eff > 0) {
       const d = ORDER[act];
-      // an order for the Factory Dock counts only what reaches it; any other counts both Docks
-      const to = this.timeToFill(d.wants, s.orders.progress[act] ?? {}, (i) => (d.at === 'factory' ? 0 : rates.dock[i] ?? 0) + (rates.fdock[i] ?? 0));
+      // an order for one floor's Dock counts only what reaches it; any other counts every Dock
+      const to = this.timeToFill(d.wants, s.orders.progress[act] ?? {}, (i) => DOCKS.reduce((a, k) => a + (!d.at || DOCK_FLOOR[k] === d.at ? rates[k][i] ?? 0 : 0), 0));
       if (to !== null && to < dt) { dt = to; cause = { order: act }; }
     }
     const sel = s.research.selected;
@@ -454,6 +481,13 @@ export class OfflineRun {
       if (rem > 0) this.giveBay(cause.bay, rem);
       this.push({ t: this.t, kind: 'bay', text: `The Megaproject Bay has all the ${itemName(cause.bay).toLowerCase()} it wants`, est: true });
       this.watch(this.t, true);
+    } else if (cause && 'hbay' in cause) {
+      const mid = bayProjects(g, cause.hbay).find((m) => megaStageOf(g, m)?.wants[cause.item]);
+      const st3 = mid ? megaStageOf(g, mid) : null;
+      const rem = st3 ? Math.ceil((st3.wants[cause.item] ?? 0) - (s.megas?.[mid!]?.progress[cause.item]?.toNumber() ?? 0)) : 0;
+      if (rem > 0) this.giveHBay(cause.hbay, cause.item, rem);
+      this.push({ t: this.t, kind: 'bay', text: `The ${HIGH[cause.hbay].name} Bay has all the ${itemName(cause.item).toLowerCase()} it wants`, est: true });
+      this.watch(this.t, true);
     } else if (cause && 'order' in cause) {
       // the slices paid whole items; top up the last fraction of one so the order fills now
       if (s.orders.active === cause.order) {
@@ -461,7 +495,7 @@ export class OfflineRun {
         const p = s.orders.progress[cause.order] ?? {};
         for (const [item, n] of Object.entries(d.wants) as [ItemId, number][]) {
           const rem = n - (p[item]?.toNumber() ?? 0);
-          if (rem > 0 && rem <= 1 + 1e-9) fillOrder(g, item, Num.of(rem), d.at === 'factory' ? 'factory' : undefined);
+          if (rem > 0 && rem <= 1 + 1e-9) fillOrder(g, item, Num.of(rem), d.at);
         }
         runOrders(g);
       }
@@ -499,14 +533,14 @@ export class OfflineRun {
       this.carry[key] = Math.max(0, v - n);
       return n;
     };
-    for (const kind of ['dock', 'fdock'] as const)
+    for (const kind of DOCKS)
       for (const [item, r] of Object.entries(rates[kind]) as [ItemId, number][]) {
         const n = whole(kind + item, r * k);
         if (n <= 0) continue;
         const amt = Num.of(n);
         addTo(s.delivered, item, amt);
         addTo(this.extra[kind], item, amt);
-        const left = fillOrder(g, item, amt, kind === 'fdock' ? 'factory' : undefined);
+        const left = fillOrder(g, item, amt, DOCK_FLOOR[kind]);
         const v = saleValue(g, item);
         // a one-off for the coin/min statistic: the HUD's rate stays the live one
         if (v > 0 && !left.isZero()) g.earn(left.mul(v), true);
@@ -528,6 +562,24 @@ export class OfflineRun {
       const n = whole('bay' + item, r * k);
       if (n > 0) this.giveBay(item, n);
     }
+    for (const id of HIGH_IDS)
+      for (const [item, r] of Object.entries(rates[HBAYS[id]]) as [ItemId, number][]) {
+        const n = whole(HBAYS[id] + item, r * k);
+        if (n > 0) this.giveHBay(id, item, n);
+      }
+  }
+
+  /** Give a high floor's Bay up to `n` of an item: what its open projects still want (the rest,
+   * which live play would sell at its Dock, is not counted: offline never pays more than live). */
+  private giveHBay(id: HighFloorId, item: ItemId, n: number) {
+    const g = this.g;
+    const bay = g.s[id]?.ents.find((e) => e.kind === 'fbay');
+    if (!bay) return;
+    const t = g.tally;
+    g.tally = null;
+    const left = megaGiveX(g, id, bay, item, n);
+    g.tally = t;
+    if (n - left > 0) addTo(this.extra[HBAYS[id]], item, n - left);
   }
 
   /** Give the Bay up to `n` of an item, no more than its stage still wants. */
@@ -668,21 +720,22 @@ export class OfflineRun {
       const inSeconds = (heapCap(g) - h.count) / rate;
       if (!nextHeap || inSeconds < nextHeap.inSeconds) nextHeap = { x: h.x, y: h.y, inSeconds };
     }
-    const sum = (k: 'dock' | 'fdock' | 'hopper' | 'bay', item: ItemId) => (this.tally[k][item] ?? Num.ZERO).add(this.extra[k][item] ?? Num.ZERO);
+    const sum = (k: Kind, item: ItemId) => (this.tally[k][item] ?? Num.ZERO).add(this.extra[k][item] ?? Num.ZERO);
     const sold: Partial<Record<ItemId, Num>> = {};
     let hopper = Num.ZERO;
     const given: Partial<Record<ItemId, Num>> = {};
-    const items = (k: 'dock' | 'fdock' | 'hopper' | 'bay') => new Set([...Object.keys(this.tally[k]), ...Object.keys(this.extra[k])]) as Set<ItemId>;
-    for (const kind of ['dock', 'fdock'] as const)
+    const items = (k: Kind) => new Set([...Object.keys(this.tally[k]), ...Object.keys(this.extra[k])]) as Set<ItemId>;
+    for (const kind of DOCKS)
       for (const item of items(kind)) {
         const n = sum(kind, item).round();
         if (n.gt(0)) addTo(sold, item, n);
       }
     for (const item of items('hopper')) hopper = hopper.add(sum('hopper', item).round());
-    for (const item of items('bay')) {
-      const n = sum('bay', item).round();
-      if (n.gt(0)) given[item] = n;
-    }
+    for (const kind of ['bay', 'dbay', 'wbay'] as const)
+      for (const item of items(kind)) {
+        const n = sum(kind, item).round();
+        if (n.gt(0)) addTo(given, item, n);
+      }
     // one row per stopped line, in place of its machines' jams and its heap's row
     const pairs = [...this.lineAcc.values()].filter((a) => a.root).map((a) => ({ key: a.key, l: this.jamLine(a) })).sort((a, b) => a.l.t - b.l.t);
     const lines = pairs.map((p) => p.l);

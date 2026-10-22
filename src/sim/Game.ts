@@ -1,6 +1,6 @@
 // The game: state, the command log, and the fixed system order (CLAUDE.md):
 // input commands -> automation (the Patent tree's helpers: the Draughtsman, the Shovel Frog..., §19) ->
-// miners -> belts -> machines -> modules -> docks and hoppers -> orders -> research -> sparks ->
+// miners -> belts -> machines -> modules (the Factory, then the high floors, §21) -> docks and hoppers -> orders -> research -> sparks ->
 // audits -> stats.
 // Pure (tests/purity.test.ts): time comes in as ticks; presentation effects go out as events on
 // `events`, drained by the renderer and audio.
@@ -13,7 +13,7 @@ import { RESEARCH, type ResearchId } from '../data/research';
 import { ORDER, CUSTOMERS } from '../data/orders';
 import { recipeKnown } from './transfer';
 import { RECIPE } from '../data/recipes';
-import type { ItemId } from '../data/items';
+import { ITEMS, type ItemId } from '../data/items';
 import { RULES } from '../data/rules';
 import { DX, DY, MODES, newEnt, newState, opposite, type Box, type Dir, type Ent, type FEnt, type Mode, type ModuleDesign, type State } from './world';
 import { ANNEX, FACTORY, FACTORY_MAX_H, FACTORY_MAX_W } from '../data/land';
@@ -41,6 +41,13 @@ import { reorganize, customerMet } from './reorganize';
 import { keepDesign, forgetKept, unfoldKept, importDesign, renameKept, queueKept } from './drawer';
 import { runAutomation, autoStamp } from './systems/automation';
 import { buyAnnex } from './systems/annex';
+// Act III (DESIGN.md §21)
+import type { HighFloorId } from '../data/floors';
+import { setupScenario, beltsLeft } from './scenario';
+import type { ScenarioId } from '../data/scenarios';
+import { runChallenges, quitChallenge, challengeBuildRefusal, buildPrice, ruled } from './systems/challenges';
+import type { ChallengeId } from '../data/challenges';
+import { runHigh, hplace, hremove, addRoute, setSkiffs, unroute, hclick, buyLot, startHAudit, cancelHAudit, foldHAudited } from './systems/high';
 
 export interface Intake {
   to: 'dock' | 'hopper';
@@ -50,7 +57,7 @@ export interface Intake {
   y: number;
   /** how many (1 when absent: the Workshop hands over one item at a time) */
   n?: Num;
-  floor?: 'factory';
+  floor?: 'factory' | 'district' | 'world';
 }
 
 /** Everything a player (or a bot) can do. Each is validated and logged with the tick it applied at. */
@@ -88,7 +95,9 @@ export type Cmd =
   | PauseCmd
   | { k: 'idleUpgrade'; id: IdleUpgradeId }
   // Reorganize, layer 1 (DESIGN.md §19)
-  | { k: 'reorganize' }
+  | { k: 'reorganize'; challenge?: ChallengeId }
+  // Challenges (DESIGN.md §21): give this run's restriction up (no reward)
+  | { k: 'challengeQuit' }
   | { k: 'patent'; id: PatentId }
   // the Patent Drawer (DESIGN.md §19): keep a folded design, forget one, unfold one whole onto its
   // box, import a share string, rename, and order the Draughtsman's queue
@@ -100,7 +109,20 @@ export type Cmd =
   | { k: 'queueKept'; id: number; at?: number }
   | { k: 'autoStamp'; id: number }
   // the Factory annex (DESIGN.md §19): one more block east of the floor
-  | { k: 'annex' };
+  | { k: 'annex' }
+  // Act III (DESIGN.md §21): the Factory Chute; the high floors (the District, the World): modules,
+  // skiff routes, lots, Overdrive and Inspiration clicks, and their folds
+  | { k: 'fchute'; x: number; y: number }
+  | { k: 'hplace'; floor: HighFloorId; design: number; x: number; y: number }
+  | { k: 'hremove'; floor: HighFloorId; x: number; y: number }
+  | { k: 'route'; floor: HighFloorId; fx: number; fy: number; tx: number; ty: number; item: ItemId }
+  | { k: 'skiff'; floor: HighFloorId; id: number; n: 1 | -1 }
+  | { k: 'unroute'; floor: HighFloorId; id: number }
+  | { k: 'hclick'; floor: HighFloorId; x: number; y: number }
+  | { k: 'hlot'; floor: HighFloorId }
+  | { k: 'haudit'; floor: HighFloorId; x: number; y: number; w: number; h: number }
+  | { k: 'hauditCancel' }
+  | { k: 'hfold'; name: string | null };
 
 export interface Logged { t: number; c: Cmd }
 
@@ -155,10 +177,12 @@ export class Game {
   factoryDirty = true;
   /** bumped on every Factory layout change */
   fversion = 0;
+  /** bumped on every high floor's layout change (src/sim/systems/high.ts keeps their caches) */
+  hversion = 0;
   /** deliveries by destination, counted while open (offline progress measures rates with it) */
   tally: Tally | null = null;
 
-  constructor(seed: number, opts: { keepHistory?: boolean; empty?: boolean } = {}) {
+  constructor(seed: number, opts: { keepHistory?: boolean; empty?: boolean; scenario?: ScenarioId } = {}) {
     this.s = newState(seed);
     if (opts.keepHistory) this.history = [];
     this.layOre();
@@ -166,6 +190,7 @@ export class Game {
       for (const b of START_LAYOUT) this.addEnt(b.kind, b.x, b.y, b.rot);
       this.s.nextSpark = this.sparkDelay();
     }
+    if (opts.scenario) setupScenario(this, opts.scenario);
     this.rebuild();
   }
 
@@ -269,9 +294,9 @@ export class Game {
     return FACTORY.w + ANNEX.cols * (this.s.annex ?? 0);
   }
 
-  /** Its rows (the Floating City's kept row comes with Milestone 7). */
+  /** Its rows: the 8, and the ninth the Floating City's first stage gives for good (DESIGN.md §21). */
   get fh(): number {
-    return FACTORY.h;
+    return FACTORY.h + ((this.s.megas?.city?.stage ?? 0) >= 1 ? 1 : 0);
   }
 
   fentAt(x: number, y: number): FEnt | null {
@@ -325,7 +350,7 @@ export class Game {
       if (e.kind === 'belt') belts.push(e);
       else if (e.kind === 'miner') this.miners.push(e);
       else if (isMachine(e.kind)) this.machines.push(e);
-      else if (e.kind === 'splitter' || e.kind === 'merger' || e.kind === 'crate' || e.kind === 'heap') this.logistics.push(e);
+      else if (e.kind === 'splitter' || e.kind === 'merger' || e.kind === 'crate' || e.kind === 'heap' || e.kind === 'chuteMouth') this.logistics.push(e);
       else if (isPower(e.kind)) this.power.push(e);
     }
     this.belts = this.orderBelts(belts);
@@ -407,7 +432,8 @@ export class Game {
       case 'ffold': return foldFAudited(this, c.name);
       case 'pause': return setPause(this, c);
       case 'idleUpgrade': return buyIdleUpgrade(this, c.id);
-      case 'reorganize': return reorganize(this);
+      case 'reorganize': return reorganize(this, c.challenge);
+      case 'challengeQuit': return quitChallenge(this);
       case 'patent': return buyPatent(this, c.id);
       case 'keep': return keepDesign(this, c.id);
       case 'forget': return forgetKept(this, c.id);
@@ -417,14 +443,25 @@ export class Game {
       case 'queueKept': return queueKept(this, c.id, c.at);
       case 'autoStamp': return autoStamp(this, c.id);
       case 'annex': return buyAnnex(this);
+      case 'fchute': return fplace(this, 'chute', c.x, c.y, 0);
+      case 'hplace': return hplace(this, c.floor, c.design, c.x, c.y);
+      case 'hremove': return hremove(this, c.floor, c.x, c.y);
+      case 'route': return addRoute(this, c.floor, c.fx, c.fy, c.tx, c.ty, c.item);
+      case 'skiff': return setSkiffs(this, c.floor, c.id, c.n);
+      case 'unroute': return unroute(this, c.floor, c.id);
+      case 'hclick': return hclick(this, c.floor, c.x, c.y);
+      case 'hlot': return buyLot(this, c.floor);
+      case 'haudit': return startHAudit(this, c.floor, { x: c.x, y: c.y, w: c.w, h: c.h });
+      case 'hauditCancel': return cancelHAudit(this);
+      case 'hfold': return foldHAudited(this, c.name);
       default: return no('unknown command');
     }
   }
 
   /** Set a powered machine's mode (DESIGN.md §18 Modes, research Tuning). */
   private setMode(x: number, y: number, mode: Mode): ActResult {
-    if (!this.done('tuning')) return no('Research Tuning first');
     if (!MODES.includes(mode)) return no('no such mode');
+    if ((mode === 'recycling' || mode === 'byproduct') ? !this.done('recycling') : !this.done('tuning')) return no(mode === 'recycling' || mode === 'byproduct' ? 'Research Recycling first' : 'Research Tuning first');
     const e = this.entAt(x, y);
     if (!e || !isMachine(e.kind) || !(BUILD[e.kind].kw ?? 0)) return no('Modes are for powered machines');
     const lock = auditLock(this, x, y);
@@ -452,8 +489,12 @@ export class Game {
         if (e && !(kind === 'belt' && e.kind === 'belt')) return `${BUILD[e.kind].name} is in the way`;
       }
     if (kind === 'miner' && !this.minerOre(x, y)) return this.s.mega.stage >= 2 ? 'A Miner goes on an ore patch or beside one' : 'A Miner goes on an ore patch';
+    const rule = challengeBuildRefusal(this, kind);
+    if (rule) return rule;
+    if (kind === 'belt' && beltsLeft(this) <= 0) return 'No belt tiles left on this board (the Scenario)';
     const free = kind === 'crate' && this.s.freeCrates > 0;
-    if (!free && this.s.coin.lt(d.cost)) return `Needs ${d.cost} coin`;
+    const price = buildPrice(this, kind);
+    if (!free && this.s.coin.lt(price)) return `Needs ${price} coin`;
     return null;
   }
 
@@ -472,7 +513,7 @@ export class Game {
     if (why) return no(why);
     const d = BUILD[kind];
     if (kind === 'crate' && this.s.freeCrates > 0) this.s.freeCrates--;
-    else this.s.coin = this.s.coin.sub(d.cost);
+    else this.s.coin = this.s.coin.sub(buildPrice(this, kind));
     this.addEnt(kind, x, y, rot);
     if ((d.speed ?? 1) > 1) this.bump('mk2Built');
     this.emit({ type: 'place', x, y, id: kind });
@@ -487,8 +528,8 @@ export class Game {
     if (lock) return no(lock);
     // a heap with slag in it can't be lifted (removing it would empty it for free)
     if (e.kind === 'heap' && e.count > 0) return no(`The heap holds ${e.count} slag: let it drain out its front first`);
-    // full refund in the slice (ROADMAP.md Milestone 1 step 2)
-    this.s.coin = this.s.coin.add(BUILD[e.kind].cost);
+    // full refund in the slice (ROADMAP.md Milestone 1 step 2), at today's price
+    this.s.coin = this.s.coin.add(isMachine(e.kind) || e.kind === 'splitter' ? buildPrice(this, e.kind as BuildKind) : BUILD[e.kind].cost);
     this.s.ents = this.s.ents.filter((q) => q !== e);
     this.layoutDirty = true;
     this.emit({ type: 'remove', x, y, id: e.kind });
@@ -512,6 +553,7 @@ export class Game {
   /** Count a click against the 12/s cap (DESIGN.md §1); false when it is over the cap. */
   countClick(): boolean {
     const s = this.s;
+    if (ruled(this, 'handsOff')) return false;
     if (s.tick - s.clickWindow >= TICK_RATE) {
       s.clickWindow = s.tick;
       s.clicks = 0;
@@ -523,6 +565,7 @@ export class Game {
 
   private click(x: number, y: number): ActResult {
     const s = this.s;
+    if (ruled(this, 'handsOff')) return no('Hands Off: no clicks count this run (the Challenge)');
     if (s.tick - s.clickWindow >= TICK_RATE) {
       s.clickWindow = s.tick;
       s.clicks = 0;
@@ -624,6 +667,7 @@ export class Game {
     const ch = CHUNKS.find((c) => c.id === id);
     if (!ch) return no('no such land');
     if (this.s.land.includes(id)) return no('already yours');
+    if (this.s.scenario) return no('A Scenario\'s land is fixed');
     if (ch.requires && !this.done(ch.requires)) return no(`Needs research: ${RESEARCH[ch.requires].name}`);
     if (this.s.coin.lt(ch.cost)) return no(`Needs ${Num.of(ch.cost).format()} coin`);
     this.s.coin = this.s.coin.sub(ch.cost);
@@ -651,12 +695,19 @@ export class Game {
 
   private setRecipe(x: number, y: number, recipe: string | null): ActResult {
     const e = this.entAt(x, y);
+    // a Chute Mouth is set to the item it pushes out (DESIGN.md §21)
+    if (e?.kind === 'chuteMouth') {
+      if (recipe !== null && !(recipe in ITEMS)) return no('no such item');
+      e.recipe = recipe;
+      return OK;
+    }
     if (!e || !isMachine(e.kind) || e.kind === 'miner' || e.kind === 'furnace') return no('not a machine with recipes');
     const lock = auditLock(this, x, y);
     if (lock) return no(lock);
     if (recipe !== null) {
       const r = RECIPE[recipe];
       if (!r || r.machine !== BUILD[e.kind].machine) return no('that machine cannot make it');
+      if (r.mk2 && (BUILD[e.kind].speed ?? 1) <= 1) return no(`Only a Mk2 makes ${r.name}`);
       if (r.unlock && !this.done(r.unlock)) return no(`Needs research: ${RESEARCH[r.unlock].name}`);
       if (!recipeKnown(this, r)) return no(`${CUSTOMERS[r.rep!.customer].name} teaches it at reputation ${r.rep!.level}`);
     }
@@ -686,12 +737,14 @@ export class Game {
     runPower(this);
     runMachines(this);
     runModules(this);
+    runHigh(this);
     runDocks(this);
     runOrders(this);
     runResearch(this);
     runSparks(this);
     runAudits(this);
     runFAudits(this);
+    runChallenges(this);
     runStats(this);
     this.s.tick++;
   }

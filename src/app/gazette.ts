@@ -132,7 +132,10 @@ export function newspaper(app: App, L: Layout, left: number) {
   ui.region(R.x, R.y, R.w, R.h, 'button');
   // the slip with the headline, tucked under the paper
   const room = R.x + 4 - left;
-  if (room > 70) {
+  // a clipboard placed over the slip's spot wins: the headline waits (it is news, not a cause)
+  const slipSpot = { x: R.x + 4 - Math.min(room, L.wide ? 250 : 210), y: R.y - 12, w: Math.min(room, L.wide ? 250 : 210), h: 36 };
+  const underClip = app.hud.clipRects.some((c) => c.x < slipSpot.x + slipSpot.w && slipSpot.x < c.x + c.w && c.y < slipSpot.y + slipSpot.h && slipSpot.y < c.y + c.h);
+  if (room > 70 && !underClip) {
     const sw = Math.min(room, L.wide ? 250 : 210);
     const { kick, rest } = split(gz.text);
     const inner = sw - 14 - 4;

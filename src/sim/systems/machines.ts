@@ -6,7 +6,7 @@
 // Act II (DESIGN.md §18): a machine's speed is its kind's (Mk2: 3x) times its mode, Overdrive and
 // the power its grid can give; a powered machine with none is starved with why = 'power'.
 import type { Game, ActResult } from '../Game';
-import { DX, DY, ccw, cw, faceTiles, opposite, type Dir, type Ent } from '../world';
+import { DX, DY, ccw, cw, faceTiles, opposite, type Dir, type Ent, type Mode } from '../world';
 import { RECIPE, type RecipeDef } from '../../data/recipes';
 import { BUILD, isMachine } from '../../data/machines';
 import { lineOf } from '../analysis';
@@ -26,8 +26,20 @@ export function modeSpeed(m: Ent): number {
     case 'efficient': return RULES.modeEfficientSpeed.value;
     case 'overclock': return RULES.modeOverclockSpeed.value;
     case 'precision': return RULES.modePrecisionSpeed.value;
+    case 'recycling': return RULES.modeRecyclingSpeed.value;
+    case 'byproduct': return RULES.modeByproductSpeed.value;
     default: return 1;
   }
+}
+
+/** Crafts per byproduct for this machine's recipe in its mode (DESIGN.md §21 Modes): Recycling
+ * makes half the waste, Byproduct twice it (never more than one a craft). */
+export function byEvery(m: { mode?: Mode }, r: RecipeDef): number {
+  const every = r.byproduct?.every ?? 0;
+  if (!every) return 0;
+  if (m.mode === 'recycling') return every * 2;
+  if (m.mode === 'byproduct') return Math.max(1, Math.round(every / 2));
+  return every;
 }
 
 /** A Lucky Vein's boost (DESIGN.md §6) for this machine now: 1 when none, or while it is being
@@ -123,7 +135,7 @@ export function runMachines(g: Game) {
       }
     } else {
       const missing = r.inputs.find((s) => (m.inBuf[s.item] ?? 0) < s.n);
-      const byDue = r.byproduct && (m.crafts + 1) % r.byproduct.every === 0;
+      const byDue = r.byproduct && (m.crafts + 1) % byEvery(m, r) === 0;
       if (byDue && m.by >= cap) {
         m.state = 'blocked';
         m.why = r.byproduct!.item;
@@ -170,7 +182,7 @@ function start(m: Ent, r: RecipeDef, cap: number) {
   for (const s of r.inputs) if ((m.inBuf[s.item] ?? 0) < s.n) return;
   const o = r.outputs[0];
   if (m.out > 0 && (m.outItem !== o.item || m.out + o.n > cap)) return;
-  const byDue = r.byproduct && (m.crafts + 1) % r.byproduct.every === 0;
+  const byDue = r.byproduct && (m.crafts + 1) % byEvery(m, r) === 0;
   if (byDue && m.by >= cap) return;
   for (const s of r.inputs) m.inBuf[s.item] -= s.n;
   m.active = true;
@@ -192,7 +204,7 @@ function finish(g: Game, m: Ent, r: RecipeDef) {
     }
   }
   m.crafts++;
-  if (r.byproduct && m.crafts % r.byproduct.every === 0) {
+  if (r.byproduct && m.crafts % byEvery(m, r) === 0) {
     m.by++;
     m.byItem = r.byproduct.item;
   }

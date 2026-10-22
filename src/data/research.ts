@@ -7,6 +7,9 @@ export const RESEARCH_IDS = [
   // Act II (DESIGN.md §18)
   'coalSeams', 'steelmaking', 'overdrive', 'steamPower', 'surveying', 'glassworks', 'crushing', 'concrete', 'refining',
   'machineKits', 'circuits', 'heavyMachines', 'tuning', 'motors', 'nestedFolds', 'greatDrill',
+  // Act III (DESIGN.md §21)
+  'zoning', 'chutes', 'chemistry', 'bearings', 'vulcanizing', 'batteries', 'servos', 'sensors', 'processors',
+  'recycling', 'hydroponics', 'sandwiches', 'robotics', 'floatingCity', 'scrapTransmuter', 'sandwichEngineering', 'districtFolds',
 ] as const;
 export type ResearchId = (typeof RESEARCH_IDS)[number];
 
@@ -19,8 +22,11 @@ export interface ResearchDef {
   requires: ResearchId[];
   /** what it unlocks, as a row of rich-text markup for the panel (docs/hud-180.md: no sentence) */
   unlocks: string;
-  /** which act's tree page it sits on (1: the Workshop, 2: the Factory) */
-  act?: 1 | 2;
+  /** which act's tree page it sits on (1: the Workshop, 2: the Factory, 3: the District...) */
+  act?: 1 | 2 | 3 | 4 | 5;
+  /** the Great Drill's stage that must stand before it is offered (Act III opens once the Drill is
+   * done: DESIGN.md §21) */
+  drill?: number;
   derivation: string;
 }
 
@@ -50,6 +56,25 @@ export const RESEARCH: Record<ResearchId, ResearchDef> = {
   motors: { id: 'motors', num: 24, act: 2, name: 'Motors', cost: { steel: 800, circuit: 150, gear: 300 }, requires: ['circuits'], unlocks: '{i:steel} + 4 {i:copperWire} + {i:circuit} → {i:motor} in the Assembler', derivation: '§18 Items: motor' },
   nestedFolds: { id: 'nestedFolds', num: 25, act: 2, name: 'Nested Folds', cost: { circuit: 150, concrete: 300 }, requires: ['circuits', 'concrete'], unlocks: '{u:fold} on the Factory floor · modules fold into one', derivation: '§18 Nested folds' },
   greatDrill: { id: 'greatDrill', num: 26, act: 2, name: 'The Great Drill', cost: { motor: 40, concrete: 200 }, requires: ['motors', 'concrete'], unlocks: '{u:mega} the Megaproject Bay · {i:drillBit} Drill Bits', derivation: '§18 Megaproject #1, stage 1 by about S+4 h: 40 motors are about 6 min of one motor assembler, 200 concrete about 45 min of the Workshop mixer on one steel line slag; 600 concrete was over 3 h of it' },
+  // Act III (DESIGN.md §21): every node waits for the Great Drill's stage 3 (the end of Act II's
+  // spine, about the third run); costs are what the Act II floor already makes, then tier 3 goods
+  zoning: { id: 'zoning', num: 27, act: 3, drill: 3, name: 'Zoning', cost: { motor: 300, circuit: 600, concrete: 1500 }, requires: ['nestedFolds', 'greatDrill'], unlocks: '{u:district} the District floor · skiff routes · depth-2 modules go up', derivation: '§21 Research: the District; paid in the Act II floor\'s own goods (§21 Pacing)' },
+  chutes: { id: 'chutes', num: 28, act: 3, drill: 3, name: 'Chutes', cost: { steel: 2500, motor: 100 }, requires: ['zoning'], unlocks: '{u:chute} the Factory Chute · the Chute Mouth · Factory goods back down to the Workshop', derivation: '§21 Research: the Chute' },
+  chemistry: { id: 'chemistry', num: 29, act: 3, drill: 3, name: 'Chemistry', cost: { oil: 1200, plastic: 800 }, requires: ['chutes'], unlocks: 'the Chem Vat · 2 {i:oil} + {i:sand} → {i:solvent} · {i:sludge} out a side', derivation: '§21 Research: oil, a byproduct, is the price and the input' },
+  bearings: { id: 'bearings', num: 30, act: 3, drill: 3, name: 'Bearings', cost: { steel: 3000, gear: 1500 }, requires: ['chutes'], unlocks: '{i:steel} → 2 {i:bearing} · 2 {i:gear} + 2 {i:bearing} + {i:steel} → {i:gearbox}', derivation: '§21 Research: bearings and gearboxes' },
+  vulcanizing: { id: 'vulcanizing', num: 31, act: 3, drill: 3, name: 'Vulcanizing', cost: { solvent: 600, plastic: 600 }, requires: ['chemistry'], unlocks: '{i:plastic} + {i:solvent} → 2 {i:rubber} in the Chem Vat', derivation: '§21 Research: rubber' },
+  batteries: { id: 'batteries', num: 32, act: 3, drill: 3, name: 'Batteries', cost: { solvent: 500, copperIngot: 2000 }, requires: ['chemistry'], unlocks: '2 {i:copperIngot} + {i:solvent} + {i:plastic} → {i:battery}', derivation: '§21 Research: batteries' },
+  servos: { id: 'servos', num: 33, act: 3, drill: 3, name: 'Servos', cost: { gearbox: 200, motor: 200 }, requires: ['bearings'], unlocks: '{i:motor} + {i:gearbox} + {i:circuit} → {i:servo} · {i:clockworkFrog}', derivation: '§21 Research: servos, and the clockwork frog' },
+  sensors: { id: 'sensors', num: 34, act: 3, drill: 3, name: 'Sensors', cost: { rubber: 600, circuit: 800 }, requires: ['vulcanizing'], unlocks: '2 {i:glass} + {i:circuit} + {i:rubber} → {i:sensor} · {i:weatherBalloon}', derivation: '§21 Research: sensors, and the weather balloon' },
+  processors: { id: 'processors', num: 35, act: 3, drill: 3, name: 'Processors', cost: { solvent: 800, circuit: 1500 }, requires: ['chemistry'], unlocks: '3 {i:circuit} + 2 {i:solvent} → {i:processor}', derivation: '§21 Research: processors' },
+  recycling: { id: 'recycling', num: 36, act: 3, drill: 3, name: 'Recycling', cost: { rubber: 400, gearbox: 100 }, requires: ['vulcanizing'], unlocks: '{u:mode} Recycling · ½ the byproduct · Byproduct · 2× the byproduct', derivation: '§21 Modes' },
+  hydroponics: { id: 'hydroponics', num: 37, act: 3, drill: 3, name: 'Hydroponics', cost: { sludge: 800, glass: 1000 }, requires: ['chemistry'], unlocks: 'the Greenhouse · 2 {i:sludge} + {i:gravel} → {i:fertilizer} → 3 {i:produce}', derivation: '§21 Research: the Greenhouse; sludge, a byproduct, is the price (the Hopper takes it only while a node wants it, as slag)' },
+  sandwiches: { id: 'sandwiches', num: 38, act: 3, drill: 3, name: 'Sandwiches', cost: { produce: 1500 }, requires: ['hydroponics'], unlocks: '3 {i:produce} + {i:plastic} → {i:sandwich}', derivation: '§21 Research: the sandwich' },
+  robotics: { id: 'robotics', num: 39, act: 3, drill: 3, name: 'Robotics', cost: { servo: 80, sensor: 80, processor: 40 }, requires: ['servos', 'sensors', 'processors'], unlocks: '2 {i:servo} + {i:sensor} + 2 {i:steel} → {i:robotArm} · {i:umbrella}', derivation: '§21 Research: robot arms, and the umbrella' },
+  floatingCity: { id: 'floatingCity', num: 40, act: 3, drill: 3, name: 'The Floating City', cost: { servo: 60, concrete: 3000 }, requires: ['servos', 'zoning'], unlocks: '{u:mega} the District Bay · {i:liftRotor} · Megaproject #2', derivation: '§21 Megaprojects: the Floating City' },
+  scrapTransmuter: { id: 'scrapTransmuter', num: 41, act: 3, drill: 3, name: 'The Scrap Transmuter', cost: { processor: 80, battery: 200 }, requires: ['processors', 'batteries', 'floatingCity'], unlocks: '{u:mega} {i:transmuterCoil} · Megaproject #3', derivation: '§21 Megaprojects: the Scrap Transmuter' },
+  sandwichEngineering: { id: 'sandwichEngineering', num: 42, act: 3, drill: 3, name: 'Sandwich Engineering', cost: { robotArm: 30, processor: 60, sandwich: 400 }, requires: ['robotics', 'sandwiches'], unlocks: '{i:robotArm} + {i:processor} + 10 {i:sandwich} + {i:battery} → {i:sandwichEngineer} · Mk2 only', derivation: '§21 Tier 3: the Autonomous Sandwich Engineer' },
+  districtFolds: { id: 'districtFolds', num: 43, act: 3, drill: 3, name: 'District Folds', cost: { robotArm: 40, sensor: 300 }, requires: ['robotics'], unlocks: '{u:fold} on the District · groups fold into one · depth 3', derivation: '§21 District folds' },
   folding: { id: 'folding', num: 10, name: 'Folding', cost: { gizmo: 50, gear: 500 }, requires: ['gizmoTheory'], unlocks: '{u:fold} the Fold tool · Chunk D for sale', derivation: '§8 #10; 500 gears: chunk C\'s gear lines on the Hopper put Folding at 22-30 min and the Dock-only player 5+ min behind (§13 checks 6, 11); §16 first fold by 40 min' },
 };
 

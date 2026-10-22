@@ -126,7 +126,8 @@ export function rail(app: App, L: Layout) {
       else { hs.collapsed.add('goal'); hs.foldedAt = ui.time; }
     }
   }
-  toolboxButton(app, L.build);
+  // the District builds from its tool strip (src/app/district.ts), not the wheel
+  if (app.floor !== 'district') toolboxButton(app, L.build);
   if (folded) {
     // a little bubble: "!" when a new line has arrived since it was folded
     const news = hs.goalAt > hs.foldedAt;
@@ -146,7 +147,8 @@ export function rail(app: App, L: Layout) {
   const grab = !cam ? grabKind(app, goal?.ui ?? null) : null;
   const holding = !!grab && app.mode.k === 'build' && app.mode.kind === grab;
   const canGrab = !!grab && !holding && g.s.coin.gte(BUILD[grab].cost);
-  const chips = (cam ? cam.chips : goal?.chips) ?? [];
+  // a chip wider than the bubble drops words from its end (never into the Gazette's slip)
+  const chips = ((cam ? cam.chips : goal?.chips) ?? []).map((c) => fitChip(c, cw));
   const bar = cam ? undefined : goal?.bar;
   const note = cam ? null : goal?.note ? layoutRich(goal.note, cw) : null;
   // chips flow in rows
@@ -232,6 +234,19 @@ export function rail(app: App, L: Layout) {
 
 export const SPEAKER_NAME: Record<Speaker, string> = { bramble: 'Mayor Bramble', unit7: 'Unit 7', voltaire: 'Dame Voltaire', committee: 'The Committee', inspector: 'The Inspector' };
 
+/** A chip's text cut to `w` px: whole words off its end, then '..' (markup kept balanced). */
+function fitChip(c: string, w: number): string {
+  if (chipWidth(c) <= w) return c;
+  const words = c.split(' ');
+  while (words.length > 1) {
+    words.pop();
+    const t = words.join(' ');
+    if ((t.match(/\{/g) ?? []).length !== (t.match(/\}/g) ?? []).length) continue;
+    if (chipWidth(t + '..') <= w) return t + '..';
+  }
+  return c;
+}
+
 /** In hand, under a Grab: how to put it down. */
 const HOLDING = '{good:in hand}  {k:LMB} place  {k:R} turn  {k:RMB} drop';
 
@@ -260,6 +275,9 @@ function goalAction(app: App, ui: string | null): { go: () => void; what: string
     case 'mega': return { go: () => app.togglePanel('mega'), what: 'the Megaproject' };
     case 'survey': return { go: () => app.togglePanel('survey'), what: 'the Survey Office' };
     case 'factory': return app.floor === 'factory' ? null : { go: () => app.setFloor('factory'), what: 'the Factory floor' };
+    // the District (DESIGN.md §21): the floor, and its Route tool
+    case 'district': return app.floor === 'district' ? null : { go: () => app.setFloor('district'), what: 'the District' };
+    case 'route': return app.floor === 'district' && app.mode.k === 'route' ? null : { go: () => { if (app.floor !== 'district') app.setFloor('district'); if (app.floor === 'district') app.setMode({ k: 'route' }); }, what: 'the Route tool' };
     case 'fold': return app.mode.k === 'fold' ? null : { go: () => app.toggleFold(), what: 'the Fold tool' };
     default: return null;
   }
@@ -275,11 +293,12 @@ export function diegetic(app: App, L: Layout) {
   const r = app.renderer;
   const inView = (x: number, y: number) => x > 0 && x < ui.w && y > 4 && y < ui.h;
   const fac = app.floor === 'factory';
+  const dist = app.floor === 'district';
   const at = (tx: number, ty: number) => { const s = r.toScreen(tx, ty); return { x: Math.round(s.x / ui.scale), y: Math.round(s.y / ui.scale) }; };
   const o = g.s.orders;
   if (o.active) {
     const d = ORDER[o.active];
-    const dock = fac ? g.s.factory.ents.find((e) => e.kind === 'fdock') : d.at === 'factory' ? null : g.s.ents.find((e) => e.kind === 'dock');
+    const dock = dist ? (d.at && d.at !== 'district' ? null : g.s.district?.ents.find((e) => e.kind === 'fdock')) : fac ? g.s.factory.ents.find((e) => e.kind === 'fdock') : d.at === 'factory' || d.at === 'district' ? null : g.s.ents.find((e) => e.kind === 'dock');
     if (dock) {
       const p = at(dock.x + dock.w - 0.25, dock.y + 0.2);
       if (inView(p.x, p.y - 20)) {
@@ -310,7 +329,7 @@ export function diegetic(app: App, L: Layout) {
   }
   const sel = g.s.research.selected;
   if (sel) {
-    const hop = fac ? g.s.factory.ents.find((e) => e.kind === 'fhopper') : g.s.ents.find((e) => e.kind === 'hopper');
+    const hop = dist ? g.s.district?.ents.find((e) => e.kind === 'fhopper') : fac ? g.s.factory.ents.find((e) => e.kind === 'fhopper') : g.s.ents.find((e) => e.kind === 'hopper');
     if (hop) {
       const p = at(hop.x + hop.w, hop.y);
       const cx = p.x - 7, cy = p.y + 6;
@@ -330,7 +349,7 @@ export function diegetic(app: App, L: Layout) {
   }
   // the goal's arrow, bobbing over the tile it names
   const goal = nextGoal(g);
-  if (goal?.tile && !app.panel && !fac) {
+  if (goal?.tile && !app.panel && !fac && !dist) {
     const s = r.toScreen(goal.tile.x + 0.5, goal.tile.y);
     const bob = Math.round(Math.sin(ui.time * 6) * 2);
     const ux = Math.round(s.x / ui.scale), uy = Math.round(s.y / ui.scale) - 18 + bob;

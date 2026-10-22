@@ -9,6 +9,7 @@ import { RULES } from '../../data/rules';
 import { TICK_RATE } from '../../engine/time';
 import { DX, DY, type Ent } from '../world';
 import { note } from './stats';
+import { powerMult } from './challenges';
 
 export interface Grid {
   poles: Ent[];
@@ -22,11 +23,13 @@ export interface Grid {
 }
 
 /** kW a machine draws while crafting, after its mode (0 for unpowered machines). */
-export function drawKw(e: Ent): number {
+export function drawKw(e: Ent, g?: Game): number {
   const kw = BUILD[e.kind].kw ?? 0;
   if (!kw) return 0;
   const m = e.mode ?? 'normal';
-  return kw * (m === 'efficient' ? RULES.modeEfficientPower.value : m === 'overclock' ? RULES.modeOverclockPower.value : 1);
+  // Dame Voltaire's rep 4 (DESIGN.md §21): Act III's chemistry and greenhouses at half the draw
+  const volt = g && g.s.orders.rep.voltaire >= 4 && (e.kind === 'chemVat' || e.kind === 'greenhouse') ? RULES.voltaireChemPower.value : 1;
+  return kw * volt * (m === 'efficient' ? RULES.modeEfficientPower.value : m === 'overclock' ? RULES.modeOverclockPower.value : 1);
 }
 
 /** How far a Pole reaches (Dame Voltaire's rep 3 adds a tile). */
@@ -108,7 +111,8 @@ function stoke(g: Game, burner: Ent): boolean {
 
 /** kW a producer can make this tick (0 without fuel). */
 function output(g: Game, p: Ent): number {
-  const base = BUILD[p.kind].power ?? 0;
+  // Lean Power (a Challenge, DESIGN.md §21): half while it is taken, a tenth more once won
+  const base = (BUILD[p.kind].power ?? 0) * powerMult(g);
   if (p.kind === 'generator') return stoke(g, p) ? base : 0;
   // a Steam Engine needs its Boiler burning
   const b = g.boilerOf.get(p.id);
@@ -121,7 +125,7 @@ export function runPower(g: Game) {
   for (const gr of g.grids) {
     // what is wanted: machines mid-craft, or ready to start and waiting on power
     let demand = 0;
-    for (const c of gr.consumers) if (!c.paused && (c.active || c.why === 'power')) demand += drawKw(c);
+    for (const c of gr.consumers) if (!c.paused && (c.active || c.why === 'power')) demand += drawKw(c, g);
     let supply = 0;
     const live: Ent[] = [];
     if (demand > 0) {

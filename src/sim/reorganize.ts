@@ -44,13 +44,15 @@ import { BYPRODUCTS, mainItem, megaOpen } from './systems/modules';
 import { recipeKnown } from './transfer';
 import { workShare } from './systems/stats';
 import { prules } from './patents';
+import { challengeRefusal, startChallenge, won } from './systems/challenges';
+import type { ChallengeId } from '../data/challenges';
 
 /** What a Reorganize keeps, in words (the confirm card lists it). */
 export const KEPT: { what: string; why: string }[] = [
   { what: 'Patents and the Patent tree', why: 'what the reset is for' },
   { what: 'The Patent Office\'s record', why: 'every product\'s best design on file: a later run is paid only for beating it' },
   { what: 'The Patent Drawer', why: 'your kept designs, ready to unfold whole onto their boxes' },
-  { what: 'The Great Drill', why: 'Megaproject progress survives every reset' },
+  { what: 'The Great Drill and every Megaproject', why: 'Megaproject progress survives every reset' },
   { what: 'Reputation', why: 'every customer remembers you, and their rewards stay (the Committee\'s opens the Drill\'s stages)' },
   { what: 'The Night Shift', why: 'the offline crews you bought with coin keep working' },
   { what: 'The Codex', why: 'firsts already paid stay paid' },
@@ -59,7 +61,7 @@ export const KEPT: { what: string; why: string }[] = [
 
 /** What it loses. */
 export const LOST: string[] = [
-  'Both floors: every building, module and trunk',
+  'Every floor: every building, module, trunk and skiff route',
   'Coin and every item in the factory',
   'Land (back to chunk A), the Factory annex and deposit claims',
   'Research (head starts give some back)',
@@ -326,9 +328,10 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/
 // ------------------------------------------------------------------ the reset
 
 export function reorganizeRefusal(g: Game): string | null {
+  if (g.s.scenario) return 'A Scenario has no Reorganize: its best fold is its record';
   const p = previewPatents(g);
   if (p.now < RULES.patentMin.value) return g.s.designs.length ? 'Nothing new to patent yet: fold a new product, or a line better than the one on file' : 'Nothing to patent yet: fold a line into a module first';
-  if (g.s.audits.length || g.s.faudit) return 'An audit is running: fold or cancel it first';
+  if (g.s.audits.length || g.s.faudit || g.s.haudit) return 'An audit is running: fold or cancel it first';
   return null;
 }
 
@@ -352,8 +355,8 @@ export function fileDesigns(g: Game) {
 
 /** Reorganize: bank this run's Patents and start a new run, keeping what survives (pillar 4:
  * always the player's choice, with a preview). */
-export function reorganize(g: Game): ActResult {
-  const why = reorganizeRefusal(g);
+export function reorganize(g: Game, challenge?: ChallengeId): ActResult {
+  const why = reorganizeRefusal(g) ?? (challenge ? challengeRefusal(g, challenge) : null);
   if (why) return no(why);
   const s = g.s;
   const p = previewPatents(g).now;
@@ -375,6 +378,7 @@ export function reorganize(g: Game): ActResult {
   for (const b of START_LAYOUT) g.addPart(b.kind, b.x, b.y, b.rot);
   fresh.nextSpark = g.sparkDelay();
   applyHeadStarts(g);
+  if (challenge) startChallenge(g, challenge);
   g.layoutDirty = true;
   g.factoryDirty = true;
   g.bump('reorganizes');
@@ -393,6 +397,8 @@ function carry(s: State): State {
   f.meta.peakPerMin = 0;
   f.meta.perMinRing = [];
   f.mega = s.mega;
+  // Megaprojects #2 and on survive every reset as the Great Drill does (DESIGN.md §21)
+  if (s.megas) f.megas = s.megas;
   f.codex = s.codex;
   f.orders.rep = s.orders.rep;
   f.counters = s.counters;
@@ -423,7 +429,10 @@ export function applyHeadStarts(g: Game, ids: readonly PatentId[] = g.s.meta.nod
       s.granted = (s.granted ?? Num.ZERO).add(e.coin);
     }
     for (const q of e.place ?? []) if (!g.entAt(q.x, q.y)) g.addPart(q.kind, q.x, q.y, q.rot);
+    if (e.lots) s.headLots = Math.max(s.headLots ?? 0, e.lots);
   }
+  // Hands Off won (a Challenge, DESIGN.md §21): the Bellows in every run
+  if (won(g, 'handsOff') && !s.upgrades.includes('bellows')) s.upgrades.push('bellows');
   // in the tree's order, so the research screen and the bots read them as researched in turn
   s.research.done = RESEARCH_IDS.filter((r) => research.has(r));
   g.layoutDirty = true;

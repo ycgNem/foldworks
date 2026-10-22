@@ -1674,3 +1674,115 @@ reset layer or milestone order changed), no sim, data or save change. Pillars: r
   foot): the Roblox tycoon convention (Miner's Haven among many). Our ribbons, art and pages.
 - **Click an empty plot to build on it**: the tycoon and city-builder convention. Generic.
 - **A tooltip delay with a warm-up**: every desktop OS. Generic.
+
+## Milestone 7: Act III, the District (2026-10-21)
+
+The owner: *"finish the rest of the milestones/game run autonomously, no itch.io page, use up to
+250 credits if needed."* The plan for Milestones 7-14 is `docs/endgame.md`; this is Act III as
+built. Nothing on CLAUDE.md's ask-before list changed: the tile size, palette (Act III's art uses
+palette B extended as it stands), tick rate, currency list, floor list (the District and the World
+are `PLAN.md`'s third and fourth floors), reset layers and milestone order stay as written.
+Pillars: 1 (folding: groups of groups fold again), 2 (automation: the Dispatcher, the Chute), 3 (a
+bottleneck is never hidden: every route says what it carries of what it is wanted).
+
+### The sim
+- **The high floors are one system** (`src/sim/systems/high.ts`) over per-floor data
+  (`src/data/floors.ts`): the District now, the World in Milestone 9 with its own numbers. A high
+  floor holds only modules, its Dock, Hopper and Bay; modules run exactly as the Factory's
+  (`stepModule`, extracted), so Overdrive, pausing, the Drill's boost, bills and pips are shared.
+- **Skiff routes, not trunks.** A route carries one item from a module's output to a module, the
+  Dock, the Hopper or the Bay, at `skiffs x load / (2 x distance / speed + dwell)`, distance
+  Euclidean between centres. District: speed 2, load 4, dwell 1 s; a skiff 15,000 coin, flat,
+  refunded when lifted; 12 a route; 120 routes a floor. Several routes from one output share it in
+  turn (two passes, the same rotation as the Factory's trunks). Why: distance becomes the act's
+  layout lesson (a feeder beside its consumer needs one skiff, across the floor three) without belt
+  pathing on a floor of whole groups; a flat price, not a curve (CLAUDE.md).
+- **The Bay never jams** (as the Factory's): what no open project counts goes on to the Dock.
+- **The Chute holds at most 20 of an item**; a full stock stops the Factory Chute taking that item
+  and its trunk backs up (the pip says so). **A fold box may not hold a Chute Mouth**: it would make
+  items out of nothing as far as the audit can see, so a tier 3 line is fed through ports.
+- **Megaprojects #2 and #3 are kept through every reset**, like the Great Drill. The Floating
+  City's rewards are a ninth Factory row and a fourth District lot; the Transmuter's are waste
+  bought at 25% of what made it, then a byproduct with nowhere to go sold where it stands.
+- **The Autonomous Sandwich Engineer is the Assembler Mk2's alone** (a recipe flag `mk2`), so the
+  act's last product asks for the Act II machine tier.
+- **Recycling and Byproduct modes** are powered-only like Act II's; Byproduct exists because two
+  tier 3 inputs are wastes (fertilizer from sludge, gravel from slag).
+- **Ten Act III Patents** (DESIGN.md §21 Patents): head starts, Long Skiffs (a rule about distance,
+  not output), the Bigger Nest and Ward Boundaries (boxes), the Dispatcher (one skiff every 10 s at
+  most, at full price, only for a route under 90% of its want and only while a skiff is under 5%
+  of the coin on hand: it never spends a save). The bots' Patent priority list doesn't name them
+  until the Act III bot does, so Act I-II pace is unchanged.
+- **Challenges** (DESIGN.md §21): taken at a Reorganize from the second one on; a won Challenge
+  isn't taken again; giving one up costs only the reward; its reward is the part its rule took
+  away (free Splitters, the Bellows, a tenth of the plant, 10% off machines flat, a tile of box).
+- **Scenarios**: Tiny Island became chunks A and B (chunk A has no copper; the plan's "chunk A
+  only" couldn't make a Gizmo). Rich Ore, Little Power is scored by steel a minute, not steel per
+  kW as planned: a Mk1 smelter draws no power, so per kW would be infinite. No Reorganize and no
+  land for sale on a board; the records are the app's (local storage), never the sim's.
+- **Offline tallies each floor's Dock and Bay apart** (`dock, fdock, ddock, wdock`, `bay, dbay,
+  wbay`): an order for one floor fills only from that floor's Dock, and the District's Bay fills
+  its own projects, never the Great Drill (before, away time counted District deliveries as the
+  Workshop's and the Drill's). A high floor's Bay counts away only what its projects want; the rest,
+  which live play sells at the Dock, isn't paid: offline never pays more than live (§12).
+- **SAVE_VERSION 8** with an empty migration: every Act III field is absent until it happens, so
+  old saves need nothing, but an older build now refuses a save whose District it would drop.
+- **Art** (art-director, 0 PixelLab generations): the module's icon well is 8x8 (the plan said
+  6x6) and the skiff 12x10 (10x8), as the brief asked; tier 3 icons by shape, not colour only.
+
+### Flagged as derivative (owner to decide)
+- **Flying point-to-point carriers whose throughput falls with distance** are Satisfactory's
+  Drone Ports (and Mindustry's mass drivers). Ours are bought per route at a flat price, carry one
+  item each, and the formula is the round trip; there is no network, no fuel and no battery.
+- **A recycler that turns waste into value** is Factorio Space Age's Recycler. Ours is a
+  Megaproject's reward (a sale price, then a rule), not a machine you place.
+- **Megaprojects built in stages at a bay** echo Satisfactory's Space Elevator phases and Dyson
+  Sphere Program's sphere (already flagged for the Great Drill).
+- **Puzzle boards scored by area and rate with personal bests** are Zachtronics' (Opus Magnum's
+  histograms) and shapez's puzzle mode. Ours score a fold of one product with the game's own
+  grade; no histograms, no leaderboard.
+- **Challenges, and the Dispatcher as an autobuyer**, are Antimatter Dimensions conventions
+  (flagged since `PLAN.md`); goals are factory goals, rewards small rules.
+- **A chute dropping items to the floor below** is generic (every multi-level factory game).
+
+### The District's screen
+- **A labelled tool strip across the top** (Route, Remove, Fold, then the depth-2 groups with
+  spares) instead of the Workbench Wheel: the District has three tools and an inventory, and every
+  one is a visible button (the owner's "visible, not hidden").
+- **The District's floor button is a "D" on a wing of the lift**; Tab cycles the open floors.
+- **A route is short when it carries under 90% of its want** (the Dispatcher's test), drawn bold
+  orange, with the readout `1 skiff · 0.47/s of 1.4 wanted · 7.5 tiles` and how many more skiffs
+  carry it all (pillar 3).
+- **A click on a group overdrives it and its route group**; while Overdrive isn't ready the click
+  pins its report instead.
+- **District rates read per second** (routes are per second in the design); the grade card stays
+  per minute, the Factory's card, shared.
+- **No pause on the District yet**: the pause command takes the Factory only (to add with the
+  World, Milestone 9).
+- **`- skiff` uses an ASCII hyphen**: the bitmap font has no minus sign.
+
+### Act III on the Workshop, the Factory and the pages
+- **The Chute Mouth's report is its control**: placing one pins its report, whose `PUSHES OUT`
+  picker lists the Chute's stock and every item a Factory module makes; states PUSHING, EMPTY
+  (naming the item: pillar 3), BLOCKED, NO ITEM. Its pip and still frame are drawn in
+  `src/app/act3.ts` for now (the renderer gives pips to machines only); they move into the
+  renderer's `buildingAt` when that file is next worked on.
+- **The Factory Chute is on the wheel's trunk petal** with a placement ghost; its pip blinks red
+  while a stock is full (its trunk backs up) and green while it takes.
+- **Recycling and Byproduct sit beside Tuning's modes** once Recycling is researched.
+- **Act III's Heavy machines stay off the wheel until the Great Drill's stage 3** (or one is
+  unlocked), so Act II's wheel isn't crowded with locked kinds.
+- **The research screen's Act III tab** appears once the Great Drill is researched; every node says
+  "needs the Great Drill's stage 3" until it stands. No "!" badge on the tab (it ran into the coin
+  chip).
+- **The Megaproject page has a tab per project** (the Great Drill, the Floating City, the Scrap
+  Transmuter) with per-stage meters and the pictures (pN = N stages done, then the running pair).
+- **Challenges**: a `NEXT RUN` strip on the Reorganize card from the second reset; while one runs, a
+  slip under the Purse states its rule and goal with a two-click Give up; a win is a banner, a
+  toast and a fanfare; the Patent Office shows `N/5 challenges`.
+- **Scenarios open from Options** after the first Reorganize (a toast points there). Each board
+  saves under `foldworks_scenario_<id>`; the personal bests under `foldworks_scenario_best`; a slip
+  shows the best and the record with a `To town` button; a new best is a banner.
+- **The Patent Office's lower branches share the width by their column count** (four-wide Rules
+  and Automation rows crowded at 1024 px with equal widths).
+- **UI icons `district` and `chute`** were drawn with the ui-icons pipeline (appended at 34, 35).

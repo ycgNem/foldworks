@@ -32,6 +32,8 @@ import type { App } from './app';
 import type { Rect } from '../ui/ui';
 import { bookArea, heading, disc, tick, pencilCircle, speak, ROW_H } from './ledger';
 import { committeeFallback } from './reorganize';
+import { CHALLENGES, CHALLENGE_IDS, CHALLENGE_AFTER_RUNS } from '../data/challenges';
+import { won } from '../sim/systems/challenges';
 
 /** A node's picture: an item icon, a UI icon, or a building's sprite (frame f). */
 type NodeIcon = { item: string } | { ui: UIconName } | { sprite: string; f?: number };
@@ -52,6 +54,10 @@ const NODE_ICON: Partial<Record<string, NodeIcon>> = {
   draughtsman: { ui: 'build' }, drawerSpace: { ui: 'blueprint' },
   // offline
   nightShift: { ui: 'overnight' }, nightWatch: { ui: 'lock' }, lightsOn: { ui: 'power' },
+  // Act III (DESIGN.md §21 Patents)
+  zoningCharter: { ui: 'district' }, districtDeeds: { sprite: 'dist_module' }, chemNotes: { item: 'solvent' }, bearingPatent: { item: 'bearing' },
+  senseNotes: { item: 'sensor' }, roboticsPatent: { item: 'robotArm' }, longSkiffs: { item: 'liftRotor' }, biggerNest: { ui: 'mega' },
+  wideDistrictBox: { ui: 'survey' }, dispatcher: { ui: 'rotate' },
 };
 
 /** A node with no entry above gets the picture of its effect. */
@@ -71,6 +77,9 @@ const SHORT: Partial<Record<string, string | string[]>> = {
   nestedBoxes: ['Nesting', 'Nest'], freshDies: 'Dies',
   shovelFrog: ['Shovel', 'Dig'], labAssistant: 'Lab', orderClerk: 'Clerk', stampPress: 'Press', draughtsman: ['Drafter', 'Draft'], drawerSpace: ['Drawer', 'Slots'],
   nightShift: 'Shift', nightWatch: 'Watch', lightsOn: 'Lights',
+  zoningCharter: ['Zoning', 'Zone'], districtDeeds: 'Deeds', chemNotes: ['Chemistry', 'Chem'], bearingPatent: ['Bearing', 'Ball'],
+  senseNotes: ['Sensors', 'Sense'], roboticsPatent: ['Robots', 'Robot'], longSkiffs: ['Skiffs', 'Skiff'], biggerNest: ['Nest+', 'Nest'],
+  wideDistrictBox: ['Wards', 'Ward'], dispatcher: ['Dispatch', 'Send'],
 };
 
 const STOP = new Set(['a', 'an', 'the', 'of', 'on', 'by', 'and', 'in', 'to', 'for']);
@@ -123,16 +132,20 @@ export function patentsScreen(app: App, r0: Rect) {
   const bw = layoutRich('{u:reset} Reorganize').w + 14;
   const bx = body.x + body.w - bw;
   if (button(ui, 'toReorganize', bx, body.y - 1, bw, 15, '{u:reset} Reorganize', { tip: [{ text: '{u:reset} {big:Reorganize}' }, { text: 'what a reset gives, keeps and loses' }] })) app.panel = 'reorganize';
-  const runChips = [
+  // Act III (DESIGN.md §21): the Challenges won, once Challenges are offered; its tip lists all five
+  const nWon = CHALLENGE_IDS.filter((id) => won(g, id)).length;
+  const challengeTip = [{ text: '{big:Challenges}' }, ...CHALLENGE_IDS.map((id) => ({ text: won(g, id) ? `{good:${ICON.check} ${CHALLENGES[id].name}} ${CHALLENGES[id].reward}` : `{soft:${CHALLENGES[id].name} · ${CHALLENGES[id].goalText}}` })), { text: g.s.challenge ? `{reset:under way} ${CHALLENGES[g.s.challenge as keyof typeof CHALLENGES]?.name ?? ''}` : '{soft:taken on the Reorganize card}' }];
+  const runChips: { text: string; role: Role; tip: string | { text: string }[] }[] = [
     { text: `${m.runs} ${m.runs === 1 ? 'reset' : 'resets'}`, role: 'soft' as Role, tip: '{u:reset} Reorganizes so far' },
     { text: `+${pv.now} this run`, role: 'reset' as Role, tip: `{u:reset} a Reorganize now banks {reset:+${pv.now}}` },
+    ...(m.runs >= CHALLENGE_AFTER_RUNS ? [{ text: `${nWon}/${CHALLENGE_IDS.length} challenges`, role: (nWon ? 'good' : 'soft') as Role, tip: challengeTip }] : []),
   ];
   let cx = body.x + bankW + 8;
   for (const c of runChips) {
     const cw = chipWidth(c.text);
     if (cx + cw > bx - 4) break;
     chip(ui, cx, body.y, c.text, { role: c.role });
-    ui.hint(cx, body.y, cw, 12, c.tip, 180);
+    ui.hint(cx, body.y, cw, 12, c.tip, 200);
     cx += cw + 3;
   }
   // ---- the tree: head starts on top, the other branches side by side below
@@ -143,10 +156,15 @@ export function patentsScreen(app: App, r0: Rect) {
   const boxes: { b: PatentBranch; x: number; y: number; w: number; h: number }[] = [];
   const headNodes = PATENT_LIST.filter((p) => p.branch === 'head');
   const gap = 8;
-  const lw = Math.floor((body.w - gap * (lower.length - 1)) / Math.max(1, lower.length));
+  // the lower branches share the width by their columns (Act III's Patents made Rules and
+  // Automation four wide, Offline three: equal boxes crowded the four-wide ones at 1024 px)
+  const colsOf = (b: PatentBranch) => Math.max(...PATENT_LIST.filter((p) => p.branch === b).map((p) => p.pos[0])) + 1;
+  const allCols = lower.reduce((n, b) => n + colsOf(b), 0) || 1;
+  const lws = lower.map((b) => Math.floor(((body.w - gap * (lower.length - 1)) * colsOf(b)) / allCols));
+  const lxs = lws.map((_, i) => body.x + lws.slice(0, i).reduce((n, v) => n + v + gap, 0));
   // spare height spreads into the rows (a roomy page breathes; at most 12 px a row)
   const headL = headNodes.length ? branchLayout(headNodes, body.w) : null;
-  const lowL = lower.map((b) => branchLayout(PATENT_LIST.filter((p) => p.branch === b), lw));
+  const lowL = lower.map((b, i) => branchLayout(PATENT_LIST.filter((p) => p.branch === b), lws[i]));
   const lowRows = Math.max(0, ...lowL.map((l) => l.rows));
   const need = (headL ? 15 + headL.h + 3 : 0) + 15 + Math.max(0, ...lowL.map((l) => l.h));
   const grow = Math.max(0, Math.min(12, Math.floor((bottom - ty - need - 4) / Math.max(1, (headL?.rows ?? 0) + lowRows))));
@@ -155,7 +173,7 @@ export function patentsScreen(app: App, r0: Rect) {
     headH = 15 + branchLayout(headNodes, body.w, grow).h;
     boxes.push({ b: 'head' as PatentBranch, x: body.x, y: ty, w: body.w, h: headH });
   }
-  lower.forEach((b, i) => boxes.push({ b, x: body.x + i * (lw + gap), y: ty + headH + 3, w: lw, h: bottom - (ty + headH + 3) }));
+  lower.forEach((b, i) => boxes.push({ b, x: lxs[i], y: ty + headH + 3, w: lws[i], h: bottom - (ty + headH + 3) }));
   for (const bx0 of boxes) {
     const role = branchRole(bx0.b);
     const ink = roleInk(role);

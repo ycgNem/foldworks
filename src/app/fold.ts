@@ -30,6 +30,7 @@ import { drawRich, layoutRich, richWidth, richHeight } from '../ui/rich';
 import { paperRaw, hash2, stampCanvas } from '../ui/paper';
 import type { Layout } from './layout';
 import { zones } from './tags';
+import { hgradeCard } from './district';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
 
@@ -296,6 +297,7 @@ export function auditBadge(app: App, L: Layout) {
     // costs nothing, but another clipboard is worse to cover than a corner
     const r = placeClip(b, avoid, placed, view, zones);
     placed.push(r);
+    app.hud.clipRects.push(r);
     auditClip(app, a, ws, r, b, here.length);
   });
 }
@@ -470,7 +472,7 @@ function otherFloorTag(app: App, c: Rect, there: AnyAudit[], ws: boolean): numbe
 
 // ------------------------------------------------------------------ the grade card
 
-interface GradeSpec {
+export interface GradeSpec {
   res: AuditResult;
   box: Box;
   /** the report's heading, and what was boxed in small caps */
@@ -531,6 +533,8 @@ export function gradeCard(app: App, L: Layout) {
 export function fgradeCard(app: App, L: Layout) {
   const g = app.game;
   const a = g.s.faudit;
+  // a District fold's grade card (DESIGN.md §21) opens on the same page: src/app/district.ts
+  if (!a?.result && g.s.haudit?.result) return hgradeCard(app, L);
   if (!a || !a.result) { app.panel = null; return; }
   const res = a.result;
   const mods = a.ids.map((id) => g.fById.get(id)).filter((m) => !!m);
@@ -658,7 +662,7 @@ function inspector(app: App, x: number, y: number, size: 48 | 24, cheer: boolean
   } else portrait(ui, 'inspector', x, y, size);
 }
 
-function drawGrade(app: App, L: Layout, sp: GradeSpec) {
+export function drawGrade(app: App, L: Layout, sp: GradeSpec) {
   const ui = app.ui;
   const ctx = ui.ctx;
   const res = sp.res;

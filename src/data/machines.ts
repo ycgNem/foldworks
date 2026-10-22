@@ -7,7 +7,9 @@ import type { ItemId } from './items';
 
 export type BuildKind = 'belt' | 'miner' | 'smelter' | 'press' | 'assembler' | 'heap' | 'splitter' | 'merger' | 'crate'
   // Act II (DESIGN.md §18)
-  | 'boiler' | 'steamEngine' | 'generator' | 'pole' | 'kiln' | 'mixer' | 'refinery' | 'smelterMk2' | 'pressMk2' | 'assemblerMk2';
+  | 'boiler' | 'steamEngine' | 'generator' | 'pole' | 'kiln' | 'mixer' | 'refinery' | 'smelterMk2' | 'pressMk2' | 'assemblerMk2'
+  // Act III (DESIGN.md §21)
+  | 'chemVat' | 'greenhouse' | 'chuteMouth';
 export type FixedKind = 'furnace' | 'dock' | 'hopper';
 export type EntKind = BuildKind | FixedKind;
 
@@ -63,6 +65,10 @@ export const BUILD: Record<EntKind, BuildDef> = {
   smelterMk2: { kind: 'smelterMk2', name: 'Smelter Mk2', cost: 6000, w: 2, h: 2, unlock: 'heavyMachines', machine: 'smelter', kw: 150, speed: 4, act2: true, blurb: '2×2 · 4× a Smelter · {i:ironIngot} 120/min, a full belt · {power:150 kW}', derivation: '§18 Mk2: 4x speed makes 120 ingots/min, exactly one Mk1 belt; 6,000 coin, about half a minute of the Act II factory (12,000/min): priced against Act II income, not against Mk1 prices (230 was a rounding error of the coin piling up, the Milestone 4 review)' },
   pressMk2: { kind: 'pressMk2', name: 'Press Mk2', cost: 9000, w: 2, h: 2, unlock: 'heavyMachines', machine: 'press', kw: 120, speed: 4, act2: true, blurb: '2×2 · 4× a Press · {power:120 kW}', derivation: '§18 Mk2: 4x speed; 9,000 coin, about 45 s of the Act II factory (12,000/min); 120 kW' },
   assemblerMk2: { kind: 'assemblerMk2', name: 'Assembler Mk2', cost: 20000, w: 2, h: 2, unlock: 'heavyMachines', machine: 'assembler', kw: 200, speed: 4, act2: true, blurb: '2×2 · 4× an Assembler · {power:200 kW}', derivation: '§18 Mk2: 4x speed; 20,000 coin, about 1.7 min of the Act II factory (12,000/min), the dearest machine; 200 kW' },
+  // Act III (DESIGN.md §21)
+  chemVat: { kind: 'chemVat', name: 'Chem Vat', cost: 12000, w: 1, h: 1, unlock: 'chemistry', machine: 'chemVat', kw: 100, act2: true, blurb: '2 {i:oil} + {i:sand} → {i:solvent}  30/min · {i:sludge} 1 per 2, out the sides · {power:100 kW}', derivation: '§21 Machines: the Chem Vat, 100 kW; 12,000 coin, priced against the Act III factory (the Refinery\'s 9,000 against Act II\'s, a little dearer: it makes four recipes)' },
+  greenhouse: { kind: 'greenhouse', name: 'Greenhouse', cost: 25000, w: 2, h: 2, unlock: 'hydroponics', machine: 'greenhouse', kw: 150, act2: true, blurb: '2×2 · {i:fertilizer} → 3 {i:produce}  30/min · {power:150 kW}', derivation: '§21 Machines: the Greenhouse, 2x2, 150 kW (a Mk2 smelter\'s draw); 25,000 coin, about an Assembler Mk2' },
+  chuteMouth: { kind: 'chuteMouth', name: 'Chute Mouth', cost: 400, w: 1, h: 1, unlock: 'chutes', act2: true, blurb: 'drops what the Factory Chute takes · set it to an item · 120/min out the front', derivation: '§21 The Chute: a belt\'s speed out of its front (§4); 400 coin, a token: the Chute is a routing piece, not a machine' },
 };
 
 /** The build bar, in slot order (keys 1-9). */
@@ -72,12 +78,13 @@ export const BUILD_BAR: BuildKind[] = ['belt', 'miner', 'smelter', 'press', 'ass
 export const STORE_TABS: { id: 'build' | 'power' | 'heavy'; name: string; kinds: BuildKind[] }[] = [
   { id: 'build', name: 'Build', kinds: BUILD_BAR },
   { id: 'power', name: 'Power', kinds: ['boiler', 'steamEngine', 'generator', 'pole'] },
-  { id: 'heavy', name: 'Heavy', kinds: ['kiln', 'mixer', 'refinery', 'smelterMk2', 'pressMk2', 'assemblerMk2'] },
+  { id: 'heavy', name: 'Heavy', kinds: ['kiln', 'mixer', 'refinery', 'smelterMk2', 'pressMk2', 'assemblerMk2', 'chemVat', 'greenhouse', 'chuteMouth'] },
 ];
 
 export function isMachine(k: EntKind): boolean {
   return k === 'miner' || k === 'smelter' || k === 'press' || k === 'assembler' || k === 'furnace'
-    || k === 'kiln' || k === 'mixer' || k === 'refinery' || k === 'smelterMk2' || k === 'pressMk2' || k === 'assemblerMk2';
+    || k === 'kiln' || k === 'mixer' || k === 'refinery' || k === 'smelterMk2' || k === 'pressMk2' || k === 'assemblerMk2'
+    || k === 'chemVat' || k === 'greenhouse';
 }
 
 /** Buildings of the power grid (they are not crafting machines; they have their own pips). */

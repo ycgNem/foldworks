@@ -17,6 +17,9 @@ interface Cam { x: number; y: number; zoom: number }
 const LOOK: Record<Floor, { bands: number[]; far: number; near: number; sun: [number, number]; refY: number }> = {
   workshop: { bands: [0.2, 0.37, 0.52, 0.63], far: 0.6, near: 0.8, sun: [0.15, 0.13], refY: 120 },
   factory: { bands: [0.36, 0.55, 0.68, 0.77], far: 0.74, near: 0.86, sun: [0.14, 0.1], refY: 60 },
+  // the high floors (DESIGN.md §21, §22): higher still, the zenith deeper, the cloud sea further down
+  district: { bands: [0.46, 0.64, 0.76, 0.84], far: 0.8, near: 0.9, sun: [0.13, 0.08], refY: 40 },
+  world: { bands: [0.56, 0.72, 0.82, 0.89], far: 0.85, near: 0.93, sun: [0.12, 0.07], refY: 20 },
 };
 
 let grad: { c: HTMLCanvasElement; w: number; h: number; floor: Floor } | null = null;
