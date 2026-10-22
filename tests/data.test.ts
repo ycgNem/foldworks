@@ -22,7 +22,7 @@ import { IDLE, IDLE_UPGRADES } from '../src/data/idle';
 import { PATENT_LIST, PATENTS, PATENT_IDS } from '../src/data/patents';
 import { WORLDS, RUBBLE } from '../src/data/worlds';
 import { LEGACY, LEGACY_LIST } from '../src/data/legacy';
-import { KERNELS, KERNEL_LIST, KERNEL_GRADE, LEDGER, LEDGER_RULES } from '../src/data/kernels';
+import { KERNELS, KERNEL_LIST, KERNEL_GRADE, LEDGER, LEDGER_RULES, LEDGER_LATE, LEDGER_REWARDS } from '../src/data/kernels';
 
 /** every deposit on any island: the Workshop's and each island's own (DESIGN.md §22) */
 const ALL_PATCHES = [...PATCHES, ...Object.values(WORLDS).flatMap((w) => w.patches)];
@@ -70,6 +70,8 @@ function records(): [string, { derivation?: string } & Record<string, unknown>][
     ['kernel grade bonus', KERNEL_GRADE as any],
     ...LEDGER.map((d) => ['ledger ' + d.item, d] as [string, any]),
     ['ledger rules', LEDGER_RULES as any],
+    ...LEDGER_LATE.map((d) => ['ledger late ' + d.item, d] as [string, any]),
+    ...LEDGER_REWARDS.map((d) => ['ledger reward ' + d.at, d] as [string, any]),
     // the long tail (DESIGN.md §24): the shelf's caps (the trophies, Challenges and Scenarios are above)
     ['trophy caps', TROPHY_CAPS as any],
   ];
@@ -142,7 +144,9 @@ describe('cross-references', () => {
     for (let pass = 0; pass < 20; pass++) for (const d of KERNEL_LIST) if (d.requires.every((r) => done.has(r))) done.add(d.id);
     expect(done.size).toBe(KERNEL_LIST.length);
     for (const d of Object.values(RESEARCH)) if (d.kernel) expect(KERNELS[d.kernel], d.id).toBeTruthy();
-    for (const p of LEDGER) expect(ITEMS[p.item].value, p.item).toBeGreaterThan(0);
+    for (const p of [...LEDGER, ...LEDGER_LATE]) expect(ITEMS[p.item].value, p.item).toBeGreaterThan(0);
+    for (const p of LEDGER_LATE) if (p.island && p.island !== 'any') expect(WORLDS[p.island], p.item).toBeTruthy();
+    for (const r of LEDGER_REWARDS) if (r.page) expect(CODEX_PAGES.some((q) => q.id === r.page && q.open.k === 'ledger'), r.page).toBe(true);
   });
   it('the Patent tree points at real things, has flat prices and no cycles (DESIGN.md §19)', () => {
     const ids = new Set<string>(PATENT_IDS);

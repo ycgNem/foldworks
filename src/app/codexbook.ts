@@ -35,7 +35,7 @@ export function codexTab(tab: CodexTab, page: string | null = null) {
 }
 
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
-const GROUP_NAME: Record<PageGroup, string> = { tier: 'specimens', floor: 'floors', island: 'islands', ending: 'the ending' };
+const GROUP_NAME: Record<PageGroup, string> = { tier: 'specimens', floor: 'floors', island: 'islands', ledger: 'the ledger', ending: 'the ending' };
 
 /** Unit 7's line on its Codex (ALL CAPS, clipped, counting). */
 function unit7Line(app: App, open: boolean, tab: CodexTab): string {
@@ -165,18 +165,27 @@ function tierSide(app: App, dp: Rect, tier: Tier, hovered: ItemId | null, open: 
 
 // ------------------------------------------------------------------ the lore
 
-/** The lore pages in their four groups: open ones in ink, shut ones pencilled with a lock. */
+/** The lore pages in their five groups: open ones in ink, shut ones pencilled with a lock. */
 function loreList(app: App, page: Rect) {
   const ui = app.ui;
   const g = app.game;
   const x = page.x + 2, w = page.w - 4;
   let y = page.y + 1;
   if (!st.page || !CODEX_PAGES.some((p) => p.id === st.page)) st.page = CODEX_PAGES.find((p) => pageOpen(g, p))?.id ?? CODEX_PAGES[0].id;
-  const groups: PageGroup[] = ['tier', 'floor', 'island', 'ending'];
-  const rows = CODEX_PAGES.length + groups.length;
+  const groups: PageGroup[] = ['tier', 'floor', 'island', 'ledger', 'ending'];
+  // the Ledger's folios (one every twentieth order from the tenth): the open ones and the next only,
+  // so six shut rows never push the ending off the page
+  const shown = (gr: PageGroup) => {
+    const all = CODEX_PAGES.filter((p) => p.group === gr);
+    if (gr !== 'ledger') return all;
+    const open = all.filter((p) => pageOpen(g, p));
+    const next = all.find((p) => !pageOpen(g, p));
+    return next ? [...open, next] : open;
+  };
+  const rows = groups.reduce((n, gr) => n + shown(gr).length + 1, 0);
   const rh = Math.max(11, Math.min(13, Math.floor((page.h - groups.length * 2) / rows)));
   for (const gr of groups) {
-    const list = CODEX_PAGES.filter((p) => p.group === gr);
+    const list = shown(gr);
     if (!list.length) continue;
     if (y + rh > page.y + page.h) break;
     caption(ui, GROUP_NAME[gr], x, y + 2, gr === 'ending' ? T.coin : T.inkSoft);

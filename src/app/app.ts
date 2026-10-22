@@ -42,6 +42,8 @@ import { layout, type Layout } from './layout';
 import { Gazette } from './gazette';
 import type { ScreenName } from './screens';
 import { TROPHY } from '../data/trophies';
+import { rewardAt } from '../sim/systems/ledger';
+import { cosmeticName, ledgerRewardText } from './endless';
 import { Bot, type Policy } from '../sim/bot';
 // Milestone 5: Reorganize, the Patent tree and the Patent Drawer (src/app/reorganize.ts, patents.ts, drawer.ts)
 import { prules } from '../sim/patents';
@@ -712,9 +714,11 @@ export class App {
         case 'kernel': a.sfx('upgrade'); break;
         case 'ledger': {
           a.sfx('order');
-          const cos = e.id && !(e.id in ITEMS) ? e.id : null;
-          this.toast(`Ledger order ${e.d ?? ''} filled!`, `{coin:${Num.of(e.value ?? 0).format()}}${cos ? ` · a cosmetic: {good:${cos}}` : ' · the next one opens'}`, C.lime, 'ledger');
-          if (cos) { a.sfx('fanfare', 0.7); banner(this, 'A COSMETIC!', `the Endless Ledger · ${cos}`, C.gold); }
+          const cos = e.id && !(e.id in ITEMS) ? cosmeticName(e.id) : null;
+          // every tenth order to the 120th pays a lore page or a rule as well (the review of 2026-10-22)
+          const rw = e.d ? rewardAt(e.d) : null;
+          this.toast(`Ledger order ${e.d ?? ''} filled!`, `{coin:${Num.of(e.value ?? 0).format()}}${cos ? ` · {good:${cos}}` : ' · the next one opens'}${rw ? ` · ${ledgerRewardText(rw)}` : ''}`, C.lime, 'ledger');
+          if (cos) { a.sfx('fanfare', 0.7); banner(this, rw?.page ? 'A COSMETIC AND A PAGE!' : rw?.rule ? 'A COSMETIC AND A RULE!' : 'A COSMETIC!', `the Endless Ledger · ${cos}`, C.gold); }
           break;
         }
         case 'sliceEnd':

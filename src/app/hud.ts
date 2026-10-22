@@ -11,6 +11,7 @@ import { C, rgba } from '../data/palette';
 import { BUILD } from '../data/machines';
 import { RESEARCH } from '../data/research';
 import { TROPHIES, bonusText } from '../data/trophies';
+import { bonusCapped } from '../sim/longtail';
 import { itemName, ITEMS, type ItemId } from '../data/items';
 import { MEGA, MEGAS, type MegaId } from '../data/megaprojects';
 import { TITLE } from '../game-info';
@@ -324,7 +325,8 @@ function slips(app: App, L: Layout, dt: number) {
     const drop = p.t < 0.25 ? (1 - p.t / 0.25) * -30 : p.t > 3.6 ? (p.t - 3.6) * -90 : Math.round(Math.sin(Math.min(1, (p.t - 0.25) * 4) * Math.PI) * 2);
     // Milestone 11: the ribbon says the bonus the trophy gives, on a slip under it (the newest only)
     const newest = i === Math.min(2, app.trophyPops.length) - 1;
-    const bonus = newest ? `{good:+} ${bonusText(t.bonus)}` : '';
+    // a kind already at its cap says so (the review of 2026-10-22: it read as a gain that wasn't)
+    const bonus = !newest ? '' : bonusCapped(app.game, t) ? `{u:lock} ${bonusText(t.bonus).replace(/\{good:([^}]*)\}/g, '$1')} {soft:· capped: the shelf already gives the most}` : `{good:+} ${bonusText(t.bonus)}`;
     const bw2 = bonus ? Math.min(ui.w - 40, richWidth(bonus) + 14) : 0;
     const ry = Math.round(6 + (newest && app.trophyPops.length > 1 ? 34 : i * 20) + drop);
     ui.floating(() => {

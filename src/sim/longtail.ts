@@ -9,7 +9,8 @@ import type { State, BoardRecord, ModuleDesign } from './world';
 import type { ItemId } from '../data/items';
 import type { BuildKind } from '../data/machines';
 import { BUILD } from '../data/machines';
-import { TROPHIES, TROPHY_CAPS, type TrophyDef } from '../data/trophies';
+import { TROPHIES, TROPHY_CAPS, type TrophyDef, type TrophyBonus } from '../data/trophies';
+import { LEDGER_REWARDS } from '../data/kernels';
 import { CODEX_ITEMS, CODEX_PAGES, CODEX_TOTAL, TIERS, ITEM_TIER, inCodex, type CodexPage, type Tier } from '../data/codex';
 import { COSMETICS, cosmeticDef, SKIN_SLOTS, type CosmeticDef, type SkinSlot } from '../data/cosmetics';
 import { SCENARIOS, SCENARIO_IDS, type ScenarioDef, type ScenarioId } from '../data/scenarios';
@@ -43,20 +44,72 @@ export interface TrophyRules {
   /** a share off the Old Works' repair price */
   repair: number;
   chuteRoom: number;
+  // ---- Acts IV-V's own kinds (the review of 2026-10-22), the shelf's and the Ledger's rules
+  /** tiles a second the World's barges fly faster */
+  barge: number;
+  /** seconds Beyond's couriers load quicker at each end */
+  courier: number;
+  /** a share off the World's and Beyond's lots */
+  lot: number;
+  /** a share off what every Ledger order wants */
+  ledger: number;
 }
 
-const cache = new WeakMap<State, { flags: string[]; len: number; r: TrophyRules }>();
+/** The capped kinds and the TrophyRules field each one sums into. */
+const CAPPED: Partial<Record<TrophyBonus['k'], keyof typeof TROPHY_CAPS>> = {
+  skiffs: 'skiffs', routes: 'routes', drawer: 'drawer', sparkLife: 'sparkLife', heap: 'heap', startCoin: 'startCoin',
+  cool: 'cool', repair: 'repair', chute: 'chute', barge: 'barge', courier: 'courier', lot: 'lot', ledger: 'ledger',
+};
+
+/** A bonus's size, as summed against its cap (0 for the kinds without one). */
+export function bonusSize(b: TrophyBonus): number {
+  switch (b.k) {
+    case 'speed': case 'skiffs': case 'routes': case 'drawer': case 'sparkLife': case 'heap': case 'startCoin': case 'chute': case 'barge': return b.add;
+    case 'cool': case 'courier': return b.sub;
+    case 'repair': case 'lot': case 'ledger': return b.off;
+    case 'free': case 'cosmetic': return 0;
+  }
+}
+
+/** The cap a bonus counts against (a product's own for a craft speed), or null (free buildings, skins). */
+export function bonusCap(b: TrophyBonus): number | null {
+  if (b.k === 'speed') return TROPHY_CAPS.speed;
+  const f = CAPPED[b.k];
+  return f ? (TROPHY_CAPS[f] as number) : null;
+}
+
+/** Do two bonuses sum into the same capped total (the same kind, and for a craft speed the same product)? */
+const sameKind = (a: TrophyBonus, b: TrophyBonus) => a.k === b.k && (a.k !== 'speed' || (b.k === 'speed' && a.item === b.item));
+
+/** The Ledger's rules paid so far (every twentieth order to the 120th, DESIGN.md §23). */
+const ledgerRules = (g: Game): TrophyBonus[] => {
+  const filled = g.s.meta.ledger?.n ?? 0;
+  return LEDGER_REWARDS.filter((r) => r.rule && r.at <= filled).map((r) => r.rule!);
+};
+
+/** Is this bonus already at its cap without this trophy (DESIGN.md §24: "capped: the shelf already
+ * gives the most")? The other trophies earned and the Ledger's rules paid count; free buildings and
+ * skins are never capped. */
+export function bonusCapped(g: Game, t: TrophyDef): boolean {
+  const cap = bonusCap(t.bonus);
+  if (cap === null) return false;
+  const have = new Set(g.s.flags);
+  let sum = 0;
+  for (const o of TROPHIES) if (o !== t && have.has('trophy:' + o.id) && sameKind(o.bonus, t.bonus)) sum += bonusSize(o.bonus);
+  for (const b of ledgerRules(g)) if (sameKind(b, t.bonus)) sum += bonusSize(b);
+  return sum >= cap - 1e-9;
+}
+
+const cache = new WeakMap<State, { flags: string[]; len: number; ledger: number; r: TrophyRules }>();
 
 export function trules(g: Game): TrophyRules {
   const s = g.s;
   const hit = cache.get(s);
-  if (hit && hit.flags === s.flags && hit.len === s.flags.length) return hit.r;
+  const filled = s.meta.ledger?.n ?? 0;
+  if (hit && hit.flags === s.flags && hit.len === s.flags.length && hit.ledger === filled) return hit.r;
   const have = new Set(s.flags);
-  const r: TrophyRules = { n: 0, speed: {}, free: {}, skiffs: 0, routes: 0, drawer: 0, sparkLife: 0, heap: 0, startCoin: 0, cool: 0, repair: 0, chuteRoom: 0 };
-  for (const t of TROPHIES) {
-    if (!have.has('trophy:' + t.id)) continue;
-    r.n++;
-    const b = t.bonus;
+  const r: TrophyRules = { n: 0, speed: {}, free: {}, skiffs: 0, routes: 0, drawer: 0, sparkLife: 0, heap: 0, startCoin: 0, cool: 0, repair: 0, chuteRoom: 0, barge: 0, courier: 0, lot: 0, ledger: 0 };
+  const add = (b: TrophyBonus) => {
     switch (b.k) {
       case 'speed': r.speed[b.item] = Math.min(TROPHY_CAPS.speed, (r.speed[b.item] ?? 0) + b.add); break;
       case 'free': r.free[b.kind] = (r.free[b.kind] ?? 0) + b.n; break;
@@ -69,9 +122,20 @@ export function trules(g: Game): TrophyRules {
       case 'cool': r.cool += b.sub; break;
       case 'repair': r.repair += b.off; break;
       case 'chute': r.chuteRoom += b.add; break;
+      case 'barge': r.barge += b.add; break;
+      case 'courier': r.courier += b.sub; break;
+      case 'lot': r.lot += b.off; break;
+      case 'ledger': r.ledger += b.off; break;
       case 'cosmetic': break;
     }
+  };
+  for (const t of TROPHIES) {
+    if (!have.has('trophy:' + t.id)) continue;
+    r.n++;
+    add(t.bonus);
   }
+  // the Ledger's rules (every twentieth order to the 120th) sum with the shelf's, under one cap
+  for (const x of LEDGER_REWARDS) if (x.rule && x.at <= filled) add(x.rule);
   r.skiffs = Math.min(TROPHY_CAPS.skiffs, r.skiffs);
   r.routes = Math.min(TROPHY_CAPS.routes, r.routes);
   r.drawer = Math.min(TROPHY_CAPS.drawer, r.drawer);
@@ -80,7 +144,13 @@ export function trules(g: Game): TrophyRules {
   r.cool = Math.min(TROPHY_CAPS.cool, r.cool);
   r.repair = Math.min(TROPHY_CAPS.repair, Math.round(r.repair * 1000) / 1000);
   r.chuteRoom = Math.min(TROPHY_CAPS.chute, r.chuteRoom);
-  cache.set(s, { flags: s.flags, len: s.flags.length, r });
+  r.startCoin = Math.min(TROPHY_CAPS.startCoin, r.startCoin);
+  const round = (v: number) => Math.round(v * 1000) / 1000;
+  r.barge = Math.min(TROPHY_CAPS.barge, round(r.barge));
+  r.courier = Math.min(TROPHY_CAPS.courier, round(r.courier));
+  r.lot = Math.min(TROPHY_CAPS.lot, round(r.lot));
+  r.ledger = Math.min(TROPHY_CAPS.ledger, round(r.ledger));
+  cache.set(s, { flags: s.flags, len: s.flags.length, ledger: filled, r });
   return r;
 }
 
@@ -149,6 +219,7 @@ export function pageOpen(g: Game, p: CodexPage): boolean {
     case 'island': return visitedIsland(g, o.id);
     case 'relocated': return (g.s.meta.relocations ?? 0) > 0;
     case 'lastFold': return (g.s.meta.lastFolds ?? 0) > 0;
+    case 'ledger': return (g.s.meta.ledger?.n ?? 0) >= o.n;
   }
 }
 

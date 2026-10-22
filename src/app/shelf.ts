@@ -4,17 +4,19 @@
 // grid (earned, pencilled in, or "???" for a hidden one), and under them the closest ones still to
 // earn. The right page holds the sticker in hand: its condition, its progress and the bonus it gives
 // (or gives already). Bonuses lists what the shelf adds up to, kind by kind, against each kind's cap
-// (TROPHY_CAPS: the shelf is a set of small rules, never a multiplier on its own size). The Wardrobe
+// (TROPHY_CAPS: the shelf is a set of small rules, never a multiplier on its own size; the Ledger's
+// rules count with them), and a sticker whose kind is already at its cap says so (the review of
+// 2026-10-22: "yours for good" on a bonus that added nothing). The Wardrobe
 // lists every kind a skin can dress, what it wears, and the skins owned for it, worn with the
 // `skin` command. Ink on paper, the page kit of screens.ts.
 import { C, rgba } from '../data/palette';
-import { TROPHIES, TROPHY, TROPHY_CAPS, trophyFace, type TrophyDef } from '../data/trophies';
+import { TROPHIES, TROPHY, TROPHY_CAPS, trophyFace, pluralName, type TrophyDef } from '../data/trophies';
 import { COSMETICS, SKIN_SLOTS, cosmeticDef, type CosmeticDef, type SkinSlot } from '../data/cosmetics';
 import { CHALLENGES } from '../data/challenges';
 import { CUSTOMERS } from '../data/orders';
 import { BUILD } from '../data/machines';
 import { ITEMS, type ItemId } from '../data/items';
-import { trules, trophyEarned, ownedCosmetics, skinFor } from '../sim/longtail';
+import { trules, trophyEarned, ownedCosmetics, skinFor, bonusCapped } from '../sim/longtail';
 import { trophyValue } from '../sim/systems/stats';
 import { textWidth, smallWidth, bigWidth, ellipsize, LINE_H } from '../ui/font';
 import { drawRich, richWidth, richHeight } from '../ui/rich';
@@ -219,6 +221,8 @@ function stickerGrid(app: App, list: TrophyDef[], page: Rect): TrophyDef | null 
     const hv = ui.hover(cx, cy, cell, cell);
     ui.mark('trophy:' + t.id, cx, cy, cell, cell);
     if (!earned && !t.hidden && progress(t) > 0) meter(ui, cx + 6, cy + cell - 7, cell - 12, 3, progress(t), { role: 'coin', glint: false });
+    // a sticker whose kind is already at its cap wears a small lock (its bonus adds nothing now)
+    if (!(t.hidden && !earned) && bonusCapped(g, t)) drawRich(ui, '{u:lock}', cx + cell - 11, cy + 1, Infinity, T.inkSoft);
     if (st.focus === t.id) penCircle(ui, ccx, ccy, 15, 1);
     if (hv) {
       hovered = t;
@@ -249,7 +253,7 @@ function stickerGrid(app: App, list: TrophyDef[], page: Rect): TrophyDef | null 
       drawRich(ui, t.desc, rx, ry + 10, Infinity, T.inkSoft);
       ui.unclip();
       meter(ui, rx, ry + 19, cw, 3, f, { role: 'coin', glint: false });
-      ui.hint(rx, ry, cw, rowH - 2, [{ text: `{big:${t.name}}` }, { text: t.desc }, { text: trophyFace(t, false).bonus }], 190);
+      ui.hint(rx, ry, cw, rowH - 2, [{ text: `{big:${t.name}}` }, { text: t.desc }, { text: trophyFace(t, false).bonus }, ...(bonusCapped(g, t) ? [{ text: CAPPED_NOTE }] : [])], 190);
       if (ui.hover(rx, ry, cw, rowH - 2) && ui.clicked) { ui.eat(); st.focus = t.id; }
     });
   }
@@ -305,12 +309,15 @@ function trophySide(app: App, dp: Rect, list: TrophyDef[], hovered: TrophyDef | 
       ui.text(s, dx + dw, dy, earned ? T.good : T.ink, { align: 'right' });
       dy += 14;
     }
-    // the bonus: what it gives (or gives already), in the shelf's own words
+    // the bonus: what it gives (or gives already), in the shelf's own words; a kind already at its
+    // cap without it says so instead of "yours for good" (the review of 2026-10-22)
     if (dy + 22 <= end) {
-      caption(ui, earned ? 'its bonus, yours for good' : 'its bonus', dx, dy, earned ? T.good : T.coin);
+      const capped = !(focus.hidden && !earned) && bonusCapped(g, focus);
+      caption(ui, capped ? 'its bonus, capped' : earned ? 'its bonus, yours for good' : 'its bonus', dx, dy, capped ? T.inkSoft : earned ? T.good : T.coin);
       dy += 9;
       const bh = richHeight(face.bonus, dw);
-      if (dy + bh <= end) dy += drawRich(ui, face.bonus, dx, dy, dw, earned ? T.ink : T.inkSoft) + 4;
+      if (dy + bh <= end) dy += drawRich(ui, face.bonus, dx, dy, dw, earned && !capped ? T.ink : T.inkSoft) + 4;
+      if (capped && dy + richHeight(CAPPED_NOTE, dw) <= end) dy += drawRich(ui, CAPPED_NOTE, dx, dy, dw, T.ink) + 4;
     }
   }
   // the latest stickers, along the page's foot
@@ -324,6 +331,9 @@ function trophySide(app: App, dp: Rect, list: TrophyDef[], hovered: TrophyDef | 
 }
 
 // ------------------------------------------------------------------ Bonuses
+
+/** What a capped sticker says (DESIGN.md §24). */
+export const CAPPED_NOTE = '{u:lock} {bad:capped:} the shelf already gives the most';
 
 /** One bonus row: an icon and name at the left, the sum at the right, a meter of it against its cap
  * under (no meter for a kind without a cap). Returns the height. */
@@ -363,7 +373,12 @@ function bonusesPage(app: App, page: Rect) {
   rows.push(['{u:overdrive} Overdrive cools', `${r.cool} s sooner`, r.cool / TROPHY_CAPS.cool, `CAP ${TROPHY_CAPS.cool} S`]);
   rows.push(['{u:relocate} ruins repair', `${Math.round(r.repair * 100)}% off`, r.repair / TROPHY_CAPS.repair, `CAP ${Math.round(TROPHY_CAPS.repair * 100)}%`]);
   rows.push(['{u:chute} the Chute holds', `+${r.chuteRoom}`, r.chuteRoom / TROPHY_CAPS.chute, `CAP +${TROPHY_CAPS.chute}`]);
-  rows.push(['{coin} each run starts', `{coin:${r.startCoin.toLocaleString('en-US')}}`, null, 'AFTER A RESET']);
+  rows.push(['{coin} each run starts', `{coin:${r.startCoin.toLocaleString('en-US')}}`, r.startCoin / TROPHY_CAPS.startCoin, `CAP ${TROPHY_CAPS.startCoin.toLocaleString('en-US')}`]);
+  // Acts IV-V's own (the shelf's and the Ledger's rules)
+  rows.push(['{u:world} barges', `+${r.barge} tiles/s`, r.barge / TROPHY_CAPS.barge, `CAP +${TROPHY_CAPS.barge}`]);
+  rows.push(['{u:beyond} couriers', `${r.courier} s quicker`, r.courier / TROPHY_CAPS.courier, `CAP ${TROPHY_CAPS.courier} S`]);
+  rows.push(['{u:claim} high lots', `${Math.round(r.lot * 100)}% off`, r.lot / TROPHY_CAPS.lot, `CAP ${Math.round(TROPHY_CAPS.lot * 100)}%`]);
+  rows.push(['{u:ledger} Ledger orders', `${Math.round(r.ledger * 100)}% less`, r.ledger / TROPHY_CAPS.ledger, `CAP ${Math.round(TROPHY_CAPS.ledger * 100)}%`]);
   const skins = TROPHIES.filter((t) => t.bonus.k === 'cosmetic');
   rows.push(['{u:trophies} skins from trophies', `${skins.filter((t) => trophyEarned(g, t)).length}/${skins.length}`, null, 'IN THE WARDROBE']);
   const per = two ? Math.ceil(rows.length / 2) : rows.length;
@@ -376,7 +391,8 @@ function bonusesPage(app: App, page: Rect) {
   });
   y += per * 22 + 4;
   // the products sped up and the buildings made free, as chips
-  const chips: string[] = [...speeds.map(([it, a]) => `{i:${it}} +${Math.round(a * 100)}%`), ...frees.map(([k, n]) => `${n > 1 ? n + ' ' : ''}${(BUILD as Record<string, { name: string }>)[k]?.name ?? k}${n > 1 ? 's' : ''} free`)];
+  const bname = (k: string) => (BUILD as Record<string, { name: string }>)[k]?.name ?? k;
+  const chips: string[] = [...speeds.map(([it, a]) => `{i:${it}} +${Math.round(a * 100)}%`), ...frees.map(([k, n]) => `${n > 1 ? `${n} ${pluralName(bname(k))}` : bname(k)} free`)];
   if (chips.length && y + 22 <= bottom) {
     rule(ui, x, y - 2, w, true);
     y += caption(ui, 'the products and the buildings', x, y + 1) + 2;
@@ -399,7 +415,7 @@ function bonusesSide(app: App, dp: Rect, have: number) {
   dy += speaker(app, 'bramble', brambleLine(have, TROPHIES.length, 'bonuses'), dx, dy, dw) + 8;
   dy += ledgerRow(ui, '{u:trophies} {soft:trophies}', `${have} of ${TROPHIES.length}`, dx, dy, dw);
   dy += ledgerRow(ui, '{soft:hidden found}', `${TROPHIES.filter((t) => t.hidden && trophyEarned(g, t)).length} of ${TROPHIES.filter((t) => t.hidden).length}`, dx, dy, dw) + 6;
-  for (const s of ['{u:star} each bonus is about what earned it', '{u:lock} every kind stops at its cap', '{u:clock} kept through every reset', '{soft:never a bonus on the trophy count}']) {
+  for (const s of ['{u:star} each bonus is about what earned it', '{u:lock} every kind stops at its cap', '{u:ledger} the Ledger\'s rules count too', '{u:clock} kept through every reset', '{soft:never a bonus on the trophy count}']) {
     const h = richHeight(s, dw);
     if (dy + h > dp.y + dp.h) break;
     dy += drawRich(ui, s, dx, dy, dw, T.ink) + 3;

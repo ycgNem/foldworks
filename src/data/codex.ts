@@ -51,9 +51,12 @@ export type PageOpen =
   /** a Relocate taken (Home's page: a place is only seen once it is left) */
   | { k: 'relocated' }
   /** a Last Fold taken (Unit 7's ending) */
-  | { k: 'lastFold' };
+  | { k: 'lastFold' }
+  /** this many Endless Ledger orders filled (kept through every reset: `meta.ledger.n`; the
+   * Ledger's every twentieth order from the tenth pays one, src/data/kernels.ts LEDGER_REWARDS) */
+  | { k: 'ledger'; n: number };
 
-export type PageGroup = 'tier' | 'floor' | 'island' | 'ending';
+export type PageGroup = 'tier' | 'floor' | 'island' | 'ledger' | 'ending';
 
 export interface CodexPage {
   id: string;
@@ -179,6 +182,56 @@ export const CODEX_PAGES: CodexPage[] = [
       'SOMEONE BUILT HERE BEFORE. THEIR MACHINES ARE STILL STANDING, BROKEN, IN THE SHAPE OF A LINE.',
       'AMONG THE RELICS, UNIT 7 FOUND A UNIT 6. IT WAS COLLECTING THINGS TOO. ITS DRAWERS WERE FULL.',
       'UNIT 7 HAS CATALOGUED UNIT 6. WITH CARE.',
+    ],
+  },
+  // ---- the Ledger's folios (the review of 2026-10-22: the Ledger paid only ribbons): Unit 7 reads
+  // the Committee's ledger over its shoulder, one folio every twentieth order from the tenth
+  {
+    id: 'ledger1', group: 'ledger', title: 'The Ledger, Folio I', open: { k: 'ledger', n: 10 }, hint: '{u:ledger} fill 10 Ledger orders',
+    lines: [
+      'THE COMMITTEE KEEPS A LEDGER. UNIT 7 HAS READ IT, OVER A SHOULDER. THE SHOULDER DID NOT MIND.',
+      'EVERY LINE IS AN ORDER. EVERY ORDER IS ONE MORE THAN THE LAST. THERE IS NO LAST LINE.',
+      'UNIT 7 ASKED WHERE THE GOODS GO. THE COMMITTEE SAID "ON FILE". THE FILE IS VERY LARGE.',
+    ],
+  },
+  {
+    id: 'ledger2', group: 'ledger', title: 'The Ledger, Folio II', open: { k: 'ledger', n: 30 }, hint: '{u:ledger} fill 30 Ledger orders',
+    lines: [
+      'THE LEDGER IS WRITTEN IN THREE HANDS. NO MEMBER OF THE COMMITTEE WILL SAY WHICH HAND IS THEIRS.',
+      'IN THE MARGIN: A DRAWING OF A FROG. IN THE OTHER MARGIN: A SMALLER DRAWING OF THE SAME FROG, DISAPPROVING.',
+      'UNIT 7 HAS ADDED NOTHING TO THE LEDGER. UNIT 7 HAS UNDERLINED ONE NUMBER, LIGHTLY. IT WAS A GOOD NUMBER.',
+    ],
+  },
+  {
+    id: 'ledger3', group: 'ledger', title: 'The Ledger, Folio III', open: { k: 'ledger', n: 50 }, hint: '{u:ledger} fill 50 Ledger orders',
+    lines: [
+      'THE GOODS DO NOT LEAVE THE ISLAND. THEY GO INTO A WAREHOUSE BEHIND THE COMMITTEE ROOM. UNIT 7 HAS SEEN THE DOOR.',
+      'THE DOOR SAYS "STORES". INSIDE, THE CRATES ARE STACKED IN THE ORDER THEY WERE ASKED FOR. GIZMO, STEEL, CIRCUIT. GIZMO, STEEL, CIRCUIT.',
+      'THE OLDEST CRATE IS LABELLED "ORDER 1: 300 GIZMOS". IT HAS NEVER BEEN OPENED. IT IS DUSTED WEEKLY.',
+    ],
+  },
+  {
+    id: 'ledger4', group: 'ledger', title: 'The Ledger, Folio IV', open: { k: 'ledger', n: 70 }, hint: '{u:ledger} fill 70 Ledger orders',
+    lines: [
+      'NOW THE LEDGER ASKS FOR LENSES, ALLOYS, WEATHER. IT ASKS ONLY FOR WHAT THE TOWN HAS ALREADY MADE ONCE.',
+      'UNIT 7 ASKED THE COMMITTEE HOW IT KNOWS. THE COMMITTEE POINTED AT THE CODEX. AT UNIT 7.',
+      'UNIT 7 HAD NOT KNOWN IT WAS BEING READ. UNIT 7 SAT UP STRAIGHTER.',
+    ],
+  },
+  {
+    id: 'ledger5', group: 'ledger', title: 'The Ledger, Folio V', open: { k: 'ledger', n: 90 }, hint: '{u:ledger} fill 90 Ledger orders',
+    lines: [
+      'THE WAREHOUSE HAS RUN OUT OF ROOM. THE COMMITTEE HAS FOLDED IT. IT IS NOW ONE TILE, AND FULL.',
+      'UNIT 7 FINDS THIS CORRECT. EVERYTHING HERE IS FOLDED SOONER OR LATER. EVEN THE KEEPING.',
+      'A BOTTLED TUESDAY IS FILED UNDER "T". THE COMMITTEE IS NOT SURE IT IS STILL TUESDAY INSIDE. NOBODY CHECKS.',
+    ],
+  },
+  {
+    id: 'ledger6', group: 'ledger', title: 'The Ledger, Folio VI', open: { k: 'ledger', n: 110 }, hint: '{u:ledger} fill 110 Ledger orders',
+    lines: [
+      'UNIT 7 HAS FOUND THE FIRST PAGE OF THE LEDGER. IT IS OLDER THAN THE TOWN. IT IS OLDER THAN THE FURNACE.',
+      'THE FIRST ORDER ON IT IS NOT FOR GIZMOS. IT SAYS: "ONE OF EVERYTHING, PLEASE. NO HURRY."',
+      'IT IS SIGNED UNIT 6. UNIT 7 HAS FILLED THE ORDER. UNIT 7 IS STILL FILLING IT. THERE IS NO HURRY.',
     ],
   },
   // ---- the ending (the first Last Fold)

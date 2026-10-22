@@ -161,14 +161,16 @@ export function routeDist(a: FEnt, b: FEnt): number {
  * Long Skiffs (a Patent) a tile a second to the speed (DESIGN.md §21). */
 export function skiffStats(g: Game, id: HighFloorId): { load: number; speed: number; dwell: number } {
   const f = HIGH[id];
+  // the Trophy Shelf's and the Ledger's Acts IV-V rules: barges faster, couriers quicker at the ends
+  const tr = trules(g);
   // the Challenges' rules and rewards on top (Headwinds, Rough Seas, Light Fleet: DESIGN.md §24)
   return skiffRules(g, id, {
     load: f.load + (g.s.orders.rep.bramble >= 4 ? RULES.brambleSkiffLoad.value : 0),
     // Long Skiffs flies the District's; the Lighthouse's Lens Room the World's barges (DESIGN.md §22)
     // (Beyond's couriers: neither, DESIGN.md §23)
-    speed: f.speed + (id === 'district' ? prules(g).skiffSpeed : id === 'world' && megaDone(g, 'lighthouse', 1) ? RULES.lighthouseSpeed.value : 0),
+    speed: f.speed + (id === 'district' ? prules(g).skiffSpeed : id === 'world' && megaDone(g, 'lighthouse', 1) ? RULES.lighthouseSpeed.value : 0) + (id === 'world' ? tr.barge : 0),
     // the Lighthouse's Beacon: loading in half the time on every high floor
-    dwell: f.dwell * (megaDone(g, 'lighthouse', 2) ? RULES.lighthouseDwell.value : 1),
+    dwell: (f.dwell - (id === 'beyond' ? tr.courier : 0)) * (megaDone(g, 'lighthouse', 2) ? RULES.lighthouseDwell.value : 1),
   });
 }
 
@@ -396,7 +398,9 @@ export function unroute(g: Game, id: HighFloorId, rid: number): ActResult {
 export function lotPrice(g: Game, id: HighFloorId): Num | null {
   const st = g.s[id], f = HIGH[id];
   if (!st || st.lots >= f.lots) return null;
-  return Num.of(Math.round(f.lotBase * (st.lots + 1) * lotFactor(g, id)));
+  // the shelf's and the Ledger's lot rule: the World's and Beyond's lots (DESIGN.md §24)
+  const off = id === 'district' ? 0 : trules(g).lot;
+  return Num.of(Math.round(f.lotBase * (st.lots + 1) * lotFactor(g, id) * (1 - off)));
 }
 
 export function buyLot(g: Game, id: HighFloorId): ActResult {
