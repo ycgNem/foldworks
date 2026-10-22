@@ -41,11 +41,11 @@ export const SCENARIOS: Record<ScenarioId, ScenarioDef> = {
   },
   richOre: {
     id: 'richOre', name: 'Rich Ore, Little Power',
-    pitch: 'The ground is generous; the coal merchant is not. Fold the fastest steel you can power.',
+    pitch: 'The ground is generous; the coal merchant is not. Fold the fastest glass you can power.',
     land: ['A', 'C', 'E', 'F'], research: 'act2', coin: 250000,
     miners: 2, power: 0.5,
-    product: 'steel', measure: 'rate', unit: 'steel/min',
-    derivation: '§21 Scenarios: Miners dig 2x and Steam Engines and Generators make 0.5x, so ore is free and kW dear: a fast steel fold is Mk2 smelters on twice the plant, or many Mk1s in one box; 250,000 coin is a steel line and its plant (§18 prices)',
+    product: 'glass', measure: 'rate', unit: 'glass/min',
+    derivation: '§21 Scenarios: Miners dig 2x and Steam Engines and Generators make 0.5x, so sand is free and kW dear: glass comes from the Kiln, a powered machine (steel did not: a Mk1 smelter draws none, the second gate), so the fastest glass fold is a plant sized to its kilns in Efficient mode; 250,000 coin is a glass line and its plant (§18 prices)',
   },
   scarceBelts: {
     id: 'scarceBelts', name: 'Scarce Belts',

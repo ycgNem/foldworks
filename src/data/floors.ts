@@ -41,11 +41,11 @@ export interface HighFloorDef {
 export const HIGH: Record<HighFloorId, HighFloorDef> = {
   district: {
     id: 'district', name: 'District', opens: 'zoning', depth: 2,
-    w: 12, h: 10, lotCols: 2, lots: 3, lotBase: 2_000_000,
+    w: 12, h: 10, lotCols: 2, lots: 3, lotBase: 1_000_000,
     dock: { x: 10, y: 1 }, hopper: { x: 10, y: 5 }, bay: { x: 0, y: 8 },
-    speed: 2, load: 4, dwell: 1, skiffCost: 15000, maxSkiffs: 12,
+    speed: 2, load: 1, dwell: 1, skiffCost: 40000, maxSkiffs: 12,
     foldMax: 8,
-    derivation: '§21 The District: 12x10 (120 tiles, 1.25x the Factory\'s 96, each holding a group of 2-6 modules), three lots of 2x10 east of it at 2M x n (linear, the annex pattern, §19), Dock and Hopper at the east edge like the Factory\'s, the Bay at the south-west corner; skiffs fly 2 tiles/s with 4 items a trip and 1 s at the two ends: beside its consumer a skiff moves 2.0/s, five tiles off 0.67, across the floor 0.32, against depth-2 rates of 0.1-3 items/s, so a feeder placed beside its consumer needs one skiff and across the floor three to six; a skiff is 15,000 (flat), about 10 s of the Act III factory',
+    derivation: '§21 The District: 12x10 (120 tiles, 1.25x the Factory\'s 96, each holding a group of 2-6 modules), three lots of 2x10 east of it at 1M x n (linear, the annex pattern, §19; 45-55 min of the 18-21K a minute the floor makes when the District opens, the second gate\'s measure), Dock and Hopper at the east edge like the Factory\'s, the Bay at the south-west corner; skiffs fly 2 tiles/s with 1 item a trip and 1 s at the two ends (ship value, not bulk: the second gate): beside its consumer a skiff moves 0.5 a second, five tiles off 0.17, across the floor 0.08, against depth-2 flows of 0.06-1.1 a second, so a bulk feeder (glass, steel, solvent at 0.5-1 a second) must stand beside what it feeds, and a Servo group (0.1-0.2) can fly across the floor on two skiffs; a skiff is 40,000 (flat): 2 min of the floor\'s income when the District opens, 27 s at 15 h, 12 s at 30 h (the critic\'s 89K and 195K a minute), so a bad layout costs at the act\'s start and a dozen skiffs is a decision later',
   },
   world: {
     id: 'world', name: 'World', opens: null, depth: 3,

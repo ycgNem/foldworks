@@ -6,6 +6,7 @@
 // goal (an order, a research, a grade) and every reward is a small rule tied to what earned it,
 // never a multiplier on everything.
 import type { ResearchId } from './research';
+import type { ItemId } from './items';
 
 export const CHALLENGE_IDS = ['noSplitters', 'handsOff', 'leanPower', 'threeKinds', 'smallBoxes'] as const;
 export type ChallengeId = (typeof CHALLENGE_IDS)[number];
@@ -13,6 +14,8 @@ export type ChallengeId = (typeof CHALLENGE_IDS)[number];
 export type ChallengeGoal =
   | { k: 'order'; id: string }
   | { k: 'research'; id: ResearchId }
+  /** this many of an item delivered this run (a head start can't deliver it for you) */
+  | { k: 'deliver'; item: ItemId; n: number }
   /** a fold graded S or better this run */
   | { k: 'foldS' };
 
@@ -40,36 +43,36 @@ export const CHALLENGES: Record<ChallengeId, ChallengeDef> = {
     id: 'noSplitters', name: 'No Splitters',
     rule: 'No Splitters can be built this run',
     goal: { k: 'order', id: 'gizmoFestival' }, goalText: 'Fill the Gizmo Festival',
-    reward: 'Splitters cost nothing, for good',
+    reward: 'Every high floor holds 20 more skiff routes, for good',
     flavor: 'Every belt goes exactly one place. Like a sensible person.',
-    derivation: '§21 Challenges: the slice\'s last goal, its lines laid with dedicated belts and two Miners where one split would do; the reward is the part it took away, priced at nothing',
+    derivation: '§21 Challenges: the slice\'s last goal, its lines laid with dedicated belts and two Miners where one split would do; the reward is routing room, a lot\'s worth of routes (RULES.routesPerLot) on every high floor (the second gate: free Splitters were worth nothing by Act III)',
   }),
   handsOff: C({
     id: 'handsOff', name: 'Hands Off',
     rule: 'No clicks count: no hand-mining, no cranking, no Sparks, no Overdrive, no Inspiration',
-    goal: { k: 'research', id: 'folding' }, goalText: 'Research Folding',
-    reward: 'Every run starts with the Bellows, for good',
+    goal: { k: 'deliver', item: 'gizmo', n: 200 }, goalText: 'Deliver 200 Gizmos this run',
+    reward: 'The Dispatcher works for you without its Patent, for good',
     start: { coin: 60, upgrades: ['bellows'] },
     flavor: 'The town votes to sit on its hands. The machines are delighted.',
-    derivation: '§21 Challenges: Folding is the slice\'s first hour, built by Miners alone (60 coin buys the first Miner and its belt, §4); the reward is the Bellows head start (a 1-Patent node, §19) for nothing',
+    derivation: '§21 Challenges: 200 Gizmos is the slice\'s middle, built with no click (60 coin buys the first Miner and its belt, §4); a delivery this run, so no head start meets it (the second gate: Folding was known from the start and won in 2 s); the reward is automation for a player who proved they need none, the Dispatcher (a 3-Patent node, §21)',
   }),
   leanPower: C({
     id: 'leanPower', name: 'Lean Power',
     rule: 'Steam Engines and Generators make half their kW',
     value: 0.5,
-    goal: { k: 'research', id: 'circuits' }, goalText: 'Research Circuits',
+    goal: { k: 'deliver', item: 'circuit', n: 300 }, goalText: 'Deliver 300 circuits this run',
     reward: 'Steam Engines and Generators make 10% more, for good',
     flavor: 'The coal merchant is on holiday. Nobody knows where.',
-    derivation: '§21 Challenges: Circuits are Act II\'s first powered line (§18); at half power the player learns Efficient mode and shed load; the reward is a tenth of the plant they did without',
+    derivation: '§21 Challenges: circuits are Act II\'s first powered line (§18), 300 of them about 30 min of two circuit lines; a delivery this run, so no head start meets it (the second gate: Circuits were known from a head start); at half power the player learns Efficient mode and shed load; the reward is a tenth of the plant they did without',
   }),
   threeKinds: C({
     id: 'threeKinds', name: 'Three Kinds',
     rule: 'At most three kinds of machine on the Workshop (the Hand Furnace is free)',
     value: 3,
     goal: { k: 'foldS' }, goalText: 'Fold a line graded S',
-    reward: 'Workshop machines cost 10% less, for good',
+    reward: 'Nested and District fold boxes a tile larger each way, for good',
     flavor: 'A frog, a press and a furnace walk into a bar.',
-    derivation: '§21 Challenges: an S fold of three kinds is a tight line (miner, smelter, press: §10\'s grade with C >= 0.9); the reward is a flat 10% off the Workshop\'s machines, never a curve (§4)',
+    derivation: '§21 Challenges: an S fold of three kinds is a tight line (miner, smelter, press: §10\'s grade with C >= 0.9); the reward is room to fold deeper, a tile of the nested and District boxes (what one Patent node gives, §19; 10% off Workshop machines was worth nothing by Act III: the second gate)',
   }),
   smallBoxes: C({
     id: 'smallBoxes', name: 'Small Boxes',

@@ -492,12 +492,12 @@ If any answer is no, change the model here before building more.
 
 | By | Reached |
 |---|---|
-| 40 min | first fold (measured: 28:32, planner bot) |
+| 40 min | first fold (measured: 24:35, planner bot, §13 round 4) |
 | 90 min | slice end: the Gizmo Festival filled at the Factory Dock (measured: 31:43; §13 check 9 is revised to ≤ 45 min) |
 | 3 h | Act II: power, steel, glass, circuits |
 | 5 h | first Reorganize (12–20 Patents) |
-| 15 h | District floor (Act III) |
-| 25 h | first megaproject complete |
+| 11 h | District floor (Act III; measured 10:01, the second gate moved it from 15 h: the Great Drill stands at about 9.5 h) |
+| 25 h | the first Act III megaproject stage (the Floating City's Platform; measured 15:48) |
 | 40 h | first Relocate |
 | 60 h | four biome worlds visited |
 | 80 h | the Last Fold available |
@@ -1286,8 +1286,9 @@ asks where each group stands and how its goods get to the next one. The plan and
   modules only** (groups folded on the Factory, §18 Nested folds); a depth-3 module (folded here)
   goes up to the World (§22). Every module is one tile, as on the Factory.
 - **12x10 to start** (120 tiles, 1.25x the Factory's 96, each tile a group of two to six modules),
-  with **three lots of 2x10** east of it bought at 2M x n (linear, the annex pattern, §19), and a
-  fourth kept for good by the Floating City's second stage (18x10 at most). The Dock and the Hopper
+  with **three lots of 2x10** east of it bought at 1M x n (linear, the annex pattern, §19; 45-55
+  min of the 18-21K a minute the floor makes when the District opens), and a fourth kept for good
+  by the Floating City's second stage (20x10 at most). The Dock and the Hopper
   stand on the east edge like the Factory's; the Bay at the south-west corner once a Megaproject
   of this floor is researched.
 - **No trunks: skiff routes.** A route flies one item from a module's output buffer to a module
@@ -1295,16 +1296,32 @@ asks where each group stands and how its goods get to the next one. The plan and
 
       skiffs x load / (2 x distance / speed + dwell)
 
-  District skiffs fly **2 tiles/s**, carry **4 items** a trip and spend **1 s** at the two ends;
-  distance is between tile centres, as the crow flies, never less than 1. So a skiff moves **2.0
-  items/s** to a module beside it, **0.67** five tiles off, **0.32** across the floor. *Derivation:*
-  depth-2 rates run from 0.1 (an Engineer group's) to about 3 a second (a Bearing group's); with
-  these numbers a feeder placed beside its consumer needs one skiff and one placed across the floor
-  three to six, so where a group stands is the act's decision (rule 5), and the price of a skiff is
-  what a bad layout costs every run. A skiff is **15,000 coin, flat** (no price per skiff owned;
-  about 10 s of the Act III factory's income), refunded when taken off; a route holds up to 12.
-  Routes from one output share it in turn. At most **120 routes** a floor (one per first tile), so
-  the floor stays readable (PLAN.md not-list).
+  District skiffs fly **2 tiles/s**, carry **1 item** a trip and spend **1 s** at the two ends;
+  distance is between tile centres, as the crow flies, never less than 1. So a skiff moves **0.5
+  items/s** to a module beside it, **0.17** five tiles off, **0.08** across the floor. *Derivation:*
+  **ship value, not bulk.** Depth-2 flows run from 0.06 to about 1.1 a second; a bulk feeder
+  (glass, steel, solvent at 0.5-1 a second) placed across the floor needs six to twelve skiffs, so
+  it must stand beside what it feeds, while a Servo group (0.1-0.2 a second, 3,600 coin each) flies
+  across the floor on two. Where a group stands is the act's decision (rule 5), and the price of a
+  skiff is what a bad layout costs every run. (The second gate: at 4 a trip one skiff carried every
+  depth-2 flow even across the floor, 120 routes held 120 skiffs, and distance never bound.) A skiff
+  is **40,000 coin, flat** (no price per skiff owned): about 2 min of the floor's income when the
+  District opens, 27 s at 15 h and 12 s at 30 h (89K and 195K a minute, measured), so a bad layout
+  costs at the act's start and a dozen skiffs is a choice later; refunded when taken off; a route
+  holds up to 12.
+  Routes from one output share it in turn. At most **120 routes** a floor and **20 more a lot**
+  bought (the second gate: at 120 flat the cap was the real wall at 30 h with half the tiles used,
+  and the lots were worth nothing), shown on the tool strip (`routes 96/140`), so the floor stays
+  readable (PLAN.md not-list).
+- **The waste chute.** On a high floor a module's waste (slag, oil, sludge) with no route out of it
+  goes down to the floor's Dock on its own, sold or scrapped there as the Dock does. *Derivation:*
+  the byproduct lesson is learned on the Workshop and the Factory; on a floor of groups the second
+  gate found half the routes at 30 h carrying waste to the Dock, the act's biggest chore and the
+  route cap's filler (pillar 2: the chore becomes the floor's). A waste an input wants is still
+  routed by hand (fertilizer from sludge).
+- **The District takes its own folds.** Depth-2 groups and the depth-3 modules folded here (§21
+  District folds) both stand on it: a fold packs a group's routes into one tile's ports, the
+  answer to a crowded floor (pillar 1: designing beats buying). The World takes depth 3 (§22).
 - **Everything else is the Factory's**: modules run as rate functions (`stepModule`), starved or
   blocked in proportion; a byproduct with no route blocks its module (the slag lesson, one floor
   up); Overdrive on a module runs every module joined to it by routes; a click on the Hopper is
@@ -1390,25 +1407,50 @@ Bay never jams, §19). Each stage pays its Patents in proportion as it is delive
 
 | Project, stage | Wants | Reward, for good | Patents |
 |---|---|---|---|
-| The Floating City 1, the Platform | 120 lift rotors, 4,000 concrete | the Factory floor's ninth row | 6 |
-| The Floating City 2, the Spires | 200 lift rotors, 1,000 sandwiches, 6,000 glass | a fourth District lot | 8 |
-| The Scrap Transmuter 1 | 100 transmuter coils, 8,000 steel | every Dock buys slag, oil and sludge at 25% of what made them | 8 |
-| The Scrap Transmuter 2 | 200 coils, 300 processors | a byproduct with nowhere to go sells where it stands instead of blocking | 10 |
+| The Floating City 1, the Platform | 120 lift rotors, 1,500 concrete | the Factory floor's ninth row | 6 |
+| The Floating City 2, the Spires | 150 lift rotors, 300 sandwiches, 2,500 glass | a fourth District lot | 8 |
+| The Scrap Transmuter 1 | 80 transmuter coils, 3,000 steel | every Dock buys slag, oil and sludge at 25% of what made them | 8 |
+| The Scrap Transmuter 2 | 150 coils, 120 processors | a byproduct with nowhere to go sells where it stands instead of blocking | 10 |
 
 *Derivation:* the Floating City's row is §15's (+1 Factory row), the Transmuter's 25% is §15's;
 "what made them" is the cheapest main output a recipe makes beside the byproduct (slag 0.75, a
 quarter of an ingot: under the 1 a slag gravel earns, so crushing still pays; oil 6; sludge 7.5).
-Each stage is about an hour of one part's group at the Bay. The Transmuter's second stage ends the
-byproduct lesson for good, at the end of the act that finishes it.
+Each stage is about an hour of two groups of its parts at the Bay (the second gate cut them: at
+4,000 concrete, 8,000 steel and 6,000 glass a stage was 2.6-4 h of one group; concrete is
+slag-bound, 4 slag each, and the whole run-3 floor makes about 2.8 slag a second). A project with a
+stage standing keeps its Bay open in every later run without its research (its progress is kept;
+the second gate found every run re-paying the research before the Bay counted anything). The
+Transmuter's second stage ends the byproduct lesson for good, at the end of the act that finishes it.
+
+### Orders and reputation (Act III, `src/data/orders.ts`)
+Ten orders, each about 2x what its goods fetch at the Dock (§7's rule; 1.96-2.2x as priced):
+
+| Order | Customer | Wants | Pays |
+|---|---|---|---|
+| Picnic on the Rim | Bramble | 300 sandwiches | 120,000 |
+| The Clockwork Chorus | Bramble | 100 clockwork frogs | 380,000 |
+| Umbrellas for the Mayor | Bramble | 30 self-folding umbrellas | 720,000 |
+| Calibrated Senses | Unit 7 | 200 sensors | 420,000 |
+| The Specimen Drawer | Unit 7 | ten of eight tier 3 goods | 160,000 |
+| The Servo Ballet | Voltaire | 120 servos | 900,000 |
+| The Weather Gala | Voltaire | 60 weather balloons | 600,000 |
+| The Sludge Pond | the Committee | 2,000 sludge | 30,000 (waste, paid as a sink) |
+| Spare Parts | the Committee | 600 bearings, 200 gearboxes | 180,000 |
+| The Engineer | the Committee | 1 Autonomous Sandwich Engineer | 200,000 |
+
+Each pays a reputation point; the act's rewards come at reputation 4 (Bramble's Skiff Club: a
+skiff carries one more; Unit 7: the Chute holds 60 an item; Voltaire: the Chem Vat and Greenhouse
+draw half their power) and the Committee's 6 (Pocket Skiffs: a route's first skiff is free),
+each a rule, never a multiplier (`src/data/rules.ts`).
 
 ### Patents (Act III, `src/data/patents.ts`)
 Ten nodes, priced as Act II's (§19): about a Patent for every 10-15 minutes of a run a node saves.
 
 | Node | Branch | Cost | Effect |
 |---|---|---|---|
-| Zoning Charter | head start | 2 | Zoning and Chutes known (about 25-30 min of Act II goods) |
-| District Deeds | head start | 2 | the District opens with its first lot (2M coin, 10-15 min) |
-| Chemistry Notes | head start | 2 | Chemistry, Vulcanizing, Batteries |
+| Zoning Charter | head start | 3 | Zoning and Chutes known (about 25-30 min of Act II goods) |
+| District Deeds | head start | 3 | the District opens with its first lot (1M coin, 45-55 min) |
+| Chemistry Notes | head start | 3 | Chemistry, Vulcanizing, Batteries |
 | The Bearing Patent | head start | 2 | Bearings, Servos |
 | Sense and Logic | head start | 3 | Sensors, Processors, Recycling, Hydroponics |
 | The Robotics Patent | head start | 3 | Robotics, Sandwiches |
@@ -1418,8 +1460,8 @@ Ten nodes, priced as Act II's (§19): about a Patent for every 10-15 minutes of 
 | The Dispatcher | automation | 3 | a skiff onto the route furthest short of its want, every 10 s |
 
 *Derivation:* Long Skiffs is a rule about distance, not a multiplier on output: at 3 tiles/s a
-route five tiles long carries 4 / (10/3 + 1) = 0.92 a skiff, was 4 / (5 + 1) = 0.67, and a route
-beside its consumer gains little (2.0 to 2.4), because the dwell is unchanged. The Dispatcher buys
+route five tiles long carries 1 / (10/3 + 1) = 0.23 a skiff, was 1 / (5 + 1) = 0.17, and a route
+beside its consumer gains less (0.5 to 0.6), because the dwell is unchanged. The Dispatcher buys
 at the full price, only for a route carrying under 90% of what it is wanted and only while a skiff
 costs under 5% of the coin on hand (20 skiffs' worth), so it never spends a save; pillar 2: the
 act's chore, placing skiffs, becomes a machine's.
@@ -1431,17 +1473,20 @@ run; giving a Challenge up costs nothing but the reward. A won Challenge isn't t
 
 | Challenge | Rule | Goal | Reward, for good |
 |---|---|---|---|
-| No Splitters | no Splitters built | the Gizmo Festival | Splitters cost nothing |
-| Hands Off | no click counts (starts with the Bellows and 60 coin) | Folding researched | every run starts with the Bellows |
-| Lean Power | Steam Engines and Generators make half | Circuits researched | they make 10% more |
-| Three Kinds | three kinds of machine on the Workshop (the Hand Furnace free; a Mk2 is its family) | a fold graded S | Workshop machines 10% cheaper |
+| No Splitters | no Splitters built | the Gizmo Festival | every high floor holds 20 more routes |
+| Hands Off | no click counts (starts with the Bellows and 60 coin) | 200 Gizmos delivered this run | the Dispatcher works without its Patent |
+| Lean Power | Steam Engines and Generators make half | 300 circuits delivered this run | they make 10% more |
+| Three Kinds | three kinds of machine on the Workshop (the Hand Furnace free; a Mk2 is its family) | a fold graded S | the nested and District fold boxes a tile larger |
 | Small Boxes | fold boxes 4x4 | the Gizmo Festival | fold boxes a tile larger each way |
 
-*Derivation:* every goal is one the act already sets (§16's slice and Act II goals), and every
-reward is the part of the rule it took away, small and specific: free Splitters (20 coin each,
-§4), the Bellows (a 1-Patent node, §19), a tenth of the power plant, a flat 10% (never a curve,
-§4), one tile of box (what one Patent node gives, §19). Hands Off's 60 coin is the first Miner and
-its belt (§4), so the run can start without a click. DECISIONS.md: Challenges are an Antimatter
+*Derivation:* every goal is something done this run (an order, a delivery, a fold), never a
+research a head start already knows (the second gate: Hands Off and Lean Power, with Folding and
+Circuits as goals, were won in 2 s). Every reward is small, specific and tied to what earned it,
+and matters in Act III (the second gate: free Splitters and 10% off Workshop machines were worth
+nothing by then): routing room for routing discipline, automation for a player who proved they
+need none (the Dispatcher, a 3-Patent node), a tenth of the power plant, a tile of the deeper fold
+boxes and of the Workshop's (what one Patent node gives, §19). Hands Off's 60 coin is the first
+Miner and its belt (§4), so the run can start without a click. DECISIONS.md: Challenges are an Antimatter
 Dimensions convention (flagged when PLAN.md listed them); here the goals are factory goals and the
 rewards rules, never a multiplier on everything.
 
@@ -1455,24 +1500,26 @@ keeps the personal bests in local storage (never the sim).
 | Board | Land | Twist | Scored by |
 |---|---|---|---|
 | Tiny Island | chunks A and B, 6,000 coin | two chunks | Gizmos a minute per tile of box |
-| Rich Ore, Little Power | A, C, E, F, 250,000 | Miners 2x, power producers 0.5x | steel a minute |
+| Rich Ore, Little Power | A, C, E, F, 250,000 | Miners 2x, power producers 0.5x | glass a minute |
 | Scarce Belts | all six, 600,000 | 40 belt tiles in all | circuits a minute |
 
 *Derivation:* Tiny Island is §10's compactness read as a number (chunk A alone has no copper, so
-the board is A and B); Rich Ore makes ore free and kW dear (Efficient mode, few powered machines);
+the board is A and B); Rich Ore makes sand free and kW dear, scored in glass from the powered Kiln
+(steel was planned, but a Mk1 smelter draws no power: the second gate);
 Scarce Belts' 40 tiles are two-thirds of an Act II circuit line's (§18), so machines face each other
 and feed by side intake. The coin is each board's lines twice over at §4 and §18 prices.
 
 ### Pacing (measured, Milestone 7)
-§16's targets for Act III: the District at about **15 h**, the first megaproject complete by 25 h
-(the Great Drill already is, at about 10 h), rules 1 (a goal every 10 min of active play), 2 (no 15
+§16's targets for Act III: the District at about **11 h** (moved from 15 h at the second gate:
+the Great Drill stands at about 9.5 h, and holding Zoning to 15 h would add Act II's dead air),
+the first Act III megaproject stage by 25 h (the Great Drill is complete at about 9.5 h), rules 1 (a goal every 10 min of active play), 2 (no 15
 min without a decision) and 5 to 40 h for the planner bot. Measured by the campaign bot with the
 Act III policy (`src/sim/bot3.ts`, `tests/pace-act3.test.ts`, seed 1000, 40 h of play, resetting
 when the Reorganize preview stalls, or at a run's cap once the Reorganize may be taken):
 
 | Measure | Target | Measured |
 |---|---|---|
-| District open (Zoning researched) | about 15 h | **10:01** (Act III hand-over 9:53, run 3) |
+| District open (Zoning researched) | about 11 h | **10:01** (Act III hand-over 9:53, run 3) |
 | Floating City stage 1 (first Act III Megaproject stage) | by 25 h | **15:48** (run 4) |
 | District modules at 40 h | 20+ | **49** (50 at most; the floor full, 119 of 120 routes) |
 | Routes between District modules | some (rule 5) | up to 14 of 119 |

@@ -44,7 +44,7 @@ import { BYPRODUCTS, mainItem, megaOpen } from './systems/modules';
 import { recipeKnown } from './transfer';
 import { workShare } from './systems/stats';
 import { prules } from './patents';
-import { challengeRefusal, startChallenge, won } from './systems/challenges';
+import { challengeRefusal, startChallenge } from './systems/challenges';
 import type { ChallengeId } from '../data/challenges';
 
 /** What a Reorganize keeps, in words (the confirm card lists it). */
@@ -431,8 +431,6 @@ export function applyHeadStarts(g: Game, ids: readonly PatentId[] = g.s.meta.nod
     for (const q of e.place ?? []) if (!g.entAt(q.x, q.y)) g.addPart(q.kind, q.x, q.y, q.rot);
     if (e.lots) s.headLots = Math.max(s.headLots ?? 0, e.lots);
   }
-  // Hands Off won (a Challenge, DESIGN.md §21): the Bellows in every run
-  if (won(g, 'handsOff') && !s.upgrades.includes('bellows')) s.upgrades.push('bellows');
   // in the tree's order, so the research screen and the bots read them as researched in turn
   s.research.done = RESEARCH_IDS.filter((r) => research.has(r));
   g.layoutDirty = true;

@@ -9,7 +9,8 @@ import { BUILD } from '../src/data/machines';
 import { CHALLENGES, CHALLENGE_IDS } from '../src/data/challenges';
 import { prules } from '../src/sim/patents';
 import { foldRefusal } from '../src/sim/systems/audits';
-import { buildPrice, powerMult } from '../src/sim/systems/challenges';
+import { powerMult } from '../src/sim/systems/challenges';
+import { maxRoutes } from '../src/sim/systems/high';
 import { SCENARIOS, SCENARIO_IDS } from '../src/data/scenarios';
 import { scenarioMiners, beltsLeft, scenarioBest } from '../src/sim/scenario';
 
@@ -50,7 +51,7 @@ describe('Challenges (DESIGN.md §21)', () => {
     expect(g.act({ k: 'reorganize', challenge: 'noSplitters' }).why).toMatch(/after your first Reorganize/);
   });
 
-  it('No Splitters: refused while it holds; won with the Festival; then Splitters are free', () => {
+  it('No Splitters: refused while it holds; won with the Festival; then every high floor holds 20 more routes', () => {
     const g = ready();
     take(g, 'noSplitters');
     g.s.research.done.push('splitters');
@@ -60,16 +61,14 @@ describe('Challenges (DESIGN.md §21)', () => {
     g.step(TICK_RATE);
     expect(g.s.challenge).toBeNull();
     expect(g.s.meta.challenges).toContain('noSplitters');
-    expect(buildPrice(g, 'splitter')).toBe(0);
-    const coin = g.s.coin;
     expect(g.act({ k: 'place', kind: 'splitter', x: t.x, y: t.y, rot: 0 }).ok).toBe(true);
-    expect(g.s.coin.eq(coin)).toBe(true);
+    expect(maxRoutes(g, 'district')).toBe(140);
     // a won Challenge isn't taken again
     g.s.megaPatents = 3;
     expect(g.act({ k: 'reorganize', challenge: 'noSplitters' }).why).toMatch(/won already/);
   });
 
-  it('Hands Off: no click counts; starts with the Bellows and a Miner\'s coin; the Bellows is kept', () => {
+  it('Hands Off: no click counts; starts with the Bellows and a Miner\'s coin; won with 200 Gizmos, the Dispatcher works for good', () => {
     const g = ready();
     expect(g.act({ k: 'reorganize', challenge: 'handsOff' }).ok).toBe(true);
     expect(g.s.upgrades).toContain('bellows');
@@ -77,14 +76,15 @@ describe('Challenges (DESIGN.md §21)', () => {
     const f = g.s.ents.find((e) => e.kind === 'furnace')!;
     expect(g.act({ k: 'click', x: f.x, y: f.y }).why).toMatch(/Hands Off/);
     expect(g.countClick()).toBe(false);
+    // a head start's research is no goal: deliveries this run are
     g.s.research.done.push('folding');
+    g.step(TICK_RATE);
+    expect(g.s.meta.challenges ?? []).not.toContain('handsOff');
+    g.s.delivered.gizmo = N(200);
     g.step(TICK_RATE);
     expect(g.s.meta.challenges).toContain('handsOff');
     expect(g.countClick()).toBe(true);
-    // every later run starts with the Bellows
-    g.s.megaPatents = 3;
-    expect(g.act({ k: 'reorganize' }).ok).toBe(true);
-    expect(g.s.upgrades).toContain('bellows');
+    expect(prules(g).dispatcherEvery).toBe(10);
   });
 
   it('Lean Power: producers make half while it holds, a tenth more once won', () => {
@@ -93,10 +93,13 @@ describe('Challenges (DESIGN.md §21)', () => {
     expect(powerMult(g)).toBe(0.5);
     g.s.research.done.push('circuits');
     g.step(TICK_RATE);
+    expect(powerMult(g)).toBe(0.5);
+    g.s.delivered.circuit = N(300);
+    g.step(TICK_RATE);
     expect(powerMult(g)).toBeCloseTo(1.1);
   });
 
-  it('Three Kinds: a fourth kind of machine is refused (Mk2s are their family); won, machines are 10% off', () => {
+  it('Three Kinds: a fourth kind of machine is refused (Mk2s are their family); won, the nested and District boxes grow', () => {
     const g = ready();
     take(g, 'threeKinds');
     g.s.research.done.push('pressing', 'gearcutting');
@@ -112,10 +115,12 @@ describe('Challenges (DESIGN.md §21)', () => {
     expect(placeOn('press').ok).toBe(true);
     expect(placeOn('smelter').ok).toBe(true);
     expect(placeOn('assembler').why).toMatch(/Three kinds/);
+    const nested = prules(g).nestedMax;
     g.s.counters.foldS = (g.s.challengeBase ?? 0) + 1;
     g.step(TICK_RATE);
     expect(g.s.meta.challenges).toContain('threeKinds');
-    expect(buildPrice(g, 'assembler')).toBe(Math.ceil(BUILD.assembler.cost * 0.9));
+    expect(prules(g).nestedMax).toBe(nested + 1);
+    expect(prules(g).highFoldMax).toBe(9);
     expect(placeOn('assembler').ok).toBe(true);
   });
 

@@ -147,10 +147,23 @@ export function routeCap(g: Game, id: HighFloorId, r: SkiffRoute): number {
 export function routeWant(g: Game, id: HighFloorId, r: SkiffRoute): number {
   const a = hent(g, id, r.from), b = hent(g, id, r.to);
   const da = a ? g.design(a.design) : undefined;
-  const make = da?.outs[r.item] ?? 0;
+  // the Great Drill's boost runs every module faster, and so what it makes and takes (the second
+  // gate: the card read "0.18/s of 0.11 wanted")
+  const drill = drillFactor(g);
+  const make = (da?.outs[r.item] ?? 0) * drill;
   if (!b || b.kind !== 'module') return make;
   const db = g.design(b.design);
-  return Math.min(make, db?.ins[r.item] ?? 0);
+  return Math.min(make, (db?.ins[r.item] ?? 0) * drill);
+}
+
+/** The Great Drill's stage 1 boost every module runs at (DESIGN.md §19). */
+export const drillFactor = (g: Game) => (g.s.mega.stage >= 1 ? 1 + RULES.drillBoost.value : 1);
+
+/** Routes this floor holds now: 120, and 20 more a lot bought (DESIGN.md §21), and the No
+ * Splitters Challenge's 20 once won. */
+export function maxRoutes(g: Game, id: HighFloorId): number {
+  const st = g.s[id];
+  return RULES.maxRoutes.value + RULES.routesPerLot.value * (st?.lots ?? 0) + (g.s.meta.challenges?.includes('noSplitters') ? RULES.routesPerLot.value : 0);
 }
 
 // ------------------------------------------------------------------ opening
@@ -188,7 +201,10 @@ export function hplaceRefusal(g: Game, id: HighFloorId, design: number, x: numbe
   if (e) return `${hname(g, e)} is in the way`;
   const d = g.design(design);
   if (!d) return 'Pick a module from the inventory';
-  if ((d.depth ?? 1) !== f.depth) return `The ${f.name} takes depth-${f.depth} modules: ${(d.depth ?? 1) < f.depth ? 'fold a group of these on the floor below' : 'this one goes on a floor above'}`;
+  // the District also takes its own folds (depth 3): a fold packs a group's routes into one tile's
+  // ports (the second gate: a District fold had nowhere to go until the World)
+  const dd = d.depth ?? 1;
+  if (dd !== f.depth && !(id === 'district' && dd === 3)) return `The ${f.name} takes depth-${f.depth}${id === 'district' ? ' and depth-3' : ''} modules: ${dd < f.depth ? 'fold a group of these on the floor below' : 'this one goes on a floor above'}`;
   if (d.spare < 1) return `No spare ${d.name}: stamp a copy`;
   return placeClaimRefusal(g, d);
 }
@@ -254,7 +270,7 @@ export function routeRefusal(g: Game, id: HighFloorId, fx: number, fy: number, t
   if (b === a) return 'A route goes somewhere else';
   if (!takes(g, id, b, item)) return b.kind === 'module' ? `${hname(g, b)} takes no ${itemName(item).toLowerCase()}` : b.kind === 'fbay' ? 'No Megaproject here wants that' : `The ${hname(g, b)} refuses ${itemName(item).toLowerCase()}`;
   if (st.routes.some((r) => r.from === a.id && r.to === b.id && r.item === item)) return 'That route is flown already: add a skiff to it';
-  if (st.routes.length >= RULES.maxRoutes.value) return `${RULES.maxRoutes.value} routes is the most a floor holds`;
+  if (st.routes.length >= maxRoutes(g, id)) return `${maxRoutes(g, id)} routes is the most this floor holds now: a lot adds 20, or fold a group into one tile`;
   const lock = hauditLock(g, id, fx, fy) ?? hauditLock(g, id, tx, ty);
   if (lock) return lock;
   if (!pocketSkiff(g) && g.s.coin.lt(HIGH[id].skiffCost)) return `A skiff costs ${Num.of(HIGH[id].skiffCost).format()} coin`;
@@ -378,9 +394,13 @@ export function megaStageOf(g: Game, mid: MegaId): MegaStage | null {
   return MEGAS[mid].stages.find((st) => st.stage === done + 1) ?? null;
 }
 
-/** Projects this floor's Bay builds now: their research done this run (progress is kept). */
+/** A project is open once its research is done this run, or for good once a stage of it stands
+ * (its progress is kept, so a later run doesn't pay the research again: the second gate). */
+export const projectOpen = (g: Game, m: MegaId) => g.done(MEGAS[m].opens as never) || (g.s.megas?.[m]?.stage ?? 0) >= 1;
+
+/** Projects this floor's Bay builds now (progress is kept). */
 export function bayProjects(g: Game, id: HighFloorId): MegaId[] {
-  return MEGA_IDS.filter((m) => MEGAS[m].floor === id && g.done(MEGAS[m].opens as never) && megaStageOf(g, m));
+  return MEGA_IDS.filter((m) => MEGAS[m].floor === id && projectOpen(g, m) && megaStageOf(g, m));
 }
 
 /** Items some open project at this floor's Bay still wants. */
@@ -489,6 +509,22 @@ function runFloor(g: Game, id: HighFloorId, st: HighFloorState) {
       if (r.moved > 1e-9) r.used = g.s.tick;
     }
   }
+  // 2b. a module's waste with no route out goes down the floor's waste chute to its Dock (DESIGN.md
+  // §21: the byproduct lesson was learned on the floors below; on a floor of groups it was the act's
+  // biggest chore and filled the route cap: the second gate)
+  const dock = st.ents.find((e) => e.kind === 'fdock');
+  if (dock)
+    for (const m of st.ents) {
+      if (m.kind !== 'module') continue;
+      for (const k of Object.keys(m.outBuf)) {
+        const item = k as ItemId;
+        const n = m.outBuf[item] ?? 0;
+        if (n <= 1e-9 || !BYPRODUCTS.has(item) || groups.has(m.id + ':' + item)) continue;
+        m.outBuf[item] = 0;
+        dock.inBuf[item] = (dock.inBuf[item] ?? 0) + n;
+        hauditFlow(g, id, m, dock, item, n);
+      }
+    }
   // 3. whole items at the Dock, the Hopper and the Bay are paid out
   for (const e of st.ents) {
     if (e.kind !== 'fdock' && e.kind !== 'fhopper' && e.kind !== 'fbay') continue;
@@ -507,7 +543,7 @@ function runFloor(g: Game, id: HighFloorId, st: HighFloorState) {
   // 4. once a second: statistics, and the Bay arriving once a project is researched
   if (g.s.tick % TICK_RATE === 0) {
     for (const m of st.ents) if (m.kind === 'module') moduleSecond(m);
-    if (!st.ents.some((e) => e.kind === 'fbay') && MEGA_IDS.some((m) => MEGAS[m].floor === id && g.done(MEGAS[m].opens as never))) placeHBay(g, id, st, f);
+    if (!st.ents.some((e) => e.kind === 'fbay') && MEGA_IDS.some((m) => MEGAS[m].floor === id && projectOpen(g, m))) placeHBay(g, id, st, f);
     if (pr.dispatcherEvery && (g.s.tick / TICK_RATE) % pr.dispatcherEvery === 0) dispatch(g, id, st, f);
   }
 }

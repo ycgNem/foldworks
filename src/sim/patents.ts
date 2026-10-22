@@ -108,6 +108,12 @@ export function prules(g: Game): PatentRules {
   }
   // Small Boxes (a Challenge, DESIGN.md §21): 4x4 while it is taken; a tile more each way once won
   if (s.meta.challenges?.includes('smallBoxes')) r.foldMax += 1;
+  // Three Kinds won: the nested and District boxes a tile larger; Hands Off won: the Dispatcher
+  if (s.meta.challenges?.includes('threeKinds')) {
+    r.nestedMax += 1;
+    r.highFoldMax = Math.max(r.highFoldMax, 8) + 1;
+  }
+  if (s.meta.challenges?.includes('handsOff')) r.dispatcherEvery = r.dispatcherEvery || 10;
   if (s.challenge === 'smallBoxes') r.foldMax = Math.min(r.foldMax, CHALLENGES.smallBoxes.value ?? 4);
   // the ceiling of ROADMAP Milestone 5 (rounding: 0.5 + 0.05 x 3; the Night Shift's 0.1 is added
   // in offlineEfficiency, src/sim/offline.ts, which caps the sum at 0.75)

@@ -9,7 +9,7 @@ import { RESEARCH_IDS } from '../src/data/research';
 import { CHUNKS } from '../src/data/land';
 import { HIGH, skiffRate } from '../src/data/floors';
 import { TICK_RATE } from '../src/engine/time';
-import { routeCap, hentAt, highW } from '../src/sim/systems/high';
+import { routeCap, hentAt, highW, maxRoutes, routeWant, drillFactor } from '../src/sim/systems/high';
 import { saleValue } from '../src/sim/systems/docks';
 import { foldRefusal } from '../src/sim/systems/audits';
 import { byEvery } from '../src/sim/systems/machines';
@@ -58,7 +58,7 @@ describe('the District (DESIGN.md §21)', () => {
     expect(hentAt(g, 'district', HIGH.district.hopper.x, HIGH.district.hopper.y)?.kind).toBe('fhopper');
   });
 
-  it('takes depth-2 modules only', () => {
+  it('takes depth-2 modules (and its own depth-3 folds), never depth 1', () => {
     const g = sandbox();
     const d1 = design(g, { depth: 1, outs: { steel: 1 } });
     const d2 = design(g, { outs: { steel: 1 } });
@@ -124,6 +124,9 @@ describe('the District (DESIGN.md §21)', () => {
     must(g, { k: 'hplace', floor: 'district', design: use.id, x: 9, y: 1 });
     must(g, { k: 'route', floor: 'district', fx: 8, fy: 1, tx: 9, ty: 1, item: 'glass' });
     must(g, { k: 'route', floor: 'district', fx: 9, fy: 1, tx: DK.x, ty: DK.y, item: 'circuit' });
+    // a skiff carries one a trip: two of them bring the glass (1 a second) next door, and two the
+    // circuits to the Dock
+    for (const r of g.s.district!.routes) must(g, { k: 'skiff', floor: 'district', id: r.id, n: 1 });
     g.step(60 * TICK_RATE);
     const m = hentAt(g, 'district', 9, 1)!;
     expect(m.fAvg).toBeGreaterThan(0.9);
@@ -194,12 +197,13 @@ describe('the District Bay: the Floating City and the Scrap Transmuter (DESIGN.m
     g.s.megas = { transmuter: { stage: 1, progress: {} } };
     expect(saleValue(g, 'slag')).toBeCloseTo(0.75, 6); // a quarter of an iron ingot
     expect(saleValue(g, 'sludge')).toBeCloseTo(7.5, 6); // a quarter of a solvent
-    // a module whose slag has nowhere to go stops at stage 1 and keeps running at stage 2
-    const d = design(g, { outs: { steel: 0.2, slag: 0.5 } });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 3, y: 3 });
-    must(g, { k: 'route', floor: 'district', fx: 3, fy: 3, tx: DK.x, ty: DK.y, item: 'steel' });
+    // a Factory module whose slag has nowhere to go stops at stage 1 and keeps running at stage 2
+    const d = design(g, { depth: 1, outs: { steel: 0.2, slag: 0.5 } });
+    // beside the Factory Hopper, facing it: its steel goes in, its slag has nowhere to go (the
+    // Hopper takes waste only while a node wants it)
+    must(g, { k: 'fplace', design: d.id, x: 9, y: 5, rot: 0 });
     g.step(30 * TICK_RATE);
-    const m = hentAt(g, 'district', 3, 3)!;
+    const m = g.s.factory.ents.find((e) => e.kind === 'module' && e.x === 9 && e.y === 5)!;
     expect(m.state).toBe('blocked');
     g.s.megas.transmuter!.stage = 2;
     const c0 = g.s.coin;
@@ -272,6 +276,10 @@ describe('District folds (DESIGN.md §21)', () => {
     must(g, { k: 'hplace', floor: 'district', design: use.id, x: 3, y: 2 });
     must(g, { k: 'route', floor: 'district', fx: 2, fy: 2, tx: 3, ty: 2, item: 'glass' });
     must(g, { k: 'route', floor: 'district', fx: 3, fy: 2, tx: DK.x, ty: DK.y, item: 'circuit' });
+    // one item a trip: two skiffs bring the glass next door, five the circuits across to the Dock
+    const [inner, out] = g.s.district!.routes;
+    must(g, { k: 'skiff', floor: 'district', id: inner.id, n: 1 });
+    for (let i = 0; i < 4; i++) must(g, { k: 'skiff', floor: 'district', id: out.id, n: 1 });
     must(g, { k: 'haudit', floor: 'district', x: 2, y: 2, w: 2, h: 1 });
     g.step(75 * TICK_RATE);
     const a = g.s.haudit!;
@@ -284,11 +292,12 @@ describe('District folds (DESIGN.md §21)', () => {
     expect(d.bill).toBe(8000);
     expect(d.hparts?.length).toBe(2);
     expect(d.hroutes?.length).toBe(1);
-    // the skiffs came back: the inner route's and the one to the Dock
-    expect(g.s.coin.sub(coin).toNumber()).toBe(2 * HIGH.district.skiffCost);
+    // the skiffs came back: the inner route's two and the five to the Dock
+    expect(g.s.coin.sub(coin).toNumber()).toBe(7 * HIGH.district.skiffCost);
     expect(hentAt(g, 'district', 2, 2)).toBeNull();
-    // a depth-3 module is for the World floor, not the District
-    expect(g.act({ k: 'hplace', floor: 'district', design: d.id, x: 5, y: 5 }).why).toMatch(/floor above/);
+    // the District takes its own fold back: a group's routes packed into one tile's ports
+    d.spare = 1;
+    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 5, y: 5 });
   });
 
   it('refuses a pile of strangers', () => {
@@ -297,6 +306,42 @@ describe('District folds (DESIGN.md §21)', () => {
     must(g, { k: 'hplace', floor: 'district', design: a.id, x: 2, y: 2 });
     must(g, { k: 'hplace', floor: 'district', design: a.id, x: 3, y: 2 });
     expect(g.act({ k: 'haudit', floor: 'district', x: 2, y: 2, w: 2, h: 1 }).why).toMatch(/works together/);
+  });
+});
+
+describe('the waste chute and the route cap (DESIGN.md §21, the second gate)', () => {
+  it('a District module\'s waste with no route goes to the Dock on its own', () => {
+    const g = sandbox();
+    const d = design(g, { outs: { steel: 0.2, slag: 0.5 } });
+    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 3, y: 3 });
+    must(g, { k: 'route', floor: 'district', fx: 3, fy: 3, tx: DK.x, ty: DK.y, item: 'steel' });
+    // eight tiles to the Dock at one a trip: three skiffs carry its 0.2 steel a second
+    for (let i = 0; i < 2; i++) must(g, { k: 'skiff', floor: 'district', id: g.s.district!.routes[0].id, n: 1 });
+    g.step(30 * TICK_RATE);
+    expect(hentAt(g, 'district', 3, 3)!.state).toBe('work');
+    expect(g.s.delivered.slag?.toNumber() ?? 0).toBeGreaterThan(10);
+  });
+
+  it('holds 120 routes and 20 more a lot', () => {
+    const g = sandbox();
+    expect(maxRoutes(g, 'district')).toBe(120);
+    must(g, { k: 'hlot', floor: 'district' });
+    expect(maxRoutes(g, 'district')).toBe(140);
+  });
+
+  it('takes its own folds (depth 3) as well as depth-2 groups', () => {
+    const g = sandbox();
+    const d = design(g, { depth: 3, outs: { servo: 0.2 } });
+    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 5, y: 5 });
+  });
+
+  it('a route\'s want counts the Great Drill\'s boost', () => {
+    const g = sandbox();
+    const d = design(g, { outs: { servo: 0.2 } });
+    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 5, y: 5 });
+    must(g, { k: 'route', floor: 'district', fx: 5, fy: 5, tx: DK.x, ty: DK.y, item: 'servo' });
+    expect(routeWant(g, 'district', g.s.district!.routes[0])).toBeCloseTo(0.2 * drillFactor(g), 6);
+    expect(drillFactor(g)).toBeGreaterThan(1);
   });
 });
 

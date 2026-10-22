@@ -76,14 +76,14 @@ export const MEGAS: Record<MegaId, MegaProjectDef> = {
     id: 'city', name: 'The Floating City', floor: 'district', opens: 'floatingCity',
     stages: [
       {
-        stage: 1, name: 'The Floating City, stage 1: the Platform', wants: { liftRotor: 120, concrete: 4000 },
+        stage: 1, name: 'The Floating City, stage 1: the Platform', wants: { liftRotor: 120, concrete: 1500 },
         reward: 'the Factory floor gains its ninth row · for good', patents: 6,
-        derivation: '§21 Megaprojects: 120 lift rotors and 4,000 concrete, about an hour of one Lift Rotor group and a Concrete group at the District Bay; the Factory\'s ninth row (FACTORY_MAX_H) for good; worth 6 Patents',
+        derivation: '§21 Megaprojects (the second gate): 120 lift rotors and 1,500 concrete, about an hour of one Lift Rotor group and two Concrete groups (0.3-0.4 a second each; 4,000 was 2.6-3.7 h of one) at the District Bay; the Factory\'s ninth row (FACTORY_MAX_H) for good; worth 6 Patents',
       },
       {
-        stage: 2, name: 'The Floating City, stage 2: the Spires', wants: { liftRotor: 200, sandwich: 1000, glass: 6000 },
+        stage: 2, name: 'The Floating City, stage 2: the Spires', wants: { liftRotor: 150, sandwich: 300, glass: 2500 },
         reward: 'the District gains a fourth lot · for good', patents: 8,
-        derivation: '§21 Megaprojects: 200 rotors, 1,000 sandwiches (the citizens), 6,000 glass, about 1.5 h of the Bay floor in a later run; a fourth District lot (18x10) for good; worth 8 Patents',
+        derivation: '§21 Megaprojects (the second gate): 150 rotors, 300 sandwiches (the citizens), 2,500 glass, about 1.5 h of the Bay floor in a later run (6,000 glass and 1,000 sandwiches were 4-9 h); a fourth District lot (20x10 at most) for good; worth 8 Patents',
       },
     ],
     derivation: '§21 Megaproject #2 (PLAN.md): the Floating City, +1 Factory floor row (§15)',
@@ -92,14 +92,14 @@ export const MEGAS: Record<MegaId, MegaProjectDef> = {
     id: 'transmuter', name: 'The Scrap Transmuter', floor: 'district', opens: 'scrapTransmuter',
     stages: [
       {
-        stage: 1, name: 'The Scrap Transmuter, stage 1', wants: { transmuterCoil: 100, steel: 8000 },
+        stage: 1, name: 'The Scrap Transmuter, stage 1', wants: { transmuterCoil: 80, steel: 3000 },
         reward: 'every Dock buys {i:slag} {i:oil} {i:sludge} at {coinc:25%} of what made them · for good', patents: 8,
-        derivation: '§21 Megaprojects: 100 coils and 8,000 steel, about an hour of a Coil group and two Steel copies; byproducts sell at 25% of their recipe\'s main output (§15: the Scrap Transmuter); worth 8 Patents',
+        derivation: '§21 Megaprojects (the second gate): 80 coils and 3,000 steel, about an hour of a Coil group and two Steel copies (0.73-0.84 a second; 8,000 was 2.6-3 h); byproducts sell at 25% of their recipe\'s main output (§15: the Scrap Transmuter); worth 8 Patents',
       },
       {
-        stage: 2, name: 'The Scrap Transmuter, stage 2', wants: { transmuterCoil: 200, processor: 300 },
+        stage: 2, name: 'The Scrap Transmuter, stage 2', wants: { transmuterCoil: 150, processor: 120 },
         reward: 'a module whose byproduct has nowhere to go sells it at that price instead of stopping · for good', patents: 10,
-        derivation: '§21 Megaprojects: 200 coils and 300 processors, about 1.5 h; the byproduct lesson is finished, so waste never stops a module again; worth 10 Patents',
+        derivation: '§21 Megaprojects (the second gate): 150 coils and 120 processors, about 1.5 h (300 processors were 900 circuits, 3 h); the byproduct lesson is finished, so waste never stops a module again; worth 10 Patents',
       },
     ],
     derivation: '§21 Megaproject #3 (PLAN.md): the Scrap Transmuter, byproducts sell at 25% of the item that made them (§15)',

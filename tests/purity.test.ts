@@ -54,14 +54,15 @@ describe('every amount is a Num (CLAUDE.md)', () => {
   // coin and item stocks: fields named like an amount must not be typed as a plain number (or a
   // record of plain numbers); the names the review round added: count, bearings, progress, inBuf,
   // outBuf
-  const NAMES = 'coin|earned|money|bank|banked|delivered|stock|stocks|amount|count|bearings|progress|inBuf|outBuf';
-  const AMOUNT = new RegExp(`\\b(${NAMES})\\s*[:?]\\s*(number\\b|(Partial<)?Record<[^>]*,\\s*number>)`, 'g');
+  const NAMES = 'coin|earned|money|bank|banked|delivered|stock|stocks|amount|count|bearings|progress|inBuf|outBuf|chute';
+  const AMOUNT = new RegExp(`\\b(${NAMES})\\s*\\??\\s*:\\s*(number\\b|(Partial<)?Record<[^>]*,\\s*number>)`, 'g');
   /** Fields that match a name but are not an amount that grows: each one bounded, read every tick
    * (DECISIONS.md, the Milestone 5-6 review round: Num is for amounts that grow without bound). */
   const BOUNDED: Record<string, string[]> = {
     // a machine's input buffer (2 crafts' worth, §4), a module's in and out buffers (2-6 s of its
     // rates, §11, fractional), a heap's slag (its capacity, 400) or a crate's count
-    'src/sim/world.ts': ['inBuf', 'inBuf', 'outBuf', 'count'],
+    // ... and the Chute's stock (at most 20 an item, 60 with Unit 7's rep 4: DESIGN.md §21 The Chute)
+    'src/sim/world.ts': ['inBuf', 'inBuf', 'outBuf', 'count', 'chute'],
     // how many machines a stopped line stopped (a tally of buildings, not of items)
     'src/sim/offline.ts': ['count', 'count'],
   };

@@ -53,6 +53,7 @@ function goalMet(g: Game, id: ChallengeId): boolean {
   switch (goal.k) {
     case 'order': return g.s.orders.done.includes(goal.id);
     case 'research': return g.done(goal.id);
+    case 'deliver': return (g.s.delivered[goal.item]?.toNumber() ?? 0) >= goal.n;
     case 'foldS': return (g.s.counters.foldS ?? 0) > (g.s.challengeBase ?? 0);
   }
 }
@@ -82,12 +83,9 @@ export function challengeBuildRefusal(g: Game, kind: BuildKind): string | null {
   return null;
 }
 
-/** What a Workshop build costs now (the Challenges' rewards: free Splitters, 10% off machines). */
-export function buildPrice(g: Game, kind: BuildKind): number {
-  const base = BUILD[kind].cost;
-  if (kind === 'splitter' && won(g, 'noSplitters')) return 0;
-  if (isMachine(kind) && won(g, 'threeKinds')) return Math.ceil(base * 0.9);
-  return base;
+/** What a Workshop build costs now (one place for a price a rule may change). */
+export function buildPrice(_g: Game, kind: BuildKind): number {
+  return BUILD[kind].cost;
 }
 
 /** The power producers' factor: half under Lean Power, a tenth more once it is won (and a

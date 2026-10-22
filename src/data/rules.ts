@@ -119,10 +119,11 @@ export const RULES = {
   /** the Scrap Transmuter: what a byproduct sells for, as a share of its cheapest recipe's main output */
   transmuteShare: r(0.25, '§21 Megaprojects: the Scrap Transmuter, byproducts sell at 25% of the item that made them (§15), the cheapest such item (slag 0.75, under gravel\'s 1 a slag, so crushing still pays; oil 6; sludge 7.5)'),
   /** reputation rewards of Act III (DESIGN.md §21 Orders): rules a player plans around */
-  brambleSkiffLoad: r(1, '§21 Orders: Bramble rep 4, the Skiff Club: a skiff carries one more a trip (5, was 4): every route a quarter more, so a far feeder needs a skiff fewer'),
+  brambleSkiffLoad: r(1, '§21 Orders: Bramble rep 4, the Skiff Club: a skiff carries one more a trip (2, was 1): every route twice what it carried, so a far feeder needs half the skiffs'),
   unit7ChuteStock: r(60, '§21 Orders: Unit 7 rep 4, Specimen Jars: the Chute holds 60 of each item, was 20 (30 s of a full belt): one Chute feeds three Chute Mouths of an item without the trunk backing up'),
   voltaireChemPower: r(0.5, '§21 Orders: Dame Voltaire rep 4: Chem Vats and Greenhouses draw half their kW, so a tier 3 line folds with a smaller power plant inside its box'),
   /** skiff routes a floor holds at most (a readable floor: DESIGN.md §17) */
+  routesPerLot: r(20, '§21 Skiff routes (the second gate): each District lot adds 20 routes (two columns of 10 tiles, each a group with a route out); at 120 flat the cap was the real wall at 30 h with half the tiles used, and lots were worth nothing'),
   maxRoutes: r(120, '§21 Skiff routes: at most 120 a floor, one for each tile of the District\'s first 12x10, so the floor stays readable (PLAN.md not-list: logistics readable on one screen)'),
 };
 
