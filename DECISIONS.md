@@ -2069,3 +2069,26 @@ their derivations are DESIGN.md §23; all are model estimates until an Act V bot
   a waste into an input, one node.
 - The Seed: a roguelite's carried-over item. Re-derived: the World folded into one tile, its sides
   a routing puzzle.
+
+### Act IV's World, Relocate and Legacy (the screens)
+- **The World floor reuses the District's renderer and tools** over `g.s.world` (one `HighFloorId`
+  switch, `app.high`). It has **no Fold tool**: a fold up there is Act V's Last Fold, and F on the
+  World says so.
+- **The lift's World key is a pixel globe**, not a "W" (the dial's own W is the Workshop), left of
+  D; the wing widens to 28 px (dial angle 20°).
+- **Pausing a module is visible**: Stop/Start and "Stop all N / Start all N" keys on a pinned
+  District or World module's report, a STOPPED chip, the module dimmed with a "paused" pip.
+- **Relocate has three labelled ways in**: a slip under the Purse once a move is possible or close,
+  a key left of Reorganize on the Patent Office, and a key on the Legacy tree. Fly takes two
+  clicks.
+- **The travel moment**: the town's houses on a raft under a rotor fly an arc to the new island
+  with its rule shown, land with "+N LEGACY", then the Legacy tree opens. **The Legacy tree**:
+  Automation down the left, Head starts and Islands on the right.
+- **Research page 4** (Act IV): island rows captioned "HERE ON ..." / "ON ...", other islands'
+  nodes locked with "Relocate to X to research it".
+- **Lesson cards** slide right of a corner block that grazes their left edge instead of dropping
+  mid-screen (all cards); two new ones, the first Relocate and the first barge route.
+- Derivative check: flying to a new world and a prestige-tree page are genre conventions already
+  covered by §22's flags; nothing new.
+- Open: Cinder's chip shrinks to "C" on the Lighthouse page at 1024; the World ground uses the
+  District frame where no `world_*` sprite exists; the Relocate foot row is hidden at 1024 by Fly.
