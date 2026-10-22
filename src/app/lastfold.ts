@@ -20,7 +20,7 @@ import { BIG_H, ICON, bigWidth, smallWidth, textWidth } from '../ui/font';
 import { layoutRich, drawLayout, richWidth, drawRich } from '../ui/rich';
 import { T, type Role } from '../ui/theme';
 import { sheet, hasArt, itemIcon } from '../render/sprites';
-import { previewKernels, lastFoldRefusal, LASTFOLD_KEPT, LASTFOLD_LOST, type KernelPreview } from '../sim/lastfold';
+import { previewKernels, lastFoldRefusal, keptForGood, LASTFOLD_KEPT, LASTFOLD_LOST, type KernelPreview } from '../sim/lastfold';
 import { krules } from '../sim/kernels';
 import { worldOf } from '../sim/systems/islands';
 import { WORLDS } from '../data/worlds';
@@ -112,7 +112,11 @@ function lastFoldCard(app: App, r0: Rect) {
     st.armedUntil = -1;
   }
   const tip = why ? [{ text: `{bad:${why}}` }] : armed ? [{ text: '{u:lastFold} click again · the World folds' }] : [{ text: '{u:lastFold} two clicks · the first arms it' }, { text: `{coin:+${p.now} Kernels} banked · a new universe from the Seed` }];
-  if (button(ui, 'lastFoldGo', bx, fy - 6, bw, 20, label, { icon: 'lastFold', disabled: !!why, gold: !why, big: true, pulse: armed, tip })) {
+  // its tip beside or above the key, never over it (the Act IV-V review: at 1280x720 it hid the key)
+  const goR = { x: bx, y: fy - 6, w: bw, h: 20 };
+  // (the first rect is the anchor: the tag's string runs to the key's right edge, not over its label)
+  if (ui.hover(goR.x, goR.y, goR.w, goR.h)) ui.tip(tip, 180, { avoid: [{ x: goR.x + goR.w - 2, y: goR.y, w: 2, h: goR.h }, goR] });
+  if (button(ui, 'lastFoldGo', bx, fy - 6, bw, 20, label, { icon: 'lastFold', disabled: !!why, gold: !why, big: true, pulse: armed })) {
     if (!armed) st.armedUntil = ui.time + 4;
     else {
       st.armedUntil = -1;
@@ -166,7 +170,7 @@ function bankColumn(app: App, p: KernelPreview, c: Rect) {
     return true;
   };
   const per = RULES.kernelPerValue.value;
-  const valTip = `the filing value (steps × grade × tier) of every module at work: ${p.counted} of ${p.lines.length} · ÷${per}`;
+  const valTip = `the filing value (steps × grade × tier) of the modules at work, ${p.counted} of ${p.lines.length}: each kind's best in full (${p.kinds} kinds), a copy a quarter · ÷${per}`;
   if (!row(`{u:fold} value ${p1(p.value)} {soft:÷${per}}`, `{coinc:+${p1(p.valueTerm)}}`, valTip)) row(`{u:fold} ${p1(p.value)}`, `{coinc:+${p1(p.valueTerm)}}`, valTip);
   if (!row(`{u:star} graded {big:${letter}}`, `{coinc:+${p.gradeBonus}}`, 'one Kernel a letter from D: a grade, not a multiplier')) row(`{u:star} ${letter}`, `{coinc:+${p.gradeBonus}}`);
   if (y + 3 + ROW_H <= bottom) {
@@ -182,7 +186,7 @@ function bankColumn(app: App, p: KernelPreview, c: Rect) {
     y += ROW_H;
     for (const q of goals.slice(0, 3)) {
       const i = q.text.indexOf(':');
-      const s = `{soft:${ICON.right}} ${i > 0 ? q.text.slice(0, i) : q.text}`;
+      const s = `{soft:${ICON.right}} ${q.short ?? (i > 0 ? q.text.slice(0, i) : q.text)}`;
       const gain = `{coinc:+${p1(q.gain)}}`;
       const L = layoutRich(s, c.w - richWidth(gain) - 6);
       if (y + L.h + 2 > bottom) break;
@@ -195,10 +199,10 @@ function bankColumn(app: App, p: KernelPreview, c: Rect) {
 }
 
 /** Kept and lost in short (the sim's rows are the tips). */
-const KEPT_SHORT = ['{u:kernel} Kernels and their tree', '{u:mega} every Megaproject', '{u:heart} reputation, Codex, trophies', '{u:blueprint} the Patent Drawer', '{u:trophies} Challenges, stats, the Ledger', '{u:world} records, Legacy (by Kernel)'];
-const KEPT_TINY = ['{u:kernel} Kernels, tree', '{u:mega} Megaprojects', '{u:heart} rep, Codex', '{u:blueprint} the Drawer', '{u:trophies} stats, Ledger', '{u:world} by Kernel'];
-const LOST_SHORT = ['every floor, coin, research', 'Patents and their tree', 'Legacy and its tree', "the islands' records"];
-const LOST_TINY = ['floors, coin, research', 'Patents, tree', 'Legacy, tree', 'records'];
+const KEPT_SHORT = ['{u:kernel} Kernels and their tree', '{u:mega} every Megaproject', '{u:heart} reputation, Codex, trophies', '{u:blueprint} the Patent Drawer', '{u:trophies} Challenges, stats, the Ledger', "{u:legacy} Legacy's Automation", "{u:research} Acts I-II's research", '{u:world} records, picks (by Kernel)'];
+const KEPT_TINY = ['{u:kernel} Kernels, tree', '{u:mega} Megaprojects', '{u:heart} rep, Codex', '{u:blueprint} the Drawer', '{u:trophies} stats, Ledger', '{u:legacy} Automation', '{u:research} Acts I-II', '{u:world} by Kernel'];
+const LOST_SHORT = ['every floor, coin, research', 'Patents and their tree', 'Legacy, its head starts', "the islands' records"];
+const LOST_TINY = ['floors and coin', 'Patents, tree', 'Legacy, head starts', 'records'];
 const LOST_FULL = [LASTFOLD_LOST[0], 'Patents (unspent and the Patent tree) and the record on file', LASTFOLD_LOST[1], LASTFOLD_LOST[2]];
 const oneLine = (w: number, ...ss: string[]) => ss.find((s) => richWidth(s) <= w) ?? ss[ss.length - 1];
 
@@ -252,15 +256,24 @@ function seedPage(app: App, p: KernelPreview, page: Rect) {
   ui.big('The Seed', x + 38, y + 1, T.ink);
   drawRich(ui, `{soft:planted on} ${WORLDS.home.name.replace(/^the /, '')} {soft:at 4,6}`, x + 38, y + BIG_H + 3, pw - 38, T.ink);
   y += 36;
-  y += drawRich(ui, `{i:ironOre} {i:copperOre} {i:coal} {i:sand} one out of each side every ${krules(g).seedSeconds} s · {k:R} turns it`, x, y, pw, T.ink) + 4;
+  y += drawRich(ui, `{i:ironOre} {i:copperOre} {i:coal} {i:sand} one out of each side every ${krules(g).seedSeconds} s · {k:R} turns it`, x, y, pw, T.ink) + 2;
+  // the Seed's head start: every run of the new universe knows Acts I-II (DESIGN.md §23)
+  if (y + 20 <= end) y += drawRich(ui, "{u:research} {soft:it knows} Acts I-II's research {soft:in every run}", x, y, pw, T.ink) + 4;
   // Kept Legacy: which Legacy nodes go through
   const slots = krules(g).legacySlots;
   if (slots && y + 30 <= end) {
-    const kept = new Set(g.s.meta.keptLegacy ?? []);
-    const owned = (g.s.meta.legacyNodes ?? []).filter((n) => LEGACY[n as LegacyId]) as LegacyId[];
+    const kept = new Set((g.s.meta.keptLegacy ?? []).filter((n) => !keptForGood(n) && n !== 'townArchive'));
+    // only head starts and softeners: the Automation branch stays anyway, the Seed keeps the Archive
+    const owned = (g.s.meta.legacyNodes ?? []).filter((n) => LEGACY[n as LegacyId] && !keptForGood(n) && n !== 'townArchive') as LegacyId[];
     ui.small(`KEEP LEGACY ${kept.size}/${slots}`, x, y, kept.size >= slots ? T.good : T.inkSoft);
+    const auto = (g.s.meta.legacyNodes ?? []).filter(keptForGood).length;
+    if (auto) {
+      const at = `+${auto} AUTOMATION`;
+      if (smallWidth(`KEEP LEGACY ${kept.size}/${slots}`) + smallWidth(at) + 8 <= pw) ui.small(at, x + pw, y, T.good, { align: 'right' });
+      ui.hint(x, y - 1, pw, 9, [{ text: '{big:Kept Legacy}' }, { text: 'pick head starts and softeners to keep' }, { text: `{good:${auto} Automation node${auto === 1 ? '' : 's'}} stay for good, picked or not` }], 200);
+    }
     y += 9;
-    if (!owned.length) { y += drawRich(ui, '{soft:no Legacy nodes this universe}', x, y, pw, T.inkSoft) + 3; }
+    if (!owned.length) { y += drawRich(ui, '{soft:no head start or softener to keep}', x, y, pw, T.inkSoft) + 3; }
     const half = Math.floor((pw - 3) / 2);
     let i = 0;
     for (const id of owned) {
@@ -281,19 +294,22 @@ function seedPage(app: App, p: KernelPreview, page: Rect) {
   if (y + 20 > end) return;
   rule(ui, x, y, pw, true);
   y += 3;
-  ui.small(`THE WORLD ${p.counted}/${p.lines.length} AT WORK`, x, y, T.inkSoft);
+  const wl = `THE WORLD ${p.counted}/${p.lines.length} AT WORK`, kl = `, ${p.kinds} KINDS`;
+  ui.small(smallWidth(wl + kl) <= pw ? wl + kl : wl, x, y, T.inkSoft);
   y += 9;
   const lines = p.lines.slice().sort((q, w) => Number(w.counted) - Number(q.counted) || w.value - q.value);
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
     if (y + 10 > end) { break; }
     if (y + 20 > end && i < lines.length - 1) { drawRich(ui, `{soft:+${lines.length - i} more}`, x, y, pw, T.inkSoft); break; }
-    const v = p1(l.value);
+    // a copy counts a quarter of its value (its kind's best in full)
+    const copy = l.counted && l.share < 1;
+    const v = p1(copy ? l.value * l.share : l.value);
     ui.clip(x, y, pw - textWidth(v) - 4, 10);
     drawRich(ui, `${l.counted ? `{good:${ICON.check}}` : `{bad:${ICON.cross}}`} ${l.item && l.item in ITEMS ? `{i:${l.item}}` : ''} ${l.name}`, x, y, Infinity, l.counted ? T.ink : T.inkSoft);
     ui.unclip();
-    ui.text(v, x + pw, y, l.counted ? T.ink : T.inkSoft, { align: 'right' });
-    ui.hint(x, y, pw, 10, [{ text: `{big:${l.name}}` }, { text: `{u:${l.floor === 'beyond' ? 'beyond' : 'world'}} value ${p1(l.value)} · busy ${Math.round(l.busy * 100)}%` }, { text: l.counted ? '{good:counted}' : `{bad:not counted} · ${l.floor === 'beyond' ? 'run it 60 s' : 'half speed or better in the audit'}` }], 210);
+    ui.text(v, x + pw, y, l.counted && !copy ? T.ink : T.inkSoft, { align: 'right' });
+    ui.hint(x, y, pw, 10, [{ text: `{big:${l.name}}` }, { text: `{u:${l.floor === 'beyond' ? 'beyond' : 'world'}} value ${p1(l.value)} · busy ${Math.round(l.busy * 100)}%` }, { text: !l.counted ? `{bad:not counted} · ${l.floor === 'beyond' ? 'run it 60 s' : 'half speed or better in the audit'}` : copy ? `{good:counted} as a copy · a quarter, ${p1(l.value * l.share)}` : '{good:counted} in full · the best of its kind' }], 210);
     y += 10;
   }
 }

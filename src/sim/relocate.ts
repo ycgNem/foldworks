@@ -3,12 +3,17 @@
 // room go too; Legacy is banked for what this world built:
 //
 //   Legacy = floor( SUM over the four floors of the best value this world / 4
-//                   + 3 x Megaproject stages done this world
+//                   + 3 x Megaproject stages counted
 //                   + 5 for an island not visited before )
 //
 //   a floor's best value = its best design's steps folded x grade x rate tier (as filing, §19):
 //   the Workshop's best depth-1 fold, the Factory's best nested fold, the District's best fold of
-//   groups, and the World's best module put to work there (run 60 s at half speed or better)
+//   groups; the World's is the summed value of its distinct designs (product and depth) put to work
+//   there (run 60 s at half speed or better) / 4, so it is not the District's best counted again
+//
+//   stages counted = the stages done this world, plus, at the first Relocate of a universe from an
+//   island, the stages that stood on it when the universe began (`meta.inherited`): every stage
+//   counts once a universe, so universe 2's first Relocate is worth universe 1's (the review)
 //
 // Not a root or a log of a currency: it counts the best of what was folded on each floor, the
 // Megaprojects built and the islands seen, never coin. A world's bests are kept through its
@@ -60,19 +65,39 @@ export function designFloor(d: ModuleDesign): LegacyFloor {
 
 const asBest = (v: NonNullable<ReturnType<typeof designValue>>): FloorBest => ({ value: v.value, item: v.item, grade: v.grade, steps: v.steps, tier: v.tier });
 
-/** Each floor's best this run: the designs folded, and the World's modules put to work. */
+/** The World's designs this run as its Legacy term counts them: each distinct design (product and
+ * depth) put to work there, and each fold made on the World, at its best value (DESIGN.md §22). */
+export function worldDesigns(g: Game): Map<string, NonNullable<ReturnType<typeof designValue>>> {
+  const best = new Map<string, NonNullable<ReturnType<typeof designValue>>>();
+  const add = (d: ModuleDesign | undefined) => {
+    const v = d ? designValue(d) : null;
+    if (!v) return;
+    const key = `${v.item}|${d!.depth ?? 1}`;
+    const was = best.get(key);
+    if (!was || v.value > was.value) best.set(key, v);
+  };
+  for (const e of g.s.world?.ents ?? []) {
+    if (e.kind !== 'module' || (e.ok ?? 0) < RULES.legacyRunSeconds.value) continue;
+    add(g.design(e.design));
+  }
+  for (const d of g.s.designs) if (designFloor(d) === 'world') add(d);
+  return best;
+}
+
+/** Each floor's best this run: the designs folded; the World's distinct designs at work, summed. */
 export function bestsThisRun(g: Game): Partial<Record<LegacyFloor, FloorBest>> {
   const out: Partial<Record<LegacyFloor, FloorBest>> = {};
   const up = (f: LegacyFloor, b: FloorBest) => { if (!out[f] || b.value > out[f]!.value) out[f] = b; };
   for (const d of g.s.designs) {
+    if (designFloor(d) === 'world') continue;
     const v = designValue(d);
     if (v) up(designFloor(d), asBest(v));
   }
-  for (const e of g.s.world?.ents ?? []) {
-    if (e.kind !== 'module' || (e.ok ?? 0) < RULES.legacyRunSeconds.value) continue;
-    const d = g.design(e.design);
-    const v = d ? designValue(d) : null;
-    if (v) up('world', asBest(v));
+  const ws = [...worldDesigns(g).values()];
+  if (ws.length) {
+    const top = ws.reduce((a, b) => (b.value > a.value ? b : a));
+    const sum = ws.reduce((t, v) => t + v.value, 0);
+    out.world = { ...asBest(top), value: sum / RULES.legacyWorldDesigns.value, designs: ws.length, sum };
   }
   return out;
 }
@@ -115,8 +140,10 @@ export interface LegacyPreview {
   floors: Record<LegacyFloor, FloorBest | null>;
   value: number;
   designs: number;
-  /** Megaproject stages done this world, and their term */
+  /** Megaproject stages counted (done this world, and those standing since the universe began that
+   * this island's first Relocate banks: `inherited`), and their term */
   stages: number;
+  inherited: number;
   stageTerm: number;
   /** the island and its first-visit bonus */
   target: WorldId | null;
@@ -135,10 +162,12 @@ export function previewLegacy(g: Game, target?: WorldId): LegacyPreview {
   const floors = floorBests(g);
   const value = LEGACY_FLOORS.reduce((t, f) => t + (floors[f]?.value ?? 0), 0);
   const designs = value / RULES.legacyPerValue.value;
-  const stages = m.here?.stages ?? 0;
+  const here = worldOf(g);
+  // a universe's stages standing count once, at the first Relocate from their island (DESIGN.md §22)
+  const inherited = m.inherited?.[here] ?? 0;
+  const stages = (m.here?.stages ?? 0) + inherited;
   const stageTerm = stages * RULES.legacyPerStage.value;
   const visited = m.visited ?? ['home'];
-  const here = worldOf(g);
   const unvisited = WORLD_IDS.filter((w) => !visited.includes(w) && w !== here);
   const to = target ?? unvisited[0] ?? null;
   const newIsland = to && !visited.includes(to) && to !== here ? RULES.legacyNewIsland.value : 0;
@@ -146,9 +175,14 @@ export function previewLegacy(g: Game, target?: WorldId): LegacyPreview {
   const now = Math.floor(total + 1e-9);
   const goals: LegacyGoal[] = [];
   const k = 1 / RULES.legacyPerValue.value;
+  const kw = k / RULES.legacyWorldDesigns.value;
   for (const f of LEGACY_FLOORS) {
     const b = floors[f];
-    if (!b) goals.push({ kind: 'floor', floor: f, gain: 2 * k, text: f === 'world' ? 'Put a District fold to work on the World floor (60 s at half speed or better): +0.5 Legacy a unit of its value' : `Fold on the ${FLOOR_NAME[f]}: +${fmt(k)} Legacy a unit of value (steps x grade x tier)` });
+    if (f === 'world') {
+      // the World counts each kind of design at work once: another kind raises it, a copy doesn't
+      const lead = b ? 'Put another kind of District group to work on the World (a product not at work there yet)' : 'Put a District fold to work on the World floor';
+      goals.push({ kind: 'floor', floor: f, gain: 8 * kw, text: `${lead}: 60 s at half speed or better, +${fmt(kw)} Legacy a unit of its value (about 8 a group; a copy adds nothing)` });
+    } else if (!b) goals.push({ kind: 'floor', floor: f, gain: 2 * k, text: `Fold on the ${FLOOR_NAME[f]}: +${fmt(k)} Legacy a unit of value (steps x grade x tier)` });
     else goals.push({ kind: 'floor', floor: f, gain: k * b.value * 0.25, text: `Beat the ${FLOOR_NAME[f]}'s best (${itemName(b.item).toLowerCase()}, ${b.grade}, ${fmt(b.value)}): a step deeper or a grade better, +${fmt(k)} a unit` });
   }
   for (const mid of MEGA_IDS) {
@@ -158,7 +192,25 @@ export function previewLegacy(g: Game, target?: WorldId): LegacyPreview {
   }
   if (unvisited.length && !(target && newIsland)) goals.push({ kind: 'island', gain: RULES.legacyNewIsland.value, text: `Fly to an island you have not visited (${unvisited.map((w) => WORLDS[w].name).join(', ')}): +${RULES.legacyNewIsland.value} Legacy` });
   goals.sort((a, b) => b.gain - a.gain);
-  return { now, total, floors, value, designs, stages, stageTerm, target: to, newIsland, unvisited, goals };
+  return { now, total, floors, value, designs, stages, inherited, stageTerm, target: to, newIsland, unvisited, goals };
+}
+
+/** The Megaproject stages standing now, by the island whose Relocate banks them (DESIGN.md §22):
+ * the Great Drill's, the City's and the Transmuter's are Home's (where every universe begins), each
+ * stage of #4 and #5 its own island's. The Last Fold hands these to the next universe
+ * (`meta.inherited`), so every stage counts once a universe. */
+export function stagesStanding(g: Game): Partial<Record<WorldId, number>> {
+  const out: Partial<Record<WorldId, number>> = {};
+  const add = (w: WorldId, n: number) => { if (n > 0) out[w] = (out[w] ?? 0) + n; };
+  add('home', g.s.mega.stage);
+  for (const mid of MEGA_IDS) {
+    const def = MEGAS[mid];
+    const ms = g.s.megas?.[mid];
+    if (!ms) continue;
+    if (!def.anyOrder) { add('home', ms.stage); continue; }
+    for (const st of def.stages) if (st.world && ms.done?.includes(st.stage)) add(st.world, 1);
+  }
+  return out;
 }
 
 // ------------------------------------------------------------------ the move
@@ -213,6 +265,8 @@ export function relocate(g: Game, world: WorldId): ActResult {
   m.patented = {};
   m.queue = m.queue.filter((q) => m.drawer.some((k) => k.id === q));
   if (!megaDone(g, 'anchor', 4)) m.keptRoom = {};
+  // this island's stages standing since the universe began are banked: once a universe
+  if (m.inherited?.[from] !== undefined) delete m.inherited[from];
   switchMegas(g, from, world);
   m.world = world;
   if (!(m.visited ??= ['home']).includes(world)) m.visited.push(world);

@@ -119,7 +119,12 @@ function relocateCard(app: App, r0: Rect) {
     ui.hint(body.x + 2, fy - 3, RL.w, 12, [{ text: `{big:${isle}}` }, { text: `${hm(since)} this world · ${m.relocations ?? 0} ${(m.relocations ?? 0) === 1 ? 'move' : 'moves'} so far` }], 200);
   }
   const tip = why ? [{ text: `{bad:${why}}` }] : armed ? [{ text: '{u:relocate} click again · the town flies' }] : [{ text: '{u:relocate} two clicks · the first arms it' }, { text: `{coin:+${p.now} Legacy} banked · Patents and the tree reset` }];
-  if (button(ui, 'relocateGo', bx, fy - 6, bw, 20, label, { icon: 'relocate', disabled: !!why, gold: !why, big: true, pulse: armed, tip })) {
+  // its tip beside or above the key, never over it (the Act IV-V review: at 1280x720 the tag sat on
+  // the Fly key it was about); shown on a disabled key too, so the refusal is read where it is
+  const goR = { x: bx, y: fy - 6, w: bw, h: 20 };
+  // (the first rect is the anchor: the tag's string runs to the key's right edge, not over its label)
+  if (ui.hover(goR.x, goR.y, goR.w, goR.h)) ui.tip(tip, 180, { avoid: [{ x: goR.x + goR.w - 2, y: goR.y, w: 2, h: goR.h }, goR] });
+  if (button(ui, 'relocateGo', bx, fy - 6, bw, 20, label, { icon: 'relocate', disabled: !!why, gold: !why, big: true, pulse: armed })) {
     if (!armed) st.armedUntil = ui.time + 4;
     else {
       st.armedUntil = -1;
@@ -189,14 +194,22 @@ function bankColumn(app: App, p: LegacyPreview, to: WorldId, c: Rect) {
   for (const f of LEGACY_FLOORS) {
     const b = p.floors[f];
     const ic = `{u:${FLOOR_ICON[f]}}`;
-    if (!b) { row(`${ic} ${FLOOR_NAME[f]} {soft:none yet}`, '{soft:0}', f === 'world' ? '{u:world} a District fold put to work up there: 60 s at half speed or better' : `{u:fold} a fold on the ${FLOOR_NAME[f]} this world`); continue; }
+    if (!b) { row(`${ic} ${FLOOR_NAME[f]} {soft:none yet}`, '{soft:0}', f === 'world' ? '{u:world} District folds put to work up there: 60 s at half speed or better · each kind counted once' : `{u:fold} a fold on the ${FLOOR_NAME[f]} this world`); continue; }
+    // the World: its distinct designs at work, summed, over RULES.legacyWorldDesigns (DESIGN.md §22)
+    if (f === 'world' && b.designs) {
+      const kw = RULES.legacyWorldDesigns.value;
+      const wtip = `{u:world} ${b.designs} kind${b.designs === 1 ? '' : 's'} of design at work on the World, each at its best value, summed ${p1(b.sum ?? 0)} · ÷${kw} · ÷${per} · a copy adds nothing`;
+      const gain = `{coinc:+${p1(b.value / per)}}`;
+      if (!row(`${ic} World ×${b.designs} {soft:${p1(b.sum ?? 0)}÷${kw}}`, gain, wtip)) row(`${ic} World ×${b.designs}`, gain, wtip);
+      continue;
+    }
     const fact = `${b.steps}×${b.grade}${b.tier ? `×t${b.tier}` : ''}`;
     const tip = `{i:${b.item}} ${ITEMS[b.item]?.name ?? b.item} · ${b.steps} steps × grade ${b.grade}${b.tier ? ` × tier ${b.tier}` : ''} = ${p1(b.value)} · ÷${per}`;
     // narrower: the floor and its product (the sum in the tip), then the product and its sum
     const gain = `{coinc:+${p1(b.value / per)}}`;
     if (!row(`${ic} ${FLOOR_NAME[f]} {i:${b.item}} {soft:${fact}}`, gain, tip) && !row(`${ic} ${FLOOR_NAME[f]} {i:${b.item}}`, gain, tip)) row(`${ic} {i:${b.item}} {soft:${fact}}`, gain, tip);
   }
-  row(`{u:mega} stages built ×${p.stages}`, p.stageTerm ? `{coinc:+${p1(p.stageTerm)}}` : '{soft:0}', `{u:mega} Megaproject stages finished this world · ${RULES.legacyPerStage.value} Legacy each`);
+  row(`{u:mega} stages built ×${p.stages}`, p.stageTerm ? `{coinc:+${p1(p.stageTerm)}}` : '{soft:0}', p.inherited ? `{u:mega} Megaproject stages: ${p.stages - p.inherited} finished this world, ${p.inherited} standing here since the universe began (each counts once a universe) · ${RULES.legacyPerStage.value} Legacy each` : `{u:mega} Megaproject stages finished this world · ${RULES.legacyPerStage.value} Legacy each`);
   row(`{u:relocate} ${p.newIsland ? 'a new island' : `{soft:${SHORT[to]} visited}`}`, p.newIsland ? `{coinc:+${p.newIsland}}` : '{soft:0}', p.newIsland ? `{u:relocate} ${isleName(to, true)} has not seen the town yet` : '{soft:an island visited before banks no bonus}');
   if (y + 3 + ROW_H <= bottom) {
     rule(ui, c.x, y + 1, c.w, true);

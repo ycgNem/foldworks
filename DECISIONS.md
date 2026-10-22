@@ -2618,3 +2618,61 @@ DESIGN.md §12 and §20 carry the numbers.
   runs under the 5 s, never over, since the window is fixed by the estimate); a factory that needs
   many segments still goes past 5 s (the 1 h checkpoint's 10: 7.8 s).
 - Nothing derivative: the budget, the rows and the hold are the offline model's own rules.
+
+## Fixes after the review: the prestige economy (2026-10-22)
+
+Built in a worktree, time-boxed (about 3 h), from the review's decisions above (Blocking 2 and the
+Kernels, World-term, universe-2 and "raises it" findings). Derivations in DESIGN.md §22 (Relocate,
+the Legacy tree) and §23 (the Last Fold, the Kernel tree, pacing targets); tests in
+`tests/prestige.test.ts` (9) and the updated `tests/act5.test.ts`. No `SAVE_VERSION` bump: the one
+new field (`meta.inherited`) is optional, absent meaning nothing inherited (the first universe and
+every older save).
+- **The Automation branch is kept through every Last Fold** (pillar 2: what was automated stays
+  automated). The eight nodes from the Patent Clerk to the Group Drawer stay owned, with the
+  Committee's number and the Town Plan's layouts (`keptForGood`, `lastFold`). **Kept Legacy** now
+  keeps four head starts or softeners only: `keepLegacy` refuses an Automation node ("kept through
+  every Last Fold already") and the Archive; an older save's Automation pick takes no slot. Its text,
+  derivation, the card's picker (head starts and softeners, "+n AUTOMATION" beside the count) and the
+  Legacy tree's node page ("through every move and every Last Fold") say so.
+- **Every Megaproject stage counts for Legacy once a universe.** The Last Fold hands the next universe
+  the stages standing, by the island whose Relocate banks them (`stagesStanding`: the Great Drill's,
+  the City's and the Transmuter's are Home's, each stage of #4 and #5 its own island's); the first
+  Relocate from each island counts its share and forgets it (`meta.inherited`). **Refined from the
+  review's wording** ("count once, at its first Relocate"): all fifteen at the very first Relocate
+  would front-load 45 Legacy into one move (about 58); per island, universe 2's Relocates pay what
+  universe 1's did move by move. **First Relocate per universe: about 33-35 Legacy, every universe**
+  (Home's seven stages 21, folds 7-9, a new island 5; was ~14 in universe 2); each first island visit
+  about 20. Universe 1 is unchanged (nothing inherited).
+- **Kernels count a copy a quarter**: each (product, depth) at work counts its best module in full,
+  every further copy `RULES.kernelCopyShare` = 0.25 of its value. Taken over the critic's alternative
+  (value x min(1, scale / tierStep)), which discounts small lines rather than copies while the rate
+  tier already pays scale. **100 copies of one Engineer chain: 25 Kernels** (was 100). **The first
+  Last Fold: about 11, not 22** (25 groups of about 7 kinds at 8: 56 + 18 x 2 = 92, 9, and a B's 2):
+  the old number no longer holds. The divisor stays 10: the first fold buys the Ledger and Beyond (10),
+  Wide Belts waits for the second, and the 51-Kernel tree lasts to about the fourth Last Fold, which
+  eases the review's kept-open item (nothing to buy after the third). The card shows each kind's
+  count ("7 KINDS"), a copy's line at its quarter, and an idle copy's goal at a quarter.
+- **The World's Legacy term counts its distinct designs**: the summed value of the distinct designs
+  (product and depth) at work on the World, each at its best, over `RULES.legacyWorldDesigns` = 4;
+  a copy adds nothing. A well-built World of 4-5 kinds at 7-10 is 30-45, over 4 is 7.5-11: a floor's
+  7-10 as §22 says; one kind alone is 2 (it was the District's best counted again, 6-10). The Relocate
+  card's World row reads "World xN sum÷4"; its goal is another kind of group. An older save's World
+  best (the old single-module value) stands until that world's next Relocate.
+- **The Seed knows Acts I-II's research** in every run of a universe after the first
+  (`RULES.seedActs` = 2, `applyHeadStarts`; not in a Scenario): the 26 nodes up to the Great Drill's,
+  Act III's chemistry and the District still researched. The Town Archive comes with it (added to the
+  Legacy nodes at each Last Fold, so Standing Charts stays reachable without paying 8 for nothing).
+  The Last Fold card's KEPT column ("Acts I-II's research") and its Seed page ("it knows Acts I-II's
+  research in every run") say so; the Seed's own hover report is in `src/app/tags.ts`, outside this
+  change's files, and was not touched. The model (no Act V bot): an island's climb 1-2 h shorter,
+  universe 2's World at about 20-30 h, not 25-35. **Not measured.**
+- **The Last Fold's "raises it" reads the audit's own advice**: the grade goal is the whole-World
+  audit's `advice[0]` (weakest part first), its card line the advice's first sentence ("21 of 190 tiles
+  are modules; 152 would be fully compact"), the letter above and its Kernel in the tip.
+- **The Fly key's tip** (and the Fold the World key's, the same layout) is placed beside or above its
+  key, never over it (`ui.tip` with the key as the rect to avoid), and shows on a disabled key too.
+- **Open:** a universe after the first owns the Automation branch (56 of the tree's 103), so its ~95
+  Legacy buys the 47 of head starts and softeners with about 50 to spare: the Legacy tree runs out of
+  things to buy in universe 2 (a sink or new nodes are an owner decision: a new tree layer needs a
+  DECISIONS entry naming its pillar). The Kernel and universe-2 hours are the model's; the Act V bot
+  that would measure them does not exist yet.

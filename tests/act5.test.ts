@@ -217,13 +217,16 @@ describe('the Last Fold (DESIGN.md §23)', () => {
     expect(m.nodes).toEqual([]);
     expect(m.patented).toEqual({});
     expect(m.legacy!.toNumber()).toBe(0);
-    expect(m.legacyNodes).toEqual([]);
+    // the Purse is a head start (lost); the Clerk is Automation (kept for good); the Seed keeps the
+    // Archive (the prestige review)
+    expect(m.legacyNodes).toEqual(['patentClerk', 'townArchive']);
     expect(m.worldRecords).toEqual({});
     expect(m.visited).toEqual(['home']);
     expect(m.world).toBe('home');
     expect(g.s.world).toBeUndefined();
     expect(g.s.designs).toEqual([]);
-    expect(g.s.research.done).toEqual([]);
+    // the Seed knows Acts I-II's research, nothing of Act III on
+    expect(g.s.research.done).toEqual(RESEARCH_IDS.filter((r) => (RESEARCH[r].act ?? 1) <= 2));
     expect(g.s.land).toEqual(['A']);
     // the Seed stands in the new Workshop, not removable, and is planted again by every later run
     const seed = g.entAt(RULES.seedX.value, RULES.seedY.value)!;
@@ -421,17 +424,17 @@ describe('the Kernel tree (DESIGN.md §23): every node', () => {
     expect(floorBests(g).workshop!.value).toBe(7);
   });
 
-  it('Kept Legacy: the chosen Legacy nodes survive a Last Fold', () => {
+  it('Kept Legacy: the chosen head starts and softeners survive a Last Fold (Automation stays anyway)', () => {
     const { g } = graded();
-    g.s.meta.legacyNodes = ['patentClerk', 'regrader', 'skiffGuild'];
-    expect(g.act({ k: 'keepLegacy', id: 'patentClerk' }).why).toMatch(/Kept Legacy/);
+    g.s.meta.legacyNodes = ['patentPurse', 'oldHabits', 'warmHands', 'patentClerk', 'regrader'];
+    expect(g.act({ k: 'keepLegacy', id: 'patentPurse' }).why).toMatch(/Kept Legacy/);
     kernels(g, 'keptIslands', 'keptLegacy');
-    expect(g.act({ k: 'keepLegacy', id: 'townPlan' }).why).toMatch(/own/);
-    must(g, { k: 'keepLegacy', id: 'patentClerk' });
-    must(g, { k: 'keepLegacy', id: 'regrader' });
-    expect(LEGACY.regrader).toBeTruthy();
+    expect(g.act({ k: 'keepLegacy', id: 'secondNature' }).why).toMatch(/own/);
+    must(g, { k: 'keepLegacy', id: 'patentPurse' });
+    must(g, { k: 'keepLegacy', id: 'warmHands' });
+    expect(LEGACY.warmHands.branch).toBe('soften');
     must(g, { k: 'lastFold' });
-    expect(g.s.meta.legacyNodes).toEqual(['patentClerk', 'regrader']);
+    expect([...g.s.meta.legacyNodes!].sort()).toEqual(['patentClerk', 'patentPurse', 'regrader', 'townArchive', 'warmHands']);
   });
 });
 
