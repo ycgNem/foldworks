@@ -21,6 +21,7 @@ import { nominal, feeders, entName } from '../sim/analysis';
 import { shares } from '../sim/systems/stats';
 import { poleReach } from '../sim/systems/power';
 import { fname } from '../sim/systems/modules';
+import type { HighFloorId } from '../data/floors';
 import { routeCap, routeWant, hent, hname, skiffRateNow, routeDist } from '../sim/systems/high';
 import { DX, DY, type Ent, type FEnt, type Floor, type SkiffRoute } from '../sim/world';
 import type { Game } from '../sim/Game';
@@ -224,48 +225,52 @@ function factoryCauses(g: Game): { cause: Cause; cost: number }[] {
   return [...by.values()];
 }
 
-// ------------------------------------------------------------------ the District
+// ------------------------------------------------------------------ the District (and the World, DESIGN.md §22)
+
+/** the high floor being traced */
+let HF: 'district' | 'world' = 'district'; // the UI's high floors (Beyond joins with its screen)
 
 function routeCause(g: Game, r: SkiffRoute): Cause | null {
-  const a = hent(g, 'district', r.from), b = hent(g, 'district', r.to);
+  const a = hent(g, HF, r.from), b = hent(g, HF, r.to);
   if (!a || !b) return null;
-  const cap = routeCap(g, 'district', r), want = routeWant(g, 'district', r);
-  const each = skiffRateNow(g, 'district', routeDist(a, b));
+  const cap = routeCap(g, HF, r), want = routeWant(g, HF, r);
+  const each = skiffRateNow(g, HF, routeDist(a, b));
   const more = Math.max(1, Math.ceil((want - cap) / Math.max(1e-6, each)));
   return {
-    key: 'r' + r.id, floor: 'district', kind: 'route', id: r.id, x: (a.x + a.w / 2 + b.x + b.w / 2) / 2, y: (a.y + a.h / 2 + b.y + b.h / 2) / 2,
+    key: 'r' + r.id, floor: HF, kind: 'route', id: r.id, x: (a.x + a.w / 2 + b.x + b.w / 2) / 2, y: (a.y + a.h / 2 + b.y + b.h / 2) / 2,
     name: `${hname(g, a)} to ${hname(g, b)}`,
-    say: `The route from ${hname(g, a)} carries ${plain(cap, 2)} of ${plain(want, 2)} ${lc(r.item)} a second. ${more} skiff${more > 1 ? 's' : ''} more, or move them closer.`,
+    say: `The route from ${hname(g, a)} carries ${plain(cap, 2)} of ${plain(want, 2)} ${lc(r.item)} a second. ${more} ${HF === 'world' ? 'barge' : 'skiff'}${more > 1 ? 's' : ''} more, or move them closer.`,
     chips: [`{pip:starved} ${ic(r.item)} ${Math.round((cap / Math.max(1e-6, want)) * 100)}%`],
   };
 }
 
 function districtCause(g: Game, m: FEnt, seen: Set<number>): Cause {
   seen.add(m.id);
-  const st = g.s.district!;
+  const st = g.s[HF]!;
   const name = hname(g, m);
-  const c = (say: string, chips: string[] = []): Cause => ({ key: 'd' + m.id, floor: 'district', kind: 'module', id: m.id, x: m.x + m.w / 2, y: m.y + m.h / 2, name, say, chips });
+  const c = (say: string, chips: string[] = []): Cause => ({ key: 'd' + m.id, floor: HF, kind: 'module', id: m.id, x: m.x + m.w / 2, y: m.y + m.h / 2, name, say, chips });
   const item = m.why as ItemId | null;
   if (m.state === 'starved') {
     const ins = st.routes.filter((r) => r.to === m.id && r.item === item);
     if (!ins.length) return c(`${name}: no route brings it ${ic(item)} ${lc(item)}. The Route tool, from a group that makes it.`, [`{pip:starved} ${ic(item)} none`]);
-    const short = ins.find((r) => routeCap(g, 'district', r) < 0.9 * routeWant(g, 'district', r));
+    const short = ins.find((r) => routeCap(g, HF, r) < 0.9 * routeWant(g, HF, r));
     if (short) return routeCause(g, short) ?? c('', []);
-    const src = ins.map((r) => hent(g, 'district', r.from)).find((f): f is FEnt => !!f && f.kind === 'module' && f.state !== 'work' && !seen.has(f.id));
+    const src = ins.map((r) => hent(g, HF, r.from)).find((f): f is FEnt => !!f && f.kind === 'module' && f.state !== 'work' && !seen.has(f.id));
     if (src) return districtCause(g, src, seen);
     return c(`${name}: starved of ${ic(item)} ${lc(item)}. Its sources make less than it wants: another group making it.`, [`{pip:starved} ${ic(item)}`]);
   }
   const outs = st.routes.filter((r) => r.from === m.id && (!item || r.item === item));
   if (!outs.length) return c(`${name}: nothing takes its ${ic(item)} ${lc(item)}. A route to the Dock or a group.`, [`{pip:blocked} ${ic(item)}`]);
-  const short = outs.find((r) => routeCap(g, 'district', r) < 0.9 * routeWant(g, 'district', r));
+  const short = outs.find((r) => routeCap(g, HF, r) < 0.9 * routeWant(g, HF, r));
   if (short) return routeCause(g, short) ?? c('', []);
-  const dst = outs.map((r) => hent(g, 'district', r.to)).find((f): f is FEnt => !!f && f.kind === 'module' && f.state !== 'work' && !seen.has(f.id));
+  const dst = outs.map((r) => hent(g, HF, r.to)).find((f): f is FEnt => !!f && f.kind === 'module' && f.state !== 'work' && !seen.has(f.id));
   if (dst) return districtCause(g, dst, seen);
   return c(`${name}: its ${ic(item)} ${lc(item)} backs up. Another route out, or a group that uses it.`, [`{pip:blocked} ${ic(item)}`]);
 }
 
-function districtCauses(g: Game): { cause: Cause; cost: number }[] {
-  const st = g.s.district;
+function districtCauses(g: Game, f: 'district' | 'world'): { cause: Cause; cost: number }[] {
+  HF = f;
+  const st = g.s[HF];
   if (!st) return [];
   const by = new Map<string, { cause: Cause; cost: number }>();
   const add = (cause: Cause | null, cost: number) => {
@@ -275,7 +280,7 @@ function districtCauses(g: Game): { cause: Cause; cost: number }[] {
     else by.set(cause.key, { cause, cost });
   };
   for (const r of st.routes) {
-    const cap = routeCap(g, 'district', r), want = routeWant(g, 'district', r);
+    const cap = routeCap(g, HF, r), want = routeWant(g, HF, r);
     if (r.skiffs > 0 && cap < 0.9 * want) add(routeCause(g, r), (want - cap) * 60 * worth(r.item));
   }
   for (const m of st.ents) {
@@ -289,7 +294,7 @@ function districtCauses(g: Game): { cause: Cause; cost: number }[] {
 
 /** The bottleneck on a floor that costs the most output, or what the next goal needs. */
 export function findStuck(g: Game, floor: Floor): Stuck {
-  const all = floor === 'factory' ? factoryCauses(g) : floor === 'district' ? districtCauses(g) : workshopCauses(g);
+  const all = floor === 'factory' ? factoryCauses(g) : floor === 'district' || floor === 'world' ? districtCauses(g, floor) : workshopCauses(g);
   all.sort((a, b) => b.cost - a.cost || a.cause.key.localeCompare(b.cause.key));
   const top = all[0];
   if (top && top.cost > 0) {
@@ -310,8 +315,8 @@ export function whereStuck(app: App) {
   app.audio.sfx('open');
   if (s.kind === 'ent') { app.selected = s.id; app.lookAt(s.x, s.y); }
   else if (s.kind === 'module' && s.floor === 'factory') { app.fselected = s.id; app.lookAt(s.x, s.y); }
-  else if (s.kind === 'module') { DS.sel = s.id; DS.route = null; app.lookAt(s.x, s.y); }
-  else if (s.kind === 'route') { DS.route = s.id; DS.sel = null; app.lookAt(s.x, s.y); }
+  else if (s.kind === 'module') { DS.game = app.game; DS.floor = app.high ?? 'district'; DS.sel = s.id; DS.route = null; app.lookAt(s.x, s.y); }
+  else if (s.kind === 'route') { DS.game = app.game; DS.floor = app.high ?? 'district'; DS.route = s.id; DS.sel = null; app.lookAt(s.x, s.y); }
   else if (Number.isFinite(s.x) && app.floor === 'workshop') app.lookAt(s.x, s.y);
   const hs = app.hud;
   // the answer takes the speaker's corner now (the cameo queue's head), then the goal comes back

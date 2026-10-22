@@ -154,7 +154,7 @@ export function drawHud(app: App, dt: number) {
     panArrows(app, L);
     // the District's audit hangs its own clipboard (src/app/district.ts)
     app.hud.clipRects = [];
-    if (app.floor !== 'district') auditBadge(app, L);
+    if (!app.high) auditBadge(app, L);
     corners(app, L, dt);
     edgeArrows(app);
     pinnedReport(app, L);
@@ -487,7 +487,7 @@ const HOVER_FADE = 0.1;
 function hoverKeyOf(app: App): string | null {
   const g = app.game;
   const h = app.hud.hoverTile;
-  if (app.floor === 'district') return districtHoverKey(app);
+  if (app.high) return districtHoverKey(app);
   if (!h) return app.townTip ? 'town:' + app.townTip : null;
   // the pinned thing has its whole report up already: no hover tag for it
   if (app.floor === 'factory') { const fe = g.fentAt(h.x, h.y); return fe && fe.id !== app.fselected ? 'f' + fe.id : null; }
@@ -518,7 +518,7 @@ function hoverReport(app: App) {
   const alpha = Math.min(1, age / HOVER_FADE);
   ui.tipAlpha = alpha;
   const brief = mode === 'brief';
-  if (app.floor === 'district') { districtHover(app, { brief, alpha }); return; }
+  if (app.high) { districtHover(app, { brief, alpha }); return; }
   const h = app.hud.hoverTile;
   if (!h && app.townTip) { ui.tip([{ text: app.townTip }], 240); return; }
   if (!h) return;

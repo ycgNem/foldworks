@@ -27,7 +27,7 @@ import type { Layout } from './layout';
 import type { App } from './app';
 
 export type LessonId = 'starved' | 'slag' | 'fold' | 'factory' | 'trunk' | 'brownout' | 'reorganize' | 'route' | 'shortRoute'
-  | 'islePebble' | 'isleCinder' | 'isleRime' | 'isleOldworks';
+  | 'relocate' | 'worldRoute' | 'islePebble' | 'isleCinder' | 'isleRime' | 'isleOldworks';
 
 interface LessonDef {
   title: string;
@@ -96,6 +96,15 @@ export const LESSONS: Record<LessonId, LessonDef> = {
     title: 'The Old Works', art: 'rubble', frame: 5,
     lines: ['{k:LMB} rubble: Clear it for coin', 'ruins repair for {good:a quarter} · pin one, Repair'],
   },
+  // Act IV (DESIGN.md §22): the first Relocate and the first World route
+  relocate: {
+    title: 'A new island', icon: 'relocate',
+    lines: ['{u:legacy} Legacy banked: the Legacy tree', 'one rule here changes the best fold', 'Megaprojects, Codex and Drawer stay'],
+  },
+  worldRoute: {
+    title: 'Barge routes', art: 'barge',
+    lines: ['a barge carries two a trip', 'bulk sits beside its user', 'finished goods fly anywhere'],
+  },
 };
 
 const ISLE_LESSON: Record<string, LessonId> = { pebble: 'islePebble', cinder: 'isleCinder', rime: 'isleRime', oldworks: 'isleOldworks' };
@@ -138,6 +147,8 @@ export function pastLessons(g: Game): LessonId[] {
   const routes = g.s.district?.routes.length ?? 0;
   if (routes > 0) out.push('route');
   if (routes > 2) out.push('shortRoute');
+  if ((g.s.meta.relocations ?? 0) > 0) out.push('relocate');
+  if ((g.s.world?.routes.length ?? 0) > 0) out.push('worldRoute');
   return out;
 }
 
@@ -168,7 +179,9 @@ export function lessonEvents(app: App, evs: GameEvent[]) {
     if (e.type === 'firstSlagJam') teach(app, 'slag');
     else if (e.type === 'firstFold' || (e.type === 'fold' && (e.floor ?? 'workshop') === 'workshop')) teach(app, 'fold');
     else if (e.type === 'reorganize') teach(app, 'reorganize');
-    else if (e.type === 'firstRoute') teach(app, 'route');
+    else if (e.type === 'firstRoute' && e.floor !== 'world') teach(app, 'route');
+    else if (e.type === 'relocate') teach(app, 'relocate');
+    else if (e.type === 'route' && e.floor === 'world') teach(app, 'worldRoute');
   }
 }
 
@@ -238,7 +251,9 @@ function drawCard(app: App, L: Layout, id: LessonId) {
   const sz = tagSize(inner, Math.max(ART + 2, textH), 'left');
   // top centre, under anything the HUD holds there this frame (the District's tool strip)
   let y = 6;
-  const x = Math.floor((ui.w - sz.w) / 2);
+  let x = Math.floor((ui.w - sz.w) / 2);
+  // a corner block that only grazes its left edge moves it right a little, not down the screen
+  for (const z of zones) if (z !== ownZone && z.y < 40 && z.x < x && z.x + z.w > x && z.x + z.w - x < 24 && z.x + z.w + 4 + sz.w <= ui.w - 4) x = z.x + z.w + 4;
   for (const z of zones) if (z !== ownZone && z.x < x + sz.w && z.x + z.w > x && z.y < 40) y = Math.max(y, z.y + z.h + 4);
   // it drops in
   const k = Math.min(1, (ui.time - S.shownAt) / 0.2);

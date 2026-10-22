@@ -14,7 +14,7 @@
 import { C, rgba } from '../data/palette';
 import type { Game } from '../sim/Game';
 import type { Box, FEnt, SkiffRoute } from '../sim/world';
-import { HIGH } from '../data/floors';
+import { HIGH, type HighFloorId } from '../data/floors';
 import { MEGAS } from '../data/megaprojects';
 import type { ItemId } from '../data/items';
 import { RULES } from '../data/rules';
@@ -27,7 +27,7 @@ import { onPaper } from '../ui/theme';
 import { sheet, itemIcon, hasArt, drawSprite } from './sprites';
 import { mainOutput } from './factory';
 import { TILE } from './ground';
-import { drawPip } from './pips'; // Milestone 13: pips with shapes
+import { drawPip, type PipShape } from './pips'; // Milestone 13: pips with shapes
 import { art, artSig, canvas, hh, named } from './skyart';
 
 const PIP: Record<string, string> = { work: C.pipGreen, starved: C.pipYellow, blocked: C.pipRed, idle: C.pipGrey };
@@ -47,12 +47,23 @@ export interface DistrictOverlay {
   hoverRoute: number | null;
   /** a District fold box being dragged (tile rect, inclusive corners) */
   box: { x0: number; y0: number; x1: number; y1: number } | null;
+  /** which high floor is drawn (the World reuses the District's drawing, DESIGN.md §22) */
+  floor?: HighFloorId;
 }
+
+/** A high floor's sheet: the World's `world_*` art is frame-compatible with the District's `dist_*`
+ *  (docs/endgame.md, Act IV art as built), so the World draws with its own where it has it. */
+export function hart(f: HighFloorId, name: string): string {
+  const w = 'world_' + name;
+  return f === 'world' && hasArt(w) ? w : 'dist_' + name;
+}
+
+/** What flies a high floor's routes: skiffs on the District, barges on the World (DESIGN.md §22). */
+export const carrier = (f: HighFloorId) => (f === 'world' ? 'barge' : 'skiff');
 
 /** The deck round the build floor, in tiles: the plaza north (two rows of 32 px plates), a walk
  *  `w` west, `e` east (the next lot for sale stands there), `s` south; the plaza a `wing` wider. */
 export const DPLAT = { n: 4, s: 2, w: 2, e: 3, wing: 1 };
-const DPLAT_ART = ['dist_edge', 'dist_under', 'dist_deck'] as const;
 const PLATE_KINDS = ['plain', 'plain', 'skylight', 'plain', 'vent', 'plain', 'plain'];
 
 function pick(a: ReturnType<typeof art>, name: string, i: number): HTMLCanvasElement | null {
@@ -72,24 +83,27 @@ export class DistrictPlatform {
   /** world px under the floor's south edge the camera may show */
   readonly below = (DPLAT.s + 4) * TILE;
 
+  /** the District's platform, or the World's (its art is frame-compatible: `world_*`) */
+  constructor(readonly floor: HighFloorId = 'district') {}
+
   bounds() {
     return this.b;
   }
 
   draw(ctx: CanvasRenderingContext2D, fw: number, fh: number, time: number) {
-    const key = `${fw}x${fh}:${artSig(DPLAT_ART)}`;
+    const key = `${fw}x${fh}:${artSig(['edge', 'under', 'deck'].map((n) => hart(this.floor, n)))}`;
     if (!this.c || key !== this.key) {
       this.bake(fw, fh);
       this.key = key;
     }
     ctx.drawImage(this.c!, this.ox, this.oy);
-    const r = art(hasArt('dist_rotor') ? 'dist_rotor' : 'fplat_rotor');
+    const r = art(hasArt(hart(this.floor, 'rotor')) ? hart(this.floor, 'rotor') : 'fplat_rotor');
     const tick = Math.floor(time * (r.fps || 12));
     for (let i = 0; i < this.rotors.length; i++) {
       const p = this.rotors[i];
       ctx.drawImage(r.frames[(tick + i) % r.frames.length], p.x - r.ax, p.y - r.ay);
     }
-    const s = art(hasArt('dist_rotor_side') ? 'dist_rotor_side' : 'fplat_rotor_side');
+    const s = art(hasArt(hart(this.floor, 'rotor_side')) ? hart(this.floor, 'rotor_side') : 'fplat_rotor_side');
     const n = Math.max(1, Math.floor(s.frames.length / 2));
     for (let i = 0; i < this.sides.length; i++) {
       const p = this.sides[i];
@@ -112,9 +126,10 @@ export class DistrictPlatform {
     this.ox = X0 * TILE;
     this.oy = Y0 * TILE;
     const put = (img: CanvasImageSource | null, x: number, y: number) => { if (img) ctx.drawImage(img, x * TILE - this.ox, y * TILE - this.oy); };
-    const edge = art('dist_edge'), under = art('dist_under'), deck = art('dist_deck');
+    const F = this.floor;
+    const edge = art(hart(F, 'edge')), under = art(hart(F, 'under')), deck = art(hart(F, 'deck'));
     const seams = new Set<number>();
-    for (let x = HIGH.district.w; x < fw; x += HIGH.district.lotCols) seams.add(x);
+    for (let x = HIGH[F].w; x < fw; x += HIGH[F].lotCols) seams.add(x);
     const bottom = (x: number) => { let b = Y1 - 1; while (b >= Y0 && !on(x, b)) b--; return b; };
     for (let x = X0; x < X1; x++) {
       const b = bottom(x);
@@ -164,7 +179,8 @@ export class DistrictPlatform {
     ctx.fillRect(-this.ox + fw * TILE, -this.oy - 1, 1, fh * TILE + 2);
     this.c = c;
     const span = BX1 - BX0 - 2;
-    const n = Math.max(2, Math.round(span / 5));
+    // the World's rotors are broader (64 px): one about every six tiles
+    const n = Math.max(2, Math.round(span / (F === 'world' ? 6 : 5)));
     this.rotors = [];
     for (let i = 0; i < n; i++) this.rotors.push({ x: Math.round((BX0 + 1 + ((i + 0.5) * span) / n) * TILE), y: (Y1 + 2) * TILE - 3 });
     const rows = fh >= 6 ? [2, fh - 2] : [Math.floor(fh / 2)];
@@ -181,9 +197,9 @@ export class DistrictPlatform {
 
 /** A route whose skiffs can carry under 90% of what it is wanted: short of skiffs (the bottleneck;
  *  the Dispatcher's own test, DESIGN.md §21). */
-export function routeShort(g: Game, r: SkiffRoute): boolean {
-  const want = routeWant(g, 'district', r);
-  return want > 1e-9 && routeCap(g, 'district', r) < want * 0.9;
+export function routeShort(g: Game, r: SkiffRoute, f: HighFloorId = 'district'): boolean {
+  const want = routeWant(g, f, r);
+  return want > 1e-9 && routeCap(g, f, r) < want * 0.9;
 }
 
 /** Whether a route moved anything in the last second (its skiffs carry crates out). */
@@ -192,20 +208,20 @@ export function routeBusy(g: Game, r: SkiffRoute): boolean {
 }
 
 /** A route's two ends, world px (the tile centres of its two things). */
-export function routeEnds(g: Game, r: SkiffRoute): { a: FEnt; b: FEnt; ax: number; ay: number; bx: number; by: number } | null {
-  const a = hent(g, 'district', r.from), b = hent(g, 'district', r.to);
+export function routeEnds(g: Game, r: SkiffRoute, f: HighFloorId = 'district'): { a: FEnt; b: FEnt; ax: number; ay: number; bx: number; by: number } | null {
+  const a = hent(g, f, r.from), b = hent(g, f, r.to);
   if (!a || !b) return null;
   return { a, b, ax: (a.x + a.w / 2) * TILE, ay: (a.y + a.h / 2) * TILE, bx: (b.x + b.w / 2) * TILE, by: (b.y + b.h / 2) * TILE };
 }
 
 /** The route whose flight line passes within `tol` world px of (wx, wy), away from its two ends'
  *  tiles (a click there is the thing's), nearest first. */
-export function routeAtWorld(g: Game, wx: number, wy: number, tol = 3): SkiffRoute | null {
-  const st = g.s.district;
+export function routeAtWorld(g: Game, wx: number, wy: number, tol = 3, f: HighFloorId = 'district'): SkiffRoute | null {
+  const st = g.s[f];
   if (!st) return null;
   let best: SkiffRoute | null = null, bd = tol;
   for (const r of st.routes) {
-    const e = routeEnds(g, r);
+    const e = routeEnds(g, r, f);
     if (!e) continue;
     const inside = (q: FEnt) => wx >= q.x * TILE && wy >= q.y * TILE && wx < (q.x + q.w) * TILE && wy < (q.y + q.h) * TILE;
     if (inside(e.a) || inside(e.b)) continue;
@@ -262,9 +278,9 @@ function arrowHead(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: nu
 
 /** The Bay's frame: empty, stage1, stage2 by the open stage's progress; run1/run2 once every
  *  project here is done (or one stands done and nothing is open). */
-function bayFrame(g: Game, time: number): number {
-  const open = bayProjects(g, 'district');
-  const anyDone = (['city', 'transmuter'] as const).some((m) => (g.s.megas?.[m]?.stage ?? 0) >= 1);
+function bayFrame(g: Game, time: number, fl: HighFloorId): number {
+  const open = bayProjects(g, fl);
+  const anyDone = (Object.values(MEGAS) as { id: keyof typeof MEGAS; floor: string }[]).some((m) => m.floor === fl && (g.s.megas?.[m.id]?.stage ?? 0) >= 1);
   if (!open.length) return anyDone ? 3 + (Math.floor(time * 6) % 2) : 0;
   const m = open[0];
   const st = megaStageOf(g, m)!;
@@ -276,8 +292,8 @@ function bayFrame(g: Game, time: number): number {
 }
 
 /** The District's open project's progress (0..1) at the Bay, or null when nothing is open. */
-export function districtMegaFrac(g: Game): { id: keyof typeof MEGAS; frac: number } | null {
-  const m = bayProjects(g, 'district')[0];
+export function districtMegaFrac(g: Game, f: HighFloorId = 'district'): { id: keyof typeof MEGAS; frac: number } | null {
+  const m = bayProjects(g, f)[0];
   if (!m) return null;
   const st = megaStageOf(g, m)!;
   const p = g.s.megas?.[m]?.progress ?? {};
@@ -288,22 +304,23 @@ export function districtMegaFrac(g: Game): { id: keyof typeof MEGAS; frac: numbe
 
 /** `view`: the world rect on screen (sprites outside it are skipped). */
 export function drawDistrict(ctx: CanvasRenderingContext2D, g: Game, time: number, ov: DistrictOverlay, view: { x0: number; y0: number; x1: number; y1: number }) {
-  const st = g.s.district;
+  const F: HighFloorId = ov.floor ?? 'district';
+  const st = g.s[F];
   if (!st) return;
-  const fw = highW(g, 'district'), fh = HIGH.district.h;
+  const fw = highW(g, F), fh = HIGH[F].h;
   const vis = (x: number, y: number, w: number, h: number) => x + w > view.x0 && y + h > view.y0 && x < view.x1 && y < view.y1;
   // the next lot for sale, outlined on the walk east of the floor (its button is the HUD's)
-  if (lotPrice(g, 'district')) antsBox(ctx, fw + 2 / TILE, 0, HIGH.district.lotCols, fh, C.ink, rgba(C.steel0, 0.2), time);
+  if (lotPrice(g, F)) antsBox(ctx, fw + 2 / TILE, 0, HIGH[F].lotCols, fh, C.ink, rgba(C.steel0, 0.2), time);
   // the Bay's corner, marked until the Bay stands there
-  const bayRes = (Object.values(MEGAS) as { floor: string; opens: string }[]).some((m) => m.floor === 'district' && g.done(m.opens as never));
-  if (bayRes && !st.ents.some((e) => e.kind === 'fbay')) bayMarks(ctx, time);
+  const bayRes = (Object.values(MEGAS) as { floor: string; opens: string }[]).some((m) => m.floor === F && g.done(m.opens as never));
+  if (bayRes && !st.ents.some((e) => e.kind === 'fbay')) bayMarks(ctx, time, F);
   // flight lines under everything that stands up
   for (const r of st.routes) {
-    const e = routeEnds(g, r);
+    const e = routeEnds(g, r, F);
     if (!e) continue;
     if (!vis(Math.min(e.ax, e.bx), Math.min(e.ay, e.by), Math.abs(e.bx - e.ax) + 1, Math.abs(e.by - e.ay) + 1)) continue;
     const sel = r.id === ov.selRoute, hov = r.id === ov.hoverRoute;
-    const short = routeShort(g, r);
+    const short = routeShort(g, r, F);
     // short of skiffs: warning orange, bold (the bottleneck); selected gold; under the mouse bone;
     // the rest a quiet pencil line in ink
     const bold = sel || short || hov;
@@ -316,36 +333,40 @@ export function drawDistrict(ctx: CanvasRenderingContext2D, g: Game, time: numbe
     const x = e.x * TILE, y = e.y * TILE;
     if (!vis(x, y, e.w * TILE, e.h * TILE)) continue;
     if (e.kind === 'fdock' || e.kind === 'fhopper') {
-      const name = e.kind === 'fdock' ? 'dist_dock' : 'dist_hopper';
+      const name = hart(F, e.kind === 'fdock' ? 'dock' : 'hopper');
       const s = hasArt(name) ? sheet(name) : sheet(e.kind === 'fdock' ? 'factory_dock' : 'factory_hopper');
       ctx.drawImage(s.frames[Math.floor(time * (s.fps || 3)) % s.frames.length], x, y);
       continue;
     }
     if (e.kind === 'fbay') {
-      const s = sheet('dist_bay');
-      if (hasArt('dist_bay')) ctx.drawImage(s.frames[Math.min(s.frames.length - 1, bayFrame(g, time))], x, y);
+      const bn = hart(F, 'bay');
+      const s = sheet(bn);
+      if (hasArt(bn)) ctx.drawImage(s.frames[Math.min(s.frames.length - 1, bayFrame(g, time, F))], x, y);
       else { ctx.fillStyle = C.ink; ctx.fillRect(x, y, 32, 32); ctx.fillStyle = C.steel3; ctx.fillRect(x + 1, y + 1, 30, 30); }
       const fresh = Object.values(e.inBuf).some((v) => v > 0.01);
       if (fresh && Math.floor(time * 8) % 2) { ctx.fillStyle = C.bone; ctx.fillRect(x + 15, y + 14, 2, 2); }
       continue;
     }
     if (e.kind !== 'module') continue;
-    drawModule(ctx, g, e, x, y, time);
+    drawModule(ctx, g, e, x, y, time, F);
     if ((e.od ?? 0) > 0) moduleHot(ctx, e, time);
     else if ((e.cool ?? 0) > 0) coolArc(ctx, x, y, e.cool ?? 0);
-    pip(ctx, x, y, PIP[e.state], e.state === 'blocked', time);
+    // a module stopped by the player (the pause command, DESIGN.md §22): dimmed, the paused pip
+    if (e.paused) { ctx.fillStyle = rgba(C.ink, 0.28); ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2); }
+    pip(ctx, x, y, PIP[e.state], e.state === 'blocked' && !e.paused, time, e.paused ? 'paused' : undefined);
   }
-  // the skiffs, over the modules (they fly)
-  skiffs(ctx, g, time, vis);
-  hauditBox(ctx, g, time);
-  overlays(ctx, g, ov, time);
+  // the skiffs (barges on the World), over the modules (they fly)
+  skiffs(ctx, g, time, vis, F);
+  hauditBox(ctx, g, time, F);
+  overlays(ctx, g, ov, time, F);
 }
 
 /** A District module: its building (lit and working while it runs), its main output in the window. */
-function drawModule(ctx: CanvasRenderingContext2D, g: Game, e: FEnt, x: number, y: number, time: number) {
+function drawModule(ctx: CanvasRenderingContext2D, g: Game, e: FEnt, x: number, y: number, time: number, f: HighFloorId) {
   const out = mainOutput(g, e.design);
-  if (hasArt('dist_module')) {
-    const s = sheet('dist_module');
+  const mn = hart(f, 'module');
+  if (hasArt(mn)) {
+    const s = sheet(mn);
     const f = e.state === 'work' ? 1 + ((Math.floor(time * (s.fps || 6)) + e.id) % Math.max(1, s.frames.length - 1)) : 0;
     ctx.drawImage(s.frames[f % s.frames.length], x, y);
     if (out) ctx.drawImage(itemIcon(out), x + 4, y + 6);
@@ -361,13 +382,14 @@ const SHORT_HOP = 2;
 /** The skiffs: each route's skiffs spaced along its round trip (2 x distance / speed + dwell),
  *  half the dwell at each end; outbound with a crate of the item while the route carries; over a
  *  building at reduced alpha; on a short hop a pulse instead. */
-function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: number, y: number, w: number, h: number) => boolean) {
-  const st = g.s.district!;
-  const s = sheet('skiff');
-  const k = skiffStats(g, 'district');
-  const dwell = HIGH.district.dwell;
+function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: number, y: number, w: number, h: number) => boolean, F: HighFloorId) {
+  const st = g.s[F]!;
+  const kind = carrier(F);
+  const s = sheet(kind);
+  const k = skiffStats(g, F);
+  const dwell = k.dwell;
   for (const r of st.routes) {
-    const e = routeEnds(g, r);
+    const e = routeEnds(g, r, F);
     if (!e) continue;
     const dist = routeDist(e.a, e.b);
     const travel = dist / k.speed;
@@ -402,16 +424,17 @@ function skiffs(ctx: CanvasRenderingContext2D, g: Game, time: number, vis: (x: n
       if (!vis(px - 8, py - 18, 16, 22)) continue;
       const left = out ? e.bx < e.ax : e.ax < e.bx;
       // over a building it goes see-through, so the module under it still reads
-      const over = hentAt(g, 'district', Math.floor(px / TILE), Math.floor((py + lift) / TILE));
+      const over = hentAt(g, F, Math.floor(px / TILE), Math.floor((py + lift) / TILE));
       ctx.globalAlpha = over ? 0.45 : 1;
       // its shadow on the deck
       ctx.fillStyle = rgba(C.ink, 0.25);
       ctx.fillRect(px - 4, py + lift + 1, 8, 1);
       const frame = Math.floor(time * (s.fps || 16)) + i;
-      if (hasArt('skiff')) drawSprite(ctx, s, frame, px, py, left);
+      if (hasArt(kind)) drawSprite(ctx, s, frame, px, py, left);
       else { ctx.fillStyle = C.ink; ctx.fillRect(px - 6, py - 4, 12, 5); ctx.fillStyle = C.brass1; ctx.fillRect(px - 5, py - 3, 10, 3); }
-      // loaded on the outbound leg (and loading at the source): the item rides on the deck
-      if (out && busy) ctx.drawImage(itemIcon(r.item), px - 4, py - 12);
+      // loaded on the outbound leg (and loading at the source): the item rides on the deck (a
+      // barge's hold sits a little higher: it is 12 px tall to the skiff's 10)
+      if (out && busy) ctx.drawImage(itemIcon(r.item), px - 4, py - (kind === 'barge' ? 14 : 12));
       ctx.globalAlpha = 1;
     }
   }
@@ -450,8 +473,8 @@ function coolArc(ctx: CanvasRenderingContext2D, x: number, y: number, cool: numb
   }
 }
 
-function pip(ctx: CanvasRenderingContext2D, x: number, y: number, col: string, blink: boolean, time: number) {
-  drawPip(ctx, x, y, col, blink, time);
+function pip(ctx: CanvasRenderingContext2D, x: number, y: number, col: string, blink: boolean, time: number, shape?: PipShape) {
+  drawPip(ctx, x, y, col, blink, time, shape);
 }
 
 function outline(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, col: string) {
@@ -484,8 +507,8 @@ function antsBox(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
   }
 }
 
-function bayMarks(ctx: CanvasRenderingContext2D, time: number) {
-  const b = HIGH.district.bay;
+function bayMarks(ctx: CanvasRenderingContext2D, time: number, f: HighFloorId) {
+  const b = HIGH[f].bay;
   const x = b.x * TILE, y = b.y * TILE;
   const on = Math.floor(time * 2) % 2 === 0;
   ctx.fillStyle = rgba(on ? C.lamp1 : C.ink, 0.6);
@@ -507,9 +530,9 @@ function label(ctx: CanvasRenderingContext2D, s: string, cx: number, y: number, 
 
 /** The District fold's audit: the box with its countdown and the window's progress; each module's
  *  run share so far as a bar under it; gold once graded. */
-function hauditBox(ctx: CanvasRenderingContext2D, g: Game, time: number) {
+function hauditBox(ctx: CanvasRenderingContext2D, g: Game, time: number, fl: HighFloorId) {
   const a = g.s.haudit;
-  if (!a || a.floor !== 'district') return;
+  if (!a || a.floor !== fl) return;
   const b = a.box;
   const col = a.result ? C.gold : C.teal1;
   antsBox(ctx, b.x, b.y, b.w, b.h, col, rgba(col, 0.1), time);
@@ -522,7 +545,7 @@ function hauditBox(ctx: CanvasRenderingContext2D, g: Game, time: number) {
   ctx.fillRect(b.x * TILE, b.y * TILE, Math.round(b.w * TILE * f), 2);
   const n = Math.max(1, a.t - warm);
   for (const id of a.ids) {
-    const m = hent(g, 'district', id);
+    const m = hent(g, fl, id);
     if (!m) continue;
     const run = a.t > warm ? Math.min(1, (a.run[id] ?? 0) / n) : 0;
     ctx.fillStyle = C.ink;
@@ -538,20 +561,20 @@ export function boxOf(b: { x0: number; y0: number; x1: number; y1: number }): Bo
 }
 
 /** The items a route from `a` to `b` could carry: what a makes that b takes. */
-export function routeItems(g: Game, a: FEnt, b: FEnt): ItemId[] {
+export function routeItems(g: Game, a: FEnt, b: FEnt, f: HighFloorId = 'district'): ItemId[] {
   const d = g.design(a.design);
   if (!d || a.kind !== 'module') return [];
-  return (Object.keys(d.outs) as ItemId[]).filter((it) => takes(g, 'district', b, it));
+  return (Object.keys(d.outs) as ItemId[]).filter((it) => takes(g, f, b, it));
 }
 
-function overlays(ctx: CanvasRenderingContext2D, g: Game, ov: DistrictOverlay, time: number) {
+function overlays(ctx: CanvasRenderingContext2D, g: Game, ov: DistrictOverlay, time: number, F: HighFloorId) {
   if (ov.selected) {
-    const e = hent(g, 'district', ov.selected);
+    const e = hent(g, F, ov.selected);
     if (e) outline(ctx, e.x, e.y, e.w, e.h, C.gold);
   }
   if (ov.box) {
     const b = boxOf(ov.box);
-    const ok = !hfoldRefusal(g, 'district', b);
+    const ok = !hfoldRefusal(g, F, b);
     const col = ok ? C.pipGreen : C.pipRed;
     antsBox(ctx, b.x, b.y, b.w, b.h, col, rgba(col, 0.14), time);
     label(ctx, `${b.w}x${b.h}`, (b.x + b.w / 2) * TILE, b.y > 0 ? b.y * TILE - 14 : (b.y + b.h) * TILE + 3, col);
@@ -560,39 +583,40 @@ function overlays(ctx: CanvasRenderingContext2D, g: Game, ov: DistrictOverlay, t
   const h = ov.hover;
   if (ov.route) {
     // the Route tool: its source in gold, a rubber band to the mouse, the destination green or red
-    const src = ov.from ? hentAt(g, 'district', ov.from.x, ov.from.y) : null;
+    const src = ov.from ? hentAt(g, F, ov.from.x, ov.from.y) : null;
     if (src) {
       outline(ctx, src.x, src.y, src.w, src.h, C.lamp2);
       const sx = (src.x + src.w / 2) * TILE, sy = (src.y + src.h / 2) * TILE;
-      const to = h ? hentAt(g, 'district', h.x, h.y) : null;
+      const to = h ? hentAt(g, F, h.x, h.y) : null;
       if (to && to !== src) {
-        const ok = routeItems(g, src, to).length > 0;
+        const ok = routeItems(g, src, to, F).length > 0;
         const col = ok ? C.pipGreen : C.pipRed;
         outline(ctx, to.x, to.y, to.w, to.h, col);
         flightLine(ctx, sx, sy, (to.x + to.w / 2) * TILE, (to.y + to.h / 2) * TILE, col, time, true, 1);
       } else if (h) flightLine(ctx, sx, sy, (h.x + 0.5) * TILE, (h.y + 0.5) * TILE, C.bone, time, true, 0.8);
     } else if (h) {
-      const e = hentAt(g, 'district', h.x, h.y);
+      const e = hentAt(g, F, h.x, h.y);
       if (e) outline(ctx, e.x, e.y, e.w, e.h, e.kind === 'module' ? C.lamp2 : rgba(C.bone, 0.5));
     }
     return;
   }
   if (!h) return;
   if (ov.place !== null) {
-    const why = hplaceRefusal(g, 'district', ov.place, h.x, h.y);
+    const why = hplaceRefusal(g, F, ov.place, h.x, h.y);
     const ok = !why;
     ctx.globalAlpha = 0.6;
-    const s = hasArt('dist_module') ? sheet('dist_module') : sheet('module');
+    const mn = hart(F, 'module');
+    const s = hasArt(mn) ? sheet(mn) : sheet('module');
     ctx.drawImage(s.frames[0], h.x * TILE, h.y * TILE);
     const out = mainOutput(g, ov.place);
-    if (out) ctx.drawImage(itemIcon(out), h.x * TILE + 4, h.y * TILE + (hasArt('dist_module') ? 6 : 4));
+    if (out) ctx.drawImage(itemIcon(out), h.x * TILE + 4, h.y * TILE + (hasArt(mn) ? 6 : 4));
     ctx.globalAlpha = 1;
     ctx.fillStyle = rgba(ok ? C.pipGreen : C.pipRed, 0.25);
     ctx.fillRect(h.x * TILE, h.y * TILE, TILE, TILE);
     outline(ctx, h.x, h.y, 1, 1, ok ? C.pipGreen : C.pipRed);
     return;
   }
-  const e = hentAt(g, 'district', h.x, h.y);
+  const e = hentAt(g, F, h.x, h.y);
   if (ov.remove) {
     if (e) {
       const ok = e.kind === 'module';
@@ -607,7 +631,7 @@ function overlays(ctx: CanvasRenderingContext2D, g: Game, ov: DistrictOverlay, t
     outline(ctx, e.x, e.y, e.w, e.h, rgba(C.glow, 0.6 + 0.4 * Math.sin(time * 10)));
     label(ctx, '3x', (e.x + 0.5) * TILE, e.y * TILE - 13, C.hot);
   } else if (e) outline(ctx, e.x, e.y, e.w, e.h, rgba(C.bone, 0.7));
-  else if (h.x >= 0 && h.y >= 0 && h.x < highW(g, 'district') && h.y < HIGH.district.h && ov.hoverRoute === null) {
+  else if (h.x >= 0 && h.y >= 0 && h.x < highW(g, F) && h.y < HIGH[F].h && ov.hoverRoute === null) {
     ctx.fillStyle = rgba(C.bone, 0.12);
     ctx.fillRect(h.x * TILE, h.y * TILE, TILE, TILE);
   }

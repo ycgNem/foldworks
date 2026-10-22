@@ -55,7 +55,8 @@ export function floorTags(app: App, L: Layout) {
   if (app.panel) return;
   const fac = app.floor === 'factory';
   // the District (DESIGN.md §21): its Dock, Hopper and Bay, what the skiffs bring them
-  const dist = app.floor === 'district';
+  const dist = !!app.high;
+  const HF = app.high ?? 'district';
   const tileUi = (16 * app.renderer.cam.zoom) / ui.scale;
   const compact = tileUi < 12;
   const tags: FloorTag[] = [];
@@ -66,8 +67,8 @@ export function floorTags(app: App, L: Layout) {
   // that destination's own tag (a tag per belt crowded a busy Dock under eight labels)
   const inflow = { dock: new Map<string, number>(), hopper: new Map<string, number>() };
   if (dist && !compact) {
-    for (const r of g.s.district?.routes ?? []) {
-      const to = g.s.district!.ents.find((e) => e.id === r.to);
+    for (const r of g.s[HF]?.routes ?? []) {
+      const to = g.s[HF]!.ents.find((e) => e.id === r.to);
       if (!to || (to.kind !== 'fdock' && to.kind !== 'fhopper')) continue;
       const m = inflow[to.kind === 'fdock' ? 'dock' : 'hopper'];
       m.set(r.item, (m.get(r.item) ?? 0) + r.flow * 60);
@@ -94,7 +95,7 @@ export function floorTags(app: App, L: Layout) {
     [...m.entries()].sort((p, q) => q[1] - p[1]).slice(0, n).map(([it, pm]) => `{i:${it}} ${pm > 0 ? fmtRate(pm) : '{warn:0}'}`).join('  ') + (m.size ? ' {soft:/min}' : '');
   // the District's east margin (the walk east of the floor, where the next lot stands): the Dock's
   // and the Hopper's tags hang there, beside their buildings, and their inflow rows keep to its room
-  const eastX = dist ? worldRect(app, highW(g, 'district'), 0, 0, 0).x + 6 : 0;
+  const eastX = dist ? worldRect(app, highW(g, HF), 0, 0, 0).x + 6 : 0;
   const pad = tagSize(0, 0, 'left').w;
   const eastRow = (m: Map<string, number>) => {
     let n = 4;
@@ -103,7 +104,7 @@ export function floorTags(app: App, L: Layout) {
   };
 
   // ---- the Dock: coin a minute; the active order's portrait and bars; orders waiting
-  const dock: Ent | FEnt | undefined = dist ? g.s.district?.ents.find((e) => e.kind === 'fdock') : fac ? g.s.factory.ents.find((e) => e.kind === 'fdock') : g.s.ents.find((e) => e.kind === 'dock');
+  const dock: Ent | FEnt | undefined = dist ? g.s[HF]?.ents.find((e) => e.kind === 'fdock') : fac ? g.s.factory.ents.find((e) => e.kind === 'fdock') : g.s.ents.find((e) => e.kind === 'dock');
   const selling = g.incomePerMin() > 0 || !!g.s.orders.active || offeredOrders(g).length > 0;
   if (dock && selling) {
     const r = near(dock);
@@ -112,7 +113,7 @@ export function floorTags(app: App, L: Layout) {
       const head = rate > 0 ? `{coin} {coinc:+${fmtRate(rate)}/min}` : '{coin} {soft:0/min}';
       const o = g.s.orders;
       const d = o.active ? ORDER[o.active] : null;
-      const here = d && (dist ? !d.at || d.at === 'district' : fac || (d.at !== 'factory' && d.at !== 'district')) ? d : null;
+      const here = d && (dist ? !d.at || d.at === HF : fac || (d.at !== 'factory' && d.at !== 'district' && d.at !== 'world')) ? d : null;
       const offered = !o.active ? offeredOrders(g).length : 0;
       const hl = layoutRich(head);
       let cw = hl.w, ch = LINE_H - 2;
@@ -154,7 +155,7 @@ export function floorTags(app: App, L: Layout) {
   }
 
   // ---- the Hopper: the research node, its name and %; a nudge to pick one
-  const hop: Ent | FEnt | undefined = dist ? g.s.district?.ents.find((e) => e.kind === 'fhopper') : fac ? g.s.factory.ents.find((e) => e.kind === 'fhopper') : g.s.ents.find((e) => e.kind === 'hopper');
+  const hop: Ent | FEnt | undefined = dist ? g.s[HF]?.ents.find((e) => e.kind === 'fhopper') : fac ? g.s.factory.ents.find((e) => e.kind === 'fhopper') : g.s.ents.find((e) => e.kind === 'hopper');
   const sel = g.s.research.selected;
   if (hop) {
     const r = near(hop);
@@ -223,8 +224,8 @@ export function floorTags(app: App, L: Layout) {
 
   // ---- the District's Bay: the open project's stage and its %
   if (dist) {
-    const bay = g.s.district?.ents.find((e) => e.kind === 'fbay');
-    const mf = districtMegaFrac(g);
+    const bay = g.s[HF]?.ents.find((e) => e.kind === 'fbay');
+    const mf = districtMegaFrac(g, HF);
     if (bay && mf) {
       const r = near(bay);
       if (onScreen(r)) {

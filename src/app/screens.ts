@@ -15,6 +15,8 @@ import { ICON, textWidth, smallWidth, bigWidth, ellipsize, hasSmallGlyph, LINE_H
 import { keyLabel } from '../engine/input';
 import { itemIcon, sheet, hasArt } from '../render/sprites';
 import { available, researchFrac } from '../sim/systems/research';
+import { worldOf } from '../sim/systems/islands';
+import { WORLDS, type WorldId } from '../data/worlds';
 import { inspireUnlocked, inspiredFrac } from '../sim/systems/inspire';
 import { trophyValue } from '../sim/systems/stats';
 import { Num } from '../engine/num';
@@ -53,7 +55,9 @@ export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options
   // the 180 (docs/hud-180.md): the Swamp Gazette's page and the drawn keyboard
   | 'gazette' | 'keys'
   // Act III (DESIGN.md §21): the Scenario boards (src/app/scenarios.ts)
-  | 'scenarios';
+  | 'scenarios'
+  // Act IV (DESIGN.md §22): the Relocate card and the Legacy tree (src/app/relocate.ts, legacy.ts)
+  | 'relocate' | 'legacy';
 
 /** Screens added from other files (Milestones 5 and 6): drawn in the overlay rect like the rest. */
 const EXTRA = new Map<string, (app: App, r: Rect, L: Layout) => void>();
@@ -327,17 +331,21 @@ const TREE: Record<ResearchId, [number, number, number?]> = {
   sensors: [4, 0], recycling: [4, 0.8, 1], sandwiches: [4, 2.4, 1], floatingCity: [4, 3.2, 1],
   robotics: [5, 0.8, 1], scrapTransmuter: [5, 2.4, 1],
   districtFolds: [6, 0.2, 1], sandwichEngineering: [6, 1.8, 1],
-  // Act IV's page (placeholder positions from the sim agent: the UI agent lays the page out;
-  // each island's chain is a row, Charting's projects the top one)
-  charting: [0, 0], lighthouse: [1, 0], skyAnchor: [2, 0, 1], relocation: [3, 0],
-  skyglassCutting: [0, 0.8, 1], horizonOptics: [1, 0.8, 1],
-  cinderSmelting: [0, 1.6], sunsetDyes: [1, 1.6], sunsetEngineering: [2, 1.6, 1],
-  frostWorks: [0, 2.4, 1], stormCells: [1, 2.4, 1], pocketWeathers: [2, 2.4, 1], thermals: [3, 2.4, 1],
-  relicStudy: [0, 3.2, 1],
+  // Act IV's page (DESIGN.md §22): Charting and what it opens down the left (the World floor, the
+  // Lighthouse, the Sky Anchor, Relocation); each island's chain a row on the right, in the order
+  // the islands are named, its caption above it (ISLE_ROWS); every island name under its node
+  charting: [0, 1.7], lighthouse: [1.1, 0.55], skyAnchor: [1.1, 1.7, 1], relocation: [1.1, 2.85, 1],
+  skyglassCutting: [2.55, 0.2, 1], horizonOptics: [3.65, 0.2, 1],
+  cinderSmelting: [2.55, 1.2, 1], sunsetDyes: [3.65, 1.2, 1], sunsetEngineering: [4.75, 1.2, 1],
+  thermals: [2.55, 2.2, 1], frostWorks: [3.65, 2.2, 1], stormCells: [4.75, 2.2, 1], pocketWeathers: [5.85, 2.2, 1],
+  relicStudy: [2.55, 3.2, 1],
   // Act V's page (placeholder positions from the sim agent: the Last Fold, then each island's tier 5
   // node a row under it)
   lastFold: [0, 1.6], cartography: [1, 0.4], starForging: [1, 1.2, 1], weatherBottling: [1, 2.0], relicEngines: [1, 2.8, 1],
 };
+
+/** Act IV's island rows: the island and its row (TREE's), captioned above its first node. */
+const ISLE_ROWS: [WorldId, number][] = [['pebble', 0.2], ['cinder', 1.2], ['rime', 2.2], ['oldworks', 3.2]];
 
 const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
   pressing: 'ironPlate', surveyEast: 'workshop', copperSmelting: 'copperIngot', wireDrawing: 'copperWire', gearcutting: 'gear',
@@ -349,10 +357,10 @@ const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
   servos: 'servo', sensors: 'sensor', processors: 'processor', recycling: 'mode', hydroponics: 'produce', sandwiches: 'sandwich',
   robotics: 'robotArm', floatingCity: 'mega', scrapTransmuter: 'mega', sandwichEngineering: 'sandwichEngineer', districtFolds: 'fold',
   // Act IV (placeholders until the art director draws the islands' icons)
-  charting: 'district', thermals: 'power', skyglassCutting: 'skyglassLens', horizonOptics: 'horizonLens',
+  charting: 'world', thermals: 'power', skyglassCutting: 'skyglassLens', horizonOptics: 'horizonLens',
   cinderSmelting: 'cinderAlloy', sunsetDyes: 'sunsetDye', sunsetEngineering: 'sunsetGenerator',
   frostWorks: 'frostAlloy', stormCells: 'stormCell', pocketWeathers: 'pocketWeather', relicStudy: 'relicGear',
-  lighthouse: 'mega', skyAnchor: 'mega', relocation: 'mega',
+  lighthouse: 'lighthouseLamp', skyAnchor: 'anchorChain', relocation: 'relocate',
   // Act V (placeholders until the art director's lastFold and items5 icons)
   lastFold: 'fold', cartography: 'mapOfEverywhere', starForging: 'verySmallSun', weatherBottling: 'bottledTuesday', relicEngines: 'quietEngine',
 };
@@ -384,29 +392,42 @@ export const unlockRows = (id: ResearchId) => RESEARCH[id].unlocks.split(' · ')
 
 const NODE_R = 13;
 
-/** Act III's page is open (HudState.treePage holds the first two pages' choice); `drawn` the UI
- *  clock at the tree's last frame (a gap is a fresh opening); `pinned` a page set from outside. */
-const tree = { three: false, drawn: -1, pinned: false };
+/** Act III's or Act IV's page is open (HudState.treePage holds the first two pages' choice);
+ *  `drawn` the UI clock at the tree's last frame (a gap is a fresh opening); `pinned` a page set
+ *  from outside. */
+const tree = { three: false, four: false, drawn: -1, pinned: false };
 /** Open the research tree at a page (the e2e states; a goal that names Act III's research). */
-export function setTreePage(app: App, n: 1 | 2 | 3) {
+export function setTreePage(app: App, n: 1 | 2 | 3 | 4) {
   tree.three = n === 3;
+  tree.four = n === 4;
   tree.pinned = true;
-  if (n !== 3) app.hud.treePage = n;
+  if (n < 3) app.hud.treePage = n as 1 | 2;
+}
+
+/** Act IV's page shows once Act III's does, or as soon as one of its nodes is open or done (Thermals
+ *  opens on Rime with Act II's power, DESIGN.md §22). Under way once District Folds is done or a
+ *  node of it other than Thermals is. */
+function act4Shown(g: App['game'], act3: boolean): boolean {
+  return RESEARCH_LIST.some((d) => d.act === 4 && (g.done(d.id) || available(g, d.id))) || (act3 && g.done('districtFolds'));
+}
+function act4UnderWay(g: App['game']): boolean {
+  return g.done('districtFolds') || RESEARCH_LIST.some((d) => d.act === 4 && d.id !== 'thermals' && g.done(d.id));
 }
 
 /** Each time the tree opens it opens on the newest act under way (the second gate: Act II's page
  *  during Act III): Act III's once its nodes are open (the Drill's stage 3) or one is done, else Act
  *  II's once Folding is done. The tabs pick another page while it stays open. */
-function freshTreePage(app: App, act2: boolean, act3: boolean) {
+function freshTreePage(app: App, act2: boolean, act3: boolean, act4: boolean) {
   const ui = app.ui;
   const fresh = Math.abs(ui.time - ui.dt - tree.drawn) > 1e-6 && tree.drawn !== ui.time;
   tree.drawn = ui.time;
   if (!fresh) return;
   if (tree.pinned) { tree.pinned = false; return; }
   const g = app.game;
-  const three = act3 && ((g.s.mega.stage ?? 0) >= 3 || RESEARCH_LIST.some((d) => d.act === 3 && g.done(d.id)));
+  tree.four = act4 && act4UnderWay(g);
+  const three = !tree.four && act3 && ((g.s.mega.stage ?? 0) >= 3 || RESEARCH_LIST.some((d) => d.act === 3 && g.done(d.id)));
   tree.three = three;
-  if (!three && act2) app.hud.treePage = 2;
+  if (!three && !tree.four && act2) app.hud.treePage = 2;
 }
 
 function researchTree(app: App, r: Rect) {
@@ -417,13 +438,15 @@ function researchTree(app: App, r: Rect) {
   // says so while it does)
   const act2 = g.done('folding');
   const act3 = act2 && (g.done('greatDrill') || RESEARCH_LIST.some((d) => d.act === 3 && g.done(d.id)));
-  freshTreePage(app, act2, act3);
-  const page: 1 | 2 | 3 = !act2 ? 1 : act3 && tree.three ? 3 : app.hud.treePage;
+  const act4 = act2 && act4Shown(g, act3);
+  freshTreePage(app, act2, act3, act4);
+  const page: 1 | 2 | 3 | 4 = !act2 ? 1 : act4 && tree.four ? 4 : act3 && tree.three ? 3 : app.hud.treePage;
   const ready = (n: number) => page !== n && RESEARCH_LIST.some((d) => (d.act ?? 1) === n && available(g, d.id)) ? '!' : undefined;
   const tabs: MenuTab[] = act2 ? [
-    { id: 'tree1', label: 'Workshop', icon: 'workshop', tip: '{u:workshop} the first tree', active: page === 1, onClick: () => { app.hud.treePage = 1; tree.three = false; } },
-    { id: 'tree2', label: 'Act II', icon: 'mega', tip: '{u:factory} the second tree', active: page === 2, onClick: () => { app.hud.treePage = 2; tree.three = false; }, badge: ready(2) },
-    ...(act3 ? [{ id: 'tree3', label: 'Act III', icon: 'star' as const, tip: '{u:district} the third tree · the District', active: page === 3, onClick: () => { tree.three = true; } }] : []),
+    { id: 'tree1', label: 'Workshop', icon: 'workshop', tip: '{u:workshop} the first tree', active: page === 1, onClick: () => { app.hud.treePage = 1; tree.three = false; tree.four = false; } },
+    { id: 'tree2', label: 'Act II', icon: 'mega', tip: '{u:factory} the second tree', active: page === 2, onClick: () => { app.hud.treePage = 2; tree.three = false; tree.four = false; }, badge: ready(2) },
+    ...(act3 ? [{ id: 'tree3', label: 'Act III', icon: 'star' as const, tip: '{u:district} the third tree · the District', active: page === 3, onClick: () => { tree.three = true; tree.four = false; } }] : []),
+    ...(act4 ? [{ id: 'tree4', label: 'Act IV', icon: 'world' as const, tip: '{u:world} the fourth tree · the World and the islands', active: page === 4, onClick: () => { tree.four = true; tree.three = false; }, badge: ready(4) }] : []),
   ] : [];
   const info = Math.min(196, Math.floor(r.w * 0.34));
   const { body, detail } = menuTemplate(app, r, { title: 'Research', accent: T.research, icon: 'research', tabs, detail: info });
@@ -453,13 +476,23 @@ function researchTree(app: App, r: Rect) {
         for (let i = 0; i <= n; i++) if ((i - run + 90) % 9 < 2) { ctx.fillStyle = T.research; ctx.fillRect(Math.round(x0 + ((x1 - x0) * i) / n), Math.round(y0 + ((y1 - y0) * i) / n), 1, 1); }
       } else pencilLine(ui, x0, y0, x1, y1, T.inkSoft, 0.45, 2);
     }
+  // Act IV: each island's row captioned above its first node (offered only there: the others say
+  // "on Cinder Isle", the island the town is on "here")
+  const here = worldOf(g);
+  const isleCaps = page !== 4 ? [] : ISLE_ROWS.map(([w, row]) => {
+    const first = nodes.filter((d) => d.world === w).sort((a, b) => TREE[a.id][0] - TREE[b.id][0])[0];
+    const p = first ? pos(first.id) : { x: area.x, y: Math.round(area.y + (row / 3.2) * area.h) };
+    const s = w === here ? `HERE ON ${WORLDS[w].name.toUpperCase()}` : `ON ${WORLDS[w].name.toUpperCase()}`;
+    const r0 = { x: p.x - NODE_R, y: p.y - NODE_R - 9, w: smallWidth(s), h: 7 };
+    return { w, s, r: r0 };
+  });
   // where each name goes: above or below its node (TREE's flag first), else beside it, whichever
   // runs into no node and no other name and stays on the page; a long name loses its "The" when
   // nothing else fits, and when nothing fits at all the spot that overlaps least wins
   type Spot = { lines: string[]; lx: number; ly: number; lw: number; lh: number; center: boolean };
   const spots = new Map<ResearchId, Spot>();
   {
-    const placed: Rect[] = [];
+    const placed: Rect[] = isleCaps.map((c) => ({ x: c.r.x - 1, y: c.r.y - 1, w: c.r.w + 2, h: c.r.h + 2 }));
     const R2 = NODE_R + 2;
     const over = (a: Rect, b: Rect) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
     for (const d of nodes) {
@@ -482,6 +515,8 @@ function researchTree(app: App, r: Rect) {
         cands.push({ lines, lx, ly, lw, lh, center: where === 'above' || where === 'below' });
       };
       const vert = (lines: string[]) => { add(lines, pref ? 'below' : 'above'); add(lines, pref ? 'above' : 'below'); };
+      // an island's rows stand close together: their names go on two lines first
+      if (page === 4 && d.world && two) vert(two);
       vert([d.name]);
       if (short !== d.name) vert([short]);
       add([d.name], 'right'); add([d.name], 'left');
@@ -503,6 +538,10 @@ function researchTree(app: App, r: Rect) {
       spots.set(d.id, best);
       placed.push({ x: best.lx - 1, y: best.ly - 1, w: best.lw + 2, h: best.lh + 2 });
     }
+  }
+  for (const c of isleCaps) {
+    ui.small(c.s, c.r.x, c.r.y, c.w === here ? T.research : T.inkSoft);
+    ui.hint(c.r.x, c.r.y - 1, c.r.w, 9, [{ text: `{big:${WORLDS[c.w].name.replace(/^the /, 'The ')}}` }, { text: c.w === here ? '{good:the town is here} · its research is offered' : `{soft:its research is offered only there} · {u:relocate} Relocate` }, { text: WORLDS[c.w].rule }], 200);
   }
   // the nodes
   let hovered: ResearchId | null = null;
@@ -568,7 +607,7 @@ function researchTree(app: App, r: Rect) {
   }
   // the right page: the hovered (or selected) node
   const show = hovered ?? sel ?? nodes.find((d) => available(g, d.id))?.id ?? nodes.find((d) => !g.done(d.id))?.id ?? null;
-  nodePage(app, detail!, show, page === 3 && (g.s.mega.stage ?? 0) < 3);
+  nodePage(app, detail!, show, (page === 3 || page === 4) && (g.s.mega.stage ?? 0) < 3 && !!show && (RESEARCH[show].drill ?? 0) > (g.s.mega.stage ?? 0));
 }
 
 /** The right page of the tree: a node's name, state and progress, what it unlocks, what it costs
@@ -617,6 +656,12 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
     y += CHIP_H + 3;
     meter(ui, x, y, w, 6, f, { role: done ? 'good' : 'research' });
     y += 10;
+    // an island's own node (DESIGN.md §22): offered only on its island
+    if (d.world && !done) {
+      const isle = WORLDS[d.world].name;
+      const s = d.world === worldOf(g) ? `{good:${ICON.check} here} · ${isle}` : `{bad:${ICON.lock} on ${isle}} {soft:offered only there}`;
+      y += drawRich(ui, s, x, y, w, T.ink) + 3;
+    }
     // what it unlocks: the data's rows
     y += caption(ui, 'unlocks', x, y);
     for (const row of unlockRows(show)) {
@@ -673,7 +718,8 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
         y += 21;
       }
     } else if (y + 14 <= end) {
-      const why = drillShort ? `{soft:${ICON.lock} needs the Great Drill's stage ${d.drill}}` : `{soft:${ICON.lock} locked}`;
+      const elsewhere = !!d.world && d.world !== worldOf(g);
+      const why = drillShort ? `{soft:${ICON.lock} needs the Great Drill's stage ${d.drill}}` : elsewhere ? `{u:relocate} {soft:Relocate to ${WORLDS[d.world!].name} to research it}` : `{soft:${ICON.lock} locked}`;
       y += drawRich(ui, why, x, y + 2, w, T.inkSoft) + 4;
     }
     // what it leads to

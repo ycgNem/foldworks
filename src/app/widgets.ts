@@ -20,6 +20,8 @@ export const ICON_NAMES = [
   'build', 'research', 'orders', 'stats', 'trophies', 'options', 'fold', 'flow', 'remove', 'rotate',
   'factory', 'workshop', 'coin', 'heart', 'clock', 'lock', 'star', 'play', 'pause', 'fastforward',
   'power', 'heavy', 'codex', 'survey', 'mega', 'kit', 'claim', 'overdrive', 'mode',
+  // Milestones 5-9 (append-only, the atlas's own order)
+  'patents', 'blueprint', 'reset', 'overnight', 'bearings', 'district', 'chute', 'world', 'legacy', 'relocate',
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 

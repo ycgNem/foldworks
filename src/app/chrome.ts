@@ -32,6 +32,8 @@ export const UICON = {
   patents: 29, blueprint: 30, reset: 31, overnight: 32,
   // Act III (append-only; 33 is the atlas's own 'bearings'): pixel-art/act3/ui3.py
   district: 34, chute: 35,
+  // Act IV (append-only): pixel-art/act4
+  world: 36, legacy: 37, relocate: 38,
 } as const;
 export type UIconName = keyof typeof UICON;
 
@@ -43,6 +45,7 @@ const GLYPH: Record<UIconName, string> = {
   power: ICON.bolt, heavy: ICON.cog, codex: '?', survey: ICON.flask, mega: ICON.star, kit: ICON.crate, claim: '^', overdrive: ICON.bolt, mode: '=',
   patents: ICON.star, blueprint: ICON.module, reset: '@', overnight: ICON.clock,
   district: ICON.module, chute: ICON.down,
+  world: ICON.star, legacy: ICON.star, relocate: ICON.right,
 };
 
 /** What each accent colour means (docs/ui-redesign.md): gold is coin and "you can buy this", teal
