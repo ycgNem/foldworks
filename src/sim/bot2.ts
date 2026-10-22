@@ -260,15 +260,15 @@ export const PARTS: Record<string, Pl[]> = {
 };
 
 /** The lab once research needs only motors and concrete (§18 Motors, Megaproject). */
-const PHASE_M = ['loop', 'corridor', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB3', 'motorAsm', 'motorOut', 'gp', 'gravel', 'g18', 'refinery', 'oilSplitM', 'concrete'];
+export const PHASE_M = ['loop', 'corridor', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB3', 'motorAsm', 'motorOut', 'gp', 'gravel', 'g18', 'refinery', 'oilSplitM', 'concrete'];
 /** The lab after the Drill works fold: circuits and concrete for the last research nodes. */
-const PHASE_Z = ['loop', 'corridor', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitZ', 'gp', 'gravel', 'g18', 'refinery', 'oilSplitM', 'concrete'];
+export const PHASE_Z = ['loop', 'corridor', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB2', 'circuitZ', 'gp', 'gravel', 'g18', 'refinery', 'oilSplitM', 'concrete'];
 /** The lab once The Great Drill is researched: the motor assembler feeds a drill-bit assembler. */
 const PHASE_X = ['loopX', 'corridor', 'steel', 'steelSlagHeap', 'gpFeed2', 'wireB3', 'motorAsm', 'drill', 'gp', 'gravel', 'g18', 'refinery', 'oilBoiler', 'concrete'];
 
 // ------------------------------------------------------------------ the plan
 
-export type Dest = { k: 'dock' } | { k: 'hopper' } | { k: 'bay' } | { k: 'mod'; id: string };
+export type Dest = { k: 'dock' } | { k: 'hopper' } | { k: 'bay' } | { k: 'chute' } | { k: 'mod'; id: string };
 
 export type Step =
   /** buy a chunk (`when`: only if this holds, else skipped) */
@@ -278,11 +278,11 @@ export type Step =
   | { k: 'corridor'; name: string; from: [number, number]; enter: Dir; to: 'hopper' | 'dock' }
   /** `pure`: items the line makes itself; an audit that measured them coming in from outside (a
    * neighbour's belt leaking into the box) is cancelled and taken again, up to 3 times */
-  | { k: 'fold'; box: Box; name: string; ready?: (g: Game, b: Act2Bot) => boolean; bg?: boolean; mode?: 'glass' | 'plastic'; pure?: ItemId[] }
+  | { k: 'fold'; box: Box; name: string; ready?: (g: Game, b: Act2Bot) => boolean; bg?: boolean; mode?: 'glass' | 'plastic'; pure?: ItemId[]; nokeep?: boolean }
   /** wait until these designs are folded (a background fold must land before its box changes) */
   | { k: 'folded'; names: string[] }
   /** a module placed by search; `annex`: east of the 12x8 only; `opt`: skipped when it can't go */
-  | { k: 'fmod'; id: string; design: string; to: Dest; by?: Dest; hub?: boolean; annex?: boolean; opt?: boolean }
+  | { k: 'fmod'; id: string; design: string; to: Dest; by?: Dest; hub?: boolean; annex?: boolean; opt?: boolean; zone?: PlaceZone }
   /** buy the annex up to `n` blocks (DESIGN.md §19), once coin is `spare` times the price */
   /** `opt`: only if affordable now (with `spare`), else skipped: the plan never waits on it */
   | { k: 'annex'; n: number; spare?: number; for?: string[]; opt?: boolean }
@@ -536,9 +536,11 @@ export class Act2Bot {
 
   // ---------------------------------------------------------------- hands
 
-  private act(c: Cmd): boolean | null {
+  /** One command through the hands (public: the Act III policy, bot3.ts, shares them, so the two
+   * together keep to the one hand and click pace). */
+  act(c: Cmd): boolean | null {
     const t = this.g.s.tick;
-    if (c.k === 'click' || c.k === 'fclick') {
+    if (c.k === 'click' || c.k === 'fclick' || c.k === 'hclick') {
       if (t < this.clickAt) return null;
       this.clickAt = t + CLICK_TICKS;
       this.log.clicks.push(t);
@@ -1058,7 +1060,7 @@ export class Act2Bot {
     for (const p of this.wanted()) {
       const e = g.entAt(p.x, p.y);
       if (!e || !this.matches(e, p)) return true;
-      if (p.recipe && e.recipe !== p.recipe && recipeKnown(g, RECIPE[p.recipe])) return true;
+      if (p.recipe && e.recipe !== p.recipe && partKnown(g, p)) return true;
     }
     return false;
   }
@@ -1090,7 +1092,7 @@ export class Act2Bot {
           else this.act({ k: 'rotate', x: p.x, y: p.y });
           return;
         }
-        if (p.recipe && e.recipe !== p.recipe && recipeKnown(g, RECIPE[p.recipe])) {
+        if (p.recipe && e.recipe !== p.recipe && partKnown(g, p)) {
           this.act({ k: 'recipe', x: p.x, y: p.y, recipe: p.recipe });
           return;
         }
@@ -1109,7 +1111,7 @@ export class Act2Bot {
       }
       if (g.canPlace(p.kind, p.x, p.y)) continue;
       // a machine whose recipe is not known yet waits (it would pick the wrong one)
-      if (p.recipe && !recipeKnown(g, RECIPE[p.recipe])) continue;
+      if (p.recipe && !partKnown(g, p)) continue;
       // a belt lifted to clear it and laid again is logged as a relay, not a decision (rule 2)
       const relay = this.relays.delete(`${p.x},${p.y}`);
       if (this.buy({ k: 'place', kind: p.kind, x: p.x, y: p.y, rot: this.rotOf(p) }, relay ? 'relay' : p.kind)) return;
@@ -1134,7 +1136,7 @@ export class Act2Bot {
 
   // ---------------------------------------------------------------- folding
 
-  private bgFolds: Extract<Step, { k: 'fold' }>[] = [];
+  bgFolds: Extract<Step, { k: 'fold' }>[] = [];
   private warmSince = new Map<string, number>();
 
   /** Is anything wanted inside the box not built yet? */
@@ -1144,7 +1146,7 @@ export class Act2Bot {
       if (!inside(b, p.x, p.y)) continue;
       const e = g.entAt(p.x, p.y);
       if (!e || !this.matches(e, p)) return true;
-      if (p.recipe && e.recipe !== p.recipe && recipeKnown(g, RECIPE[p.recipe])) return true;
+      if (p.recipe && e.recipe !== p.recipe && partKnown(g, p)) return true;
     }
     return false;
   }
@@ -1184,8 +1186,9 @@ export class Act2Bot {
     if (r) {
       this.decide('fold:' + a.result.grade.letter);
       this.mark('fold:' + s.name);
-      // the Patent Drawer (DESIGN.md §19): a lab line is kept for the next run
-      this.toKeep.push(s.name);
+      // the Patent Drawer (DESIGN.md §19): a lab line is kept for the next run (not the Act III
+      // policy's Chute lines: their slots change from run to run, bot3.ts)
+      if (!s.nokeep) this.toKeep.push(s.name);
       // what was in the box is gone: forget it
       for (const id of [...this.mine]) if (!g.byId.has(id)) this.mine.delete(id);
     }
@@ -1322,7 +1325,7 @@ export class Act2Bot {
       if (!dd && s.opt && this.later.some((q) => q.k === 'fmod' && q.id === dest.id)) return DEFER;
       if (!dd || !items.every((i) => (dd.ins[i] ?? 0) > 0)) return s.opt ? 'done' : `${dest.id} does not take ${items.join(', ')}`;
     }
-    const plan = placeModule(g, d, s.to, s.by, this.mods, s.hub, s.annex ? { x0: FACTORY.w + 2, tx0: FACTORY.w } : undefined);
+    const plan = placeModule(g, d, s.to, s.by, this.mods, s.hub, s.annex ? { x0: FACTORY.w + 2, tx0: FACTORY.w } : undefined, s.zone);
     // an annex copy with no room waits while a block is still to buy
     if (!plan && s.opt) return s.annex && annexPrice(g) ? DEFER : 'done';
     if (!plan) {
@@ -1451,6 +1454,9 @@ export class Act2Bot {
 }
 
 const inside = (b: Box, x: number, y: number) => x >= b.x && y >= b.y && x < b.x + b.w && y < b.y + b.h;
+
+/** A part's recipe is known (a Chute Mouth's "recipe" is the item it pushes out: always). */
+const partKnown = (g: Game, p: Pl) => p.kind === 'chuteMouth' || recipeKnown(g, RECIPE[p.recipe!]);
 
 // ------------------------------------------------------------------ Workshop corridor search
 
@@ -1623,6 +1629,7 @@ function takes(g: Game, e: FEnt, d: Dir, items: ItemId[]): boolean {
   if (e.kind === 'fdock') return items.every((i) => i === 'slag' || i === 'oil' || (i !== 'machineKit' && i !== 'drillBit'));
   if (e.kind === 'fhopper') return items.every((i) => i !== 'slag');
   if (e.kind === 'fbay') return true;
+  if (e.kind === 'fchute') return true;
   if (e.kind !== 'module' || e.rot !== d) return false;
   const dd = g.design(e.design);
   return !!dd && items.every((i) => (dd.ins[i] ?? 0) > 0);
@@ -1702,6 +1709,7 @@ function destPred(g: Game, to: Dest, items: ItemId[], mods: Record<string, numbe
     if (to.k === 'dock') return e.kind === 'fdock' && takes(g, e, d, items);
     if (to.k === 'hopper') return e.kind === 'fhopper' && takes(g, e, d, items);
     if (to.k === 'bay') return e.kind === 'fbay';
+    if (to.k === 'chute') return e.kind === 'fchute';
     return e.kind === 'module' && e.id === mods[to.id] && takes(g, e, d, items);
   };
 }
@@ -1711,8 +1719,12 @@ function destPred(g: Game, to: Dest, items: ItemId[], mods: Record<string, numbe
 const byOuts = (d: ModuleDesign) => (Object.keys(d.outs) as ItemId[]).filter((i) => BYPRODUCTS.has(i));
 const mainOuts = (d: ModuleDesign, by: boolean) => (Object.keys(d.outs) as ItemId[]).filter((i) => !by || !BYPRODUCTS.has(i));
 
+/** A placement confined to a part of the Factory floor (the Act III policy's bench and Chute floor,
+ * bot3.ts): the module goes inside `mods`, its trunks stay inside `trunks`. */
+export interface PlaceZone { mods: Box; trunks: Box }
+
 /** `hub`: several modules will feed this one, so the tiles around its back stay open for their trunks. */
-export function placeModule(g: Game, d: ModuleDesign, to: Dest, by: Dest | undefined, mods: Record<string, number>, hub = false, area?: { x0: number; tx0: number }): FPlan | null {
+export function placeModule(g: Game, d: ModuleDesign, to: Dest, by: Dest | undefined, mods: Record<string, number>, hub = false, area?: { x0: number; tx0: number }, zone?: PlaceZone): FPlan | null {
   const byItems = byOuts(d);
   const main = mainOuts(d, !!by);
   const h = fhazards(g);
@@ -1721,7 +1733,9 @@ export function placeModule(g: Game, d: ModuleDesign, to: Dest, by: Dest | undef
   // plan clears everything else on the 12x8
   // (modules from x0, trunks from tx0; the tiles the hand-laid annex plans hold stay free, and their
   // trunks are joined only at the lane)
-  if (area) {
+  if (zone) {
+    for (let y = 0; y < g.fh; y++) for (let x = 0; x < g.fw; x++) if (!inside(zone.trunks, x, y)) blocked.add(y * FW + x);
+  } else if (area) {
     for (let y = 0; y < g.fh; y++) for (let x = 0; x < area.tx0; x++) blocked.add(y * FW + x);
     for (const k of ANNEX_HELD) if (k !== 3 * FW + 12) blocked.add(k);
   } else {
@@ -1736,6 +1750,7 @@ export function placeModule(g: Game, d: ModuleDesign, to: Dest, by: Dest | undef
   for (let y = 0; y < g.fh; y++)
     for (let x = area?.x0 ?? 0; x < g.fw; x++) {
       if (g.fentAt(x, y) || blocked.has(y * FW + x) || h.arrive[y * FW + x]) continue;
+      if (zone && !inside(zone.mods, x, y)) continue;
       for (let rot = 0 as Dir; rot < 4; rot = (rot + 1) as Dir) {
         const fx = x + DX[rot], fy = y + DY[rot];
         if (!finb(g, fx, fy)) continue;

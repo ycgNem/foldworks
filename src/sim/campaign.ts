@@ -7,6 +7,7 @@
 import type { Game } from './Game';
 import { Bot } from './bot';
 import { ANNEX1, Act2Bot, LANE, PLAN2, type Step as Step2 } from './bot2';
+import { Act3Bot } from './bot3';
 import { TICK_RATE } from '../engine/time';
 import { previewPatents, reorganizeRefusal, runSeconds } from './reorganize';
 import { patentRefusal, hasPatent } from './patents';
@@ -23,6 +24,16 @@ export const PATENT_PRIORITY: PatentId[] = [
   'shovelFrog', 'grant', 'quickAudit', 'coalRights', 'steelCharter', 'moreAuditors', 'nightShift',
   'glassNotes', 'circuitPatent', 'widerBox', 'nightWatch', 'draughtsman', 'lightsOn', 'freshDies', 'nestedBoxes', 'sideIntake',
   'labAssistant', 'orderClerk', 'stampPress', 'drawerSpace',
+];
+
+/** The Act III nodes (DESIGN.md §21 Patents), bought once a run has reached the District, after
+ * PATENT_PRIORITY's (so a campaign that never gets there spends as before): the Charter first (the
+ * District open from the first minute, Zoning and Chutes known), then Bearings and Servos known, the
+ * first lot, faster skiffs, the Dispatcher, the bigger nest; chemistry's heads last (this player's
+ * District does not run chemistry yet). */
+export const PATENT_PRIORITY_3: PatentId[] = [
+  'zoningCharter', 'bearingPatent', 'districtDeeds', 'longSkiffs', 'dispatcher', 'biggerNest', 'wideDistrictBox',
+  'chemNotes', 'senseNotes', 'roboticsPatent',
 ];
 
 /** More Gizmo chains for the Factory floor, once the Surveyor's Charter halves the claims of its
@@ -51,6 +62,8 @@ export interface RunLog {
   end: number;
   /** the planner's hand-over to the Act II policy, seconds into the run (-1: never) */
   handover: number;
+  /** the Act II policy's hand-over to the Act III policy (bot3.ts), seconds into the run (-1: never) */
+  act3: number;
   /** milestones, seconds into the run */
   at: Record<string, number>;
   /** each minute: coin per minute averaged over the last 5 minutes (one-offs excluded) */
@@ -88,8 +101,12 @@ export interface CampaignOpts {
   /** a loop that burns its coin before each reset (the final round): called once a run when the
    * loop's reset time is reached, before the reset; it may act and step the game */
   burn?: (g: Game) => void;
-  /** called once a second */
-  onSecond?: (g: Game, run: number, bot: Act2Bot | null) => void;
+  /** hand over to the Act III policy (bot3.ts) once the Act II plan is done and the Great Drill's
+   * stage 3 stands (default false: the Act I-II pace tests' campaigns stop at the Act II plan's end,
+   * as they were measured; tests/pace-act3.test.ts plays with it) */
+  act3?: boolean;
+  /** called once a second (`act3`: the Act III policy, once it has the hands) */
+  onSecond?: (g: Game, run: number, bot: Act2Bot | null, act3?: Act3Bot | null) => void;
 }
 
 /** Play runs in a row on `g` (a fresh game). */
@@ -101,8 +118,10 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
     const start = g.s.tick;
     const planner = new Bot(g, 'planner');
     let bot: Act2Bot | null = null;
+    let act3: Act3Bot | null = null;
     let doneAt: number | null = null;
     let handover = -1;
+    let act3At = -1;
     const perMin: number[] = [];
     const preview: number[] = [];
     /** a Committee order filling (its reputation opens the Great Drill's later stages), by minute */
@@ -113,14 +132,28 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
     let burned = false;
     // the Patents, spent first thing in the new run (the tree screen, one click a hand-beat)
     const bought: PatentId[] = [];
+    // the Draughtsman's queue is kept through a reset: a design queued last run unfolds as soon as it
+    // can, and a lab design over the Act I chains (Circuits at (12,2)) would break the slice's
+    // copper line first (seen in the 40 h campaign's fifth run). The player empties the queue at
+    // the start of a run; the Act II bot queues what its plan folds again when it takes over.
+    if (o.act3) for (const id of [...g.s.meta.queue]) g.act({ k: 'queueKept', id });
+    const list = logs.some((l) => l.act3 >= 0) ? [...PATENT_PRIORITY, ...PATENT_PRIORITY_3] : PATENT_PRIORITY;
     for (;;) {
-      const next = PATENT_PRIORITY.find((id) => !hasPatent(g, id) && !patentRefusal(g, id));
+      const next = list.find((id) => !hasPatent(g, id) && !patentRefusal(g, id));
       if (!next) break;
       if (!g.act({ k: 'patent', id: next }).ok) break;
       bought.push(next);
       g.step(TICK_RATE / 4);
     }
-    while (runSeconds(g) < cap && !(o.horizon && g.s.tick >= o.horizon * TICK_RATE)) {
+    // a campaign played to a horizon (Act III's 40 h, tests/pace-act3.test.ts) resets at a run's
+    // cap as soon as the Reorganize may be taken (checked each minute), playing on until it may:
+    // the horizon, not the cap, ends it
+    const toHorizon = !!o.horizon && o.loopAt === undefined && !o.noReset && run < o.runs;
+    while (!(o.horizon && g.s.tick >= o.horizon * TICK_RATE)) {
+      if (runSeconds(g) >= cap) {
+        if (!toHorizon) break;
+        if ((g.s.tick - start) % (60 * TICK_RATE) === 0 && !reorganizeRefusal(g)) { reset = true; break; }
+      }
       if (!bot) {
         planner.update();
         if (planner.step >= planner.plan.length) doneAt ??= g.s.tick;
@@ -131,10 +164,20 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
           bot = new Act2Bot(g, {}, [...extra, ...PLAN2]);
           handover = runSeconds(g);
         }
-      } else bot.update();
+      } else if (act3) act3.update();
+      else {
+        bot.update();
+        // Act III (DESIGN.md §21): once the Act II plan is through and the Great Drill's stage 3
+        // stands, the Act III policy takes the hands (the Act II bot stays on as its builder)
+        if (o.act3 && bot.step >= bot.plan.length && g.s.mega.stage >= 3) {
+          act3 = new Act3Bot(g, bot);
+          act3At = runSeconds(g);
+        }
+      }
       g.tick();
-      bot?.tick();
-      if (g.s.tick % TICK_RATE === 0) o.onSecond?.(g, run, bot);
+      if (act3) act3.tick();
+      else bot?.tick();
+      if (g.s.tick % TICK_RATE === 0) o.onSecond?.(g, run, bot, act3);
       if (o.loopAt !== undefined && g.s.tick % TICK_RATE === 0) {
         const at = o.loopAt === 'slice' ? (handover >= 0 ? handover : Infinity) : o.loopAt;
         if (runSeconds(g) >= at && o.burn && !burned) { burned = true; o.burn(g); }
@@ -152,7 +195,7 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
         const act = g.s.orders.active;
         committee.push(act && ORDER[act].customer === 'committee' ? orderFrac(g, act) : -1);
         const m = preview.length;
-        if (o.loopAt === undefined && !o.noReset && run < o.runs && bot && bot.step >= bot.plan.length && m > stallMin && p.now >= (o.minPatents?.(run) ?? 1) && preview[m - 1] - preview[m - 1 - stallMin] < stallGain && (committee[m - 1] < 0 || committee[m - 1] === committee[m - 1 - stallMin]) && !g.s.audits.length && !g.s.faudit) {
+        if (o.loopAt === undefined && !o.noReset && run < o.runs && bot && (act3 ? act3.done() : bot.step >= bot.plan.length) && m > stallMin && p.now >= (o.minPatents?.(run) ?? 1) && preview[m - 1] - preview[m - 1 - stallMin] < stallGain && (committee[m - 1] < 0 || committee[m - 1] === committee[m - 1 - stallMin]) && !g.s.audits.length && !g.s.faudit) {
           reset = true;
           break;
         }
@@ -164,7 +207,7 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
     const t0 = start / TICK_RATE;
     for (const [k, v] of Object.entries({ ...planner.log.at, ...(bot?.log.at ?? {}) })) at[k] = v - t0;
     const log: RunLog = {
-      run, start: start / TICK_RATE, end: end / TICK_RATE, handover, at, perMin, preview,
+      run, start: start / TICK_RATE, end: end / TICK_RATE, handover, act3: act3At, at, perMin, preview,
       patents: reset ? pv.now : 0, peakPerMin: Math.max(0, ...perMin.filter((_, i) => i >= 4)), bought, megaStage: g.s.mega.stage,
       ...byTime([...planner.log.decisions, ...(bot?.log.decisions ?? [])].map((t) => t - t0), [...planner.log.what, ...(bot?.log.what ?? [])]),
       clicks: [...planner.log.clicks, ...(bot?.log.clicks ?? [])],
