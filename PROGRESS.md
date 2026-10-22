@@ -2,6 +2,33 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
+## Start here (2026-10-22, overnight run): every milestone built on `m9-worlds`
+
+Milestones 7-14 are built on the branch `m9-worlds` (not yet merged into `main`, nothing pushed):
+Act III, the second gate (passed with conditions), Act IV (islands, the World, Relocate, Legacy),
+Act V (the Last Fold, Kernels, the Seed, Beyond, tier 5, the Endless Ledger), the long tail (205
+trophies, the Codex and Unit 7's ending, 15 Challenges, 8 scenarios, 41 skins, photo mode), sound,
+onboarding, and performance/saves/release (60+ fps on every full floor, 31 KB saves, CI, the
+README). Each piece's own status section follows below; DECISIONS.md has every decision.
+
+### Owed to the owner
+- **Play from the 15 h checkpoint** (`e2e/out/checkpoints/seed1000-15h.txt`): the second gate's
+  condition, as at the first.
+- **Listen**: the mix and ambience (Milestone 12) were never heard by anyone.
+- **Decide the derivative flags** in DECISIONS.md (each "Flagged as derivative (owner to decide)"
+  list): the tier 3 chemistry (Factorio), the Legacy automation (Antimatter Dimensions), islands
+  with rules (Space Age), the third layer and its tree (AD's Reality), infinite orders (shapez),
+  wide belts (Factorio), alternate recipes (Satisfactory), trophy bonuses (AD, Cookie Clicker),
+  efficiency boards (Zachtronics).
+- **To publish**: merge `m9-worlds` into `main`, push, and set the repository's Pages source to
+  "GitHub Actions" (`.github/workflows/deploy.yml`). No itch.io page and no desktop build.
+
+### Measured vs estimated
+- Measured by bots: Acts I-III to 40 h (seed 1000; DESIGN.md §21 Pacing), performance (§25), save
+  size (§20).
+- Estimated only: Act IV's and Act V's pacing (§22, §23) until the Act IV bot (being written) and
+  an Act V bot measure them; the new Challenges' goal times (§24).
+
 ## Status (2026-10-22, late night): Milestone 11's screens, built
 
 Built in a worktree off `m9-worlds` (the skin art merged in), app, UI and e2e code, the skin lookup
