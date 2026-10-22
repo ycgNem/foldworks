@@ -24,8 +24,9 @@ export async function openGame(browser, { w = 1280, h = 720, query = '', fresh =
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
   page.on('pageerror', (e) => errors.push(`[pageerror] ${e.stack ?? e.message}`));
   if (fresh) await page.addInitScript(() => { try { if (!sessionStorage.getItem('__kept')) { localStorage.clear(); sessionStorage.setItem('__kept', '1'); } } catch {} });
-  await page.goto(BASE + (query ? '?' + query : ''));
-  await page.waitForFunction(() => window.__app && window.__app.ready, null, { timeout: 30000 });
+  // the dev server serves ~1,050 modules and sheets unbundled: a cold load takes ~40 s on this PC
+  await page.goto(BASE + (query ? '?' + query : ''), { timeout: 120000 });
+  await page.waitForFunction(() => window.__app && window.__app.ready, null, { timeout: 120000 });
   return { page, errors };
 }
 
