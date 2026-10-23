@@ -28,9 +28,9 @@ DECISIONS.md; every number's derivation is in DESIGN.md.
   islands with rules (Rime was already re-derived away from Space Age's Aquilo). Also: the Legacy
   automation and the third layer (Antimatter Dimensions), infinite orders (shapez), alternate
   recipes (Satisfactory), trophy bonuses (AD, Cookie Clicker), efficiency boards (Zachtronics).
-- **GitHub Pages**: set the repository's Pages source to "GitHub Actions"; the deploy workflow
-  (`.github/workflows/deploy.yml`) runs on every push to `main`. No itch.io page and no desktop
-  build.
+- **GitHub Pages** is already live: the deploy workflow (`.github/workflows/deploy.yml`) builds and
+  publishes on every push to `main` (typecheck, the fast tests, the build). No itch.io page and no
+  desktop build.
 
 ### What is measured and what is not
 - **Measured by bots** (seed 1000): Acts I-III to 40 h (DESIGN.md §21 Pacing: the District at
