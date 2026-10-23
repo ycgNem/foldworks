@@ -2,45 +2,57 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
-## Start here (2026-10-22, overnight run): every milestone built on `m9-worlds`
+## Start here (2026-10-22): every milestone built, on `main`
 
-Milestones 7-14 are built on the branch `m9-worlds` (not yet merged into `main`, nothing pushed):
-Act III, the second gate (passed with conditions), Act IV (islands, the World, Relocate, Legacy),
-Act V (the Last Fold, Kernels, the Seed, Beyond, tier 5, the Endless Ledger), the long tail (205
-trophies, the Codex and Unit 7's ending, 15 Challenges, 8 scenarios, 41 skins, photo mode), sound,
-onboarding, and performance/saves/release (60+ fps on every full floor, 31 KB saves, CI, the
-README). Each piece's own status section follows below; DECISIONS.md has every decision.
+Milestones 0-14 are built and merged into `main` (pushed 2026-10-22). Acts I-V, all three reset
+layers (Reorganize, Relocate, the Last Fold), the long tail (205 trophies, the Codex and Unit 7's
+ending, 15 Challenges, 8 scenarios, 41 skins, photo mode), sound, onboarding, and release work
+(60+ fps on every full floor, ~31 KB saves, CI, the README). Every decision and its reason is in
+DECISIONS.md; every number's derivation is in DESIGN.md.
+
+### Play it
+1. Double-click **`Play.bat`** (it uses the portable Node, installs on the first run, and opens
+   http://127.0.0.1:5210). The first load takes 40-90 s: the dev server serves ~1,050 files.
+2. A new game starts at Act I. **To start at 15 h** (the second gate's checkpoint: run 3, a District
+   of 108 pieces, 46.3M coin): Options -> **Import save**, and paste the whole of
+   **`docs/checkpoint-15h.txt`** (one line). The 1, 5, 30 and 40 h checkpoints the bots write are in
+   `e2e/out/checkpoints/` on this PC (not in the repo; the old format, which still loads).
+3. Keys are on the Options -> Keys page (rebindable); `G` or **Stuck?** finds what is stopping you;
+   `H` or **Photo** is photo mode.
 
 ### Owed to the owner
-- **Play from the 15 h checkpoint** (`e2e/out/checkpoints/seed1000-15h.txt`): the second gate's
-  condition, as at the first.
+- **Play from the 15 h checkpoint**: the second gate's condition (ROADMAP.md Milestone 8).
 - **Listen**: the mix and ambience (Milestone 12) were never heard by anyone.
-- **Decide the derivative flags** in DECISIONS.md (each "Flagged as derivative (owner to decide)"
-  list): the tier 3 chemistry (Factorio), the Legacy automation (Antimatter Dimensions), islands
-  with rules (Space Age), the third layer and its tree (AD's Reality), infinite orders (shapez),
-  wide belts (Factorio), alternate recipes (Satisfactory), trophy bonuses (AD, Cookie Clicker),
-  efficiency boards (Zachtronics).
-- **To publish**: merge `m9-worlds` into `main`, push, and set the repository's Pages source to
-  "GitHub Actions" (`.github/workflows/deploy.yml`). No itch.io page and no desktop build.
+- **Decide the derivative flags** (each "Flagged as derivative (owner to decide)" list in
+  DECISIONS.md). The largest debt is Factorio's, as one set: the tier 3 chemistry, wide belts and
+  islands with rules (Rime was already re-derived away from Space Age's Aquilo). Also: the Legacy
+  automation and the third layer (Antimatter Dimensions), infinite orders (shapez), alternate
+  recipes (Satisfactory), trophy bonuses (AD, Cookie Clicker), efficiency boards (Zachtronics).
+- **GitHub Pages**: set the repository's Pages source to "GitHub Actions"; the deploy workflow
+  (`.github/workflows/deploy.yml`) runs on every push to `main`. No itch.io page and no desktop
+  build.
 
-### The Acts IV-V review and its fixes
-The idle-critic reviewed Acts IV-V and the long tail (DECISIONS.md "The Acts IV-V review"): Act
-IV conditional, Act V failing on its economy, the long tail a checklist. Every finding was decided
-and fixed the same night: the Committee no longer reorganizes offline (the report had shown coin
--21.3M); the high floors appear in the offline report; the replay costs ~5 s, not 24-42 s;
-Automation survives the Last Fold; each universe's first Relocate is worth ~33-35 Legacy again;
-Kernels count kinds (a copy a quarter), so the first Last Fold pays ~11; the Seed carries Acts
-I-II's research; Rime re-derived without the Heater (it was Space Age's Aquilo); rubble stays
-cleared and clears by drag; the Town Plan covers every high floor; trophy caps at most 1.5x and
-Act IV-V trophies pay Act IV-V rules; the Ledger turns through tier 3-5 goods with lore folios.
+### What is measured and what is not
+- **Measured by bots** (seed 1000): Acts I-III to 40 h (DESIGN.md §21 Pacing: the District at
+  ~10 h, the Floating City's first stage by ~11 h); performance (§25: 92-193 fps, a full game's
+  tick 0.9 ms); save size (§20); offline compute (~5 s for 8 h away).
+- **Act IV opens when Act III's Megaprojects stand** (the City and the Transmuter: a decision of
+  the last bot pass, because without it the World opened at 11:46 and the first Relocate came at
+  18:00 against §22's 40-45 h). The bot builds the City's first stage and most of its second and
+  the Transmuter's research, but **can't finish the two projects**: its Factory bench runs out of
+  room for the last two groups (Sandwiches II, Coils II; both chains work when they fit). So **Act
+  IV and Act V pacing is unmeasured** (model estimates in §22-§23), and the bot's longest Act III
+  waits are 18-40 min (§16 wants 10). The next step is a sixth bot pass: room on the bench for
+  those two groups, then re-measure the first Relocate and the island climb.
+- **Estimated only**: everything from the World on (the first Relocate, the climb, the Last Fold,
+  Beyond), and the new Challenges' goal times (§24).
 
-### Measured vs estimated
-- Measured by bots: Acts I-III to 40 h (seed 1000; DESIGN.md §21 Pacing), performance (§25), save
-  size (§20). The campaign now reaches District Folds at 15:02 and the World at 15:41, but never
-  Relocates: no bot line yet makes Relocation's batteries, umbrellas and Sandwich Engineers (a
-  third bot pass is on it, with the idle windows its plan leaves in later Act III runs).
-- Estimated only: the first Relocate and the island climb, all of Act V (§22, §23), the new
-  Challenges' goal times (§24).
+### Where things are
+PLAN.md (what and why), DESIGN.md (every number: §16 pacing rules, §21-§25 Acts III-V, the long
+tail, performance), ROADMAP.md (milestones and the two gates), DECISIONS.md (every decision, the
+derivative flags, both reviews), STYLE.md (the look), docs/endgame.md (the Act IV-V contracts and
+the art as built), README.md (how to run, test and build). The status sections below are the
+session-by-session history, newest first.
 
 ## Status (2026-10-22, late night): Milestone 11's screens, built
 

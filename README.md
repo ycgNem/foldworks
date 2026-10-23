@@ -89,6 +89,10 @@ On this PC, double-click **`Play.bat`**: it uses the portable Node at
 `%USERPROFILE%\tools\node-v22.20.0-win-x64` when Node isn't installed, installs the tools on the
 first run and opens the game at http://127.0.0.1:5210.
 
+To start 15 hours in (Act III, a District standing): Options → **Import save**, then paste the
+whole of `docs/checkpoint-15h.txt`. Where the project stands and what is still open: the top of
+`PROGRESS.md`.
+
 From a terminal (Git Bash), put the portable Node on the PATH first:
 
 ```bash

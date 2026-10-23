@@ -26,6 +26,13 @@ against `DESIGN.md` §16.
 | 13 | Onboarding, UX and accessibility | all | Polish |
 | 14 | Balance, performance and release | all | Release |
 
+**Status (2026-10-22):** every milestone is built and merged into `main`. Both gates are passed
+with conditions (the owner's play owed at each). Milestones 9-11 were reviewed by the idle-critic
+and every finding fixed (DECISIONS.md "The Acts IV-V review"). Open from Milestone 14: the pace sim
+does not yet play the whole game to 100 h (the bots reach Act III's Megaprojects but not the
+World; Act IV-V pacing is model estimates), and the frame rate was measured on a fast laptop, not
+a mid one. PROGRESS.md's "Start here" is the current picture.
+
 ---
 
 ## Milestone 0 — Foundation
