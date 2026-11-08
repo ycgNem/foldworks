@@ -1003,7 +1003,7 @@ and run 3 missed it on both seeds at 1:22.
 | Now: run 2 passes run 1's peak at | open: 96% at 15 min | **0:12** |
 | Now: run 3 passes run 2's at | **0:12** | **0:10** |
 | Now: income at 5, 10, 15, 20 min of run 2 | 743, 11.8K, 14.6K, 12.3K | 743, 11.9K, 14.9K, 12.2K |
-| Now: Patents a run (Drill stage after) | 14, 7, 0 (1, 2, 3) | 14, 7, 0 (1, 2, 3) |
+| Now: Patents a run (Drill stage after) | 14, 6, 0 (1, 2, 3) | 14, 6, 0 (1, 2, 3) |
 
 - Seed 1000's run 2 is open (`BACK_IN_OPEN`): at 15 min it is at 96% of run 1's 15.2K peak, then lays
   the Bay floor (goods to the Drill, not the Dock) and resets at stage 2 before rebuilding the three
@@ -1012,9 +1012,10 @@ and run 3 missed it on both seeds at 1:22.
   idle minutes): its Reorganize brings back 7 designs, 26 research nodes and 41 Patents to spend (the
   old head starts refunded by the v13 migration). The campaign's player then makes 627, 2.1K, 13.0K
   and 15.9K a minute at 1, 5, 9 and 13 min (its Act II floor); the District comes after.
-- The reset loops stay under the designed runs (rule: never beat it): a loop at the slice end 2.45 an
-  hour, at 1 h 2.45, at 2 h 3.42 (a tie: the same products and Drill stages), against 3.42; the burn
-  loop out-filed it (3.59) until the bills term was filed like the designs (below), which closes it.
+- The reset loops stay under the designed runs (rule: never beat it): a loop at the slice end 1.63 an
+  hour, at 1 h 1.79, at 2 h 3.10, burning its coin at 35 min 0.82, against the designed 3.26 (14 + 6
+  Patents in 6:08). Before the bills term was filed like the designs (below) the burn loop out-filed
+  the designed run (3.59 against 3.42).
 - **The bills term is filed** (`meta.billsFiled`): only a rise over the best on file pays, as for a
   product's design; a Relocate or a Last Fold starts it again.
 - Rule 6 (never resetting) and the idle tests of runs 2 and 3 (`pace-idle-run2-1000`,
