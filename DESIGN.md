@@ -905,6 +905,36 @@ What a Patent buys now is what a returning run still rebuilds by hand:
 - The tree is now **33 nodes, 65 Patents**; the Town Archive (Legacy) knows Zoning and Chutes
   instead of Act I.
 
+### Measured pace, the returning run (rule 3, `tests/pace-reorganize.test.ts`)
+
+Rule 3 is now "a returning run is back to the run before's peak income (its 5-minute coin per minute)
+in **20 minutes or less** of play" (`BACK_IN`); it was "in a third of the run before" (1:27 and 1:00),
+and run 3 missed it on both seeds at 1:22.
+
+| | seed 1000 | seed 8919 |
+|---|---|---|
+| Before (the playability branch): run 2 passes run 1's peak at | 0:37 | 0:16 |
+| Before: run 3 passes run 2's at | 1:14-1:22 (open) | 1:22 (open) |
+| Now: run 2 passes run 1's peak at | open: 96% at 15 min | **0:12** |
+| Now: run 3 passes run 2's at | **0:12** | **0:10** |
+| Now: income at 5, 10, 15, 20 min of run 2 | 743, 11.8K, 14.6K, 12.3K | 743, 11.9K, 14.9K, 12.2K |
+| Now: Patents a run (Drill stage after) | 14, 7, 0 (1, 2, 3) | 14, 7, 0 (1, 2, 3) |
+
+- Seed 1000's run 2 is open (`BACK_IN_OPEN`): at 15 min it is at 96% of run 1's 15.2K peak, then lays
+  the Bay floor (goods to the Drill, not the Dock) and resets at stage 2 before rebuilding the three
+  annex Gizmo chains that made run 1's peak at 4 h. The bot's reset rule, not the returning run.
+- **The 15 h checkpoint** (`docs/checkpoint-15h.txt`; the critic measured 90/min, still 90 after 30
+  idle minutes): its Reorganize brings back 7 designs, 26 research nodes and 41 Patents to spend (the
+  old head starts refunded by the v13 migration). The campaign's player then makes 627, 2.1K, 13.0K
+  and 15.9K a minute at 1, 5, 9 and 13 min (its Act II floor); the District comes after.
+- The reset loops stay under the designed runs (rule: never beat it): a loop at the slice end 2.45 an
+  hour, at 1 h 2.45, at 2 h 3.42 (a tie: the same products and Drill stages), against 3.42; the burn
+  loop out-filed it (3.59) until the bills term was filed like the designs (below), which closes it.
+- **The bills term is filed** (`meta.billsFiled`): only a rise over the best on file pays, as for a
+  product's design; a Relocate or a Last Fold starts it again.
+- Rule 6 (never resetting) and the idle tests of runs 2 and 3 (`pace-idle-run2-1000`,
+  `pace-idle-run3-8919`) still pass.
+
 ### The Patent tree before the playability pass (`src/data/patents.ts`, 29 nodes, 40 Patents in all; history)
 
 Flat prices with prerequisites, never a growing price; no "+X% everything" node. A price is about

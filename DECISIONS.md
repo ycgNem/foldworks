@@ -3088,6 +3088,17 @@ reason:
   run took to pass it (`meta.caughtUp`, kept in the run history), or `RULES.backInMinutes` (the
   campaign's measure) before one has. A run whose District opened before its floor's peak was noted
   (a save from before) says "your Act II floor" with no number rather than promise its 574K.
+- **The bills term is filed like the designs** (`meta.billsFiled`): only a rise over the best on file
+  pays (a Relocate or a Last Fold starts it again). Measured: a returning run rebuilds its floor in
+  minutes, so a 35-minute reset loop filed 1-4 bills Patents a run and out-filed the designed runs
+  (3.59 against 3.42 an hour). Filing it closes the loop the way the designs' record did.
+- **A returned design's spare copies hold no claim until placed**: they are dies in the inventory.
+  (Claims still cap what digs: placing past them is refused.)
+- **Tried and dropped: the campaign's player keeping the slice's chain designs.** Keeping the wire
+  and ingot lines left them standing unfolded next run (their designs came back, so the planner never
+  folded them) on tiles the Act II lab is laid over, and the Act II policy waited on them for the
+  whole run (keeping only the Gizmo works was not measured to the end). A bot artefact, recorded so the next pass does
+  not retry it. Seed 1000's run 2 is left open in the pace test (`BACK_IN_OPEN`, with the reason).
 - **The Town Archive (Legacy) is re-derived**, since every run after a reset knows Acts I-II: it
   now knows Zoning and Chutes in every run of every world (the Zoning Charter's research, kept
   through a Relocate). The Seed keeps the Archive (lastfold.ts), so a new universe knows them too.
