@@ -856,7 +856,7 @@ export async function act3Setup(state) {
   if (state === 'megaCity' || state === 'megaTransmuter') {
     g.s.research.done.push('servos', 'floatingCity', 'scrapTransmuter');
     g.s.megas = {
-      city: { stage: 1, progress: { liftRotor: N.of(86), sandwich: N.of(410), glass: N.of(2650) } },
+      city: { stage: 1, progress: { liftRotor: N.of(86), steel: N.of(1400), glass: N.of(2500) } },
       transmuter: { stage: 0, progress: { transmuterCoil: N.of(12), steel: N.of(5200) } },
     };
     (await mod('/src/app/act2screens.ts')).setMegaTab(state === 'megaCity' ? 'city' : 'transmuter');

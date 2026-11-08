@@ -62,12 +62,24 @@ describe(`Act III pacing to 40 h (seed ${SEED})`, () => {
     expect(r.stages[0].at).toBeLessThan(25 * H);
   }, T);
 
+  // The core ending (DESIGN.md §21, the playability pass): the Floating City complete, aimed at
+  // 18-25 h for a player; the planner bot measured 12:19 (pace-act3) and 12:40 (pace-act4), in the
+  // first run that builds a District, with rules 1 and 2 at 7.1 min over that stretch.
+  it('completes the Floating City (the core ending) by 25 h, in the first Act III run', () => {
+    const r = act3Campaign(SEED);
+    const city = r.stages.find((s) => s.id === 'city' && s.stage === 2);
+    console.log(`[pace] the core ending: the Floating City complete at ${hmm(city?.at ?? null)} (aim 18-25 h for a player)`);
+    expect(city).toBeDefined();
+    expect(city!.at).toBeLessThan(25 * H);
+    const first = r.logs.find((l) => l.act3 >= 0)!;
+    expect(city!.at).toBeLessThan(first.end);
+  }, T);
+
   // Measured and printed, not asserted (DESIGN.md §21 Pacing): rules 1 and 2 hold while the
   // District grows, a copy every few minutes and a lot as the routes or the tiles run out; once the
   // floor is full (about 140 groups on 180 routes, every lot) this player has nothing left to
   // build: it builds chemistry through District Folds and Batteries (the chemistry corner,
-  // src/sim/bot3.ts; Hydroponics' sludge, the City's stage 2 and the Transmuter stay out of reach:
-  // oil, DECISIONS.md "The third pass"). It then resets (src/sim/campaign.ts ACT3_FULL), so the
+  // src/sim/bot3.ts), the City's Spires (the core ending, about 12:20) and the chain past it. It then resets (src/sim/campaign.ts ACT3_FULL), so the
   // worst wait is about the reset's 10 minutes (measured 10.2-10.8 in the third pass).
   it('rules 1 and 2 over Act III (logged; OPEN past the first megaproject stage)', () => {
     const r = act3Campaign(SEED);

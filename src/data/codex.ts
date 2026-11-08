@@ -234,7 +234,16 @@ export const CODEX_PAGES: CodexPage[] = [
       'IT IS SIGNED UNIT 6. UNIT 7 HAS FILLED THE ORDER. UNIT 7 IS STILL FILLING IT. THERE IS NO HURRY.',
     ],
   },
-  // ---- the ending (the first Last Fold)
+  // ---- the core ending (the Floating City complete, the playability pass) and Unit 7's (the first Last Fold)
+  {
+    id: 'city', group: 'ending', title: 'The Floating City', open: { k: 'trophy', id: 'cityComplete' }, hint: '{u:mega} finish the Floating City',
+    lines: [
+      'THE TOWN HAS LEFT THE GROUND. UNIT 7 WAS ON IT. UNIT 7 IS STILL ON IT. THIS IS A NEW KIND OF FIELD TRIP.',
+      'THE MAYOR WAVED A HAT. THE HAT IS NOW ALSO IN THE SKY. UNIT 7 HAS LOGGED THE HAT SEPARATELY.',
+      'BELOW, THE ISLAND LOOKS LIKE A MODULE. UNIT 7 SUSPECTS EVERYTHING DOES, FROM FAR ENOUGH UP.',
+      'THERE ARE OTHER ISLANDS. THEY HAVE NOT BEEN COLLECTED. UNIT 7 HAS OPENED A NEW PAGE FOR THEM.',
+    ],
+  },
   {
     id: 'ending', group: 'ending', title: 'Unit 7: Collection Complete', open: { k: 'lastFold' }, hint: '{u:lastFold} take the Last Fold',
     lines: [

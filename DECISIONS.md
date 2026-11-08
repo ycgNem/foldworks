@@ -3028,3 +3028,69 @@ stock, the Factory floor and the corner's machine states. **No other data or sim
   Coils line's rubber starvation in the measured runs (the Chute held 80 rubber) is not read yet.
 - **For the owner (no number changed)**: with the gate, the first Relocate's 40-45 h target is no
   longer early by construction; it now waits on the bot finishing the two projects.
+
+## Playability pass (2026-11-08): the core ending, Act III's end, the Drill's Bay in parts
+
+Agent "ending", in a worktree off `playability` (036479a). The review's findings 5 and 9 and its
+radical option 3 (DESIGN.md §16, §18, §21, §22).
+
+- **The Floating City complete is the story's ending** (radical option 3). The review estimated
+  under 1% of players reach Acts IV-V and no bot had; a game people finish beats a 100 h game nobody
+  finishes. The City is the act's spine (Megaproject #2) and the most visible thing the game builds.
+  Acts IV and V stay, unchanged, as the post-game the ending invites the player to.
+  *Pillar:* building first; nothing about the reset layers changes.
+- **The Spires want 150 rotors, 2,500 glass and 2,000 steel** (were 150 rotors, 300 sandwiches,
+  2,500 glass). The sandwiches were the act's deepest chain (Greenhouse, a sandwich corner line, a
+  nest, a District group) and no bot delivered one in five passes; a human hits the same wall (the
+  review). Rotors, glass and steel are what the act's spine already makes, so the City lands
+  inside a run that builds the District. The citizens stay in Sandwich Engineering (150 at the
+  Hopper) and Relocation's Engineers. No new cost curve; the stage's Patents (8) unchanged.
+- **Charting needs the City alone** (`megas: ['city']`; was the City and the Transmuter). The
+  Transmuter is **optional**: its rewards stand, it is built after the City (the bot's plan keeps
+  its coils line), and it no longer holds the World. The bot's full-District reset waits on the City
+  alone (`bot3.ts done()`).
+- **The finale** (`src/app/finale.ts`, `finalestate.ts`): opens 3 s after the City's last stage
+  stands, the first time in a session that sees it happen, in the first universe only (a Last
+  Fold's new universe builds the City again without the story ending again; a loaded save with the
+  City already standing does not replay it; nothing is written to the save, so determinism and
+  saves are untouched, no `SAVE_VERSION` bump). Four scenes, Skip moves one on: the City lifts off
+  the key art's island (the camera climbs after it into the night); the Swamp Gazette's special
+  beside Bramble cheering and the four customers' lines; the credits rolling the player's own
+  numbers and the town's cast; "The story isn't over": the World floor, with keys to keep building
+  or to the research page. Replay: a new Codex page in the ending group, *The Floating City*
+  (opened by the trophy), with "The City, again". The trophy that already counted the City
+  (`cityComplete`) is renamed "Lift-off"; its bonus is unchanged.
+- **The City's sprite**: one PixelLab generation (1 of the 12 allowed), palette forced to the key
+  art's 48 colours, cleaned by rule (`pixel-art/finale/build.py`); drawn at the key art's own whole
+  scale, rotor blades and puffs drawn by code.
+- **The Great Drill's stage 1 in three parts** (finding 9): the Scaffold, the Engine House and the
+  Cab stand at 15%, 35% and 50% of every item (data: `MEGA[0].parts`, `partsReached`). Each moves the
+  Bay's picture a phase, puts a drill-crew house in the Town's far row, prints in the Gazette and
+  toasts (`megaPart` event). They pay nothing (the stage's Patents are as before) and change no
+  number. Front-loaded on purpose: the fill's second half already has Act II's goals (Nested Folds,
+  the annex blocks and claims, Calibration). The Bay page shows the parts and the cheapest claim
+  block with a key to the Survey Office (claims as the fill's side goal; not merged into the Drill:
+  the critic's "claims into the Drill stages" is a cut for whoever owns claims).
+- **Touched outside my files** (minimal): `src/app/app.ts` (the finale's watch hook, its e2e debug
+  handle, the `megaPart` toast), `src/app/screens.ts` (the 'finale' page), `src/app/codexbook.ts`
+  (the replay key), `src/data/codex.ts` (the page), `src/data/trophies.ts` (the trophy's name),
+  `src/render/town.ts` (the drill crew's houses), `src/sim/systems/modules.ts` (`megaGive` emits the
+  part event), `e2e/screens.mjs` (the megaCity state's progress), `tests/pace-act2-helpers.ts` (the
+  parts counted as goals).
+
+- **Measured** (seed 1000, 40 h; DESIGN.md §16, §18, §21, §22): the City complete at **12:19
+  (pace-act3) / 12:40 (pace-act4)** in the first run that builds a District (was never by 40 h);
+  rules 1-2 over the District-to-City stretch **7.1 min** (were 40.5 / 30.5); later Act III
+  stretches 10.3-19.9 min (open, as before). Act II while the Bay fills: rule 1 **17.0-17.1 min**
+  (was 39.5-41.4), rule 2 unchanged (49.7-50.9: a part is a goal reached, not a decision); the stage
+  lands at 4:09-4:10 as before. The bot is a planner (its first fold is at 24 min against §16's 40),
+  so its 12:20-12:40 reads as the aimed 18-25 h for a first-timer; not measured with a human.
+- **The first Relocate's 40-45 h target is left standing and logged OPEN** (the bot: 17:40, Home to
+  Rime). With Act III ending at the ending, Acts IV-V are the post-game and their pace is the
+  player's choice after the credits; re-pacing them is a separate job (their floor bests, 2.5-4.4
+  against 7-10, are the bigger gap). Not changed here.
+
+**Flagged as derivative:** an end-of-story credits roll with the player's statistics is a common
+pattern (no specific game of the named list; Universal Paperclips ends on its own last number, not
+a roll). The drill's sub-stage build-up resembles construction phases in many tycoon games
+(Roblox tycoons above all); kept, because each part is a picture of the Drill the art already had.

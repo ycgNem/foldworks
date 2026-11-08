@@ -282,7 +282,7 @@ export const TROPHIES: TrophyDef[] = [
   X('smallWorld', 'Small World', '{u:fold} fold a World group into one', null, { k: 'counter', name: 'worldFolds' }, 1, { k: 'lot', off: 0.05 }, '§23 Depth-4 folds; §24: World and Beyond lots 5% cheaper'),
   X('lighthouseKeeper', 'Lighthouse Keeper', '{u:mega} light every stage of the Lighthouse', null, { k: 'mega', id: 'lighthouse' }, MEGAS.lighthouse.stages.length, { k: 'barge', add: 0.25 }, '§22 Megaprojects #4, whose Lens Room flies barges a tile faster; §24: barges a quarter tile a second more'),
   X('anchorsAweigh', 'Anchors Aweigh', '{u:mega} moor every stage of the Sky Anchor', null, { k: 'mega', id: 'anchor' }, MEGAS.anchor.stages.length, { k: 'lot', off: 0.05 }, '§22 Megaprojects #5, the Sky Anchor that holds the World\'s lots; §24: World and Beyond lots 5% cheaper'),
-  X('cityComplete', 'Spires', '{u:mega} finish the Floating City', null, { k: 'mega', id: 'city' }, MEGAS.city.stages.length, { k: 'routes', add: 5 }, '§21 Megaprojects #2; §24: 5 more routes'),
+  X('cityComplete', 'Lift-off', '{u:mega} finish the Floating City · the story ends', null, { k: 'mega', id: 'city' }, MEGAS.city.stages.length, { k: 'routes', add: 5 }, '§21 Megaprojects #2; §24: 5 more routes'),
   X('transmuted', 'Transmuted', '{u:mega} finish the Scrap Transmuter', null, { k: 'mega', id: 'transmuter' }, MEGAS.transmuter.stages.length, { k: 'heap', add: 50 }, '§21 Megaprojects #3: waste sells; §24: Slag Heaps hold 50 more (the heap trophies at 250 against the cap of 200)'),
   X('drillDone', 'Breakthrough', '{u:mega} finish the Great Drill', 'drillBit', { k: 'mega', id: 'drill' }, MEGA.length, free('miner', 2), '§19 The Great Drill, stages 2 and 3; §24: two Miners free'),
   // ---- the District and the high floors (§21)

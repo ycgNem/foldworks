@@ -7,7 +7,7 @@
 //   Drill works fold S+1:45-1:48; the Bay floor S+1:46-1:48; the Great Drill's stage 1 S+3:42-3:44
 //   (4:12-4:15); rule 2 (Sparks and belt relays not counted) 12.4-12.5 min to the Bay floor, 44-48
 //   while it fills (open); at most 4 clicks in any second; rule 1 (goals reached) 12.5 min before
-//   the Bay floor, 39.5-41.4 while it fills; rule 4 active/idle over 2:00-2:30 1.60 (seed 8919
+//   the Bay floor, 39.5-41.4 while it fills (17.0-17.1 with the Drill's three parts, the playability pass); rule 4 active/idle over 2:00-2:30 1.60 (seed 8919
 //   1.46, open: the Bay floor is laid inside the window); the preview 7 at 2 h, 10 at 3 h, 14 at 4-5 h.
 import { describe, expect, it } from 'vitest';
 import { act2Run, earnedAt, idleEarned, longestGap, patentsAt, hmm, SEEDS2, RULE4_AT, RULE4_FOR } from './pace-act2-helpers';
@@ -106,8 +106,9 @@ describe('Act II pacing (bot2 after the planner)', () => {
     });
   }
 
-  // Not met yet, measured and reported: while the Bay fills (about 1.5 h) the goals the bot reaches
-  // are Shiny Things, Nested Boxes' research, the nested Gizmo works II and the stage, 39-42 min
-  // apart at the longest (the final round) (DESIGN.md §16); §16 rule 1 wants one within 3 min.
+  // Not met yet, measured and reported: while the Bay fills (about 1.9 h) the goals the bot reaches
+  // are the orders, Tuning and Nested Folds' research, the annex and claims, and the Drill's three
+  // parts and its stage (the playability pass: tests/pace-act2-helpers.ts counts the parts), 17 min
+  // apart at the longest (was 39-42) (DESIGN.md §16, §18); §16 rule 1 wants one within 3 min.
   it.todo('rule 1: the next goal always within 3 min of reach while the Bay fills');
 });

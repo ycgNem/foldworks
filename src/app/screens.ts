@@ -53,6 +53,7 @@ import { shelfPage } from './shelf';
 import { codexBook } from './codexbook';
 import { challengesPage } from './challenges';
 import { endingPage } from './ending';
+import { finalePage } from './finale';
 
 export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options' | 'modules' | 'grade' | 'offline' | 'sliceEnd'
   // Act II (Milestone 4): the Factory floor's grade card, the Codex, the Survey Office, the Megaproject
@@ -72,6 +73,8 @@ export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options
   | 'lastfold' | 'kernels' | 'ledger'
   // Milestone 11 (DESIGN.md §24): the Challenges page, Unit 7's ending (src/app/challenges.ts, ending.ts)
   | 'challenges' | 'ending'
+  // the playability pass: the core ending, the Floating City lifting off (src/app/finale.ts)
+  | 'finale'
   // the playability review: another tab took the save over (src/app/othertab.ts)
   | 'otherTab';
 
@@ -117,6 +120,7 @@ export function drawScreen(app: App, L: Layout) {
     case 'scenarios': return scenariosScreen(app, r);
     case 'challenges': return challengesPage(app, r); // Milestone 11
     case 'ending': return endingPage(app); // Milestone 11: Unit 7's ending
+    case 'finale': return finalePage(app); // the playability pass: the core ending
   }
 }
 

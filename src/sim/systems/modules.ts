@@ -20,7 +20,7 @@ import { annexPrice } from './annex';
 import { RULES } from '../../data/rules';
 import { RECIPES } from '../../data/recipes';
 import { ITEMS, itemName, type ItemId } from '../../data/items';
-import { MEGA, megaStage, type MegaStage } from '../../data/megaprojects';
+import { MEGA, megaStage, partsReached, type MegaStage } from '../../data/megaprojects';
 import { DX, DY, ccw, cw, newFEnt, opposite, type Dir, type FEnt, type ModuleDesign } from '../world';
 import { entsIn, inBox, gradedAudit } from './audits';
 import { claimRefusal, oresOf, placeClaimRefusal } from './claims';
@@ -702,7 +702,14 @@ export function megaGive(g: Game, bay: FEnt, item: ItemId, n: number): number {
   const have = p[item]?.toNumber() ?? 0;
   const counted = Math.max(0, Math.min(n, want - have));
   if (counted <= 0) return n;
+  const parts0 = partsReached(st, p);
   p[item] = (p[item] ?? Num.ZERO).add(counted);
+  // a part of the stage stands (its sub-goals, DESIGN.md §18): the Bay's picture, a Town piece, the
+  // Gazette; presentation only, it pays nothing more
+  const parts1 = partsReached(st, p);
+  if (parts1 > parts0) {
+    g.emit({ type: 'megaPart', x: bay.x + 1, y: bay.y + 1, value: parts1, floor: 'factory' });
+  }
   // offline progress measures the Bay's intake like the Docks' (DESIGN.md §12)
   if (g.tally) g.tally.bay[item] = (g.tally.bay[item] ?? Num.ZERO).add(counted);
   g.s.megaPatents += (st.patents * counted) / want / megaParts(st);
