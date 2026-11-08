@@ -183,7 +183,9 @@ export function pastLessons(g: Game): LessonId[] {
   if (runs > 0 || g.machines.filter((m) => m.kind !== 'furnace' && m.kind !== 'miner').length >= 4) out.push('starved');
   if (runs > 0 || g.flag('jam:slag') || g.done('slagBricks')) out.push('slag');
   if (runs > 0 || g.s.designs.length > 0) out.push('fold');
-  if (g.flag('factorySeen')) out.push('factory');
+  // a save with modules standing on the Factory floor (a bot's checkpoint never looked at it) has
+  // learnt the floor: the second playtest's import showed the Factory card again
+  if (g.flag('factorySeen') || runs > 0 || g.s.factory.ents.some((e) => e.kind === 'module')) out.push('factory');
   if (g.s.factory.ents.some((e) => e.kind === 'trunk') || (runs > 0 && g.flag('factorySeen'))) out.push('trunk');
   if (g.s.ents.filter((e) => e.kind === 'pole').length >= 2) out.push('brownout');
   if (runs > 0) out.push('reorganize');
@@ -203,9 +205,11 @@ function sync(app: App) {
   S.seed = g.s.seed;
   S.queue = [];
   S.shown = null;
+  // what the save has earned always counts as seen (an import of a save whose seed has a stored
+  // set, a later run), with what this seed was shown
   const stored = lessonsSeen(g.s.seed);
-  S.seen = new Set(stored ?? pastLessons(g));
-  if (!stored) saveLessonsSeen(g.s.seed, [...S.seen]);
+  S.seen = new Set([...(stored ?? []), ...pastLessons(g)]);
+  if (!stored || S.seen.size > stored.length) saveLessonsSeen(g.s.seed, [...S.seen]);
 }
 
 /** Queue a lesson unless this save has had it. */

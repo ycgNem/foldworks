@@ -16,7 +16,7 @@ import { ITEMS, itemName, type ItemId } from '../data/items';
 import { BUILD, isMachine } from '../data/machines';
 import { RECIPES } from '../data/recipes';
 import { FACTORY } from '../data/land';
-import { plain } from '../engine/fmt';
+import { plain, aWord } from '../engine/fmt';
 import { nominal, feeders, entName } from '../sim/analysis';
 import { shares } from '../sim/systems/stats';
 import { poleReach } from '../sim/systems/power';
@@ -114,7 +114,7 @@ function workshopCause(g: Game, m: Ent, seen: Set<number>): Cause {
     if (f && !makers.length && !f.stores.length) {
       if (m.kind === 'furnace') return c(`${name}: no ore. {k:LMB} the ore beside it, or a Miner on it facing in.`, [`{pip:starved} ${ic(item)} none`]);
       const mk = item ? makerName(item) : null;
-      return c(`${name}: nothing brings it ${ic(item)} ${lc(item)}. Belt a ${mk ?? 'feeder'} into it.`, [`{pip:starved} ${ic(item)} none`]);
+      return c(`${name}: nothing brings it ${ic(item)} ${lc(item)}. Belt ${aWord(mk ?? 'feeder')} into it.`, [`{pip:starved} ${ic(item)} none`]);
     }
     const stopped = makers.find((s) => s.state !== 'work' && !s.paused && !seen.has(s.id));
     if (stopped) return workshopCause(g, stopped, seen);
@@ -204,6 +204,9 @@ function factoryCause(g: Game, m: FEnt, seen: Set<number>): Cause {
   const r = g.routes.find((q) => q.from === m && !q.by);
   const to = r?.to ?? null;
   if (!to) return c(`${name}: its front leads nowhere. Trunk it to the Factory Dock or a module.`, ['{pip:blocked} front']);
+  // a byproduct its front's taker refuses: a side trunk to the Dock carries it off (the second playtest)
+  if (item && BYPRODUCTS.has(item) && !(to.kind === 'module' && (g.design(to.design)?.ins[item] ?? 0) > 0) && to.kind !== 'fdock')
+    return c(`${name}: its ${ic(item)} ${lc(item)} has nowhere to go. A trunk from its side to the Factory Dock.`, [`{pip:blocked} ${ic(item)}`]);
   if (to.kind === 'module') {
     if (to.state !== 'work' && !to.paused && !seen.has(to.id)) return factoryCause(g, to, seen);
     const takes = (g.design(to.design)?.ins[item as ItemId] ?? 0) * 60;
@@ -212,7 +215,9 @@ function factoryCause(g: Game, m: FEnt, seen: Set<number>): Cause {
     return c(`${name}: ${fname(g, to)} takes ${pm(takes)} of its ${pm(offered)} ${lc(item)} a minute. Another taker, or the rest to the Dock.`, [`{pip:blocked} ${ic(item)} ${pm(takes)}/${pm(offered)}`]);
   }
   if (to.kind === 'fbay') return c(`${name}: the Megaproject Bay takes no ${ic(item)} ${lc(item)} now. Trunk it to the Factory Dock.`, [`{pip:blocked} ${ic(item)} Bay`]);
-  if (to.kind === 'fchute') return c(`${name}: the Factory Chute is full of ${ic(item)} ${lc(item)}. A Chute Mouth set to it empties it.`, ['{pip:blocked} Chute']);
+  // every module stopped at the full Chute is one cause, with one fix (the second playtest: the 15 h
+  // checkpoint's nine modules were nine causes, each too small to name)
+  if (to.kind === 'fchute') return { ...c(`The Factory Chute is full of ${ic(item)} ${lc(item)}. A Chute Mouth set to it empties it.`, ['{pip:blocked} Chute']), key: 'fchute:' + item, name: 'Factory Chute' };
   return c(`${name}: its ${ic(item)} ${lc(item)} backs up. A trunk carries ${FACTORY.trunkSpeed * 60} a minute: give it its own.`, [`{pip:blocked} ${ic(item)}`]);
 }
 

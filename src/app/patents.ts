@@ -20,7 +20,7 @@ import { RULES } from '../data/rules';
 import { IDLE } from '../data/idle';
 import { ICON, smallWidth, bigWidth, SMALL_H } from '../ui/font';
 import { itemIcon, sheet, hasArt, spriteName } from '../render/sprites';
-import { amount, pct } from '../engine/fmt';
+import { amount, pct, aWord } from '../engine/fmt';
 import { hasPatent, patentRefusal, prules, spendable } from '../sim/patents';
 import { offlineEfficiency } from '../sim/offline';
 import { previewPatents } from '../sim/reorganize';
@@ -357,8 +357,8 @@ export function effectInfo(app: App, p: PatentDef): { does: string[]; now: strin
       const place = list('place') as { kind: string; x: number; y: number }[];
       for (const q of place) {
         const name = BUILD[q.kind as keyof typeof BUILD]?.name ?? q.kind;
-        does.push(`{u:build} a ${name} at ${q.x},${q.y} from the start`);
-        if (!g.entAt(q.x, q.y)) add.push(`a ${name}`);
+        does.push(`{u:build} ${aWord(name)} at ${q.x},${q.y} from the start`);
+        if (!g.entAt(q.x, q.y)) add.push(aWord(name));
       }
       const now = own ? '{good:yours} · every run starts with it' : add.length ? `+ ${add.join(' · ')} now` : '{soft:you have it all already · pays from the next run}';
       return { does: does.length ? does : [p.text], now };

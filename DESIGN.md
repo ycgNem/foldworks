@@ -169,11 +169,21 @@ Theory. Gizmo Theory now opens what Folding opened (the Festival, chunk D, and A
 Measured (50 seeds, planner): Folding **3:48** (3:02-3:56), the first fold **5:17** (4:40-5:27),
 Gizmo Theory **13:27**; a first-timer about half the planner's pace at research folds at ~8-12 min.
 
-**The first node pays like the Dock.** Until Pressing is researched the Hopper pays for what it
-takes at the Dock price (`RULES.firstNodePay`, 1). A new player has one line; the guide turns its
-last belt into the Hopper, and income sat at 0 for the length of Pressing (the playtest: 22 coin,
-nothing affordable, until the belt was turned back). The Hopper-or-Dock choice (below, §13 check 11)
-starts at node 2, where a player has two lines.
+**The first nodes pay like the Dock.** Until the first fold the Hopper pays for what it takes at
+the Dock price (`RULES.firstNodePay`, 1), what it banks included. A new player has one line; the
+guide turns its last belt into the Hopper, and income sat at 0 for the length of Pressing (the
+playtest: 22 coin, nothing affordable, until the belt was turned back). *The second playtest
+(2026-11-08)*: with the rule ending at Pressing, picking Folding (plates) sent the hand line's
+ingots into the Hopper as the wrong item, banked for nothing, while the new Smelter jammed on slag:
+income sat at 0 from minute 10 to 15 and nothing said so. The rule now holds until the first fold
+(Pressing and Folding are on the town; Gizmo Theory was the other option, and would have made all of
+Act I's research free and check 11 meaningless). The Hopper-or-Dock choice (below, §13 check 11)
+starts after the first fold. When income has been 0 for 15 s while lines feed the Hopper, the frog
+says so, with the fix (a split, or a line to the Dock); the Hopper's floor tag marks what it banks
+("→ bank") so a wrong item never reads as progress. Measured (50 seeds, planner; before → after):
+first fold 5:17 → **5:02**, Gizmo Theory 13:27 → **12:22**, the Dock-only player 4.1 → **5.1 min**
+behind it (check 11 wants a quarter of the planner's time, 3.1), slice end 21:35 → **20:36**;
+Pressing, Folding and the first purchase unchanged; dead air (greedy, longest stretch) 161 s mean.
 
 **Why nodes 3–10 are ×2 the first draft** (2026-10-20, pace tests; history: the node numbers below are the old order, Folding last). At the first-draft costs the
 planner bot researched Folding at **19:01** (mean of 50 seeds) and the Dock-only bot only **3.5 min**
@@ -334,6 +344,17 @@ So the box is Act I's progression: each node opens a bigger line to fold, not a 
   the only module that could feed another was one hiding its slag in a heap.*
 - **Trunk belts**: 8 items/s (480/min), 2 coin per tile. A **Factory Dock** and a **Factory
   Hopper** at the floor's edge, which work like the Workshop's.
+- **Every input comes in at the back, along the one trunk that ends there; a trunk may run into
+  another's side, so two feeds join without a part.** A two-input module (a Gizmo works: ingots or
+  gears, and wire) is fed by trunking both feeders into the trunk behind it. *The second playtest
+  (2026-11-08)* gave up on the Festival: the screen said "one trunk feeds one module" and "takes 0.6
+  of 1/min" (a rate a second labelled a minute). The rule was fair (no part is needed); the words were
+  not. Now the module's report and its card say what it needs at its back and how ("needs 24 + 48
+  /min at its back", "one trunk into its back: run each feed into that trunk"), a starved module names
+  the placed module whose front should run into it (or the design to place, or the line to fold), a
+  module held back by a consumer that uses less than it makes reads **PACED** ("uses 34 of these 60 a
+  minute"), not BLOCKED, and a byproduct its taker refuses says where it can go ("a trunk out of its
+  side to the Factory Dock carries slag off").
 - Modules run as rate functions, not crafts: each tick a module consumes its inputs at rate
   if they're available (fractional amounts banked), produces at rate, and is **starved** or
   **blocked** in proportion. The same status pips apply. A byproduct with nowhere to go blocks
@@ -472,7 +493,11 @@ at once, its free copy stamped and placed beside it; chunk B 7:16 (6:38-7:28); f
 Theory 13:27 (12:30-13:50; Dock-only 17:33, 4.1 min behind, check 11 wants 3.4); **slice end 21:35**
 (20:42-22:19), 8:07 after Gizmo Theory (7:15-8:42), with Iron plates S, Copper wire S, Iron ingots S
 (1.00) and Gizmo works A (0.86) on seed 1000; greedy slice end 21:38 and Dock-only 27:41 (10 seeds
-each); check 10: greedy's longest stretch 162 s (134-211, p90 200); checks 7 and 8 unchanged. Act II
+each); check 10: greedy's longest stretch 162 s (134-211, p90 200); checks 7 and 8 unchanged.
+*Re-measured after the second playtest* (the Hopper pays until the first fold, §8): first fold
+**5:02** (4:27-5:48); chunk B 6:10; first Gizmo 12:35; Gizmo Theory **12:22** (11:23-12:52; Dock-only
+17:30, **5.1 min** behind, check 11 wants 3.1); slice end **20:36** (19:48-21:21), 8:14 after Gizmo
+Theory; greedy 21:22, Dock-only 27:40; check 10: greedy's longest stretch 161 s (125-202). Act II
 (seeds 1000 and 8919): the planner hands over at 0:20 (was ~0:30), then steel 0:37-0:39, power
 0:45-0:48, circuits 1:09-1:10, Concrete fold 1:18-1:19, the Drill works 2:00-2:09, stage 1 3:55-4:03;
 Patents at 4 h 15-16. Income: the planner's ~200 coin/min at 5 min becomes ~675 at 7 min (two plate
@@ -579,8 +604,8 @@ If any answer is no, change the model here before building more.
 
 | By | Reached |
 |---|---|
-| 12 min | first fold (measured: 5:17, planner bot, the playability pass; it was 24:35 at round 4 and a first-timer's minute 73) |
-| 45 min | slice end: the Gizmo Festival filled at the Factory Dock (measured: 21:35, planner; §13 check 9 ≤ 45 min) |
+| 12 min | first fold (measured: 5:02, planner bot, the second playtest's pass; 5:17 at the playability pass; it was 24:35 at round 4 and a first-timer's minute 73) |
+| 45 min | slice end: the Gizmo Festival filled at the Factory Dock (measured: 20:36, planner; §13 check 9 ≤ 45 min) |
 | 3 h | Act II: power, steel, glass, circuits |
 | 5 h | first Reorganize (12–20 Patents) |
 | 11 h | District floor (Act III; measured 10:01, the second gate moved it from 15 h: the Great Drill stands at about 9.5 h) |
@@ -645,6 +670,28 @@ If any answer is no, change the model here before building more.
   - Run 1's wait while the Bay fills is research and the Drill's own parts. Nothing on the floor
     is left to buy: the bot buys every claim and block its plan can use.
 - **Rule 4** at every stage measured: §20.
+
+**Rule 1 and the goal on screen (the second playtest, 2026-11-08).** A goal must point at something
+the player can act on now. From minute 29 to 44 the bubble said "Learn Surveying first", and
+Surveying sat on the Act II page, which opens with Gizmo Theory (minute 44), behind Coal Seams. Now:
+- A claim short (a stamp refused for want of claims) names the nearest step that can be seen: the
+  Survey Office, a chunk for sale with a deposit of that ore (chunk C's iron after Gizmo Theory),
+  Surveying when it can be picked, else the node on the way ("Gizmo Theory first, then Surveying").
+  When that step cannot be taken at once it rides under the goal as its note instead of holding the
+  bubble (before the slice end the claim alert beat every other goal). The same rule writes the
+  refusal ("Needs an iron claim (5/5 used): buy Chunk C for 2 more").
+- A research fill longer than 10 minutes at the rate the Hopper is taking it says its time and the
+  step that shortens it: a copy of a module making what it wants ("Coal Seams is a long one. Stamp a
+  gear copy, trunk it to the Hopper!", with the stamp's price), a purchase in reach (one stamp is
+  250-750 coin, 1-2 min of the income then), or saving for it with a bar.
+- **The Coal Seams wall, measured**: the planner then the Act II bot research Coal Seams (600 gears)
+  **11.0 and 12.5 min** after Gizmo Theory (seeds 1000 and 8919), with the Festival's folds and
+  modules as goals in between; a first-timer at 15 gears a minute (the playtest) waits about 40 min.
+  The long-fill goal turns that wait into a decision: each gear copy trunked to the Hopper takes ~15
+  gears a minute off it (two copies bring 40 min to about 13). Coal Seams' cost is research.ts's
+  (another agent's file in this pass) and is left as it is.
+- When income has been 0 for 15 s while lines feed the Hopper (after the first fold, when the Hopper
+  stops paying), the frog says so with the fix (§8).
 
 ## 17. Readability at 1×
 
@@ -976,7 +1023,14 @@ asking for the Boardwalk again, and every run 2.3-2.5 h back to Act III.
 **The card** says how fast the next run is: "back to X/min in ~N min", X the run's Act II floor
 (`meta.factoryPeak`, the best 5-minute income before Zoning) and N the minutes the last returning run
 took to pass it (`meta.caughtUp`), or `RULES.backInMinutes` (15, the campaign's measure, rounded up)
-before one has. When the tree is bought out and every die is on file (`spendable(g).full`), the card
+before one has. *The second playtest (2026-11-08)*: the 15 h checkpoint's card read "back to your Act
+II floor in ~455 min" for +28 Patents, a 7.5 h penalty to the eye. Its run was measured against a
+record from before the returning run existed (no Act II floor peak on file, so its overall peak, the
+District's, was the bar), and caught up only when its own District passed it. Now a catch-up counts
+only when the run before it was recorded under the returning run's rules (its record has
+`factoryPeak`); else the card says the model's 15. A measured number past `RULES.backInCap` (30,
+twice the model) is not shown at all ("back to your Act II floor", the designs line under it): a
+slow last run is the player's pace, and a number like it reads as a penalty for resetting. When the tree is bought out and every die is on file (`spendable(g).full`), the card
 says "the tree is full. nothing to buy. keep building." and its button is "Sign anyway", not gold.
 
 ### What is kept, what is lost
@@ -1688,8 +1742,17 @@ but their inputs are tier 2 goods the Workshop has no room to make. The **Factor
 the Factory floor, 5,000 coin, refunded when lifted) takes whatever trunks bring it and drops it to
 the Workshop; a **Chute Mouth** (Workshop, 400 coin) set to an item pushes that item out of its
 front, one at a time as fast as the belt takes it (120/min). The stock between them holds **20 of
-each item** (10 s of a full belt: enough to ride out a module's round robin; full, it backs the
-trunk up at once and the pip says so). **A fold box may not hold a Chute Mouth** (it would make
+each item** (10 s of a full belt: enough to ride out a module's round robin). *The second playtest
+(2026-11-08)*: full, it backed the trunk up at once, and the 15 h checkpoint's Factory stood with 9
+of 9 modules BLOCKED (the campaign bot trunked them all into the Chute; four items had a Chute Mouth,
+six did not). Loaded under main's code (1d0e84c) it does the same: not a wave-1 change. Now **the
+Chute never jams the floor**: what its stock has no room for goes on to the Factory Dock, which
+sells it (slag is scrapped there for nothing), as the Bay's does (§18); only what no Dock buys
+(megaproject parts such as Drill Bits) still backs up, and the bell names a full Chute as one cause with its
+fix. Measured on the checkpoint: 7 of 9 modules working after 2 minutes (the two others blocked on
+slag their side trunks take nowhere, which their report names), and nothing of the drop from 574K to
+449K/min in the two minutes after loading is the Factory's: the District earns all of it, and its
+fall is the bot's Overdrive wearing off (34 machines overdriven at the save: rule 4's active play). **A fold box may not hold a Chute Mouth** (it would make
 items from nothing as far as the box can see), so a tier 3 line is audited with its Chute Mouths
 outside the box feeding it through ports, and folds into a module with those inputs. On the
 Factory the same feeder modules then feed the new module, and the group nests (§18) for the
@@ -1988,6 +2051,15 @@ first minute; after the City the bot has no plan left and waits (OPEN in both). 
 traced; the likeliest causes are the Workshop's standing kit line, which ate ingots, plates, gears
 and steel the whole act, stamps of Act II designs no longer waiting on kits, and Recycling's 150
 rubber and 60 gearboxes left for Sensors and the Spires.
+
+*Re-measured after the second playtest's pass* (wave 1 merged, the Chute's overflow to the Factory
+Dock): runs 1 0:00-4:10 (15 Patents), 2 4:10-6:15 (6), 3 6:15-15:02 (36), 4 15:02-22:45 (3), 5
+22:45-40:00; the District 8:19, the City's stage 1 9:38, but **not complete in run 3**: its Spires
+get the steel and the rotors and no glass (the Glassworks corner line is never folded). The wave-1
+base (44e3b23) ends run 3 the same way; the same build without the Chute's overflow completes it by
+15 h. A bot-plan fragility, logged for bot3's owner (DECISIONS.md, the second playtest's fixes).
+153 District groups at 40 h, 0.61 ms a tick. (Both measured before the other's change: the merged build is re-measured by the balance pass.)
+
 - **The ending is early for the bot, on target for a player.** The planner knows the plan and
   plays every minute; it reached the first fold at 24 min against §16's 40 and Folding's research in
   about half a first-timer's time (the review), so 12:20-12:40 for the bot reads as about 18-25 h

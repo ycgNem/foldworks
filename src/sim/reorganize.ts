@@ -630,18 +630,26 @@ export function noteRunPace(g: Game, avg: number) {
  * minutes that took the last returning run (or RULES.backInMinutes, the campaign's measure, before
  * one has), whether the District made more than that (it is rebuilt after), and the kept designs
  * that come back built. */
-export function nextRunPace(g: Game): { perMin: number; minutes: number; measured: boolean; district: boolean; built: number } {
+export function nextRunPace(g: Game): { perMin: number; minutes: number | null; measured: boolean; district: boolean; built: number } {
   const m = g.s.meta;
   // (a run whose District opened before its Act II peak was noted, a save from before, has no
   // honest number: 0, and the card says "your Act II floor" without one)
   const floor = m.factoryPeak && m.factoryPeak > 0 ? m.factoryPeak : g.done('zoning') ? 0 : m.peakPerMin;
-  const last = [...m.history].reverse().find((h) => h.caughtUp !== undefined);
-  const now = m.caughtUp;
-  const sec = now ?? last?.caughtUp;
+  // a catch-up is a returning run's only when the run before it was recorded under the returning
+  // run's rules (its record has an Act II floor peak): a run measured against an old record (a save
+  // from before the playability pass, its last run's overall peak) took hours and promised a
+  // "~455 min" penalty on the 15 h checkpoint's card (the second playtest)
+  const h = m.history;
+  const honest = (i: number) => i > 0 && h[i - 1].factoryPeak !== undefined;
+  let sec: number | undefined = h.length && h[h.length - 1].factoryPeak !== undefined ? m.caughtUp : undefined;
+  for (let i = h.length - 1; sec === undefined && i >= 0; i--) if (h[i].caughtUp !== undefined && honest(i)) sec = h[i].caughtUp;
+  const measured = sec !== undefined;
+  const min = measured ? Math.max(1, Math.round(sec! / 60)) : RULES.backInMinutes.value;
   return {
     perMin: floor,
-    minutes: sec !== undefined ? Math.max(1, Math.round(sec / 60)) : RULES.backInMinutes.value,
-    measured: sec !== undefined,
+    // past the cap the card gives no number: a slow last run is the player's pace, not the reset's
+    minutes: min <= RULES.backInCap.value ? min : null,
+    measured,
     district: g.done('zoning') && m.peakPerMin > floor * 1.05,
     built: m.drawer.filter(returnsBuilt).length,
   };

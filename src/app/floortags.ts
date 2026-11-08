@@ -168,7 +168,17 @@ export function floorTags(app: App, L: Layout) {
         // in the District's margin a long node name gives way to its % (the node's icon stays)
         if (dist && eastX + pad + 10 + richWidth(name) > ui.w - 2) name = p;
         const nl = layoutRich(name);
-        const il = inflow.hopper.size ? layoutRich(eastRow(inflow.hopper)) : null;
+        // what the node does not take (or has in full) goes to the bank: said so, in warn ink, so
+        // the row never reads as progress (the second playtest: "Folding 0% · ingots 15/min")
+        const cost = RESEARCH[sel].cost as Partial<Record<string, number>>;
+        const prog = g.s.research.progress[sel] ?? {};
+        const banked = (it: string) => !cost[it] || (prog[it as ItemId]?.toNumber() ?? 0) >= (cost[it] ?? 0);
+        const hopRow = (m: Map<string, number>) => {
+          if (![...m.keys()].some(banked)) return eastRow(m);
+          return [...m.entries()].sort((p, q) => q[1] - p[1]).slice(0, dist ? 2 : 3)
+            .map(([it, pm]) => (banked(it) ? `{i:${it}} {warn:→ bank}` : `{i:${it}} ${pm > 0 ? fmtRate(pm) : '{warn:0}'}`)).join('  ');
+        };
+        const il = inflow.hopper.size ? layoutRich(hopRow(inflow.hopper)) : null;
         const cw = Math.max(10 + nl.w, il?.w ?? 0), ch = (compact ? LINE_H - 2 : LINE_H + 6) + (il ? LINE_H : 0);
         tags.push({
           id: 'hopper', near: r, cw, ch, east: dist ? eastX : undefined,

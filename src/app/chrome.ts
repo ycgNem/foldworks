@@ -315,7 +315,8 @@ export function button(ui: UI, id: string, x: number, y: number, w: number, h: n
   if (hov) {
     ui.hoverId = id;
     // `tipAt`: where the tag may not sit (a button in a strip: off the strip, never over itself)
-    if (opts.tip) ui.tip(typeof opts.tip === 'string' ? [{ text: opts.tip }] : opts.tip, 180, opts.tipAt ?? null);
+    // it waits on the button, then sits above or below it (never over the button or its row)
+    if (opts.tip) ui.hintOn(x, y, w, h, opts.tip, 180, opts.tipAt ?? null);
   }
   if (hov && ui.clicked) {
     ui.eat();

@@ -270,7 +270,7 @@ describe('claims and stamps (DESIGN.md §18)', () => {
     // 3 + 2 per owned coal deposit (two)
     expect(claimsHeld(g, 'coal')).toBe(7);
     for (let i = 0; i < 6; i++) must(g, { k: 'stamp', id: d.id });
-    expect(stampRefusal(g, d)).toMatch(/coal claim \(7 of 7/);
+    expect(stampRefusal(g, d)).toMatch(/coal claim \(7\/7 used\)/);
     expect(claimPrice(g, 'coal')!.toNumber()).toBe(60000);
     must(g, { k: 'claim', item: 'coal' });
     expect(claimPrice(g, 'coal')!.toNumber()).toBe(90000);

@@ -36,8 +36,8 @@ export const RULES = {
   foldBoxGears: r(5, '§10 Box sizes: 5x5 at Gearcutting: a gear line (miner, smelter, press, assembler in a row) with its second press beside it'),
   /** the first fold's gifts (§10 The first fold): placed beside the Factory Dock, its first copy free */
   firstStampFree: r(1, '§10 The first fold: the first stamp ever costs nothing (one copy of a bill of about 250, 1-2 min of minute-8 income), so folding is a gain at once and stamping is learnt on the spot; later copies keep bill x (1 + 0.5 n)'),
-  /** the first research node (Pressing): the Hopper pays its items at this share of the Dock price */
-  firstNodePay: r(1, '§8 The first node: the Hopper pays for the 30 ingots of Pressing at the Dock price, so a player whose one line feeds it never sees income at 0 (the playability review); the Hopper-or-Dock choice starts at node 2'),
+  /** until the first fold (Pressing and Folding): the Hopper pays its items at this share of the Dock price */
+  firstNodePay: r(1, '§8 The first nodes: until the first fold the Hopper pays what it takes at the Dock price (Pressing\'s 30 ingots, Folding\'s 40 plates, and anything it banks meanwhile), so a player whose lines feed it never sees income at 0 (the playability review; the second playtest: Folding banked the hand line\'s ingots and income sat at 0 from minute 10 to 15); the Hopper-or-Dock choice starts after the first fold, measured at Gizmo Theory (§13 check 11)'),
   auditWarmup: r(10, '§10 Audit: 10 s warm-up'),
   auditWindow: r(60, '§10 Audit: a 60 s window'),
   /** a kept design unfolded unchanged refolds after this check instead of a full audit */
@@ -104,6 +104,8 @@ export const RULES = {
   keptActs: r(2, '§19 What a Reorganize keeps (the playability pass): every research node of Acts I-II (24, `act` undefined, 1 or 2; 26 before Machine Kits and Tuning were cut) is known in every run after the first reset: the critic measured each later run replaying 2.3-2.5 h of them before Act III, the tutorial again'),
   returnCopies: r(1, '§19 What a Reorganize keeps: each kept design comes back with 1 copy, free (its machines were bought once, in the run that folded it); later copies are stamped at bill x (1 + 0.5 n) as ever. A 25% bill would make the first minute\'s coin the gate (a run starts with almost none) for no decision; the decision is which designs the Drawer keeps'),
   backInMinutes: r(15, '§19 What a Reorganize keeps: the Reorganize card\'s "back in" before a run has measured its own: the campaign bot\'s returning runs pass the run before\'s peak in 9-16 min (§19 Measured pace), rounded up'),
+  /** the card shows a measured "back in" up to this many minutes, and no number past it */
+  backInCap: r(30, '§19 What a Reorganize keeps: the card\'s "back in ~N min" is shown up to twice the campaign\'s measure (backInMinutes); a slower last run is the player\'s own pace, and a number past it read as a penalty for resetting (the second playtest: "~455 min" for +28 Patents)'),
   dieCopyPrice: r(1, '§19 Dies on file (the playability pass): one more copy of one kept design at every run\'s start for 1 Patent, flat (no price curve, CLAUDE.md); the cheapest node\'s price, as a copy is one module, not a rule'),
   dieCopiesMax: r(4, '§19 Dies on file: at most 4 bought copies of a design (5 with the free one, 6 with Spare Dies): the Act II floor at its peak holds 4-6 copies of its busiest product (the Act II bot\'s Gizmo, ingot and wire chains), so the sink ends where a returning floor is whole'),
   drawerBox: r(16, '§19 The Patent Drawer: a share string holds a box up to 16x16, two Workshop chunks (a fold box is 8x8, 10x10 with the Wider Fold Box)'),

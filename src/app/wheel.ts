@@ -150,11 +150,13 @@ export function openWheel(app: App, x: number, y: number): void {
   W.rclick = false;
   W.mx = ui.mx;
   W.my = ui.my;
-  // the goal's petal fans first, else the last one open on this floor
+  // the goal's petal fans first, else the floor's home petal (Build, or Modules on the Factory): the
+  // second playtest's click where the Miner had been turned on the flow view, because the wheel had
+  // reopened on the Tools petal used last; a stable start keeps every icon where it was
   const ps = petals(app);
   const goalPetal = ps.find((p) => p.goal);
-  const last = app.floor === 'factory' ? W.lastF : W.lastW;
-  const want = goalPetal?.id ?? (ps.some((p) => p.id === last) ? last : ps[app.floor === 'factory' && !app.game.s.designs.length ? 0 : Math.min(1, ps.length - 1)].id);
+  const home = app.floor === 'factory' ? 'modules' : 'build';
+  const want = goalPetal?.id ?? (ps.some((p) => p.id === home) ? home : ps[0].id);
   setPetal(app, want, false);
   app.audio.sfx('open');
 }
@@ -578,6 +580,8 @@ function moduleItems(app: App): Item[] {
       rows: [
         `grade {big:${letter}} ×${d.grade.mult.toFixed(2)} · ${d.spare} spare`,
         ins ? `${ins} → ${outs} /min` : `a source → ${outs} /min`,
+        // what it needs and how (the second playtest): every input trunked into its back
+        ...(Object.keys(d.ins).length > 1 ? ['{soft:both in at its back, on one trunk: run each feed into it}'] : Object.keys(d.ins).length ? ['{soft:its input trunked into its back}'] : []),
         ...(why ? [`{bad:${why.replace(/[{}]/g, '')}}`] : []),
       ],
       verbs: d.spare ? '{k:LMB} place  {k:SHIFT}{k:LMB} stamp' : '{k:SHIFT}{k:LMB} stamp a copy',
@@ -975,7 +979,13 @@ function infoTag(app: App, it: Item, anchor: { x: number; y: number }) {
   const rows = it.rows.map((r) => layoutRich(r, INFO_W));
   const verbs = it.verbs ? layoutRich(it.verbs, INFO_W) : null;
   const lines = chipRows(it.chips);
-  const head = Math.max(34, 15 + lines.length * (CHIP_H + 2));
+  // the name: in the display face when it fits beside its key, else wrapped in the text face (the
+  // second playtest read "Iron ingot x3." and "Copper wire x." cut to the display face's room)
+  const kw = it.key ? keycapWidthOf(it.key) + 3 : 0;
+  const bigName = bigWidth(it.name) <= INFO_W - 36 - kw;
+  const nameL = bigName ? null : layoutRich(it.name.replace(/[{}]/g, ''), INFO_W - 36 - kw);
+  const nameH = nameL ? Math.max(14, nameL.h + 2) : 14;
+  const head = Math.max(34, nameH + 1 + lines.length * (CHIP_H + 2));
   let ch = head + 2;
   for (const r of rows) ch += r.h;
   if (verbs) ch += 3 + verbs.h;
@@ -1002,15 +1012,13 @@ function infoTag(app: App, it: Item, anchor: { x: number; y: number }) {
     if (it.locked) padlock(app, r.x + 25, r.y + 25);
   }
   const tx = r.x + 36;
-  const tw = cw - 36;
-  // the name, shrunk to fit, the hotkey beside it
-  const kw = it.key ? keycapWidthOf(it.key) + 3 : 0;
-  let name = it.name;
-  while (name.length > 3 && bigWidth(name) > tw - kw) name = name.slice(0, -2) + '.';
-  ui.big(name, tx, r.y + 1, it.locked ? T.inkSoft : T.ink);
+  // the name, the hotkey beside it
+  const ink = it.locked ? T.inkSoft : T.ink;
+  if (bigName) ui.big(it.name, tx, r.y + 1, ink);
+  else drawLayout(ui, nameL!, tx, r.y + 2, ink);
   if (it.key) keycapK(ui, it.key, r.x + cw - kw + 3, r.y);
   // the price and the counts as chips under the name
-  let cy = r.y + 15;
+  let cy = r.y + nameH + 1;
   for (const line of lines) {
     let x = tx;
     for (const c of line) x += chip(ui, x, cy, c.text, c.o) + 2;

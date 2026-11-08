@@ -8,6 +8,7 @@
 // order or thanking you for one, Unit 7 logging a Codex first. The Build button (the wheel at the
 // screen's centre) stands on the portrait's head. Also the diegetic touches on the floor: the
 // active order's flag over the Dock, the research ring over the Hopper, the goal's bobbing arrow.
+import { aWord } from '../engine/fmt';
 import { C, rgba } from '../data/palette';
 import { BUILD, UPGRADES, type BuildKind } from '../data/machines';
 import { Num } from '../engine/num';
@@ -152,7 +153,7 @@ export function rail(app: App, L: Layout) {
   let chips = ((cam ? cam.chips : goal?.chips) ?? []).map((c) => fitChip(c, cw));
   let bar = cam ? undefined : goal?.bar;
   let note = cam ? null : goal?.note ? layoutRich(goal.note, cw) : null;
-  const grabLabel = grab ? `Grab a ${BUILD[grab].name} {coin:${Num.of(BUILD[grab].cost).format()}}` : '';
+  const grabLabel = grab ? `Grab ${aWord(BUILD[grab].name)} {coin:${Num.of(BUILD[grab].cost).format()}}` : '';
   const bx = P.x + 54;
   const size = () => {
     // chips flow in rows
@@ -288,7 +289,7 @@ function grabIt(app: App, k: BuildKind) {
  * building (it goes into your hand). */
 function goalAction(app: App, ui: string | null): { go: () => void; what: string } | null {
   const k = grabKind(app, ui);
-  if (k) return app.mode.k === 'build' && app.mode.kind === k ? null : { go: () => grabIt(app, k), what: `grab a ${BUILD[k].name}` };
+  if (k) return app.mode.k === 'build' && app.mode.kind === k ? null : { go: () => grabIt(app, k), what: `grab ${aWord(BUILD[k].name)}` };
   switch (ui) {
     case 'research': return { go: () => app.togglePanel('research'), what: 'research' };
     case 'orders': return { go: () => app.togglePanel('orders'), what: 'orders' };

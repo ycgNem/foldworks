@@ -3,6 +3,7 @@
 // (each Scenario board's personal bests). Pure: everything is read from the state, and the few
 // things written (a cosmetic granted, a board's best noted, a skin chosen) are written by systems
 // once a second or by commands, so a replay of the command log reaches the same state.
+import { aWord } from '../engine/fmt';
 import type { Game, ActResult } from './Game';
 import { OK, no } from './Game';
 import type { State, BoardRecord, ModuleDesign } from './world';
@@ -271,7 +272,7 @@ export function skinRefusal(g: Game, slot: SkinSlot, id: string | null): string 
   const c = cosmeticDef(id);
   if (!c) return 'No such skin';
   if (!g.s.meta.cosmetics?.includes(id)) return `${c.name} is not yours yet`;
-  if (!c.slots.includes(slot)) return `${c.name} doesn't fit a ${BUILD[slot as BuildKind]?.name ?? slot}`;
+  if (!c.slots.includes(slot)) return `${c.name} doesn't fit ${aWord(BUILD[slot as BuildKind]?.name ?? slot)}`;
   return null;
 }
 

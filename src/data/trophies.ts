@@ -6,6 +6,7 @@
 // slag trophy a free Slag Heap. Hidden trophies show as "???" until earned. Trophies are kept
 // through every reset (the `trophy:<id>` flags), so their bonuses are too. They began because the
 // owner asked for constant feedback (DECISIONS.md 2026-10-20).
+import { aWord } from '../engine/fmt';
 import type { ItemId } from './items';
 import { BUILD, type BuildKind } from './machines';
 import { cosmeticDef } from './cosmetics';
@@ -376,7 +377,7 @@ export function bonusText(b: TrophyBonus): string {
     case 'speed': return `{i:${b.item}} crafts {good:+${Math.round(b.add * 100)}%}`;
     // (the playability review: "the first Miner free" showed after the first Miner was paid for; the
     // bonus is the next one built, and one standing at a time stays free)
-    case 'free': return b.n > 1 ? `{good:${b.n}} ${pluralName(BUILD[b.kind].name)} free: the next you build` : `a ${BUILD[b.kind].name} free: the next you build`;
+    case 'free': return b.n > 1 ? `{good:${b.n}} ${pluralName(BUILD[b.kind].name)} free: the next you build` : `${aWord(BUILD[b.kind].name)} free: the next you build`;
     case 'skiffs': return `{u:district} {good:+${b.add}} skiff a route`;
     case 'routes': return `{u:district} {good:+${b.add}} routes a floor`;
     case 'drawer': return `{u:blueprint} Drawer {good:+${b.add}}`;

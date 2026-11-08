@@ -45,7 +45,7 @@ import type { Game } from '../sim/Game';
 import { Num } from '../engine/num';
 import { BUILD, UPGRADES } from '../data/machines';
 import { RESEARCH, type ResearchId } from '../data/research';
-import { CHUNKS, FACTORY } from '../data/land';
+import { CHUNKS, FACTORY, PATCHES } from '../data/land';
 import { isSky } from '../sim/systems/islands';
 import { RULES } from '../data/rules';
 import { RECIPE } from '../data/recipes';
@@ -56,7 +56,7 @@ import { availableNodes, researchFrac, available } from '../sim/systems/research
 import { offeredOrders } from '../sim/systems/orders';
 import { auditTicks, foldBox, gradedAudit } from '../sim/systems/audits';
 import { feedsDock, stampCost, mainItem, stampFree, stampStep } from '../sim/systems/modules';
-import { hopperBanking, hopperFilling } from './hopperwatch';
+import { hopperBanking, hopperFed, hopperFilling, hopperRate } from './hopperwatch';
 import { ORDER, type CustomerId, type OrderDef } from '../data/orders';
 import type { FEnt } from '../sim/world';
 import { claimRefusal, claimLoad, claimsHeld, claimsUsed } from '../sim/systems/claims';
@@ -91,9 +91,12 @@ export interface Goal {
   /** the research node the line is about: the research page opens on it (the playability review:
    * the frog's chips opened whatever node came first in the tree) */
   node?: ResearchId;
+  /** an alert whose fix can't be done at once (a research two nodes away): it rides under the
+   * goal as its note, never holding the bubble (the second playtest) */
+  quiet?: boolean;
 }
 
-const fmt = (n: number) => Math.floor(n).toLocaleString('en-US');
+const fmt =(n: number) => Math.floor(n).toLocaleString('en-US');
 const big = (n: number) => Num.of(n).format();
 const frac = (a: number, b: number) => (b > 0 ? Math.max(0, Math.min(1, a / b)) : 1);
 const delivered = (g: Game, it: ItemId) => g.s.delivered[it]?.toNumber() ?? 0;
@@ -177,6 +180,10 @@ function researchToward(g: Game, target: ResearchId): Goal | null {
   return researchLine(g, id, id === target ? null : target);
 }
 
+/** A research fill longer than this many minutes at the rate the Hopper takes it says its time and
+ * the step that shortens it (§16 rule 1: a goal in reach). */
+const LONG_FILL_MIN = 10;
+
 /** Bubble for one research node: pick it, or watch the Hopper fill it. */
 function researchLine(g: Game, id: ResearchId, target: ResearchId | null): Goal {
   const d = RESEARCH[id];
@@ -192,6 +199,25 @@ function researchLine(g: Game, id: ResearchId, target: ResearchId | null): Goal 
     const wrong = hopperBanking(g);
     if (wrong && short) return say(who, `Wrong snack! ${n} wants ${short}, not {i:${wrong.item}}.`, { ...o, chips: [...o.chips, `{i:${wrong.item}} → the bank`] });
     if (!hopperFilling(g) && short) return say(who, `${n} is hungry! Belt ${short} into the Hopper.`, o);
+    // a long fill (the second playtest: Coal Seams' 600 gears at 15 a minute, "about 40 min", and
+    // no other goal): its time, and the step that shortens it, a copy of a module making what it
+    // wants (a purchase in reach: §16 rule 1)
+    const rate = hopperRate(g);
+    let left = 0;
+    for (const [k, c] of Object.entries(d.cost) as [ItemId, number][]) left += Math.max(0, c - (prog[k]?.toNumber() ?? 0));
+    const min = rate > 0 ? left / rate / 60 : 0;
+    if (min > LONG_FILL_MIN) {
+      const clock = `{u:clock} about ${Math.ceil(min)} min`;
+      const wants = (Object.keys(d.cost) as ItemId[]).filter((k) => (prog[k]?.toNumber() ?? 0) < (d.cost[k] ?? 0));
+      const maker = g.s.designs.find((q) => { const m = mainItem(q); return !!m && wants.includes(m); });
+      if (maker && !claimRefusal(g, maker)) {
+        const cost = stampCost(g, maker);
+        const item = `{i:${mainItem(maker)}}`;
+        if (g.s.coin.gte(cost)) return say(who, `${n} is a long one. Stamp a ${item} copy, trunk it to the Hopper! {k:I}`, { ...o, chips: [...o.chips, clock, `stamp {coin:${cost.format()}}`] });
+        return say(who, `${n} is a long one. Save for a ${item} copy to speed it up.`, { ...o, bar: frac(g.s.coin.toNumber(), cost.toNumber()), chips: [`{coin:${g.s.coin.format()}}/${cost.format()}`, clock] });
+      }
+      return say(who, FEEDING[who](n, via), { ...o, chips: [...o.chips, clock] });
+    }
     return say(who, FEEDING[who](n, via), o);
   }
   return say(who, PICK[who](n, via), { chips: [...costChips(g, id, false), `→ ${d.unlocks}`], ui: 'research', node: id });
@@ -495,8 +521,10 @@ function act2Alerts(g: Game): Goal | null {
       if (used + n > held + 1e-9) { ore = k; chip = `{u:claim} {i:${k}} ${fmt(used)}/${fmt(held)} in use`; break; }
     }
     const what = ore ? `{i:${ore}}` : 'ore';
-    const text = g.done('surveying') ? `${claim.name} needs more ${what} claims! The Survey Office sells them.` : `${claim.name} needs more ${what} claims! Learn {research:Surveying} first.`;
-    return say('bramble', text, { chips: [chip], ui: g.done('surveying') ? 'survey' : 'research' });
+    // the nearest step the player can take now (a goal always points at something visible); one
+    // that can't be taken at once rides under the chain as a note instead of holding the bubble
+    const step = claimStep(g, ore ?? 'ironOre');
+    return say('bramble', `${claim.name} needs more ${what} claims! ${step.text}`, { chips: [chip], ui: step.ui, tile: step.tile, node: step.node, quiet: !step.now });
   }
   return null;
 }
@@ -545,6 +573,40 @@ function festivalGoal(g: Game, mods: FEnt[]): Goal | null {
   return say('bramble', 'Gizmos for the Festival! The town is losing its mind!', { bar: frac(have, want), chips });
 }
 
+/** Seconds of no income, with the Hopper taking things, before the frog says so. */
+const BROKE_S = 15;
+
+/** Income has been 0 for BROKE_S seconds while lines feed the Hopper: say so plainly, with the
+ * fix (a split, or a line to the Dock). Null otherwise, or before the first sale. */
+function noIncome(g: Game): Goal | null {
+  const s = g.s;
+  if (!g.flag('firstSale') || s.income.length < BROKE_S) return null;
+  for (let i = s.income.length - BROKE_S; i < s.income.length; i++) if (s.income[i] > 0) return null;
+  if (!hopperFed(g)) return null;
+  const hop = s.ents.find((e) => e.kind === 'hopper');
+  const split = g.done('splitters');
+  return say('bramble', 'No coin coming in! It all goes to the Hopper. Turn a line to the Dock.', {
+    chips: ['{coin} {warn:0/min}', split ? 'a Splitter: half each way' : 'one line → the Dock', 'the other → the Hopper'],
+    tile: hop ? { x: hop.x, y: hop.y } : undefined, ui: split ? 'build:splitter' : undefined,
+  });
+}
+
+/** The nearest thing a player can do now toward more claims on an ore: buy a chunk for sale with
+ * a deposit of it, the Survey Office, pick Surveying, or the first node on the way to it that can
+ * be picked (the second playtest: "Learn Surveying first" stood for 15 minutes while Surveying sat
+ * on a page that was not open yet). `now` says whether it can be done at once. */
+function claimStep(g: Game, ore: ItemId): { text: string; ui?: string; tile?: { x: number; y: number }; node?: ResearchId; now: boolean } {
+  const s = g.s;
+  if (g.done('surveying')) return { text: 'The Survey Office sells them.', ui: 'survey', now: true };
+  const chunk = CHUNKS.find((c) => !s.land.includes(c.id) && !isSky(g, c.id) && (!c.requires || g.done(c.requires))
+    && PATCHES.some((p) => p.item === ore && !p.stage && p.x >= c.x && p.x < c.x + c.w && p.y >= c.y && p.y < c.y + c.h));
+  if (chunk) return { text: `${chunk.name.split(' · ')[0]} has a deposit: buy it!`, ui: 'land', tile: { x: chunk.x + 3, y: chunk.y + 3 }, now: s.coin.gte(chunk.cost) };
+  if (available(g, 'surveying')) return { text: 'Learn {research:Surveying}! {k:T}', ui: 'research', node: 'surveying', now: true };
+  const step = researchToward(g, 'surveying');
+  if (step?.node) return { text: `{research:${RESEARCH[step.node].name}} first, then {research:Surveying}.`, ui: 'research', node: step.node, now: false };
+  return { text: 'More come with {research:Surveying}, later.', now: false };
+}
+
 /** The Inspector's line for a graded box. */
 function gradedLine(letter: string): string {
   if (letter.startsWith('S')) return `An {big:${letter}}. I shall tell no one. Fine, everyone.`;
@@ -552,8 +614,16 @@ function gradedLine(letter: string): string {
   return `A {big:${letter}}. Fold it, or tidy up and box it again.`;
 }
 
-/** The next goal. `floor` is the floor on screen: on the District only its own chores are said. */
+/** The next goal. `floor` is the floor on screen: on the District only its own chores are said. A
+ * quiet alert (a claim short whose fix is research away) rides under it as its note. */
 export function nextGoal(g: Game, floor?: string): Goal | null {
+  const goal = goalOf(g, floor);
+  if (!goal || goal.note || goal.quiet || floor === 'district' || floor === 'world' || floor === 'beyond' || !g.done('folding')) return goal;
+  const a = act2Alerts(g);
+  return a?.quiet && a.text !== goal.text ? { ...goal, note: a.text } : goal;
+}
+
+function goalOf(g: Game, floor?: string): Goal | null {
   const s = g.s;
   if (floor === 'district' && s.district) return districtGoal(g);
   if (floor === 'world' && s.world) return worldGoal(g);
@@ -573,6 +643,9 @@ export function nextGoal(g: Game, floor?: string): Goal | null {
     }
     return say('bramble', `Smells like money. Get the Bellows! {coin:${UPGRADES.bellows.cost}}`, { chips: ['{i:ironIngot} the furnace runs itself'], ui: 'bellows' });
   }
+  // income at 0 while lines feed the Hopper (the second playtest: nothing said income had stopped)
+  const broke = noIncome(g);
+  if (broke) return broke;
   // folding and the Factory floor (DESIGN.md §10-§11)
   if (g.done('folding')) {
     const graded = s.audits.filter((q) => q.result);
@@ -608,7 +681,7 @@ export function nextGoal(g: Game, floor?: string): Goal | null {
     const after = g.flag('sliceEnd');
     // before the slice end an alert beats the chain; after it, the Act II chain leads and the
     // alert rides under it as a note (the Milestone 4 review)
-    if (alert && !after) return alert;
+    if (alert && !after && !alert.quiet) return alert;
     const jam = mods.find((m) => m.state === 'blocked');
     if (jam && !s.flags.includes('sliceEnd')) return say('bramble', "A module's stuck! Hover it on the Factory floor to see why.");
     // the slice's end (DECISIONS.md, the gate's blocking findings): Bramble's Gizmo Festival,
@@ -633,8 +706,8 @@ export function nextGoal(g: Game, floor?: string): Goal | null {
   const sel = s.research.selected;
   if (!g.done('pressing')) {
     if (sel !== 'pressing') return say('bramble', "Let's learn {research:Pressing}! Ingots in the Hopper pay for it. {k:T}", { chips: costChips(g, 'pressing', false), ui: 'research' });
-    const hopperFed = g.belts.some((b) => b.x === 6 && b.y === 3 && b.rot === 1);
-    if (!hopperFed && count('miner') < 2) return say('bramble', 'Turn the last belt down into the Hopper! It still pays. {k:R}', { chips: ['{coin} Pressing is on the town'], tile: { x: 6, y: 3 }, node: 'pressing' });
+    const turned = g.belts.some((b) => b.x === 6 && b.y === 3 && b.rot === 1);
+    if (!turned && count('miner') < 2) return say('bramble', 'Turn the last belt down into the Hopper! It still pays. {k:R}', { chips: ['{coin} Pressing is on the town'], tile: { x: 6, y: 3 }, node: 'pressing' });
     return say('bramble', '{research:Pressing} is cooking! More miners and smelters, faster.', { bar: researchFrac(g, 'pressing'), chips: costChips(g, 'pressing', true) });
   }
   // after Pressing (DESIGN.md §8, §10): a Press on her line, then Folding, node 2

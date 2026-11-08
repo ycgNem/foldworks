@@ -111,11 +111,13 @@ export type Mode =
 
 export type Panel = ScreenName | null;
 
-export interface Toast { title: string; text: string; color: string; t: number; life: number; icon?: string }
+export interface Toast { title: string; text: string; color: string; t: number; life: number; icon?: string; /** it has slid in (slips queue: one moment at a time) */ on?: boolean }
 
 const SAVE_SLOT = 1;
 /** seconds the first sale's moment has the screen before its trophies show */
 const MOMENT_S = 2.2;
+/** seconds the Dock's "ORDER FILLED!" holds the floor before the reputation banner drops */
+const ORDER_TEXT_S = 1.6;
 /** a save loads only if the game rebuilds from it (DESIGN.md §20, corruption recovery) */
 const validSave = (d: unknown) => void checkSave(d as never);
 
@@ -138,7 +140,7 @@ export class App {
   frozen = false;
   toasts: Toast[] = [];
   /** the last refusal, shown under the cursor for a moment */
-  refusal: { text: string; t: number } | null = null;
+  refusal: { text: string; t: number; /** a tile on the floor on screen to say it at (a fold box's refusal: at the box, not wherever the mouse went) */ at?: { x: number; y: number } } | null = null;
   /** belt drag in progress */
   drag: { x0: number; y0: number; path: { x: number; y: number; rot: Dir }[] } | null = null;
   /** right/middle-button pan in progress */
@@ -152,7 +154,7 @@ export class App {
   layout: Layout = layout(480, 300);
   gazette = new Gazette();
   /** trophies just earned, shown as a medal sliding in */
-  trophyPops: { id: string; t: number; more?: string[] }[] = [];
+  trophyPops: { id: string; t: number; more?: string[]; on?: boolean }[] = [];
   /** UI time of the first sale: the moment has the screen for a breath, trophies wait behind it */
   momentAt = -99;
   /** which floor is on screen */
@@ -290,6 +292,9 @@ export class App {
     for (const f of g.s.flags) if (f.startsWith('page:')) this.hud.opened.add(f.slice(5));
     this.hud.codexSeen = g.s.codex.length;
     this.offline = null;
+    // a catch-up still running belongs to the game being left: it ends with it (else the new game
+    // refused every command as "catching up on your time away first")
+    if (this.offlineJob) { this.offlineJob = null; this.loop.job = null; }
     this.gradeId = null;
     this.nameDraft = null;
     this.sliceAt = null;
@@ -686,7 +691,9 @@ export class App {
           const rep = this.game.s.orders.rep[d.customer];
           const reward = c.rewards.find((q) => q.rep === rep);
           a.sfx('fanfare', 0.7);
-          banner(this, `${ICON.heart.repeat(Math.max(1, Math.min(3, rep)))} REPUTATION ${rep}!`, `${c.name} · ${reward ? reward.text : 'a new house in town'}`, C.leaf);
+          // after the Dock's "ORDER FILLED!" has risen and gone, and its trophies wait behind both
+          banner(this, `${ICON.heart.repeat(Math.max(1, Math.min(3, rep)))} REPUTATION ${rep}!`, `${c.name} · ${reward ? reward.text : 'a new house in town'}`, C.leaf, ORDER_TEXT_S);
+          this.momentAt = this.ui.time;
           // the Festival: the Factory floor, to watch the Gizmo parade into its Dock
           if (e.id === 'gizmoFestival' && !this.panel && this.floor !== 'factory') this.setFloor('factory', true);
           break;
@@ -863,7 +870,8 @@ export class App {
 
   toast(title: string, text: string, color: string, icon?: string) {
     this.toasts.push({ title, text, color, t: 0, life: 6, icon });
-    if (this.toasts.length > 3) this.toasts.shift();
+    // the queue keeps the newest; one still waiting gives way before one on screen
+    while (this.toasts.length > 5) { const i = this.toasts.findIndex((q) => !q.on); this.toasts.splice(i >= 0 ? i : 0, 1); }
   }
 
   // ------------------------------------------------------------------ input
@@ -1116,7 +1124,7 @@ export class App {
     const r = this.renderer;
     const cam = r.cam;
     const max = this.maxZoom();
-    const z = Math.max(1, Math.min(max, cam.zoom + d));
+    const z = Math.max(Math.min(this.minZoom(), cam.zoom), Math.min(max, cam.zoom + d));
     if (z === cam.zoom) return;
     if (!at) { cam.zoom = z; return; }
     const w = r.screenToWorld(at.x, at.y);
@@ -1130,6 +1138,18 @@ export class App {
 
   maxZoom() {
     return Math.max(2, Math.round(4 * (window.devicePixelRatio || 1)));
+  }
+
+  /** The farthest the wheel zooms out: the largest whole zoom at which the whole island (or the
+   * platform) still fits the view, so one notch never drops it into a sky of empty blue (the second
+   * playtest). A zoom already below it (a small window's fit) stays where it is. */
+  minZoom() {
+    const r = this.renderer;
+    const hp = r.hplat(this.floor);
+    const B = this.floor === 'factory' ? r.plat.bounds() : hp ? hp.bounds() : r.isle.bounds();
+    const w = B.x1 - B.x0, h = B.y1 - B.y0;
+    if (w <= 0 || h <= 0) return 1;
+    return Math.max(1, Math.min(this.maxZoom(), Math.floor(Math.min(r.view.w / w, r.view.h / h))));
   }
 
   /** The zoom that fills an area of the view (device px; the whole view by default): the largest
@@ -1457,6 +1477,8 @@ export class App {
       this.foldDrag = null;
       const r = this.act({ k: 'audit', ...b });
       if (r.ok) this.setMode({ k: 'idle' });
+      // said at the box (the second playtest: "The box holds the Dock" showed far from it)
+      else if (this.refusal) this.refusal.at = { x: b.x + b.w / 2, y: b.y };
     }
   }
 
@@ -1475,6 +1497,7 @@ export class App {
         const b = this.dragBox()!;
         this.foldDrag = null;
         if (this.act({ k: 'faudit', ...b }).ok) this.setMode({ k: 'idle' });
+        else if (this.refusal) this.refusal.at = { x: b.x + b.w / 2, y: b.y };
       }
       return;
     }

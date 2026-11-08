@@ -29,7 +29,7 @@ import { baseSpeed, veinBoost } from '../sim/systems/machines';
 import { islandDef, islandMiners, isWarm, warmPlant, plantReach, isPlant, repairPrice, softened, workingNeighbours, coldFactor } from '../sim/systems/islands';
 import { SEED_ORES, seedSide } from '../sim/systems/seed';
 import { krules } from '../sim/kernels';
-import { fname, feedsDock, mainItem, chuteCap, BYPRODUCTS } from '../sim/systems/modules';
+import { fname, feedsDock, mainItem, chuteCap, BYPRODUCTS, dockTakes } from '../sim/systems/modules';
 import { megaFrac, mainOutput } from '../render/factory';
 import { ITEM_IDS } from '../data/items';
 import { mouthLook } from './mouths';
@@ -80,6 +80,11 @@ const RULE: Row = { t: 'rule' };
 
 /** per minute, the one number helper */
 const pm = (n: number) => plain(n, n < 10 ? 1 : 0);
+
+/** A facing as an arrow and a word: "→ east" (rot 0 east, 1 south, 2 west, 3 north). */
+export function facing(rot: number): string {
+  return [`${ICON.right} east`, `${ICON.down} south`, `${ICON.left} west`, `${ICON.up} north`][rot & 3];
+}
 const lc = (id: string | null | undefined) => (id ? itemName(id).toLowerCase() : 'input');
 const icon = (id: string | null | undefined) => (id && id in ITEMS ? `{i:${id}}` : '');
 
@@ -348,6 +353,14 @@ function lineRows(app: App, m: Ent): Row[] {
     const ratio = have / want;
     if (!worst || Math.abs(Math.log(ratio)) > Math.abs(Math.log(worst.ratio))) worst = { item, ratio };
   }
+  // a shortage is fixed from the source down: of the items short, the first whose makers are fed
+  // in full (the second playtest: Press 2's report said "+1 Press" for plates while the press itself
+  // starved for ingots, and the bell said "Add 1 Smelter"; the Smelter comes first)
+  const shortOf = (item: ItemId) => (made.get(item) ?? 0) > 0 && (made.get(item) ?? 0) / (used.get(item) ?? Infinity) < 0.88;
+  if (worst && worst.ratio < 1) {
+    const first = [...used.keys()].find((item) => shortOf(item) && !(makers.get(item) ?? []).some((mk) => nominal(mk, g).ins.some((i) => shortOf(i.item))));
+    if (first && first !== worst.item) worst = { item: first, ratio: made.get(first)! / used.get(first)! };
+  }
   if (worst && Math.abs(worst.ratio - 1) > 0.12) {
     const have = made.get(worst.item)!, want = used.get(worst.item)!;
     if (worst.ratio < 1) {
@@ -515,8 +528,18 @@ function blockedRows(app: App, e: FEnt, item: ItemId): Row[] {
   const d = g.design(e.design)!;
   const r = g.routes.find((q) => q.from === e && !q.by);
   const to = r?.to ?? null;
-  if (!to) return [rich('front → {bad:nowhere} · trunk it to the Factory Dock')];
+  if (!to) {
+    // a module on the floor that wants it is the better place than the Dock
+    const user = g.s.factory.ents.find((q) => q.kind === 'module' && q !== e && (g.design(q.design)?.ins[item] ?? 0) > 0);
+    return [rich(user ? `front → {bad:nowhere} · trunk it into ${fname(g, user)}'s back` : 'front → {bad:nowhere} · trunk it to the Factory Dock')];
+  }
   const offered = d.outs[item] ?? 0;
+  // a byproduct (slag, oil) with nowhere to go: where it may go, and what clears it (the second
+  // playtest: the iron module's slag blocked the Gizmo trunk and nothing said where slag goes)
+  if (BYPRODUCTS.has(item) && !(to.kind === 'module' && (g.design(to.design)?.ins[item] ?? 0) > 0)) {
+    const into = to.kind === 'module' ? fname(g, to) : to.kind === 'fdock' ? 'the Factory Dock' : to.kind === 'fhopper' ? 'the Hopper' : fname(g, to);
+    return [rich(`→ ${into} {bad:takes no} ${icon(item)}`), rich(`a trunk out of its side to the {good:Factory Dock} carries ${icon(item)} off (scrapped)`)];
+  }
   if (to.kind === 'module') {
     const td = g.design(to.design);
     const name = fname(g, to);
@@ -525,13 +548,33 @@ function blockedRows(app: App, e: FEnt, item: ItemId): Row[] {
       const wants = td ? (Object.keys(td.ins) as ItemId[]).map((k) => icon(k)).join(' ') : '';
       return [rich(`→ ${name} {bad:takes no} ${icon(item)}`), rich(wants ? `it wants ${wants} · turn this trunk` : 'a source · takes nothing')];
     }
-    if (to.state === 'blocked') return [rich(`→ ${name} takes ${pm(takes)}/min · {bad:blocked itself}`)];
-    if (takes < offered * 0.98) return [rich(`→ ${name} takes ${pm(takes)} of ${pm(offered)}/min`), rich(`{soft:one trunk feeds one module}`)];
-    return [rich(`→ ${name} takes ${pm(takes)}/min · {warn:its store is full}`)];
+    // design rates are a second: the report speaks a minute (the second playtest read "takes 0.6 of 1/min")
+    if (to.state === 'blocked') return [rich(`→ ${name} uses ${pm(takes * 60)}/min · {bad:it is stuck itself}`)];
+    if (takes < offered * 0.98) return [rich(`→ ${name} uses ${pm(takes * 60)} of these ${pm(offered * 60)} a minute`), rich('{soft:it runs at that pace · the rest: a second consumer}')];
+    return [rich(`→ ${name} uses ${pm(takes * 60)}/min · {warn:its store is full}`)];
   }
   if (to.kind === 'fbay') return [rich('→ the Bay takes only {i:steel} {i:drillBit}')];
-  if (to.kind === 'fchute') return [rich(`→ the Factory Chute {bad:full} · ${chuteCap(g)} ${icon(item)} wait below`), rich('{soft:a Chute Mouth set to it empties it}')];
+  if (to.kind === 'fchute') return [rich(`→ the Factory Chute {bad:full} · ${chuteCap(g)} ${icon(item)} wait below`), rich('{soft:a Chute Mouth set to it empties it · no Dock buys it}')];
   return [rich(`trunk {bad:full} · ${FACTORY.trunkSpeed * 60}/min at most`), rich('{soft:give the module its own trunk}')];
+}
+
+/** A starved module: which input, and where it comes from: the placed module that makes it (trunk
+ * its front into this back), a design to place, or a line to fold (the second playtest). */
+function starvedRows(app: App, e: FEnt, item: ItemId, p: number): Row[] {
+  const g = app.game;
+  const rows: Row[] = [rich(`{chip:warn:STARVED} ${icon(item)} at its back · ${p}%`)];
+  if (!item || !(item in ITEMS)) return rows;
+  const fed = g.routes.filter((q) => q.to === e && !q.by).map((q) => g.design(q.from.design)).filter((q) => !!q);
+  const makes = (q: { outs: Partial<Record<ItemId, number>> }) => (q.outs[item] ?? 0) > 0;
+  if (fed.some((q) => makes(q!))) rows.push(rich(`its ${icon(item)} feed is short · {soft:a second copy, joined in}`));
+  else {
+    const placed = g.s.factory.ents.find((q) => q.kind === 'module' && q !== e && makes(g.design(q.design) ?? { outs: {} }));
+    const design = g.s.designs.find((q) => makes(q));
+    if (placed) rows.push(rich(`trunk ${fname(g, placed)}'s front into this back`));
+    else if (design) rows.push(rich(`place a ${icon(item)} module · trunk its front into this back`));
+    else rows.push(rich(`fold a ${icon(item)} line · {soft:its module feeds this one}`));
+  }
+  return rows;
 }
 
 function factoryReport(app: App, e: FEnt): Report {
@@ -543,7 +586,8 @@ function factoryReport(app: App, e: FEnt): Report {
     const r = g.routes.find((q) => q.tiles.includes(e));
     const cap = FACTORY.trunkSpeed * 60;
     const fl = Math.round(e.flow * 60);
-    rows.push(rich(`carrying ${fl}/min`));
+    rows.push(rich(`${facing(e.rot)} · carrying ${fl}/min`));
+    rows.push(rich('{k:R} turns it'));
     rows.push({ t: 'bar', frac: fl / cap, role: e.flow > FACTORY.trunkSpeed * 0.97 ? 'warn' : 'good', note: `of ${cap}/min` });
     if (r?.by) rows.push(rich('{reset:side route} · byproducts {i:slag} {i:oil}'));
     rep.verbs = '{k:R} turn  {k:X} remove';
@@ -582,9 +626,17 @@ function factoryReport(app: App, e: FEnt): Report {
   rep.title = `${fname(g, e)}`;
   rows.push(rich(`{chip:${gradeRole(d.grade.letter)}:${d.grade.letter}} rates ×${d.grade.mult.toFixed(2)}${d.depth === 2 ? ` · {research:depth 2}` : ''}`));
   const p = Math.round(e.fAvg * 100);
+  // held back by a consumer that uses less than it makes: a ratio, not a fault (the second
+  // playtest read BLOCKED on a wire module whose Gizmo used 34 of its 60 a minute)
+  const route = g.routes.find((q) => q.from === e && !q.by);
+  const paced = e.state === 'blocked' && !!e.why && !BYPRODUCTS.has(e.why) && route?.to?.kind === 'module'
+    && (g.design(route.to.design)?.ins[e.why as ItemId] ?? 0) > 0 && route.to.state !== 'blocked';
   if (e.state === 'work') rows.push(rich(`{chip:good:WORKING} ${p}% of full speed`));
-  else if (e.state === 'starved') rows.push(rich(`{chip:warn:STARVED} ${icon(e.why)} feed its back · ${p}%`));
-  else if (e.state === 'blocked') {
+  else if (e.state === 'starved') rows.push(...starvedRows(app, e, e.why as ItemId, p));
+  else if (paced) {
+    rows.push(rich(`{chip:warn:PACED} ${icon(e.why)} at ${p}% · as fast as it is used`));
+    rows.push(...blockedRows(app, e, e.why as ItemId));
+  } else if (e.state === 'blocked') {
     rows.push(rich(`{chip:bad:BLOCKED} ${icon(e.why)} backs up`));
     rows.push(...blockedRows(app, e, e.why as ItemId));
   } else rows.push(rich('{chip:soft:IDLE}'));
@@ -596,8 +648,16 @@ function factoryReport(app: App, e: FEnt): Report {
   const outs = Object.entries(d.outs) as [ItemId, number][];
   rows.push(rich(`out ${outs.map(([k, v]) => `${icon(k)} ${pm((v ?? 0) * 60)}/min`).join('  ')}`));
   const ins = Object.entries(d.ins) as [ItemId, number][];
-  if (ins.length) more.push(rich(`in ${ins.map(([k, v]) => `${icon(k)} ${pm((v ?? 0) * 60)}/min`).join('  ')} {soft:at its back}`));
+  // what it needs, and how: every input comes in at its back, along the one trunk that ends there;
+  // two feeds join that trunk (a trunk may run into another's side), no part needed (the second
+  // playtest gave up on a two-input Gizmo module)
+  if (ins.length) {
+    rows.push(rich(`needs ${ins.map(([k, v]) => `${icon(k)} ${pm((v ?? 0) * 60)}`).join(' + ')} /min {soft:at its back}`));
+    if (ins.length > 1) (e.state === 'starved' ? rows : more).push(rich('{soft:one trunk into its back · run each feed into that trunk}'));
+  }
+  const byOut = (Object.keys(d.outs) as ItemId[]).filter((k) => BYPRODUCTS.has(k));
   if (g.routes.some((q) => q.from === e && q.by && q.to)) more.push(rich('{reset:byproducts} → its side trunk'));
+  else if (byOut.length) more.push(rich(`${byOut.map(icon).join(' ')} leaves by its front · {soft:or a side trunk to the Dock}`));
   more.push(rich(feedsDock(g, e) ? 'reaches the {good:Factory Dock}' : '{warn:does not reach the Factory Dock}'));
   if (d.depth === 2) more.push(rich(`{research:depth 2} · folded from ${(d.fparts ?? []).filter((q) => q.kind === 'module').length} modules`));
   const odReady = odOn && !od && !cool;
@@ -621,9 +681,14 @@ function factoryChuteReport(app: App, e: FEnt, rep: Report): Report {
   const feeds = chuteFeeds(g);
   const full = chuteFull(g);
   const taking = feeds.filter((f) => f.flow > 0.01);
-  if (full.length) rows.push(rich(`{chip:bad:FULL} ${full.map((k) => icon(k)).join(' ')} ${cap}/${cap} · its trunk backs up`));
-  else if (taking.length) rows.push(rich('{chip:good:TAKING} drops it to the Workshop'));
-  else rows.push(rich(feeds.length ? '{chip:warn:WAITING} nothing on its trunks' : '{chip:soft:IDLE} trunk goods into it'));
+  // past its stock's room it sells on at the Factory Dock (the second playtest: a full Chute
+  // stopped every module trunked into it); only what no Dock buys still backs up
+  const stuck = full.filter((k) => !dockTakes(k));
+  const onward = full.filter((k) => dockTakes(k));
+  if (stuck.length) rows.push(rich(`{chip:bad:FULL} ${stuck.map((k) => icon(k)).join(' ')} ${cap}/${cap} · its trunk backs up`));
+  if (onward.length) rows.push(rich(`{chip:warn:FULL} ${onward.slice(0, 4).map((k) => icon(k)).join(' ')} · the rest goes on to the {good:Factory Dock}`));
+  if (!full.length && taking.length) rows.push(rich('{chip:good:TAKING} drops it to the Workshop'));
+  else if (!full.length) rows.push(rich(feeds.length ? '{chip:warn:WAITING} nothing on its trunks' : '{chip:soft:IDLE} trunk goods into it'));
   for (const f of feeds.slice(0, 3)) rows.push(rich(`← ${icon(f.item)} ${pm(f.flow * 60)}/min`));
   const held = (Object.entries(g.s.chute ?? {}) as [ItemId, number][]).filter(([, v]) => v >= 1);
   if (held.length) rows.push(rich(`stock ${held.slice(0, 5).map(([k, v]) => `${icon(k)} ${Math.floor(v)}/${cap}`).join('  ')}`));
