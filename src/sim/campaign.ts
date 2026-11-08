@@ -20,15 +20,18 @@ import { previewLegacy } from './relocate';
 import type { WorldId } from '../data/worlds';
 import type { LegacyId } from '../data/legacy';
 
-/** The order a sensible player buys in: the rule that raises income at once (half a claim a copy
- * of its S-graded ingot and wire lines: more source copies) and Overdrive from the first minute,
- * then every Act I head start, then Act II's, then quality of life. A node waits for its
- * prerequisites and the Patents to buy it. */
+/** The order a sensible player buys in (re-derived in the playability pass, DESIGN.md §19: a run
+ * after a Reorganize knows Acts I-II and gets its kept designs back, so the head starts are what
+ * the returning run still rebuilds by hand): the rule that raises income at once (half a claim a
+ * copy of its S-graded ingot and wire lines: more source copies), the land deeds the kept source
+ * designs claim on, a second free copy of each kept design, the claims kept, then quality of life.
+ * A node waits for its prerequisites and the Patents to buy it. (The Floor Plan is left out: this
+ * player lays its own floor, and the plan would lay last run's searched chains over this run's.) */
 export const PATENT_PRIORITY: PatentId[] = [
-  'surveyCharter', 'bellows', 'overdriveHabit', 'starterLine', 'notebooks', 'copperDeeds', 'gearPatterns', 'gizmoPatent', 'foldingPatent',
-  'shovelFrog', 'grant', 'quickAudit', 'coalRights', 'steelCharter', 'moreAuditors', 'nightShift',
-  'glassNotes', 'circuitPatent', 'widerBox', 'nightWatch', 'draughtsman', 'lightsOn', 'freshDies', 'nestedBoxes', 'sideIntake',
-  'labAssistant', 'orderClerk', 'stampPress', 'drawerSpace',
+  'surveyCharter', 'copperDeeds', 'coalRights', 'starterLine', 'steelCharter', 'overdriveHabit',
+  'shovelFrog', 'quickAudit', 'moreAuditors', 'nightShift',
+  'widerBox', 'nightWatch', 'draughtsman', 'lightsOn', 'freshDies', 'nestedBoxes', 'sideIntake',
+  'labAssistant', 'orderClerk', 'stampPress', 'drawerSpace', 'filingCabinet',
 ];
 
 /** The Act III nodes (DESIGN.md §21 Patents), bought once a run has reached the District, after

@@ -3244,3 +3244,89 @@ retention at ~35% because the hook hid behind nine research nodes and a gear gri
   The lever is Act II's (the Drill's concrete), not Act I's.
 - **Flagged as derivative**: none new. The free first copy is a tutorial gift, not a recurring
   "free item" mechanic.
+
+## Playability pass (2026-11-08): the returning run (reset layer 1)
+
+The review's findings 2 and 3: a Reorganize replayed the tutorial (the 15 h checkpoint dropped from
+573K/min to 90/min, Bramble asked for the Boardwalk again, every run spent 2.3-2.5 h back to Act
+III) and the Patent tree was bought out by ~17 h with nothing after it. Decisions, each with its
+reason:
+
+- **A Reorganize keeps what you learned** (`src/sim/reorganize.ts`). Every run after the first reset
+  of the save (`meta.runs >= 1`: a Reorganize, Relocate or Last Fold) knows every research node with
+  `act` undefined, 1 or 2 (`RULES.keptActs`), keyed off the node's `act`, never a list (the folding
+  agent is reordering Act I). Universe-wide, not per island: a new island's first run replaying
+  Act II's research is the same chore. The flags `factoryOpen`, `firstFold` and `sliceEnd` are kept,
+  so the Factory is open from the first tick and the first-fold and slice-end moments play once.
+  The Workshop and Factory floors still start empty: a new run is a new layout.
+- **The Drawer's designs come back built.** Each kept design with its audit card returns at a run's
+  start as a module design (its kept grade, rates, box and name) with **one free copy**
+  (`RULES.returnCopies`); later copies are stamped at bill x (1 + 0.5 n) as ever. Free once, not a
+  25% bill: the run starts with ~600 coin, so a bill makes the first minute's coin the gate for no
+  decision; the decision is which designs the Drawer keeps. An imported string or a Group Drawer
+  layout (no card) still unfolds and is audited. A Challenge run gets nothing back (it is a run
+  built from scratch under its rule, and "stand 8 modules" or "deliver 200 Gizmos" would be met by
+  the returns); research is still known there, as the old head starts gave it.
+- **Orders filled once are never offered again** (`meta.ordersFilled`, `ordersAt`;
+  `src/sim/systems/orders.ts`). Reputation was always kept, so a refill paid a reward twice. The
+  Town draws every order ever filled (`ordersEverFilled`), so it is the record of everything built.
+  Two exceptions: **the Committee's orders repeat** (`CustomerDef.repeats`): their reputation is the
+  Great Drill's gate, two a run by design (§19); measured, with them filled once the campaign's run
+  2 filed 0 Patents (stage 2 never opened) and could not reset. And a Challenge whose goal is an
+  order offers it again in its run. *Consequence for Act III*: Bramble, Unit 7 and Voltaire no
+  longer reach reputation 4-5 by refilling Act II orders each run; their rep 4-5 rewards (the Skiff
+  Club, Specimen Jars, half-power Chem Vats, High-Tension Lines) now come from their Act III orders.
+  That is where they belong, but it slows the District bot's skiffs until Picnic, Senses or Ballet
+  is filled: flagged for the Act III agent and the lead.
+- **The Patent tree's Act I-II head starts are re-derived** (`src/data/patents.ts`): Bellows, Old
+  Notebooks' research, Gear Patterns, the Gizmo Patent, Folding Remembered, the Grant, Overdrive by
+  Habit, Glass and Gravel Notes and the Circuit Patent bought nothing any more. The ids are kept
+  where code names them (the bots, Old Habits) with new effects; the rest are gone. The new
+  "returning run" head starts buy what a returning run still rebuilds by hand: Copper Deeds (start
+  owning B and C), Coal Rights (D and E), Steel Charter (F), Claims on File (the Survey Office's
+  blocks kept through a Reorganize), Spare Dies (a second free copy of every kept design). The
+  automation branch gains the Filing Cabinet (Drawer 12 -> 16) and the Floor Plan (the Factory
+  floor at a Reorganize is laid again, a tile every 2 s, trunks paid, module tiles filled from spare
+  copies: pillar 2, the returning run's chore becomes the Draughtsman's). 33 nodes, 65 Patents.
+  A v12 save is refunded every old head start at its old price (v13 migration).
+- **The Patent sink that scales: Dies on file.** In the Drawer, 1 Patent buys one more copy of one
+  kept design at every run's start, at most 4 a design (`RULES.dieCopyPrice`, `dieCopiesMax`): the
+  sink grows with the Drawer (8-20 slots, 32-80 Patents) and ends where a returning floor is whole.
+  Pillar 1: what comes back is a design you folded, and it still needs claims, room and trunks.
+  Forgetting a design returns its dies as Patents. Flat price, no curve.
+- **A reset that buys nothing is never invited.** When the tree is bought out and every die is on
+  file (`spendable(g).full`), the Reorganize card's Committee says "the tree is full. nothing to
+  buy. keep building.", the button reads "Sign anyway" and is no longer gold, and the Patent Office
+  says the same. (The Standing Committee still resets at the number its player set: pillar 4, the
+  player's standing choice.)
+- **The card says how fast the next run is**: "back to 15.9K/min in ~N min", the run's Act II floor
+  (`meta.factoryPeak`, its best 5-minute income before Zoning) and the minutes the last returning
+  run took to pass it (`meta.caughtUp`, kept in the run history), or `RULES.backInMinutes` (the
+  campaign's measure) before one has. A run whose District opened before its floor's peak was noted
+  (a save from before) says "your Act II floor" with no number rather than promise its 574K.
+- **The bills term is filed like the designs** (`meta.billsFiled`): only a rise over the best on file
+  pays (a Relocate or a Last Fold starts it again). Measured: a returning run rebuilds its floor in
+  minutes, so a 35-minute reset loop filed 1-4 bills Patents a run and out-filed the designed runs
+  (3.59 against 3.42 an hour). Filing it closes the loop the way the designs' record did.
+- **A returned design's spare copies hold no claim until placed**: they are dies in the inventory.
+  (Claims still cap what digs: placing past them is refused.)
+- **Tried and dropped: the campaign's player keeping the slice's chain designs.** Keeping the wire
+  and ingot lines left them standing unfolded next run (their designs came back, so the planner never
+  folded them) on tiles the Act II lab is laid over, and the Act II policy waited on them for the
+  whole run (keeping only the Gizmo works was not measured to the end). A bot artefact, recorded so the next pass does
+  not retry it. Seed 1000's run 2 is left open in the pace test (`BACK_IN_OPEN`, with the reason).
+- **The Town Archive (Legacy) is re-derived**, since every run after a reset knows Acts I-II: it
+  now knows Zoning and Chutes in every run of every world (the Zoning Charter's research, kept
+  through a Relocate). The Seed keeps the Archive (lastfold.ts), so a new universe knows them too.
+- Files outside this agent's list touched minimally: `src/sim/Game.ts` (the `die` command),
+  `src/sim/world.ts` (types), `src/sim/systems/stats.ts` (one call), `src/sim/drawer.ts`,
+  `src/render/town.ts`, `src/app/orders.ts`, `src/data/legacy.ts` (Archive and Purse text),
+  `src/data/rules.ts` (five rules), `src/engine/save.ts` (v13), `src/sim/bot.ts` (one line: the
+  planner skips orders filled before), `e2e/screens.mjs` (node ids), and the act4/act5/prestige
+  tests' expectations of a fresh run.
+
+**Flagged as derivative.** Dies on file (starting units bought with prestige currency, carried into
+each run) resembles "start with N of X" prestige upgrades in many idles (Antimatter Dimensions'
+start-with upgrades, Realm Grinder's). Kept because each copy is one specific design the player
+folded, placed by hand under claims and room, bounded at 4, and never a multiplier on production.
+Not done: unspent Patents boosting production (Cookie Clicker's heavenly chips, AdCap's angels).

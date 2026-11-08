@@ -11,7 +11,9 @@ import { ITEMS, type ItemId } from '../data/items';
 import { RULES, GRADES } from '../data/rules';
 import { megaStage } from '../data/megaprojects';
 import { ICON, bigWidth, textWidth, BIG_H } from '../ui/font';
-import { previewPatents, reorganizeRefusal, runSeconds, chainSteps, nextTierRate, bestThisRun, KEPT, LOST, type PatentGoal, type Preview } from '../sim/reorganize';
+import { previewPatents, reorganizeRefusal, runSeconds, chainSteps, nextTierRate, bestThisRun, nextRunPace, KEPT, LOST, type PatentGoal, type Preview } from '../sim/reorganize';
+import { spendable } from '../sim/patents';
+import type { Game } from '../sim/Game';
 import { TICK_RATE } from '../engine/time';
 import { Num } from '../engine/num';
 import { button, rule, chip } from './chrome';
@@ -60,8 +62,11 @@ export function reorganizeCard(app: App, r0: Rect) {
   const armed = ui.time < st.armedUntil;
   const offered = challengesOffered(app);
   if (st.pick && !offered.includes(st.pick)) st.pick = null;
+  // the playability pass (DESIGN.md §19): a reset whose Patents would buy nothing (the tree bought
+  // out, every die on file) is never invited: the card says so, and the button is no longer gold
+  const full = !why && spendable(g, p.now).full;
   // ---- the Committee, sliding the contract over
-  const line = why ? '"not yet." "come back with a fold." "or two."' : armed ? '"sure?" "sign again." "no take-backs."' : st.pick ? `"a Challenge?" "bold." "sign here." {chip:reset:+${p.now} ${p.now === 1 ? 'Patent' : 'Patents'}}` : `"psst." "sign here." {chip:reset:+${p.now} ${p.now === 1 ? 'Patent' : 'Patents'}}`;
+  const line = full ? '"the tree is full." "nothing to buy." "keep building."' : why ? '"not yet." "come back with a fold." "or two."' : armed ? '"sure?" "sign again." "no take-backs."' : st.pick ? `"a Challenge?" "bold." "sign here." {chip:reset:+${p.now} ${p.now === 1 ? 'Patent' : 'Patents'}}` : `"psst." "sign here." {chip:reset:+${p.now} ${p.now === 1 ? 'Patent' : 'Patents'}}`;
   let y = body.y;
   y += speak(app, 'committee', line, body.x, y, Math.min(body.w, 300), { size: 24, fallback: committeeFallback }) + 6;
   // ---- the contract: a sheet on the page, three ruled columns
@@ -78,7 +83,7 @@ export function reorganizeCard(app: App, r0: Rect) {
   const kx = ix + gw + 8;
   ui.ctx.fillStyle = T.paperEdge;
   ui.ctx.fillRect(kx - 4, iy, 1, ih);
-  keepColumn(ui, { x: kx, y: iy, w: kw, h: ih });
+  keepColumn(ui, g, { x: kx, y: iy, w: kw, h: ih });
   const lx = kx + kw + 8;
   ui.ctx.fillRect(lx - 4, iy, 1, ih);
   loseColumn(ui, { x: lx, y: iy, w: iw - (lx - ix), h: ih });
@@ -104,9 +109,9 @@ export function reorganizeCard(app: App, r0: Rect) {
     ui.text(ICON.cross, sx, fy + 1, T.inkSoft);
     for (let i = sx + 9; i < bx - 6; i += 3) ui.fill(i, fy + 8, 2, 1, T.inkSoft);
   }
-  const label = why ? 'Not yet' : armed ? 'Sure? Sign' : 'Sign here';
-  const tip = why ? [{ text: `{bad:${why}}` }] : armed ? [{ text: '{u:reset} click again · the run ends here' }] : [{ text: '{u:reset} two clicks · the first arms it' }, { text: before }];
-  if (button(ui, 'reorganizeGo', bx, fy - 6, bw, 20, label, { icon: 'reset', disabled: !!why, gold: !why, big: true, pulse: armed, tip })) {
+  const label = why ? 'Not yet' : armed ? 'Sure? Sign' : full ? 'Sign anyway' : 'Sign here';
+  const tip = why ? [{ text: `{bad:${why}}` }] : armed ? [{ text: '{u:reset} click again · the run ends here' }] : full ? [{ text: '{bad:the Patents would buy nothing}' }, { text: '{soft:the tree is bought out · every die is on file · keep building}' }] : [{ text: '{u:reset} two clicks · the first arms it' }, { text: before }];
+  if (button(ui, 'reorganizeGo', bx, fy - 6, bw, 20, label, { icon: 'reset', disabled: !!why, gold: !why && !full, big: true, pulse: armed, tip })) {
     if (!armed) st.armedUntil = ui.time + 4;
     else {
       st.armedUntil = -1;
@@ -276,7 +281,10 @@ function goalRow(app: App, p: Preview, q: PatentGoal): [string, string] | null {
 const KEPT_ROW: Record<string, string> = {
   'Patents and the Patent tree': '{u:reset} what the reset is for',
   "The Patent Office's record": "{u:patents} each product's best design on file · a run is paid for beating it",
-  'The Patent Drawer': '{u:blueprint} kept designs · unfold whole onto their boxes',
+  'The Patent Drawer, built': '{u:blueprint} kept designs come back as modules · a free copy each · placeable at once',
+  'Research of Acts I-II': '{u:research} every node of the Workshop and the Factory · known from the first minute',
+  'The Factory floor, open': '{u:factory} open from the first minute · no first fold to wait for',
+  'The Town and orders filled': '{u:orders} an order filled once is never asked again · its piece of the Town stands',
   'The Great Drill': '{u:mega} its progress survives every reset',
   'Reputation': "{u:heart} every customer remembers you · rewards stay · the Committee's opens the Drill",
   'The Night Shift': '{u:overnight} the offline crews you bought with coin',
@@ -284,11 +292,25 @@ const KEPT_ROW: Record<string, string> = {
   'Trophies and lifetime statistics': '{u:trophies} the shelf and the counters',
 };
 
-/** The middle column: what a Reorganize keeps, ticked; its reason on hover. */
-function keepColumn(ui: UI, c: Rect) {
+/** The middle column: how fast the next run will be, then what a Reorganize keeps, ticked; its
+ * reason on hover. */
+function keepColumn(ui: UI, g: Game, c: Rect) {
   let y = c.y;
   heading(ui, 'You keep', c.x, y, c.w, 'good');
   y += BIG_H + 5;
+  // the playability pass (DESIGN.md §19): "back to 21K/min in ~15 min", the run's own measure once
+  // a returning run has one, the campaign's before
+  const pace = nextRunPace(g);
+  if (pace.perMin > 0 || pace.district) {
+    const to = pace.perMin > 0 ? `{coinc:${Num.of(Math.round(pace.perMin)).format()}/min}` : 'your Act II floor';
+    const L = layoutRich(`{u:ff} back to ${to} in ~${pace.minutes} min`, c.w);
+    drawLayout(ui, L, c.x, y, T.ink);
+    const sub = [pace.built ? `${pace.built} design${pace.built === 1 ? '' : 's'} back built` : 'keep designs: they come back built', pace.district ? 'the District after' : ''].filter(Boolean).join(' · ');
+    const S = layoutRich(`{soft:${sub}}`, c.w);
+    drawLayout(ui, S, c.x, y + L.h + 1, T.inkSoft);
+    ui.hint(c.x, y - 1, c.w, L.h + S.h + 3, [{ text: '{big:The next run}' }, { text: `{u:research} Acts I-II known · {u:factory} the Factory open · {u:blueprint} ${pace.built} kept design${pace.built === 1 ? '' : 's'} as modules` }, { text: pace.measured ? '{soft:~ minutes: as your last run took}' : '{soft:~ minutes: as the campaign bot took}' }], 190);
+    y += L.h + S.h + 5;
+  }
   for (const k of KEPT) {
     const L = layoutRich(k.what, c.w - 10);
     if (y + L.h > c.y + c.h) break;
@@ -341,6 +363,7 @@ export function afterReorganize(app: App, patents: number, challenge: ChallengeI
   app.fitCamera(true);
   app.panel = 'patents';
   app.toast('Reorganized', `{reset:+${patents}} ${patents === 1 ? 'Patent' : 'Patents'} banked · spend them on the tree`, C.violet);
+  backBuilt(app);
   // Act III (DESIGN.md §21): the run taken as a Challenge says its rule; the first Reorganize
   // opens the Scenario boards (Options) and, from the next one, Challenges
   if (challenge) app.toast(`Challenge: ${CHALLENGES[challenge].name}`, `{bad:${CHALLENGES[challenge].rule}} · {good:goal} ${CHALLENGES[challenge].goalText}`, C.violet, 'star');
@@ -363,8 +386,15 @@ export function afterAutoReorganize(app: App, patents: number) {
   app.setFloor('workshop', true);
   app.fitCamera(true);
   app.toast('The Committee reorganized', `{reset:+${patents}} ${patents === 1 ? 'Patent' : 'Patents'} banked · a new run`, C.violet);
+  backBuilt(app);
   app.audio.resetSound(1);
   app.save();
+}
+
+/** The returning run (the playability pass, DESIGN.md §19): say what came back built, and where. */
+function backBuilt(app: App) {
+  const n = app.game.s.designs.filter((d) => d.kept !== undefined).reduce((t, d) => t + d.spare, 0);
+  if (n > 0) app.toast('Back built', `{u:blueprint} ${n} module${n === 1 ? '' : 's'} from the Drawer · {u:factory} place them on the Factory floor · Acts I-II known`, C.violet, 'fold');
 }
 
 /** The Committee's portrait until the art director's lands: three raccoon heads stacked in one

@@ -39,7 +39,7 @@ import type { IdleUpgradeId } from '../data/idle';
 import type { PatentId } from '../data/patents';
 import { buyPatent } from './patents';
 import { reorganize, customerMet } from './reorganize';
-import { keepDesign, forgetKept, unfoldKept, importDesign, renameKept, queueKept } from './drawer';
+import { keepDesign, forgetKept, unfoldKept, importDesign, renameKept, queueKept, buyDie } from './drawer';
 import { runAutomation, autoStamp } from './systems/automation';
 import { buyAnnex } from './systems/annex';
 // Act III (DESIGN.md §21)
@@ -125,6 +125,8 @@ export type Cmd =
   | { k: 'importDesign'; code: string }
   | { k: 'renameKept'; id: number; name: string }
   | { k: 'queueKept'; id: number; at?: number }
+  // Dies on file (the playability pass, DESIGN.md §19): one more copy of a kept design at every run's start
+  | { k: 'die'; id: number }
   | { k: 'autoStamp'; id: number }
   // the Factory annex (DESIGN.md §19): one more block east of the floor
   | { k: 'annex' }
@@ -498,6 +500,7 @@ export class Game {
       case 'importDesign': return importDesign(this, c.code);
       case 'renameKept': return renameKept(this, c.id, c.name);
       case 'queueKept': return queueKept(this, c.id, c.at);
+      case 'die': return buyDie(this, c.id);
       case 'autoStamp': return autoStamp(this, c.id);
       case 'annex': return buyAnnex(this);
       case 'fchute': return fplace(this, 'chute', c.x, c.y, 0);

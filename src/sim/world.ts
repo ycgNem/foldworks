@@ -235,6 +235,9 @@ export interface ModuleDesign {
   /** every machine in the box ran in its normal mode when it was folded (a kept design refolds
    * after a short check only then: the final round); absent on designs from before */
   normal?: boolean;
+  /** it came back at a run's start from this kept design in the Patent Drawer (DESIGN.md §19, the
+   * playability pass: a Reorganize keeps what you learned); absent on a design folded this run */
+  kept?: number;
 }
 
 /** What stands on a floor of modules. The Factory has trunks and its Chute (DESIGN.md §21); the
@@ -397,6 +400,10 @@ export interface KeptDesign {
   nested?: { kind: 'module' | 'trunk'; item: ItemId | null; dx: number; dy: number; rot: Dir }[];
 }
 
+/** One tile of the Floor Plan (a Patent, DESIGN.md §19): a trunk, or a module tile named by its
+ * product (filled with a spare copy of a depth-1 design making it). */
+export interface FloorPlanTile { kind: 'trunk' | 'module'; x: number; y: number; rot: Dir; item?: ItemId }
+
 /** A District layout kept by the Town Plan (a Legacy node, DESIGN.md §22): each tile named by the
  * product of the group that stood there, and the routes between the tiles (by position). */
 export interface TownPlan {
@@ -452,6 +459,11 @@ export interface RunRecord {
   earned: Num;
   /** its best coin per minute over 5 minutes (a rate) */
   peakPerMin: number;
+  /** the playability pass (DESIGN.md §19): its best 5-minute coin per minute before the District
+   * opened (its Act II floor), and the seconds it took to pass the run before's (absent: never, or a
+   * record from before) */
+  factoryPeak?: number;
+  caughtUp?: number;
   /** it ended with a Relocate to this island, banking this much Legacy (DESIGN.md §22) */
   relocate?: WorldId;
   legacy?: number;
@@ -506,6 +518,24 @@ export interface MetaState {
   /** this run's best 5-minute coin per minute so far, and the minutes it is averaged over (rates) */
   peakPerMin: number;
   perMinRing: number[];
+  /** the playability pass (DESIGN.md §19 "What a Reorganize keeps"), all absent on older saves:
+   * this run's best 5-minute coin per minute before the District opened, and the seconds into the
+   * run its 5-minute coin per minute first passed the last run's (the Reorganize card's "back in") */
+  factoryPeak?: number;
+  caughtUp?: number;
+  /** customer orders filled in a run before this one (never offered again; the Town stands on
+   * them with this run's), and the tick each was filled on */
+  ordersFilled?: string[];
+  ordersAt?: Record<string, number>;
+  /** the bills term on file (the playability pass, DESIGN.md §19): only a rise pays; `world` and
+   * `universe` are the Relocates and Last Folds when it was filed (another starts it again) */
+  billsFiled?: { value: number; world: number; universe: number };
+  /** Dies on file: copies of a kept design bought to come back at every run's start, by its id */
+  dies?: Record<number, number>;
+  /** Claims on File (a Patent): the most claims blocks bought of each ore, kept through a Reorganize */
+  keptClaims?: Partial<Record<ItemId, number>>;
+  /** the Floor Plan (a Patent): the Factory floor as it stood at the last Reorganize */
+  floorPlan?: FloorPlanTile[];
   /** Challenges completed, for good (DESIGN.md §21); absent on older saves */
   challenges?: string[];
   // ---- Relocate, layer 2 (DESIGN.md §22); absent on older saves (Home, nothing banked)

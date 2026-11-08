@@ -5,7 +5,7 @@ import { drawRich } from '../ui/rich';
 import { button, rule, T } from './chrome';
 import { lessonsOn, saveLessonsOn, saveUiScale, uiScaleSetting, maxUiScale, uiScaleFor } from './settings';
 import { setPhoto } from './photo';
-import { PATCH_NAME } from './whatsnew';
+import { PATCH_NAME } from './patch';
 import type { App } from './app';
 
 /** The scale picks a w x h canvas offers: 0 (Auto), then 1x up to the largest that fits. */

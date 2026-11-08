@@ -31,7 +31,7 @@ import type { ItemId } from '../data/items';
 import { RULES } from '../data/rules';
 import { TICK_RATE } from '../engine/time';
 import { available } from './systems/research';
-import { offeredOrders } from './systems/orders';
+import { offeredOrders, orderFilled } from './systems/orders';
 
 export type Policy = 'planner' | 'greedy' | 'dockOnly' | 'idle';
 
@@ -478,7 +478,8 @@ export class Bot {
     const offered = offeredOrders(g);
     // greedy takes whatever is offered; the others take the plan's orders in turn (the next one
     // waits until it is offered: Lamp Posts would hold the Festival up)
-    const next = this.pendingOrders.find((p) => !g.s.orders.done.includes(p));
+    // (an order filled in a run before is never offered again: the playability pass, DESIGN.md §19)
+    const next = this.pendingOrders.find((p) => !orderFilled(g, p));
     const id = this.policy === 'greedy' ? offered[0]?.id : next && offered.some((q) => q.id === next) ? next : undefined;
     if (id) this.act({ k: 'order', id });
   }

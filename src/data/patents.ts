@@ -8,12 +8,11 @@ import type { UpgradeId } from './machines';
 
 export const PATENT_IDS = [
   // head starts
-  'bellows', 'starterLine', 'notebooks', 'copperDeeds', 'gearPatterns', 'gizmoPatent', 'foldingPatent', 'grant',
-  'overdriveHabit', 'coalRights', 'steelCharter', 'glassNotes', 'circuitPatent',
+  'copperDeeds', 'coalRights', 'steelCharter', 'overdriveHabit', 'starterLine',
   // rules
   'surveyCharter', 'widerBox', 'quickAudit', 'moreAuditors', 'sideIntake', 'nestedBoxes', 'freshDies',
   // automation
-  'shovelFrog', 'labAssistant', 'orderClerk', 'stampPress', 'draughtsman', 'drawerSpace',
+  'shovelFrog', 'labAssistant', 'orderClerk', 'stampPress', 'draughtsman', 'drawerSpace', 'filingCabinet', 'notebooks',
   // offline
   'nightShift', 'nightWatch', 'lightsOn',
   // Act III (DESIGN.md §21)
@@ -41,6 +40,11 @@ export type PatentEffect =
   | { k: 'stampPress'; every: number }
   | { k: 'draughtsman'; every: number }
   | { k: 'drawer'; add: number }
+  // the returning run (the playability pass, DESIGN.md §19): more free copies of every kept design;
+  // the Survey Office's claims kept through a Reorganize; the Factory floor laid again
+  | { k: 'spareDies'; add: number }
+  | { k: 'claimsKept' }
+  | { k: 'floorPlan'; every: number }
   | { k: 'offline'; add: number }
   // Act III (DESIGN.md §21)
   | { k: 'skiffSpeed'; add: number }
@@ -74,96 +78,48 @@ export const PATENTS: Record<PatentId, PatentDef> = {
   // bought 22 of the 29 nodes, most of the tree in 5-15 h (the review round). Measured in the final
   // round, a fourth run files about 1 in 5 h (everything is on file and the Drill is done), so the
   // last 10 Patents wait for the next floor's goals (Milestone 7), not for the fourth run.
-  bellows: P({
-    id: 'bellows', name: 'Bellows on the Bench', branch: 'head', cost: 1, requires: [], pos: [0, 0],
-    effect: { k: 'head', upgrades: ['bellows'] },
-    text: '{u:reset} every run starts with the Bellows · the Hand Furnace runs itself',
-    flavor: 'You kept the bellows. Of course you kept the bellows.',
-    derivation: '§19 Patent tree: head starts; 1 Patent (the least), the 20 s of cranking §6 measures (§13 check 1)',
-  }),
-  starterLine: P({
-    id: 'starterLine', name: 'A Miner on the Patch', branch: 'head', cost: 1, requires: ['bellows'], pos: [1, 0],
-    effect: { k: 'head', place: [{ kind: 'miner', x: 2, y: 3, rot: 0 }] },
-    text: '{u:reset} every run starts with a Miner feeding the Hand Furnace · hands-free from second one',
-    flavor: 'It was still warm when you came back.',
-    derivation: '§19 Patent tree: head starts; 1 Patent (the least), the first 47 s of hand-mining (§13 check 2)',
-  }),
-  notebooks: P({
-    id: 'notebooks', name: 'Old Notebooks', branch: 'head', cost: 1, requires: ['starterLine'], pos: [2, 0],
-    effect: { k: 'head', research: ['pressing', 'surveyEast'] },
-    text: '{u:reset} start knowing {research:Pressing} · {research:Survey East}',
-    flavor: 'Smudged, dog-eared, mostly correct.',
-    derivation: '§19 Patent tree: head starts; 1 Patent, about 5 min of the first run (§13 checks 3-4)',
-  }),
+  // The returning run (the playability pass, DESIGN.md §19 "What a Reorganize keeps"): every run
+  // after a Reorganize knows Acts I-II's research, has the Factory open and gets its kept designs
+  // back as modules, so the old head starts (research, a Miner, the Bellows, 2,000 coin) bought
+  // nothing. These nodes buy what a returning run still has to rebuild by hand: the land its
+  // claims and boxes sit on, the claims it bought, and more copies of what it kept. Priced at
+  // about a Patent per 10-15 min of a run saved (§19), measured on the campaign bot.
+  // (Ids are kept from the old tree so a save, the bots and Old Habits still name them; the
+  // effects are new. A save from before refunds the old nodes: src/engine/save.ts v13.)
   copperDeeds: P({
-    id: 'copperDeeds', name: 'Copper Deeds', branch: 'head', cost: 1, requires: ['notebooks'], pos: [3, 0],
-    effect: { k: 'head', land: ['B'], research: ['copperSmelting', 'wireDrawing'] },
-    text: '{u:reset} start with Chunk B · {research:Copper Smelting} · {research:Wire Drawing}',
+    id: 'copperDeeds', name: 'Copper Deeds', branch: 'head', cost: 1, requires: [], pos: [0, 0],
+    effect: { k: 'head', land: ['B', 'C'] },
+    text: '{u:survey} every run starts owning Chunks B and C · {good:+2} claims a deposit',
     flavor: 'The frogs never asked for the land back. Frogs are like that.',
-    derivation: '§19 Patent tree: head starts; 1 Patent, chunk B (1,000) and two nodes, about 6 min of the first run (§13 check 4)',
-  }),
-  gearPatterns: P({
-    id: 'gearPatterns', name: 'Gear Patterns', branch: 'head', cost: 1, requires: ['notebooks'], pos: [3, 1],
-    effect: { k: 'head', research: ['gearcutting', 'splitters', 'buffers'] },
-    text: '{u:reset} start knowing {research:Gearcutting} · {research:Splitters & Mergers} · {research:Buffers}',
-    flavor: 'Teeth drawn to scale, on a napkin.',
-    derivation: '§19 Patent tree: head starts; 1 Patent, three nodes (about 500 plates and gears of deliveries, 5-6 min; Slag Bricks stays a choice: a press set to nothing would pick bricks from the first slag it met)',
-  }),
-  gizmoPatent: P({
-    id: 'gizmoPatent', name: 'The Gizmo Patent', branch: 'head', cost: 1, requires: ['copperDeeds', 'gearPatterns'], pos: [4, 0],
-    effect: { k: 'head', research: ['gizmoTheory'] },
-    text: '{u:reset} start knowing {research:Gizmo Theory} · Chunk C for sale at once',
-    flavor: 'Nobody knows what it does. Now nobody else is allowed to make one.',
-    derivation: '§19 Patent tree: head starts; 1 Patent, 120 gears and 300 wire of deliveries, about 5 min',
-  }),
-  foldingPatent: P({
-    id: 'foldingPatent', name: 'Folding, Remembered', branch: 'head', cost: 1, requires: ['gizmoPatent'], pos: [5, 0],
-    effect: { k: 'head', research: ['folding'] },
-    text: '{u:reset} start knowing {research:Folding} · fold the first line the moment it runs',
-    flavor: 'Your hands know the creases.',
-    derivation: '§19 Patent tree: head starts; 1 Patent (was 2: the tree repriced so most of it is bought in 5-15 h, the review round), the dearest Act I node (50 Gizmos, 500 gears: §13 check 6), about 10 min',
-  }),
-  grant: P({
-    id: 'grant', name: "Founders' Grant", branch: 'head', cost: 1, requires: ['bellows'], pos: [1, 1],
-    effect: { k: 'head', coin: 2000 },
-    text: '{u:reset} every run starts with {coin:2,000}',
-    flavor: 'Bramble insists it is a loan. Bramble has no ledger.',
-    derivation: '§19 Patent tree: head starts; 1 Patent, 2,000 coin, about what the Act I planner has earned by chunk B (1,000 at 9:20, §13 measured) and the gear lines after it, some 5 min; a flat sum, never scaled by anything (flagged derivative: DECISIONS.md)',
-  }),
-  overdriveHabit: P({
-    id: 'overdriveHabit', name: 'Overdrive by Habit', branch: 'head', cost: 1, requires: ['bellows'], pos: [2, 1],
-    effect: { k: 'head', research: ['overdrive'] },
-    text: '{u:reset} start knowing {research:Overdrive} · {k:LMB} a machine or module · 3× for 10 s',
-    flavor: 'Your finger twitches toward the big red lever.',
-    derivation: '§19 Patent tree: head starts; 1 Patent, Act II active play (§18 Overdrive) from the first minute, the click lever of §16 rule 4',
+    derivation: '§19 The returning run: 1 Patent; chunks B and C are 2,000 coin, nothing to a returning run, but their copper and iron deposits are claims (2 each, §18) the kept source designs dig with from the first minute',
   }),
   coalRights: P({
-    id: 'coalRights', name: 'Coal Rights', branch: 'head', cost: 1, requires: ['foldingPatent'], pos: [6, 0],
-    effect: { k: 'head', research: ['coalSeams'], land: ['E'] },
-    text: '{u:reset} start knowing {research:Coal Seams} · start with Chunk E · {i:coal} {i:sand}',
+    id: 'coalRights', name: 'Coal Rights', branch: 'head', cost: 1, requires: ['copperDeeds'], pos: [1, 0],
+    effect: { k: 'head', land: ['D', 'E'] },
+    text: '{u:survey} every run starts owning Chunks D and E · {i:coal} {i:sand}',
     flavor: 'Signed in coal dust, witnessed by a heron.',
-    derivation: '§19 Patent tree: head starts; 1 Patent (was 2, the review round\'s repricing), chunk E (60,000) and 600 gears of research, about 10-15 min of early Act II',
+    derivation: '§19 The returning run: 1 Patent; chunks D and E are 72,000 coin, about 5 min of a returning run\'s first 20 (the Act II floor coming back at 3-15K a minute), and E\'s coal and sand are the claims the Steel, Glass and Plastic designs dig with',
   }),
   steelCharter: P({
-    id: 'steelCharter', name: 'Steel Charter', branch: 'head', cost: 1, requires: ['coalRights'], pos: [7, 0],
-    effect: { k: 'head', research: ['steelmaking', 'steamPower'], land: ['F'] },
-    text: '{u:reset} start knowing {research:Steelmaking} · {research:Steam Power} · start with Chunk F',
+    id: 'steelCharter', name: 'Steel Charter', branch: 'head', cost: 2, requires: ['coalRights'], pos: [2, 0],
+    effect: { k: 'head', land: ['F'] },
+    text: '{u:survey} every run starts owning Chunk F · {i:coal} {i:ironOre}',
     flavor: 'Dame Voltaire framed her copy.',
-    derivation: '§19 Patent tree: head starts; 1 Patent (was 2, the review round\'s repricing), chunk F (120,000) and two nodes: 9-12 min of the first run, measured (the Milestone 5 review; it was priced at 4 for 25 min)',
+    derivation: '§19 The returning run: 2 Patents; chunk F is 120,000 coin, about 8-10 min of a returning run\'s early floor, and its iron and coal deposits hold the Steel line\'s claims',
   }),
-  glassNotes: P({
-    id: 'glassNotes', name: 'Glass and Gravel Notes', branch: 'head', cost: 2, requires: ['steelCharter'], pos: [8, 0],
-    effect: { k: 'head', research: ['glassworks', 'crushing', 'refining', 'machineKits'] },
-    text: '{u:reset} start knowing {research:Glassworks} · {research:Crushing} · {research:Refining} · {research:Machine Kits}',
-    flavor: 'The pages are stuck together with something. Possibly plastic.',
-    derivation: '§19 Patent tree: head starts; 2 Patents (was 3, the review round\'s repricing), four Act II nodes, about 15-20 min of the first run between them (§18 targets)',
+  overdriveHabit: P({
+    id: 'overdriveHabit', name: 'Claims on File', branch: 'head', cost: 2, requires: ['steelCharter'], pos: [3, 0],
+    effect: { k: 'claimsKept' },
+    text: '{u:claim} the claims bought at the Survey Office stay through a Reorganize · the most of each ore so far',
+    flavor: 'The surveyor\'s pegs are still in the ground. Nobody moved them.',
+    derivation: '§19 The returning run: 2 Patents; a run buys 1-2 blocks of claims (25,000-60,000 x (1 + 0.5 b), §18), and without them the kept source designs past the 3 + 2 a deposit wait on coin and Surveying\'s 400 coal and 100 bricks: about 10 min of the first 20',
   }),
-  circuitPatent: P({
-    id: 'circuitPatent', name: 'Circuit Patent', branch: 'head', cost: 2, requires: ['glassNotes'], pos: [9, 0],
-    effect: { k: 'head', research: ['circuits', 'concrete'] },
-    text: '{u:reset} start knowing {research:Circuits} · {research:Concrete}',
-    flavor: 'It thinks, therefore you own it.',
-    derivation: '§19 Patent tree: head starts; 2 Patents (was 3, the review round\'s repricing), the two nodes that gate Act II goods (§18 targets: circuits by S+60, concrete after), about 15-20 min',
+  starterLine: P({
+    id: 'starterLine', name: 'Spare Dies', branch: 'head', cost: 3, requires: [], pos: [0, 1],
+    effect: { k: 'spareDies', add: 1 },
+    text: '{u:blueprint} every kept design comes back with {good:2} copies, was 1',
+    flavor: 'Two of everything. The Patent Office insists.',
+    derivation: '§19 The returning run: 3 Patents; a second free copy of each kept design (8-16) is a whole second chain on the Factory floor at minute one, the 5-8 stamps (bill x 1.5-2.5) and their clicks a returning run makes in its first 15 min',
   }),
   // ---------------------------------------------------------------- rules: each one a rule a player plans around
   surveyCharter: P({
@@ -258,46 +214,60 @@ export const PATENTS: Record<PatentId, PatentDef> = {
     flavor: 'It sticks. Jiggle it.',
     derivation: '§19 The Patent Drawer, 1 Patent (was 2): 8 -> 12 kept designs, room for every Act II product line (the Act II bot folds nine products)',
   }),
+  filingCabinet: P({
+    id: 'filingCabinet', name: 'The Filing Cabinet', branch: 'auto', cost: 2, requires: ['drawerSpace'], pos: [2, 2],
+    effect: { k: 'drawer', add: 4 },
+    text: '{u:blueprint} Patent Drawer 12 → {good:16} designs · each one comes back built',
+    flavor: 'Four drawers, one of them for sandwiches.',
+    derivation: '§19 The returning run (the playability pass): 12 -> 16 kept designs; every kept design now comes back as a module at a run\'s start, so a slot is a chain that returns built: room for Act II\'s nine products and Act III\'s Workshop lines (Chem Vat, Greenhouse, bearings)',
+  }),
+  notebooks: P({
+    id: 'notebooks', name: 'The Floor Plan', branch: 'auto', cost: 3, requires: ['draughtsman'], pos: [3, 1],
+    effect: { k: 'floorPlan', every: 2 },
+    text: '{u:factory} the Factory floor at a Reorganize is laid again · trunks paid · its modules placed as copies exist',
+    flavor: 'Pinned to the wall with four drawing pins and a gear.',
+    derivation: '§19 The returning run (the playability pass): pillar 2, a returning run\'s chore (placing the same modules and trunks as last run, about 100 clicks for the Act II floor) becomes the Draughtsman\'s; one tile every 2 s at most, a trunk at its price, a module tile filled with a spare copy of a design making the same product (the best graded), so it never stamps or spends a save',
+  }),
   // ---------------------------------------------------------------- Act III (DESIGN.md §21 Patents)
   // Head starts for the District's research, and the rules and automation of composing groups.
   // Priced as Act II's: about a Patent per 10-15 min of a run the node saves (§19).
   zoningCharter: P({
-    id: 'zoningCharter', name: 'Zoning Charter', branch: 'head', cost: 3, requires: ['circuitPatent'], pos: [6, 1],
+    id: 'zoningCharter', name: 'Zoning Charter', branch: 'head', cost: 3, requires: [], pos: [2, 1],
     effect: { k: 'head', research: ['zoning', 'chutes'] },
     text: '{u:reset} start knowing {research:Zoning} · {research:Chutes} · the District open from the first minute',
     flavor: 'Stamped by a frog, countersigned by three raccoons.',
     derivation: '§21 Patents: head starts, 3; Zoning and Chutes (300 motors, 300 circuits, 300 concrete, 2,000 steel) are about 35-40 min of a fresh run\'s Act II floor (motors 7.5 a minute, circuits 8.4: the second gate\'s arithmetic), a Patent per 12-13 min (§19)',
   }),
   districtDeeds: P({
-    id: 'districtDeeds', name: 'District Deeds', branch: 'head', cost: 3, requires: ['zoningCharter'], pos: [6, 2],
+    id: 'districtDeeds', name: 'District Deeds', branch: 'head', cost: 3, requires: ['zoningCharter'], pos: [2, 2],
     effect: { k: 'head', lots: 1 },
     text: '{u:reset} the District opens with its first lot · 14×10',
     flavor: 'The ink was still wet. It is always still wet.',
     derivation: '§21 Patents: head starts, 3; the first lot is 1M coin, about 45-55 min of the 18-21K a minute the floor makes when the District opens (the second gate\'s measure)',
   }),
   chemNotes: P({
-    id: 'chemNotes', name: 'Chemistry Notes', branch: 'head', cost: 3, requires: ['zoningCharter'], pos: [7, 1],
+    id: 'chemNotes', name: 'Chemistry Notes', branch: 'head', cost: 3, requires: ['zoningCharter'], pos: [3, 1],
     effect: { k: 'head', research: ['chemistry', 'vulcanizing', 'batteries'] },
     text: '{u:reset} start knowing {research:Chemistry} · {research:Vulcanizing} · {research:Batteries}',
     flavor: 'Stained, smoking slightly, legible in places.',
     derivation: '§21 Patents: head starts, 3; three nodes (400 oil, 350 solvent, 500 plastic, 800 copper ingots), about 40 min of a floor with two Plastic modules and a first Chem Vat line',
   }),
   bearingPatent: P({
-    id: 'bearingPatent', name: 'The Bearing Patent', branch: 'head', cost: 2, requires: ['zoningCharter'], pos: [7, 2],
+    id: 'bearingPatent', name: 'The Bearing Patent', branch: 'head', cost: 2, requires: ['zoningCharter'], pos: [3, 2],
     effect: { k: 'head', research: ['bearings', 'servos'] },
     text: '{u:reset} start knowing {research:Bearings} · {research:Servos}',
     flavor: 'Round, smooth, and legally yours.',
     derivation: '§21 Patents: head starts, 2; two nodes (2,000 steel, 1,500 gears, 120 gearboxes, 120 motors), about 25-30 min',
   }),
   senseNotes: P({
-    id: 'senseNotes', name: 'Sense and Logic', branch: 'head', cost: 3, requires: ['chemNotes'], pos: [8, 1],
+    id: 'senseNotes', name: 'Sense and Logic', branch: 'head', cost: 3, requires: ['chemNotes'], pos: [4, 1],
     effect: { k: 'head', research: ['sensors', 'processors', 'recycling', 'hydroponics'] },
     text: '{u:reset} start knowing {research:Sensors} · {research:Processors} · {research:Recycling} · {research:Hydroponics}',
     flavor: 'Half of it is diagrams of eyes. The other half is diagrams of thinking.',
     derivation: '§21 Patents: head starts, 3; four nodes (700 circuits, 350 rubber, 200 solvent, 300 sludge, 600 glass, 60 gearboxes), about 40-45 min',
   }),
   roboticsPatent: P({
-    id: 'roboticsPatent', name: 'The Robotics Patent', branch: 'head', cost: 3, requires: ['senseNotes', 'bearingPatent'], pos: [9, 1],
+    id: 'roboticsPatent', name: 'The Robotics Patent', branch: 'head', cost: 3, requires: ['senseNotes', 'bearingPatent'], pos: [5, 1],
     effect: { k: 'head', research: ['robotics', 'sandwiches'] },
     text: '{u:reset} start knowing {research:Robotics} · {research:Sandwiches}',
     flavor: 'It reaches for the pen and signs itself.',

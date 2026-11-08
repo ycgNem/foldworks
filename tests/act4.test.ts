@@ -473,10 +473,11 @@ describe('Relocate (DESIGN.md §22)', () => {
     expect(m.relocations).toBe(1);
     expect(m.worldRecords!.home!.workshop).toBeTruthy();
     expect(m.history[m.history.length - 1].relocate).toBe('pebble');
-    // the run is a fresh one: chunk A, no research, the start layout, no designs
+    // the run is a fresh one: chunk A, the start layout; it knows Acts I-II and its kept designs
+    // came back built (the playability pass, DESIGN.md §19: every run after the first reset)
     expect(g.s.land).toEqual(['A']);
-    expect(g.s.research.done).toEqual([]);
-    expect(g.s.designs).toEqual([]);
+    expect(g.s.research.done).toEqual(RESEARCH_IDS.filter((r) => (RESEARCH[r].act ?? 1) <= 2 && !RESEARCH[r].world));
+    expect(g.s.designs.every((d) => d.kept !== undefined)).toBe(true);
     expect(g.s.world).toBeUndefined();
     expect(RELOCATE_KEPT.length).toBeGreaterThan(4);
     expect(RELOCATE_LOST.length).toBeGreaterThan(2);
@@ -620,7 +621,8 @@ describe('the Legacy tree (DESIGN.md §22): every node', () => {
     must(g, { k: 'keep', id: d.id });
     design(g, { outs: { gear: 1 }, grade: { letter: 'S', score: 0.95, u: 1, w: 1, c: 1, mult: 2 } });
     must(g, { k: 'reorganize' });
-    expect(g.s.designs).toEqual([]);
+    // (it came back built, the playability pass: the Regrader's refold is one more copy)
+    expect(g.s.designs.map((q) => q.name)).toEqual(['Ingots']);
     g.s.coin = N(1e6);
     g.s.research.done = [...RESEARCH_IDS];
     g.step(60 * TICK_RATE);

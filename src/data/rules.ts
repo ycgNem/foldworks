@@ -109,6 +109,12 @@ export const RULES = {
   patentMin: r(1, '§19 Reorganize: at least one Patent, so a reset is never a loss by accident'),
   /** the Patent Drawer: designs kept, the box limit of a share string */
   drawerSlots: r(8, '§19 The Patent Drawer: 8 kept designs, one fewer than the nine products the Act II bot folds, so which lines to keep is a choice (A Deeper Drawer adds 4)'),
+  /** the playability pass (DESIGN.md §19 "What a Reorganize keeps"): what a run after a Reorganize remembers */
+  keptActs: r(2, '§19 What a Reorganize keeps (the playability pass): every research node of Acts I-II (26, `act` undefined, 1 or 2) is known in every run after the first reset: the critic measured each later run replaying 2.3-2.5 h of them before Act III, the tutorial again'),
+  returnCopies: r(1, '§19 What a Reorganize keeps: each kept design comes back with 1 copy, free (its machines were bought once, in the run that folded it); later copies are stamped at bill x (1 + 0.5 n) as ever. A 25% bill would make the first minute\'s coin the gate (a run starts with almost none) for no decision; the decision is which designs the Drawer keeps'),
+  backInMinutes: r(15, '§19 What a Reorganize keeps: the Reorganize card\'s "back in" before a run has measured its own: the campaign bot\'s returning runs pass the run before\'s peak in 9-16 min (§19 Measured pace), rounded up'),
+  dieCopyPrice: r(1, '§19 Dies on file (the playability pass): one more copy of one kept design at every run\'s start for 1 Patent, flat (no price curve, CLAUDE.md); the cheapest node\'s price, as a copy is one module, not a rule'),
+  dieCopiesMax: r(4, '§19 Dies on file: at most 4 bought copies of a design (5 with the free one, 6 with Spare Dies): the Act II floor at its peak holds 4-6 copies of its busiest product (the Act II bot\'s Gizmo, ingot and wire chains), so the sink ends where a returning floor is whole'),
   drawerBox: r(16, '§19 The Patent Drawer: a share string holds a box up to 16x16, two Workshop chunks (a fold box is 8x8, 10x10 with the Wider Fold Box)'),
   /** the Surveyor\'s Charter: source designs graded at least this multiplier hold half a claim */
   halfClaimMult: r(1.25, "§19 Surveyor\'s Charter: S (x1.25) or S+: the grade a balanced, zero-waste source line reaches (§13 check 7)"),
