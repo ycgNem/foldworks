@@ -589,7 +589,9 @@ export class Bot {
         // a source line (ore in, nothing else) measured taking something from outside (a head
         // start's neighbouring line leaking ingots into the box) would fold a module that starves
         // on the Factory floor: a player cancels and audits it again (the review round), 3 times
-        if (SOURCE_LINES.has(s.name) && Object.keys(a.result.ins).length && (this.reaudits.get(s.name) ?? 0) < 3) {
+        // (or one that graded under A: its output was held up while it was measured, and a player
+        // who sees a C on a line that runs fine boxes it again)
+        if (SOURCE_LINES.has(s.name) && (Object.keys(a.result.ins).length || a.result.grade.score < 0.8) && (this.reaudits.get(s.name) ?? 0) < 3) {
           const r = this.act({ k: 'auditCancel', id: a.id });
           if (r) this.reaudits.set(s.name, (this.reaudits.get(s.name) ?? 0) + 1);
           return r !== null;

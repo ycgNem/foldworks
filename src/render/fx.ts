@@ -11,7 +11,7 @@ export interface Ring { x: number; y: number; life: number; max: number; color: 
  *  'kit' for a Machine Kit, 'module' for a folded line) */
 export interface Flyer { x0: number; y0: number; x1: number; y1: number; t: number; dur: number; arc: number; icon?: string; big?: boolean }
 /** a line folding into one tile on the Workshop (world px), then flying to the Factory tab */
-export interface FoldAnim { x: number; y: number; w: number; h: number; img: HTMLCanvasElement | null; t: number; letter: string }
+export interface FoldAnim { x: number; y: number; w: number; h: number; img: HTMLCanvasElement | null; t: number; letter: string; item?: string; rate?: number }
 
 export class Fx {
   parts: Particle[] = [];

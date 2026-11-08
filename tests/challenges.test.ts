@@ -128,7 +128,8 @@ describe('Challenges (DESIGN.md §21)', () => {
     const g = ready();
     const before = prules(g).foldMax;
     take(g, 'smallBoxes');
-    g.s.research.done.push('folding');
+    // the full box (Gizmo Theory, DESIGN.md §10 Box sizes), then the Challenge's cap under it
+    g.s.research.done.push('folding', 'gearcutting', 'gizmoTheory');
     expect(prules(g).foldMax).toBe(4);
     expect(foldRefusal(g, { x: 0, y: 0, w: 5, h: 5 })).toMatch(/at most 4x4/);
     g.s.orders.done.push('gizmoFestival');

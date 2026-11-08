@@ -9,7 +9,7 @@ import { CHUNKS } from '../src/data/land';
 import { RULES } from '../src/data/rules';
 import { TICK_RATE } from '../src/engine/time';
 import { auditTicks, foldRefusal } from '../src/sim/systems/audits';
-import { stampCost } from '../src/sim/systems/modules';
+import { feedsDock, stampCost, stampStep } from '../src/sim/systems/modules';
 import { restore, savePayload } from '../src/sim/snapshot';
 import { migrate } from '../src/engine/save';
 import { runOffline } from '../src/sim/offline';
@@ -23,6 +23,9 @@ function sandbox(seed = 1) {
   g.s.research.done = [...RESEARCH_IDS];
   g.s.upgrades.push('bellows');
   g.s.ents = g.s.ents.filter((e) => e.kind === 'dock' || e.kind === 'hopper' || e.kind === 'furnace');
+  // a player past the first fold (its gifts, DESIGN.md §10 The first fold, have their own test)
+  g.s.counters.folds = 1;
+  g.s.counters.stamps = 1;
   g.rebuild();
   return g;
 }
@@ -144,6 +147,25 @@ describe('fold, stamp, unfold', () => {
     }
     expect(costs).toEqual([100, 150, 200, 250, 300]);
     expect(d.spare).toBe(6);
+  });
+
+  it('the first fold ever goes to work beside the Factory Dock, and its first stamp is free', () => {
+    const g = ironLine(true);
+    g.s.counters.folds = 0;
+    g.s.counters.stamps = 0;
+    auditAndWait(g);
+    must(g, { k: 'fold', name: null });
+    const d = g.s.designs[0];
+    expect(d.spare).toBe(0);
+    const m = g.s.factory.ents.find((e) => e.kind === 'module' && e.design === d.id)!;
+    expect(m).toBeDefined();
+    g.step(1);
+    expect(feedsDock(g, m)).toBe(true);
+    expect(stampCost(g, d).toNumber()).toBe(0);
+    must(g, { k: 'stamp', id: d.id });
+    // the free copy counts: the next is bill x 1.5, linear from there
+    expect(stampCost(g, d).toNumber()).toBe(150);
+    expect(stampStep(d).toNumber()).toBe(50);
   });
 
   it('unfolds a spare copy back where it was folded', () => {
