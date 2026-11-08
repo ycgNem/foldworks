@@ -13,3 +13,4 @@ __pycache__/
 # scratch output from headless campaign runs (review agents)
 /camp-*.json
 /snap-*.json
+dist-check

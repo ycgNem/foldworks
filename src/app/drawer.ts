@@ -259,7 +259,7 @@ function keptDetail(app: App, k: KeptDesign, r: Rect) {
   }
   // the share string in a paper field, Copy beside it
   const by = r.y + r.h - 50;
-  const code = encodeDesign(k);
+  const code = shareString(k);
   const fw = r.w - 46;
   section(ui, r.x, by, fw, 15);
   ui.text(ellipsize(code, fw - 8), r.x + 4, by + 4, T.inkSoft);
@@ -320,8 +320,20 @@ function runDetail(app: App, d: ModuleDesign, r: Rect) {
   }
 }
 
+/** A kept design's share string, packed once (it was deflated every frame while the card was open). */
+const shareCache = new WeakMap<KeptDesign, string>();
+function shareString(k: KeptDesign): string {
+  let s = shareCache.get(k);
+  if (s === undefined) {
+    try { s = encodeDesign(k); } catch (e) { s = `(${(e as Error).message})`; }
+    shareCache.set(k, s);
+  }
+  return s;
+}
+
 function copyString(app: App, k: KeptDesign) {
-  const s = encodeDesign(k);
+  const s = shareString(k);
+  if (s.startsWith('(')) { app.refuse(s.slice(1, -1)); return; }
   const done = () => app.toast('Design string copied', `{u:blueprint} ${k.name} · ${s.length} characters`, C.violet);
   if (navigator.clipboard) navigator.clipboard.writeText(s).then(done, () => window.prompt('Copy this design string', s));
   else window.prompt('Copy this design string', s);

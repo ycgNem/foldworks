@@ -59,6 +59,9 @@ export function letterSuffix(k: number): string {
   return s;
 }
 
+/** a NaN amount was seen (warned once a session) */
+let nanSeen = false;
+
 export class Num {
   readonly m: number;
   readonly e: number;
@@ -74,7 +77,8 @@ export class Num {
   /** From a JS number. NaN becomes 0 and is reported (an amount must never be NaN). */
   static of(x: number): Num {
     if (x !== x) {
-      // keep the game alive; tests check nothing produces this
+      // keep the game alive, but say so once: a NaN bug would otherwise hide as zero coin
+      if (!nanSeen) { nanSeen = true; console.warn('Num.of(NaN): an amount was NaN and became 0', new Error().stack); }
       return Num.ZERO;
     }
     if (x === Infinity) return new Num(1, 308);

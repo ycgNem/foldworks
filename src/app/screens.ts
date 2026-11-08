@@ -71,7 +71,9 @@ export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options
   // (src/app/lastfold.ts, kernels.ts, endless.ts)
   | 'lastfold' | 'kernels' | 'ledger'
   // Milestone 11 (DESIGN.md §24): the Challenges page, Unit 7's ending (src/app/challenges.ts, ending.ts)
-  | 'challenges' | 'ending';
+  | 'challenges' | 'ending'
+  // the playability review: another tab took the save over (src/app/othertab.ts)
+  | 'otherTab';
 
 /** Screens added from other files (Milestones 5 and 6): drawn in the overlay rect like the rest. */
 // (a `var` without an initializer: hoisted, so a page may register while this module is still loading,

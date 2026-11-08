@@ -177,29 +177,85 @@ export class Input {
       this.mouse.y = e.offsetY;
       this.mouse.moved = true;
     });
+    const press = (button: number, x: number, y: number, shift: boolean, ctrl: boolean) => {
+      this.mouse.x = x;
+      this.mouse.y = y;
+      this.mouse.down[button] = true;
+      // two presses inside one frame are two clicks: the second waits for the next frame (the
+      // playability review: quick clicks were lost, 5 of 11 at an autoclicker's pace)
+      if (this.mouse.pressed[button]) this.queued[button] = Math.min(3, this.queued[button] + 1);
+      else this.mouse.pressed[button] = true;
+      // where the press happened (a fast drag may have moved on by the next frame)
+      this.mouse.px = x;
+      this.mouse.py = y;
+      this.shift = shift;
+      this.ctrl = ctrl;
+    };
+    const release = (button: number) => {
+      this.mouse.down[button] = false;
+      this.mouse.released[button] = true;
+    };
     el.addEventListener('mousedown', (e) => {
       if (e.button > 2) return;
-      this.mouse.x = e.offsetX;
-      this.mouse.y = e.offsetY;
-      this.mouse.down[e.button] = true;
-      this.mouse.pressed[e.button] = true;
-      // where the press happened (a fast drag may have moved on by the next frame)
-      this.mouse.px = e.offsetX;
-      this.mouse.py = e.offsetY;
-      this.shift = e.shiftKey;
-      this.ctrl = e.ctrlKey || e.metaKey;
+      press(e.button, e.offsetX, e.offsetY, e.shiftKey, e.ctrlKey || e.metaKey);
       e.preventDefault();
     });
     window.addEventListener('mouseup', (e) => {
       if (e.button > 2) return;
-      this.mouse.down[e.button] = false;
-      this.mouse.released[e.button] = true;
+      release(e.button);
     });
+    // touch and pen (the review: a tap worked only through the browser's emulated mouse, a drag
+    // placed nothing and a sideways swipe left the page): the primary touch is the left button.
+    // Cancelling the pointerdown stops the browser's emulated mouse events, so a tap counts once.
+    let touchId = -1;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' || !e.isPrimary) return;
+      touchId = e.pointerId;
+      const r = el.getBoundingClientRect();
+      press(0, e.clientX - r.left, e.clientY - r.top, false, false);
+      e.preventDefault();
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'mouse' || e.pointerId !== touchId) return;
+      const r = el.getBoundingClientRect();
+      const x = e.clientX - r.left, y = e.clientY - r.top;
+      this.mouse.dx += x - this.mouse.x;
+      this.mouse.dy += y - this.mouse.y;
+      this.mouse.x = x;
+      this.mouse.y = y;
+      this.mouse.moved = true;
+    });
+    const lift = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse' || e.pointerId !== touchId) return;
+      touchId = -1;
+      release(0);
+    };
+    el.addEventListener('pointerup', lift);
+    el.addEventListener('pointercancel', lift);
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     el.addEventListener('wheel', (e) => {
-      this.mouse.wheel += Math.sign(e.deltaY);
+      // a trackpad or a smooth wheel sends many small deltas: add them up and step one notch per
+      // ~100 px, at most one a frame (the review: six small events zoomed 4x to 1x at once)
+      const px = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+      const now = performance.now();
+      if (now - this.wheelAt > 400 || Math.sign(px) !== Math.sign(this.wheelAcc)) this.wheelAcc = 0;
+      this.wheelAt = now;
+      this.wheelAcc += px;
       e.preventDefault();
     }, { passive: false });
+  }
+
+  /** presses that arrived while the frame's press was still unread (one is let through a frame) */
+  private queued = [0, 0, 0];
+  /** wheel pixels not yet turned into notches, and when the last arrived (ms) */
+  private wheelAcc = 0;
+  private wheelAt = -1e9;
+  /** the wheel's notches this frame: a whole one per 100 px (a mouse notch is 100-120), one at most */
+  private wheelStep() {
+    if (Math.abs(this.wheelAcc) < 50) return 0;
+    const n = Math.sign(this.wheelAcc);
+    this.wheelAcc -= n * Math.min(Math.abs(this.wheelAcc), 100);
+    return n;
   }
 
   /** Use these bindings (the Keys page's, as stored with the settings: src/app/settings.ts). */
@@ -236,8 +292,9 @@ export class Input {
     this.pressed.clear();
     this.released.clear();
     this.mouse.pressed = [false, false, false];
+    for (let b = 0; b < 3; b++) if (this.queued[b] > 0) { this.queued[b]--; this.mouse.pressed[b] = true; }
     this.mouse.released = [false, false, false];
-    this.mouse.wheel = 0;
+    this.mouse.wheel = this.wheelStep();
     this.mouse.dx = 0;
     this.mouse.dy = 0;
     this.mouse.moved = false;

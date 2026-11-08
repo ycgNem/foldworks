@@ -305,9 +305,20 @@ export function importDesign(g: Game, code: string): ActResult {
 // ------------------------------------------------------------------ share strings (FWD1)
 
 /** Building kinds by code (append only: old strings must keep decoding). */
-const KINDS: BuildKind[] = ['belt', 'miner', 'smelter', 'press', 'assembler', 'heap', 'splitter', 'merger', 'crate', 'boiler', 'steamEngine', 'generator', 'pole', 'kiln', 'mixer', 'refinery', 'smelterMk2', 'pressMk2', 'assemblerMk2'];
+export const KINDS: BuildKind[] = ['belt', 'miner', 'smelter', 'press', 'assembler', 'heap', 'splitter', 'merger', 'crate', 'boiler', 'steamEngine', 'generator', 'pole', 'kiln', 'mixer', 'refinery', 'smelterMk2', 'pressMk2', 'assemblerMk2',
+  // Act III (the playability review: these were missing, and any Act III line's string came back "damaged")
+  'chemVat', 'greenhouse', 'chuteMouth'];
 /** Recipes by code, 1-based (0 = none; append only). */
-const RECIPES_BY_CODE = ['smeltIron', 'smeltCopper', 'pressPlate', 'drawWire', 'pressBrick', 'cutGear', 'gizmo', 'smeltSteel', 'fireGlass', 'recycledGlass', 'crushGravel', 'mixConcrete', 'refinePlastic', 'etchCircuit', 'packKit', 'buildMotor', 'forgeDrillBit'];
+export const RECIPES_BY_CODE = ['smeltIron', 'smeltCopper', 'pressPlate', 'drawWire', 'pressBrick', 'cutGear', 'gizmo', 'smeltSteel', 'fireGlass', 'recycledGlass', 'crushGravel', 'mixConcrete', 'refinePlastic', 'etchCircuit', 'packKit', 'buildMotor', 'forgeDrillBit',
+  // Acts III-V and the alternates (the playability review), in the order recipes.ts defines them
+  'mixSolvent', 'cureRubber', 'cellBattery', 'brewFertilizer', 'pressBearing', 'buildGearbox',
+  'growProduce', 'buildSensor', 'etchProcessor', 'buildServo', 'makeSandwich', 'windFrog',
+  'rigBalloon', 'foldUmbrella', 'buildArm', 'buildLiftRotor', 'windCoil', 'buildEngineer',
+  'cutLens', 'smeltCinder', 'brewDye', 'temperFrost', 'cutRelicGear', 'chargeStorm',
+  'grindHorizon', 'bottleWeather', 'buildSunset', 'buildLamp', 'forgeChain', 'chartEverywhere',
+  'climbStaircase', 'kindleSun', 'bottleTuesday', 'keepSandwich', 'hushEngine', 'pocketAnIsland',
+  'replicaPebble', 'replicaCinder', 'replicaRime', 'replicaOld', 'oreSteel', 'slagGlass',
+  'brickCircuit', 'oilPlastic', 'castGearbox'];
 const VERSION = 1;
 const PREFIX = 'FWD1';
 
@@ -327,13 +338,18 @@ export function encodeDesign(k: Pick<KeptDesign, 'name' | 'x' | 'y' | 'w' | 'h' 
   for (const p of k.parts) {
     const d = BUILD[p.kind];
     for (let yy = p.dy; yy < p.dy + d.h; yy++) for (let xx = p.dx; xx < p.dx + d.w; xx++) grid[yy * k.w + xx] = COVERED;
-    grid[p.dy * k.w + p.dx] = KINDS.indexOf(p.kind) + 1 + 32 * p.rot;
+    const kc = KINDS.indexOf(p.kind);
+    if (kc < 0) throw new Error(`A ${BUILD[p.kind].name} can't go into a design string yet`);
+    grid[p.dy * k.w + p.dx] = kc + 1 + 32 * p.rot;
     byCell.set(p.dy * k.w + p.dx, p);
   }
   const recipes: number[] = [];
   for (let i = 0; i < grid.length; i++) {
     const p = byCell.get(i);
-    if (p && HAS_RECIPE(p.kind)) recipes.push(p.recipe ? RECIPES_BY_CODE.indexOf(p.recipe) + 1 : 0);
+    if (!p || !HAS_RECIPE(p.kind)) continue;
+    const rc = p.recipe ? RECIPES_BY_CODE.indexOf(p.recipe) : -1;
+    if (p.recipe && rc < 0) throw new Error(`The recipe ${p.recipe} can't go into a design string yet`);
+    recipes.push(rc + 1);
   }
   const out = [VERSION, k.w, k.h, k.x, k.y, name.length, ...name, ...grid, ...recipes];
   const body = b64encode(lzss(new Uint8Array(out)));

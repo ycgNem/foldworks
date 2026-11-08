@@ -84,22 +84,8 @@ function loadScenario(id: ScenarioId): Game | null {
 
 /** Put a game on the App the way newGame does (nothing of the last game stays open or pinned). */
 function adopt(app: App, g: Game) {
-  app.game = g;
-  app.screen = 'play';
-  app.mode = { k: 'idle' };
-  app.selected = null;
-  app.fselected = null;
-  app.panel = null;
-  app.toasts = [];
-  app.trophyPops = [];
-  app.renderer.ground = null;
-  app.hud = newHudState();
-  app.hud.coinShown = g.s.coin.toNumber();
+  app.adopt(g);
   app.hud.firstMiner = true;
-  app.offline = null;
-  app.gradeId = null;
-  app.setFloor('workshop', true);
-  app.fitCamera(true);
 }
 
 /** Play a board: the main game (or the board open now) is saved first; `fresh` starts it over. */

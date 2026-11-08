@@ -588,7 +588,8 @@ export class Game {
     const d = BUILD[kind];
     // a trophy's "the first n free" (DESIGN.md §24): the building is marked, and refunds nothing
     let trophyFree = false;
-    if (kind === 'crate' && this.s.freeCrates > 0) this.s.freeCrates--;
+    // a reputation's free crate is marked too, or removing it refunded 30 coin, once a minute forever
+    if (kind === 'crate' && this.s.freeCrates > 0) { this.s.freeCrates--; trophyFree = true; }
     else if (freeBuild(this, kind)) trophyFree = true;
     else this.s.coin = this.s.coin.sub(buildPrice(this, kind));
     const placed = this.addEnt(kind, x, y, rot);

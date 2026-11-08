@@ -86,7 +86,8 @@ import { codexTab, type CodexTab } from './codexbook';
 import { scenarioPick } from './scenarios';
 import { openEnding, endingState } from './endingstate';
 import { setPhoto, snap } from './photo';
-import { pickNextRun } from './reorganize';
+import { pickNextRun, afterAutoReorganize } from './reorganize';
+import { claimSaves, ownsSaves, savesLost, watchOwner } from './othertab';
 import { openSkinList } from './tags';
 import type { SkinSlot } from '../data/cosmetics';
 import type { ChallengeId } from '../data/challenges';
@@ -206,6 +207,7 @@ export class App {
     // pagehide fires where beforeunload does not (mobile, bfcache): closing never loses more than
     // the last 30 s, and usually nothing (DESIGN.md §20)
     window.addEventListener('pagehide', () => { if (this.screen === 'play') this.save(); });
+    watchOwner(this);
     loadSettings();
     initSound(this); // Milestone 12: volumes, mute and reduced motion, kept
     initKeys(this); // Milestone 13: the Keys page's bindings, kept
@@ -246,35 +248,54 @@ export class App {
 
   // ------------------------------------------------------------------ game lifecycle
 
-  newGame(seed = (Math.random() * 1e9) | 0) {
-    this.game = new Game(seed);
+  /** Put a game on screen with nothing of the last one left over: every path that swaps the game
+   * (New game, Continue, Import, a Scenario board, a reset the sim made by itself) comes here, so
+   * no floor, tool, pinned report, panel or coin roll survives the swap (the playability review). */
+  adopt(g: Game) {
+    this.game = g;
     this.screen = 'play';
     this.mode = { k: 'idle' };
     this.selected = null;
+    this.fselected = null;
     this.panel = null;
     this.toasts = [];
     this.trophyPops = [];
+    this.refusal = null;
     this.renderer.ground = null;
     this.hud = newHudState();
+    this.hud.coinShown = g.s.coin.toNumber();
+    this.hud.firstMiner = g.miners.length > 0 || g.done('pressing') || g.s.meta.runs > 0;
     this.offline = null;
     this.gradeId = null;
+    this.nameDraft = null;
+    this.sliceAt = null;
+    this.handledRuns = g.s.meta.runs;
+    this.floor = 'workshop';
     this.setFloor('workshop', true);
     this.fitCamera(true);
+    claimSaves();
+  }
+
+  /** the run count whose Reorganize the app has already framed (a Reorganize the Standing
+   * Committee makes inside the sim is framed by events() instead) */
+  handledRuns = 0;
+
+  newGame(seed = (Math.random() * 1e9) | 0) {
+    this.adopt(new Game(seed));
+    this.hud.firstMiner = false;
   }
 
   continueGame() {
     const d = this.readSlot().data;
     if (!d) return this.newGame();
+    let g: Game;
     try {
-      this.game = restore(d as never);
+      g = restore(d as never);
     } catch (err) {
       console.error(err);
       return this.newGame();
     }
-    this.screen = 'play';
-    this.renderer.ground = null;
-    this.setFloor('workshop', true);
-    this.fitCamera(true);
+    this.adopt(g);
     if (this.loadNote) {
       this.toasts.push({ title: 'Save recovered', text: this.loadNote, color: C.amber, t: 0, life: 16 });
       this.loadNote = null;
@@ -282,10 +303,6 @@ export class App {
     // offline progress (DESIGN.md §12): the clock is read here, in the app, never in the sim
     const away = (Date.now() - (d.saved ?? Date.now())) / 1000;
     if (away >= 60) this.startOffline(away);
-    this.hud = newHudState();
-    this.hud.coinShown = this.game.s.coin.toNumber();
-    // a saved game past its first Miner never celebrates it again
-    this.hud.firstMiner = this.game.miners.length > 0 || this.game.done('pressing');
   }
 
   /** Switch the floor on screen (the Factory opens with the first fold). */
@@ -378,6 +395,9 @@ export class App {
 
   save(): boolean {
     if (this.screen !== 'play') return false;
+    // another tab took the save over: this one never writes again (the playability review: a
+    // forgotten tab's autosave put a 9M town back to 1,000 coin)
+    if (!ownsSaves()) { this.otherTab(); return false; }
     // mid offline run the state is between two moments: the save before it stands until it ends
     if (this.offlineJob) return false;
     // Act III: a Scenario board saves into its own slot, never over the town (src/app/scenarios.ts)
@@ -412,17 +432,27 @@ export class App {
   }
 
   importSave(s: string): ActResult {
+    let g: Game;
     try {
-      const d = importString(s);
-      this.game = restore(d as never);
-      this.screen = 'play';
-      this.renderer.ground = null;
-      this.fitCamera(true);
-      this.save();
-      return { ok: true };
+      // a string pasted from a chat or a mail can carry line breaks and spaces: none is ever part of it
+      const d = importString(s.replace(/\s+/g, ''));
+      validSave(d); // throws when the save is not one this game can play
+      g = restore(d as never);
     } catch (err) {
-      return { ok: false, why: (err as Error).message };
+      const m = (err as Error).message ?? '';
+      // the codec's own messages are plain words; anything else is a forged or broken string
+      return { ok: false, why: /^[A-Z]/.test(m) && !/properties|iterable|undefined|null/.test(m) ? m : 'That string is damaged or not a Foldworks save' };
     }
+    this.adopt(g);
+    this.save();
+    return { ok: true };
+  }
+
+  /** Another tab is playing this save: stop this one, and say so until it reloads. */
+  otherTab() {
+    if (this.panel === 'otherTab') return;
+    this.panel = 'otherTab';
+    this.frozen = true;
   }
 
   /** when the tab was hidden (ms since epoch), for offline progress on its return */
@@ -494,7 +524,9 @@ export class App {
     drawHud(this, dt);
     wheelFrameEnd(this);
     this.ui.end();
-    this.worldInput();
+    if (this.offlineJob) this.panel = 'offline';
+    else if (savesLost() && this.screen === 'play') this.panel = 'otherTab';
+    else this.worldInput();
     ambience(this, dt); // Milestone 12: the machines' voices (src/app/ambience.ts)
     this.input.endFrame();
   }
@@ -502,6 +534,8 @@ export class App {
   // ------------------------------------------------------------------ events -> sound, toasts
 
   private events() {
+    // a reset the sim made by itself (the Standing Committee) can take the floor on screen away
+    if (this.screen === 'play' && !this.openFloors().includes(this.floor)) this.setFloor('workshop', true);
     const evs = this.game.events.drain();
     if (!evs.length) return;
     this.renderer.consume(evs, this.game);
@@ -710,6 +744,11 @@ export class App {
         // ---- Act V (DESIGN.md §23): the Last Fold, Kernels, the Seed, the Endless Ledger
         case 'lastFoldAudit': a.sfx('foldStart'); a.sfx('milestone', 0.5, 0.8); this.renderer.fx.kick(2); break;
         case 'lastFold': break; // src/app/lastfold.ts plays the sequence and resetSound(3)
+        case 'reorganize':
+          // the Reorganize button frames its own reset (afterReorganize); one the Standing Committee
+          // made inside the sim is framed here: home, nothing pinned, said, saved
+          if ((e.d ?? 0) !== this.handledRuns) afterAutoReorganize(this, e.value ?? 0);
+          break;
         case 'seed': break;
         case 'kernel': a.sfx('upgrade'); break;
         case 'ledger': {
@@ -762,6 +801,12 @@ export class App {
 
   /** Do a command; refusals show under the cursor with a buzz. */
   act(c: Cmd): ActResult {
+    // mid offline run the game is between two moments: nothing may change it (the playability review:
+    // a Reorganize there paid the time away into the new run and the report read "+-67.4M")
+    if (this.offlineJob) {
+      this.refusal = { text: 'catching up on your time away first', t: 1.5 };
+      return { ok: false, why: 'catching up on your time away first' };
+    }
     const r = this.game.act(c);
     if (!r.ok && r.why && r.why !== 'too fast') {
       this.refusal = { text: r.why, t: 2 };
@@ -774,6 +819,9 @@ export class App {
     const inp = this.input;
     const cam = this.renderer.cam;
     if (inp.typing) return;
+    // the offline letter stays up while its run computes: Esc, the page keys and the lift wait
+    if (this.offlineJob) { this.panel = 'offline'; return; }
+    if (savesLost()) { this.panel = 'otherTab'; return; }
     const sp = (240 * dt) / Math.max(1, cam.zoom / 2);
     if (inp.isDown('panLeft')) cam.x -= sp;
     if (inp.isDown('panRight')) cam.x += sp;

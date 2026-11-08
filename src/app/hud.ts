@@ -600,6 +600,9 @@ function hoverReport(app: App) {
 const TAGLINE = 'Build a line. Fold it into a tile. Build with what you folded.';
 const FOOTLINE = 'A frog mayor wants Gizmos. Nobody knows what they do.';
 
+/** when New game was clicked once over a saved town (UI time): a second click within 4 s confirms */
+let newArmedAt = -99;
+
 /** The title's buttons, the tagline on a ribbon, the last line on a slip. */
 function titleKit(app: App, tagY: number, btnY: number) {
   const ui = app.ui;
@@ -614,7 +617,24 @@ function titleKit(app: App, tagY: number, btnY: number) {
     chip(ui, bx + bw + 6, y + 5, `{coin:${app.titleInfo.coin}}`, { role: 'coin' });
     y += 26;
   }
-  if (button(ui, 'new', bx, y, bw, 22, app.titleInfo.hasSave ? 'New game' : 'Start', { gold: !app.titleInfo.hasSave, big: true })) { app.audio.unlock(); app.newGame(); }
+  // New game over a saved town asks once (the playability review: one click wiped a 15 h save)
+  const armed = app.titleInfo.hasSave && ui.time - newArmedAt < 4;
+  if (button(ui, 'new', bx, y, bw, 22, !app.titleInfo.hasSave ? 'Start' : armed ? 'Sure?' : 'New game', { gold: !app.titleInfo.hasSave, big: true, pulse: armed })) {
+    app.audio.unlock();
+    if (app.titleInfo.hasSave && !armed) { newArmedAt = ui.time; app.audio.sfx('error'); }
+    else { newArmedAt = -99; app.newGame(); }
+  }
+  if (armed) {
+    const warn = `{bad:click again} to start over · your town ({coin:${app.titleInfo.coin}}) is replaced`;
+    const L = layoutRich(warn, 400);
+    const r = slip(ui, Math.floor(ui.w / 2 - L.w / 2) - 2, y + 26, L.w + 8, L.h + 4);
+    drawLayout(ui, L, r.x + 2, r.y, T.ink);
+  } else if (!app.titleInfo.hasSave && app.loadNote) {
+    // the save and every backup failed to load: say so here, where the player is (the review)
+    const L = layoutRich(`the save did not load: ${app.loadNote}`, 420);
+    const r = slip(ui, Math.floor(ui.w / 2 - L.w / 2) - 2, y + 26, L.w + 8, L.h + 4);
+    drawLayout(ui, L, r.x + 2, r.y, T.ink);
+  }
   const fw = textWidth(FOOTLINE) + 16;
   const fx = Math.floor(ui.w / 2 - fw / 2), fy = ui.h - 22;
   const r = slip(ui, fx, fy, fw, 17);

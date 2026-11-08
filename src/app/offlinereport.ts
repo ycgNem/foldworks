@@ -134,7 +134,7 @@ export function offlineReportCard(app: App, L: Layout) {
   if (pageFor !== rep) { page = 0; pageFor = rep; }
   // ---- the totals: the coin big, the rest as icon rows beside it
   coinIcon(ui, c.x, yy + 2);
-  const coin = `+${rep.coin.format()}`;
+  const coin = rep.coin.lt(0) ? rep.coin.format() : `+${rep.coin.format()}`;
   ui.big(coin, c.x + 20, yy, T.coin, { scale: 2 });
   const tw = 20 + bigWidth(coin) * 2 + 12;
   const rx = c.x + Math.max(tw, Math.floor(c.w * 0.42));

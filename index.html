@@ -2,14 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#1a1420" />
     <meta name="description" content="A pixel-art incremental factory game: build a production line, fold it into a single tile, and build the next floor out of what you folded." />
     <link rel="icon" href="data:," />
     <title>Foldworks</title>
     <style>
-      html, body { margin: 0; height: 100%; background: #0e0b12; overflow: hidden; }
-      canvas { position: absolute; inset: 0; display: block; width: 100vw; height: 100vh; image-rendering: pixelated; cursor: default; }
+      html, body { margin: 0; height: 100%; background: #0e0b12; overflow: hidden; overscroll-behavior: none; }
+      /* touch-action none: a swipe drags a belt instead of scrolling, zooming or going back a page */
+      canvas { position: absolute; inset: 0; display: block; width: 100vw; height: 100vh; image-rendering: pixelated; cursor: default; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
     </style>
   </head>
   <body>

@@ -331,6 +331,7 @@ function drawNote(ui: UI, s: string, x: number, y: number, w: number): number {
 /** The app's side of a reset: nothing of the old run stays selected or open, the new run is framed,
  * and the Patent tree opens to spend what was banked. */
 export function afterReorganize(app: App, patents: number, challenge: ChallengeId | null = null) {
+  app.handledRuns = app.game.s.meta.runs;
   app.selected = null;
   app.fselected = null;
   app.gradeId = null;
@@ -345,6 +346,24 @@ export function afterReorganize(app: App, patents: number, challenge: ChallengeI
   if (challenge) app.toast(`Challenge: ${CHALLENGES[challenge].name}`, `{bad:${CHALLENGES[challenge].rule}} · {good:goal} ${CHALLENGES[challenge].goalText}`, C.violet, 'star');
   else if (app.game.s.meta.runs === CHALLENGE_AFTER_RUNS && scenariosOpen(app)) app.toast('Scenarios open', '{u:options} Options → Scenarios · puzzle boards · Challenges at the next Reorganize', C.violet, 'trophies');
   app.audio.resetSound(1); // Relocate and the Last Fold call it with 2 and 3
+  app.save();
+}
+
+/** A Reorganize the Standing Committee made inside the sim (src/sim/systems/automation.ts): the same
+ * framing as the button's, without opening the Patent tree over the player's work (the playability
+ * review: it left the player on a District that no longer existed, unsaved and unsaid). */
+export function afterAutoReorganize(app: App, patents: number) {
+  app.handledRuns = app.game.s.meta.runs;
+  app.selected = null;
+  app.fselected = null;
+  app.gradeId = null;
+  app.mode = { k: 'idle' };
+  app.renderer.ground = null;
+  if (app.panel !== 'offline') app.panel = null;
+  app.setFloor('workshop', true);
+  app.fitCamera(true);
+  app.toast('The Committee reorganized', `{reset:+${patents}} ${patents === 1 ? 'Patent' : 'Patents'} banked · a new run`, C.violet);
+  app.audio.resetSound(1);
   app.save();
 }
 
