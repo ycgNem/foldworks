@@ -516,8 +516,9 @@ If any answer is no, change the model here before building more.
 | 3 h | Act II: power, steel, glass, circuits |
 | 5 h | first Reorganize (12–20 Patents) |
 | 11 h | District floor (Act III; measured 10:01, the second gate moved it from 15 h: the Great Drill stands at about 9.5 h) |
-| 25 h | the first Act III megaproject stage (the Floating City's Platform; measured 15:48) |
-| 40 h | first Relocate |
+| 25 h | the first Act III megaproject stage (the Floating City's Platform; measured 11:05) |
+| 18-25 h | **the core ending**: the Floating City complete (§21; the planner bot 12:19-12:40, in the first run that builds a District) |
+| 40 h | first Relocate (the post-game from here on; the bot 17:40, §22 Pacing) |
 | 60 h | four biome worlds visited |
 | 80 h | the Last Fold available |
 | 100 h | first Kernel spend; infinite orders, challenges and the codex continue |
@@ -562,8 +563,10 @@ If any answer is no, change the model here before building more.
   claims count from the final round; the test's goal list had left them out.)
   - From the slice end to the Bay floor that wait is 12.5 min in run 1 and 10-12 min in runs 2
     and 3.
-  - While the Bay fills it is 39.5-41.4 min in run 1. That covers Shiny Things, then Nested Boxes'
-    research, then the nested Gizmo works II and its two annex blocks.
+  - While the Bay fills it was 39.5-41.4 min in run 1 (Shiny Things, then Nested Boxes' research,
+    then the nested Gizmo works II and its two annex blocks). With the Drill's three parts (§18, the
+    playability pass) it is **17.0-17.1 min** (seeds 1000 and 8919: 2:56-3:13 and 3:12-3:29). Rule 2
+    there is unchanged (49.7-50.9 min without a decision: a part is a goal reached, not a choice).
   - In later runs the bot now buys its annex blocks and claims before the Bay floor, as soon as
     they are affordable (§19). After the Bay floor their waits run 27-35 min (run 2) and 84-93 min
     (run 3, the last, which plays to its cap with its plan done).
@@ -714,6 +717,20 @@ are possible and earn W = 1.*
   Bay 20 minutes sooner. At 450 and 2,000 the first Reorganize then came at 3:37-3:41, under §19's
   4-6 h. At 650 and 2,800 it comes at 4:21-4:24 with 14 Patents. Steel
   is 4.3 a bit, still over stages 2 and 3's 4, so the steel is in before the bits.
+- **Its parts** (the playability pass, 2026-11-08: the 40-minute fill with no goal was the 2 h quit
+  point, the review's finding 9). Stage 1 has three visible sub-goals, each standing when **every**
+  item is in to its share of the stage's want: **the Scaffold** at 15% (98 bits, 420 steel), **the
+  Engine House** at 35% (228 bits, 980 steel), **the Cab** at 50% (325 bits, 1,400 steel); the stage
+  itself is the fourth goal. Each one moves the Bay's picture a phase (the art's four phases), puts
+  a drill-crew house up in the Town's far row (a bunkhouse, a canteen, the foreman's tower), prints
+  in the Gazette and toasts. They pay nothing more (the Patents are the stage's, as delivered) and
+  change no number: the stage lands at the same 4:09-4:10. The Bay page shows the parts as chips,
+  the next one's share and its Town piece, and, while it fills, the Survey Office's cheapest claim
+  block with a key to the Office (claims as the fill's side goal). *Derivation:* the fill is near
+  linear (113 min, measured on seed 1000), so a part's share is a time; the parts are front-loaded
+  (2:33, 2:56, 3:13 against the Bay floor at 2:16) because the second half of the fill already has
+  Act II's own goals (Nested Folds at 3:28, the annex blocks and claims at 3:44, the Calibration
+  order at 4:01). Rule 1 while the Bay fills: **17 min** at worst (was 39.5-41.4).
 
 ### Rules settled while building it (Milestone 4)
 - A Boiler or Generator holds 4 fuel (`RULES.fuelCap`) and takes it from any side but a boiler's
@@ -1500,7 +1517,7 @@ Bay never jams, §19). Each stage pays its Patents in proportion as it is delive
 | Project, stage | Wants | Reward, for good | Patents |
 |---|---|---|---|
 | The Floating City 1, the Platform | 120 lift rotors, 1,500 concrete | the Factory floor's ninth row | 6 |
-| The Floating City 2, the Spires | 150 lift rotors, 300 sandwiches, 2,500 glass | a fourth District lot | 8 |
+| The Floating City 2, the Spires | 150 lift rotors, 2,500 glass, 2,000 steel | a fourth District lot; **the core ending** | 8 |
 | The Scrap Transmuter 1 | 80 transmuter coils, 3,000 steel | every Dock buys slag, oil and sludge at 25% of what made them | 8 |
 | The Scrap Transmuter 2 | 150 coils, 120 processors | a byproduct with nowhere to go sells where it stands instead of blocking | 10 |
 
@@ -1513,6 +1530,35 @@ slag-bound, 4 slag each, and the whole run-3 floor makes about 2.8 slag a second
 stage standing keeps its Bay open in every later run without its research (its progress is kept;
 the second gate found every run re-paying the research before the Bay counted anything). The
 Transmuter's second stage ends the byproduct lesson for good, at the end of the act that finishes it.
+
+*The Spires, re-derived (the playability pass, 2026-11-08):* they wanted 300 sandwiches, the
+deepest chain of the act (a Greenhouse on sludge, a sandwich corner line, a nest and a District
+group), and no bot delivered one by 40 h in five passes, so neither the City nor Act IV was ever
+reached. The citizens moved to Sandwich Engineering (150, at the Hopper) and the Spires want what
+the act's spine already makes: the Rotors II copies' rotors, the Glassworks' glass (three Glass II
+copies took 2,500 in about 40 min) and the Concrete II copies' steel (3,000 in minutes for the
+Transmuter, measured in the fifth pass). The Transmuter stays as it was and is **optional**: it is
+no longer on the way to the World.
+
+### The core ending (the Floating City complete)
+A game people finish beats a 100 h game nobody finishes (the playability review: under 1% of
+players would see Acts IV-V). **The Floating City complete is the story's ending** a normal player
+reaches, aimed at **18-25 h** of competent play (the planner bot is faster: measured below).
+- The first time the City's last stage stands in a universe (the first universe only; a transition
+  seen in the session, so a save loaded with the City standing does not replay it), the finale opens
+  3 s after the stage's ribbon (`src/app/finale.ts`): the key art, the City (one PixelLab
+  generation, palette forced to the key art's, cleaned in `pixel-art/finale/build.py`) lifting off
+  the town's island with its rotors spinning and puffing, the camera following it into the high sky;
+  then the Swamp Gazette's special ("TOWN TAKES FLIGHT") beside Bramble cheering and the four
+  customers' lines; then the credits, rolling the player's own numbers (hours played, folds made,
+  the best grade, items delivered, coin earned, the modules flying the City, Reorganizes,
+  trophies) and the town's cast; then the invitation, "The story isn't over": the World floor
+  (Charting), Relocate, the Lighthouse and the Sky Anchor, the Last Fold. Skip moves a scene on.
+- **The trophy** is the City's own (`cityComplete`, now "Lift-off"); its Codex page, *The Floating
+  City* (Unit 7's lines, in the ending group beside Unit 7's own), keeps **"The City, again"**.
+- **Acts IV and V are the post-game**: Charting opens with the City alone (`megas: ['city']`), so
+  the World is the invitation's next step. Their targets (§22, §23) stand as they were, now read as
+  hours after the ending.
 
 ### Orders and reputation (Act III, `src/data/orders.ts`)
 Ten orders, each about 2x what its goods fetch at the Dock (§7's rule; 1.96-2.2x as priced):
@@ -1686,6 +1732,21 @@ coils line), 32.4 min from 25:45 (run 4), 10.4 in run 5; pace-act3 19.1, 13.7, 1
 10.9, 19.9, 19.9, 10.3). The District peaks at 157-160 groups (0.73-0.86 ms a tick). Pace-act3 7
 passed, pace-act4 5 passed.
 
+**Re-measured, the playability pass** (the core ending; DECISIONS.md "Playability pass
+(2026-11-08)"): the Spires want rotors, glass and steel, and Charting the City alone. Measured
+(seed 1000, 40 h; pace-act3 8 passed, pace-act4 5 passed): the District 9:53, the City's stage 1
+10:57-11:05, **the City complete (the core ending) 12:19 (pace-act3) and 12:40 (pace-act4)**, in run
+3, the first that builds a District. **The District-to-City stretch holds rules 1 and 2: 7.1 min at
+worst** (9:46-12:40; were 40.5 / 30.5 min in the fifth pass). The later Act III stretches: pace-act3
+10.3, 19.9 and 10.7 min (run 5's 19.9 from 27:58, half an hour after its hand-over, the same
+early-run wait as before, not looked into); pace-act4 19.9 min on Rime from 20:24. Runs (pace-act3):
+1 0:00-4:22 (14 Patents), 2 4:22-7:24 (7), 3 7:24-16:38 (52), 4 16:38-25:39 (7), 5 25:39-35:23 (6),
+6 35:23-40:00. The District peaks at 156 groups (0.45 ms a tick).
+- **The ending is early for the bot, on target for a player.** The planner knows the plan and
+  plays every minute; it reached the first fold at 24 min against §16's 40 and Folding's research in
+  about half a first-timer's time (the review), so 12:20-12:40 for the bot reads as about 18-25 h
+  for a competent first-timer, the aim. Not measured with a human.
+
 Lessons:
 - **The waste chute and 1 a trip halve the routes and make distance cost.** With waste going to
   the Dock on its own the bot flies one route a product (a second only for a second product), so
@@ -1732,7 +1793,7 @@ Lessons:
   taught (the City's stage 2, the Transmuter and Relocation need them).
 - **Act III orders beyond the Servo Ballet.** Spare Parts (600 bearings) needs a bearings source the
   bot can fold: a lone press may not fold, and the Gearboxes line's press feeds its own assembler.
-- **Rules 1 and 2 outside Act III**: Act II's Bay-floor wait (39.5 min at 2:48, §16) is unchanged.
+- **Rules 1 and 2 outside Act III**: Act II's Bay-floor wait (39.5 min at 2:48) is 17 min with the Drill's parts (§16, §18); rule 2 there is unchanged.
 
 ## 22. Act IV: Worlds and Relocate (Milestone 9, 40-80 h)
 
@@ -1829,11 +1890,12 @@ reset by every Reorganize and is offered only there).
 ### Research, page 4
 Fourteen nodes, `act: 4`, after the Great Drill's stage 3 like Act III's. **Charting** (30 robot
 arms, 150 sensors, 60 processors after District Folds: 20-30 min of the District that researched
-District Folds) opens the World floor, and is offered only once **Act III's Megaprojects stand**
-(both stages of the Floating City and of the Scrap Transmuter, `megas`, as the Last Fold waits for
-the Lighthouse and the Anchor): Act III ends when its projects are built, however fast, and Act IV
-begins there (decided after the fourth bot pass, which opened the World at 11:46 and Relocated at
-18:00 with neither project finished, against the 40-45 h below; a content gate, not a price). Each island has its chain, paid in its exotic (600 of it,
+District Folds) opens the World floor, and is offered only once **the Floating City stands** (both
+its stages, `megas`, as the Last Fold waits for the Lighthouse and the Anchor): Act III ends at the
+core ending (§21), however fast it is built, and Act IV, the post-game, begins there. (The fifth
+bot pass gated it on the Scrap Transmuter too, after the fourth opened the World at 11:46 with
+neither project finished; no bot then finished both by 40 h, so the playability pass made the
+Transmuter optional: a content gate, not a price.) Each island has its chain, paid in its exotic (600 of it,
 about 13 min of one Pebble Miner, 20 of a Home one): Skyglass Cutting and Horizon Optics on
 Pebble; Cinder Smelting, Sunset Dyes and Sunset Engineering on Cinder; Thermals (500 coal, 150
 steel, with Act II's first powered machines: the plant's warmth reaches 3 tiles, was 2),
@@ -2003,6 +2065,9 @@ record (`meta.cleared`). The determinism fingerprint covers the island, the rubb
 the cold machines and the Town Plan's layouts.
 
 ### Pacing targets (§16)
+- **Post-game from the core ending** (the playability pass): the World opens when the Floating City
+  stands (about 18-25 h for a player, §21), so the targets below are read from there; the 40-45 h
+  of the first Relocate was set when Act III ended at the World, and stays as the target.
 - **Relocate first at 40-45 h**, when the World floor stands and Relocation is researched.
 - **Four islands by 60 h** (Home and three more): each island's climb back to its World floor in
   **6-8 h**, faster than Home's 40 because Megaprojects, reputation, the Drawer and the Codex are
@@ -2015,6 +2080,16 @@ the cold machines and the Town Plan's layouts.
 - **Measured below** (the Act IV bot): with Charting behind Act III's Megaprojects (the fifth pass)
   the campaign does not reach the World by 40 h yet.
 ### Pacing (measured, the Act IV bot)
+**The playability pass** (Charting behind the City alone; the World as the post-game): seed 1000,
+40 h, pace-act4 5 passed. The City complete and Charting and the World **12:40**, Relocation 16:55,
+**the first Relocate 17:40** (Home to Rime, +22 Legacy; target 40-45 h, OPEN: early by construction
+now that Act III ends at the ending, as the fourth pass found before the fifth's gate), the second
+29:18 (Rime to the Old Works, +7); Rime's climb back to its World 5.0 h (target 6-8). Rules 1-2:
+Act III 7.1 min, Act IV 7.5 min, Act III on Rime 19.9 / 19.8 min from 20:24 (OPEN). The floor
+bests stay far under §22's 7-10 (2.5-4.4) and the Old Works never reaches its World by 40 h. These
+are post-game numbers; the decision to leave the 40-45 h target standing is DECISIONS.md's
+(playability pass).
+
 Measured by the campaign bot with the Act IV policy (`src/sim/bot4.ts` over `src/sim/bot3.ts`,
 `tests/pace-act4.test.ts`, seed 1000, `FOLD_ACT4_HOURS` = 40 h of play, about 25 min of wall time;
 60 h measured once, about 25 min). Fourth pass (DECISIONS.md "The fourth pass"): the Act III bot now
