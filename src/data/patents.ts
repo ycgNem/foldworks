@@ -215,14 +215,14 @@ export const PATENTS: Record<PatentId, PatentDef> = {
     derivation: '§19 The Patent Drawer, 1 Patent (was 2): 8 -> 12 kept designs, room for every Act II product line (the Act II bot folds nine products)',
   }),
   filingCabinet: P({
-    id: 'filingCabinet', name: 'The Filing Cabinet', branch: 'auto', cost: 2, requires: ['drawerSpace'], pos: [3, 1],
+    id: 'filingCabinet', name: 'The Filing Cabinet', branch: 'auto', cost: 2, requires: ['drawerSpace'], pos: [2, 2],
     effect: { k: 'drawer', add: 4 },
     text: '{u:blueprint} Patent Drawer 12 → {good:16} designs · each one comes back built',
     flavor: 'Four drawers, one of them for sandwiches.',
     derivation: '§19 The returning run (the playability pass): 12 -> 16 kept designs; every kept design now comes back as a module at a run\'s start, so a slot is a chain that returns built: room for Act II\'s nine products and Act III\'s Workshop lines (Chem Vat, Greenhouse, bearings)',
   }),
   notebooks: P({
-    id: 'notebooks', name: 'The Floor Plan', branch: 'auto', cost: 3, requires: ['draughtsman'], pos: [4, 0],
+    id: 'notebooks', name: 'The Floor Plan', branch: 'auto', cost: 3, requires: ['draughtsman'], pos: [3, 1],
     effect: { k: 'floorPlan', every: 2 },
     text: '{u:factory} the Factory floor at a Reorganize is laid again · trunks paid · its modules placed as copies exist',
     flavor: 'Pinned to the wall with four drawing pins and a gear.',
