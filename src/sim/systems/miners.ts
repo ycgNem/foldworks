@@ -1,5 +1,5 @@
-// Miners (DESIGN.md §4): 1 ore per 2.0 s from the patch under them, out of their front. A Lucky
-// Vein on their patch runs them at 3x (§6). Progress is counted in ticks, so 2.0 s is exactly 40.
+// Miners (DESIGN.md §4): 1 ore per 2.0 s from the patch under them, out of their front. Progress
+// is counted in ticks, so 2.0 s is exactly 40.
 import type { Game } from '../Game';
 import { DX, DY } from '../world';
 import { RECIPE } from '../../data/recipes';
@@ -7,7 +7,7 @@ import { RULES } from '../../data/rules';
 import { TICK_RATE } from '../../engine/time';
 import { offer } from '../transfer';
 import { note } from './stats';
-import { odBoost, overdriveTick, veinBoost } from './machines';
+import { odBoost, overdriveTick } from './machines';
 import { isAudited } from './audits';
 import { prules } from '../patents';
 import { scenarioMiners } from '../scenario';
@@ -27,10 +27,9 @@ export function runMiners(g: Game) {
     const r = RECIPE[m.recipe ?? 'mineIron'];
     const out = r.outputs[0].item;
     const pi = g.patchOf[m.y * g.W + m.x];
-    // a Lucky Vein, Overdrive and the Great Drill's stage 1 (§18) multiply
-    // a Lucky Vein and Overdrive boost its line (never while audited, or they would be folded in)
-    const speed = veinBoost(g, m)
-      * odBoost(g, m)
+    // Overdrive (never while audited, or it would be folded in) and the Great Drill's stage 1 (§18)
+    // multiply
+    const speed = odBoost(g, m)
       // Rich Ore (a Scenario's twist, DESIGN.md §21)
       * scenarioMiners(g)
       // Pebble Isle (DESIGN.md §22): every Miner digs 1.5x

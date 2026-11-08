@@ -1,35 +1,29 @@
 // Sparks (DESIGN.md §6): one every 3-6 minutes, visible for 20 s, paused while the tab is hidden.
-// A Lucky Vein glitters on a patch with a working miner (click: that patch's miners run 3x for
-// 60 s, and so does every machine of the line it feeds). An Inspector walks up to the busiest line (click: they grade it with §10's formula and
-// hand over 60 s of its measured output x the grade multiplier, in kind, to research; paid in
-// items, not coin, so it is not a bank-percentage windfall: DECISIONS.md). Missing one costs
-// nothing.
+// A Spark is the Inspector (the playability pass cut the Lucky Vein, Cookie Clicker's golden cookie
+// into Frenzy): they walk up to the busiest line (click: they grade it with §10's formula and hand
+// over 60 s of its measured output x the grade multiplier, in kind, to research; paid in items, not
+// coin, so it is not a bank-percentage windfall: DECISIONS.md). Missing one costs nothing.
 import type { Game, ActResult } from '../Game';
 import { Num } from '../../engine/num';
-import { PATCHES } from '../../data/land';
 import { RECIPE } from '../../data/recipes';
 import type { ItemId } from '../../data/items';
 import { creditResearch } from './research';
 import { RULES } from '../../data/rules';
 import { TICK_RATE } from '../../engine/time';
 import { isMachine } from '../../data/machines';
-import { rand, type Spark } from '../world';
+import type { Spark } from '../world';
 import { lines, gradeLine, endsAtSink } from '../analysis';
 import { shares } from './stats';
 import { trules } from '../longtail';
 
 export function runSparks(g: Game) {
   const s = g.s;
-  for (const k of Object.keys(s.veins)) {
-    s.veins[k]--;
-    if (s.veins[k] <= 0) delete s.veins[k];
-  }
   if (!s.visible) return;
   for (const p of s.sparks) p.life--;
   const gone = s.sparks.filter((p) => p.life <= 0);
   if (gone.length) {
     s.sparks = s.sparks.filter((p) => p.life > 0);
-    for (const p of gone) g.emit({ type: 'sparkMiss', x: p.x, y: p.y, id: p.kind });
+    for (const p of gone) g.emit({ type: 'sparkMiss', x: p.x, y: p.y });
   }
   if (s.nextSpark > 0) {
     s.nextSpark--;
@@ -39,25 +33,15 @@ export function runSparks(g: Game) {
   const spark = pickSpark(g);
   if (spark) {
     s.sparks.push(spark);
-    g.emit({ type: 'spark', x: spark.x, y: spark.y, id: spark.kind });
+    g.emit({ type: 'spark', x: spark.x, y: spark.y });
   }
 }
 
+/** The Inspector: beside the busiest line (most working machines, two at least), on a free owned
+ * tile; none while no line has two machines at work (the timer runs on). */
 function pickSpark(g: Game): Spark | null {
-  // the Trophy Shelf's Spark trophies keep it a few seconds longer (DESIGN.md §24)
+  // the Trophy Shelf's Inspector trophies keep them a few seconds longer (DESIGN.md §24)
   const life = (RULES.sparkLife.value + trules(g).sparkLife) * TICK_RATE;
-  const options: Spark[] = [];
-  // a vein: a patch with a working miner on it
-  const patches = new Set<number>();
-  for (const m of g.miners) if (m.state === 'work') patches.add(g.patchOf[m.y * g.W + m.x]);
-  if (patches.size) {
-    const list = [...patches].sort((a, b) => a - b);
-    const pi = list[Math.floor(rand(g.s) * list.length)];
-    const p = PATCHES[pi];
-    const x = p.x + Math.floor(rand(g.s) * p.w), y = p.y + Math.floor(rand(g.s) * p.h);
-    options.push({ kind: 'vein', x, y, life });
-  }
-  // an inspector: beside the busiest line (most working machines), on a free owned tile
   let best: { n: number; ids: number[]; x: number; y: number } | null = null;
   for (const l of lines(g)) {
     const ms = l.filter((e) => isMachine(e.kind));
@@ -66,9 +50,7 @@ function pickSpark(g: Game): Spark | null {
     const spot = freeBeside(g, ms);
     if (spot) best = { n, ids: l.map((e) => e.id), x: spot.x, y: spot.y };
   }
-  if (best) options.push({ kind: 'inspector', x: best.x, y: best.y, life, line: best.ids });
-  if (!options.length) return null;
-  return options[Math.floor(rand(g.s) * options.length)];
+  return best ? { x: best.x, y: best.y, life, line: best.ids } : null;
 }
 
 function freeBeside(g: Game, ms: { x: number; y: number }[]): { x: number; y: number } | null {
@@ -83,21 +65,7 @@ function freeBeside(g: Game, ms: { x: number; y: number }[]): { x: number; y: nu
 export function catchSpark(g: Game, p: Spark): ActResult {
   g.s.sparks = g.s.sparks.filter((q) => q !== p);
   g.bump('sparks');
-  if (p.kind === 'vein') {
-    const pi = g.patchOf[p.y * g.W + p.x];
-    const ticks = RULES.veinSeconds.value * TICK_RATE;
-    g.s.veins[pi] = ticks;
-    // the whole line the patch feeds runs 3x, not just its miners: a balanced line's smelters
-    // would otherwise only back up the extra ore (the pacing audit at the Milestone 3 gate)
-    for (const l of lines(g)) {
-      if (!l.some((e) => e.kind === 'miner' && g.patchOf[e.y * g.W + e.x] === pi)) continue;
-      for (const e of l) if (isMachine(e.kind)) e.boost = ticks;
-    }
-    for (const m of g.miners) if (g.patchOf[m.y * g.W + m.x] === pi) m.boost = ticks;
-    g.emit({ type: 'sparkGet', x: p.x, y: p.y, id: 'vein' });
-    return { ok: true };
-  }
-  const line = (p.line ?? []).map((id) => g.byId.get(id)).filter((e) => !!e) as NonNullable<ReturnType<typeof g.byId.get>>[];
+  const line = p.line.map((id) => g.byId.get(id)).filter((e) => !!e) as NonNullable<ReturnType<typeof g.byId.get>>[];
   const gr = gradeLine(g, line);
   // 60 s of each final product the line makes, at its measured pace, x the grade
   const items: Partial<Record<ItemId, number>> = {};
@@ -117,7 +85,7 @@ export function catchSpark(g: Game, p: Spark): ActResult {
     total += n;
   }
   if (gr.letter === 'S') g.bump('inspectS');
-  g.emit({ type: 'sparkGet', x: p.x, y: p.y, id: 'inspector', value: total, d: gr.score });
+  g.emit({ type: 'sparkGet', x: p.x, y: p.y, value: total, d: gr.score });
   g.emit({ type: 'inspected', x: p.x, y: p.y, id: gr.letter, value: total, d: gr.score });
   if (main) g.emit({ type: 'inspectGift', x: p.x, y: p.y, id: main, value: total });
   return { ok: true };

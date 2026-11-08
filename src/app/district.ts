@@ -289,7 +289,7 @@ function entRep(app: App, e: FEnt): DRep {
     rows.push(sel ? `{u:research} counts toward ${RESEARCH[sel].name}` : '{u:research} {warn:pick research}');
     const ins = inflow(e);
     if (ins.length) rows.push(ins.slice(0, 4).map((r) => `${icon(r.item)} ${rate(r.flow)}/min`).join('  '));
-    return { title: `${HIGH[ID].name} Hopper`, uicon: 'research', rows, more, verbs: '{k:LMB} inspire' };
+    return { title: `${HIGH[ID].name} Hopper`, uicon: 'research', rows, more, verbs: '{k:LMB} research' };
   }
   if (e.kind === 'fbay') {
     const mf = districtMegaFrac(g, ID);
@@ -1153,12 +1153,12 @@ export function districtInput(app: App, t: { x: number; y: number }, overUI: boo
     DS.pick = { fx: src.x, fy: src.y, tx: thing.x, ty: thing.y, items };
     return;
   }
-  // idle: a route's line opens its card; the Dock its orders, the Hopper Inspiration, a module
+  // idle: a route's line opens its card; the Dock its orders, the Hopper research, a module
   // Overdrive for its group (else its report pins)
   if (DS.hoverRoute !== null) { DS.route = DS.route === DS.hoverRoute ? null : DS.hoverRoute; DS.sel = null; return; }
   if (!thing) { DS.sel = null; DS.route = null; return; }
   if (thing.kind === 'fdock') { app.togglePanel('orders'); return; }
-  if (thing.kind === 'fhopper') { if (!g.act({ k: 'hclick', floor: ID, x: t.x, y: t.y }).ok) app.togglePanel('research'); return; }
+  if (thing.kind === 'fhopper') { app.togglePanel('research'); return; }
   if (thing.kind === 'module' && g.done('overdrive') && !(thing.od ?? 0) && !(thing.cool ?? 0) && g.act({ k: 'hclick', floor: ID, x: t.x, y: t.y }).ok) return;
   DS.sel = DS.sel === thing.id ? null : thing.id;
   DS.route = null;

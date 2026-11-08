@@ -366,7 +366,7 @@ function inviteScene(app: App, t: number, at: number) {
   const u = t - at;
   ui.ctx.fillStyle = rgba(C.ink, 0.8 - 0.35 * clamp01(u / 0.8));
   ui.ctx.fillRect(0, 0, W, H);
-  const cw = Math.min(330, W - 24), ch = 132;
+  const cw = Math.min(330, W - 24), ch = 146;
   const x = Math.floor((W - cw) / 2), y = Math.max(8, H - ch - Math.max(24, Math.floor(H * 0.08)));
   const r = slip(ui, x, y, cw, ch, { blocking: true });
   ribbon(ui, x - 6, y - 10, cw + 12, "The story isn't over", { color: 'gold', icon: 'world' });
@@ -376,6 +376,8 @@ function inviteScene(app: App, t: number, at: number) {
     g.done('charting') ? '{good:Charting is done} · fly a barge route' : '{u:research} {soft:research} Charting {soft:to open it}',
     '{soft:islands to fly the town to, with rules of their own}',
     '{u:relocate} Relocate · {u:mega} the Lighthouse and the Sky Anchor · {u:lastFold} the Last Fold',
+    // the post-game opens here (the playability pass): Challenges and the Scenario boards
+    '{u:star} {good:Challenges} and {u:trophies} {good:Scenarios} are open · {u:options} Options',
   ];
   for (const s of lines) { ty += drawRich(ui, s, r.x + 4, ty, r.w - 8, C.ink) + 4; }
   const by = y + ch - 24, bw = Math.floor((cw - 30) / 2);

@@ -25,7 +25,7 @@ import { itemIcon } from '../render/sprites';
 import { nominal, feeders, entName, endsAtSink, outLinks, lineOf } from '../sim/analysis';
 import { shares } from '../sim/systems/stats';
 import { powerFactor, poleReach, drawKw } from '../sim/systems/power';
-import { modeSpeed, baseSpeed, veinBoost, byEvery } from '../sim/systems/machines';
+import { modeSpeed, baseSpeed, byEvery } from '../sim/systems/machines';
 import { islandDef, islandMiners, isWarm, warmPlant, plantReach, isPlant, repairPrice, softened, workingNeighbours, coldFactor } from '../sim/systems/islands';
 import { SEED_ORES, seedSide } from '../sim/systems/seed';
 import { krules } from '../sim/kernels';
@@ -96,7 +96,7 @@ const MODE_SHORT: Record<Mode, string> = { normal: 'Norm', efficient: 'Eff', ove
  * output): the crafts its buffer allows at its speed now. The same arithmetic as the report's. */
 function runLeft(app: App, m: Ent, r: RecipeDef, inputs: boolean, output: boolean): { sec: number; why: 'in' | 'out'; item: ItemId } | null {
   const g = app.game;
-  const sp = baseSpeed(g, m) * veinBoost(g, m) * Math.min(1, powerFactor(g, m));
+  const sp = baseSpeed(g, m) * Math.min(1, powerFactor(g, m));
   if (sp <= 0) return null;
   const craft = (r.time * TICK_RATE) / sp;
   let inN = Infinity, inItem: ItemId | null = null;
@@ -588,7 +588,7 @@ function factoryReport(app: App, e: FEnt): Report {
     rep.uicon = 'research';
     const sel = g.s.research.selected;
     rows.push(rich(sel ? `{u:research} counts toward ${RESEARCH[sel].name}` : '{u:research} counts toward research'), rich('{i:machineKit} → the kits bank'));
-    rep.verbs = '{k:LMB} inspire';
+    rep.verbs = '{k:LMB} research';
     return rep;
   }
   if (e.kind === 'fbay') {

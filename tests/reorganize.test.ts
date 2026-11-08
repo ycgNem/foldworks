@@ -26,6 +26,7 @@ import { decodeDesign, encodeDesign, keptBill, unfoldKeptRefusal, dieRefusal } f
 import { restore, savePayload, fingerprint, stateFrom } from '../src/sim/snapshot';
 import { migrate, SAVE_VERSION } from '../src/engine/save';
 import type { Dir, ModuleDesign } from '../src/sim/world';
+import { endStory } from './story-helpers';
 
 function sandbox(seed = 1) {
   const g = new Game(seed);
@@ -764,8 +765,9 @@ describe('the returning run (DESIGN.md §19 "What a Reorganize keeps", the playa
     must(g, { k: 'reorganize' });
     expect(g.s.meta.ordersFilled).toContain('gizmoFestival');
     expect(offeredOrders(g).some((o) => o.id === 'gizmoFestival')).toBe(false);
-    // a second reset, into the Challenge whose goal is the Festival
+    // a second reset, into the Challenge whose goal is the Festival (the post-game: the story ended)
     g.s.research.done = [...RESEARCH_IDS];
+    endStory(g);
     fakeDesign(g, 'steel', 'S', 1.25);
     must(g, { k: 'reorganize', challenge: 'smallBoxes' });
     expect(g.s.designs).toEqual([]);

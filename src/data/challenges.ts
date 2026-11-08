@@ -64,7 +64,7 @@ export const CHALLENGES: Record<ChallengeId, ChallengeDef> = {
   }),
   handsOff: C({
     id: 'handsOff', name: 'Hands Off',
-    rule: 'No clicks count: no hand-mining, no cranking, no Sparks, no Overdrive, no Inspiration',
+    rule: 'No clicks count: no hand-mining, no cranking, no Inspector, no Overdrive',
     goal: { k: 'deliver', item: 'gizmo', n: 200 }, goalText: 'Deliver 200 Gizmos this run',
     reward: 'The Dispatcher works for you without its Patent, for good',
     start: { coin: 60, upgrades: ['bellows'] },
@@ -201,6 +201,3 @@ export const CHALLENGES: Record<ChallengeId, ChallengeDef> = {
     derivation: '§21 Challenges, §24: three skiffs where the busiest routes run 6-12 (§21) means a Bay\'s feeders stand beside it; a Lighthouse or Sky Anchor stage is about an island\'s 2-4 h (§22); the reward is a quarter off the dwell (§21 skiffRate), half of what the Lighthouse\'s Beacon gives (§22)',
   }),
 };
-
-/** Challenges open after the first Reorganize (the Reorganize card offers them). */
-export const CHALLENGE_AFTER_RUNS = 1;

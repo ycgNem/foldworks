@@ -14,7 +14,6 @@ import { HIGH } from '../src/data/floors';
 import { CHALLENGES } from '../src/data/challenges';
 import { SCENARIOS } from '../src/data/scenarios';
 import { RULES, GRADES, SCORE_WEIGHTS } from '../src/data/rules';
-import { SPARKS } from '../src/data/sparks';
 import { TROPHIES, TROPHY_CAPS } from '../src/data/trophies';
 import { COSMETICS } from '../src/data/cosmetics';
 import { CODEX_PAGES } from '../src/data/codex';
@@ -47,7 +46,6 @@ function records(): [string, { derivation?: string } & Record<string, unknown>][
     ...Object.entries(RULES).map(([k, d]) => ['rule ' + k, d] as [string, any]),
     ...GRADES.map((d) => ['grade ' + d.letter, d] as [string, any]),
     ['score weights', SCORE_WEIGHTS as any],
-    ...Object.values(SPARKS).map((d) => ['spark ' + d.kind, d] as [string, any]),
     ...TROPHIES.map((d) => ['trophy ' + d.id, d] as [string, any]),
     ...CLAIM_PRICE.map((d) => ['claim price ' + d.item, d] as [string, any]),
     ...MEGA.map((d) => ['megaproject stage ' + d.stage, d] as [string, any]),

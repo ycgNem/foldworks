@@ -412,15 +412,6 @@ function placeholder(name: string): SpriteSheet {
         // the fold seam
         r(x, C.amber, 3, 8, 10, 1);
       });
-    case 'spark_vein':
-      return make(16, 16, 0, 0, 4, 8, (x, f) => {
-        const pts = [[3, 4], [11, 3], [7, 9], [12, 11], [4, 12]];
-        pts.forEach(([a, b], i) => {
-          const on = (i + f) % 4;
-          if (on === 0) { r(x, C.bone, a, b - 1, 1, 3); r(x, C.bone, a - 1, b, 3, 1); }
-          else if (on === 1) r(x, C.gold, a, b, 1, 1);
-        });
-      });
     case 'spark_inspector':
       return make(16, 16, 0, 0, 2, 2, (x, f) => {
         // a little figure with a clipboard and a hat
@@ -435,4 +426,4 @@ function placeholder(name: string): SpriteSheet {
 }
 
 /** Names the game draws (the art director's export list). */
-export const SPRITE_NAMES = ['belt', 'belt_turn', 'miner', 'smelter', 'furnace', 'press', 'assembler', 'heap', 'crate', 'splitter', 'merger', 'dock', 'hopper', 'module', 'spark_vein', 'spark_inspector', 'items'];
+export const SPRITE_NAMES = ['belt', 'belt_turn', 'miner', 'smelter', 'furnace', 'press', 'assembler', 'heap', 'crate', 'splitter', 'merger', 'dock', 'hopper', 'module', 'spark_inspector', 'items'];

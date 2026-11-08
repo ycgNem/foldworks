@@ -13,12 +13,15 @@ import { powerMult } from '../src/sim/systems/challenges';
 import { maxRoutes } from '../src/sim/systems/high';
 import { SCENARIOS, SCENARIO_IDS } from '../src/data/scenarios';
 import { scenarioMiners, beltsLeft, scenarioBest } from '../src/sim/scenario';
+import { endStory } from './story-helpers';
 
-/** A game after one Reorganize, with Patents to bank so a second one is allowed. */
+/** A game after one Reorganize and the story's end (the post-game open), with Patents to bank so
+ * a second one is allowed. */
 function ready(seed = 3) {
   const g = new Game(seed);
   g.s.meta.runs = 1;
   g.s.megaPatents = 3;
+  endStory(g);
   return g;
 }
 
@@ -45,10 +48,15 @@ describe('Challenges (DESIGN.md §21)', () => {
     }
   });
 
-  it('opens after the first Reorganize', () => {
+  it('opens after the story: the Floating City complete, not a Reorganize (the playability pass)', () => {
     const g = new Game(1);
     g.s.megaPatents = 3;
-    expect(g.act({ k: 'reorganize', challenge: 'noSplitters' }).why).toMatch(/after your first Reorganize/);
+    expect(g.act({ k: 'reorganize', challenge: 'noSplitters' }).why).toMatch(/after the story/);
+    g.s.meta.runs = 3;
+    expect(g.act({ k: 'reorganize', challenge: 'noSplitters' }).why).toMatch(/after the story/);
+    endStory(g);
+    expect(g.act({ k: 'reorganize', challenge: 'noSplitters' }).ok).toBe(true);
+    expect(g.s.challenge).toBe('noSplitters');
   });
 
   it('No Splitters: refused while it holds; won with the Festival; then every high floor holds 20 more routes', () => {
@@ -62,7 +70,8 @@ describe('Challenges (DESIGN.md §21)', () => {
     expect(g.s.challenge).toBeNull();
     expect(g.s.meta.challenges).toContain('noSplitters');
     expect(g.act({ k: 'place', kind: 'splitter', x: t.x, y: t.y, rot: 0 }).ok).toBe(true);
-    expect(maxRoutes(g, 'district')).toBe(140);
+    // 120 + 20, and the Lift-off trophy's 5 (the City stands: Challenges open after it)
+    expect(maxRoutes(g, 'district')).toBe(145);
     // a won Challenge isn't taken again
     g.s.megaPatents = 3;
     expect(g.act({ k: 'reorganize', challenge: 'noSplitters' }).why).toMatch(/won already/);

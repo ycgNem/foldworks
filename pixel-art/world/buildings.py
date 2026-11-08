@@ -168,41 +168,6 @@ def draw_module(s, f):
 
 # --------------------------------------------------------------------------- Sparks
 
-STARS = [(4, 4), (11, 6), (6, 11), (12, 12)]
-PHASE = [0, 2, 1, 3]
-
-
-def star(s, x, y, size):
-    if size == 0:
-        return
-    if size == 1:
-        s.px(x, y, c("hot"))
-        return
-    if size == 2:
-        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
-            s.px(x + dx, y + dy, c("gold"))
-        s.px(x, y, c("bone"))
-        return
-    # size 3: a four-point star with an ink halo so it reads over pale ground
-    pts = {(x, y)} | {(x + dx, y) for dx in (-2, -1, 1, 2)} | {(x, y + dy) for dy in (-2, -1, 1, 2)}
-    for p in ring_of(pts):
-        if s.get(*p) is None:
-            s.px(p[0], p[1], c("ink"))
-    for dx in (-2, 2):
-        s.px(x + dx, y, c("gold"))
-    for dy in (-2, 2):
-        s.px(x, y + dy, c("gold"))
-    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-        s.px(x + dx, y + dy, c("hot"))
-    s.px(x, y, c("bone"))
-
-
-def draw_spark_vein(s, f):
-    sizes = [0, 1, 3, 2]
-    for i, (x, y) in enumerate(STARS):
-        star(s, x, y, sizes[(f + PHASE[i]) % 4])
-
-
 def draw_inspector(s, f):
     b = 1 if f else 0   # a little bob
     rows = [
@@ -559,7 +524,6 @@ def build():
     export("splitter", mk(16, 16, 1, lambda s, f: draw_router(s, "splitter")), 0)
     export("merger", mk(16, 16, 1, lambda s, f: draw_router(s, "merger")), 0)
     export("module", mk(16, 16, 1, draw_module), 0)
-    export("spark_vein", mk(16, 16, 4, draw_spark_vein), 8, preview_bg="ore")
     export("spark_inspector", mk(16, 16, 2, draw_inspector), 2)
     export("dock", mk(32, 32, 2, draw_dock), 2)
     export("dock_lily", mk(32, 32, 2, draw_dock_lily), 2)

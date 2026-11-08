@@ -110,17 +110,25 @@ The player switches floors with Tab or the floor tabs. Both floors run all the t
   takes **≈20 s**. That matches §16's first purchase target.
 - **After the Bellows**, the furnace runs itself at 2.0 s per ingot and needs 1 ore click per 2 s
   (1.5 coin/s). The first Miner (40 coin) takes **≈27 s** and ends the clicking.
-- **Sparks** (slice set). One every 3–6 min (uniform), visible for 20 s, on the Workshop floor:
-  - **Lucky Vein**: an ore patch tile glitters. Click it and that patch's miners **and every
-    machine of the line they feed** run at 3× for 60 s. It only appears on a patch that has a
-    working miner. *(Milestone 3 gate audit: boosting only the miners did nothing in a balanced
-    1:1 line; the extra ore just backed up.)*
-  - **Inspector**: walks up to a line (the busiest connected group of machines). Click and they
-    grade it with §10's audit formula and hand **60 s of that line's measured output × the
-    grade multiplier to research, as items** (the selected node first, then the bank). This
-    rewards a good line, not a lucky click. *Paid in kind, not coin (Milestone 1–2 review): a
-    coin windfall sized by current output is the shape of Cookie Clicker's golden cookie.*
-  - Missing a Spark costs nothing. Sparks pause while the tab is hidden (no offline Sparks).
+- **Sparks**: the **Inspector**, the one kind. One every 3–6 min (uniform), visible for 20 s, on
+  the Workshop floor. They walk up to a line (the busiest connected group of machines, two at
+  least at work; on a free owned tile beside it). Click and they grade it with §10's audit
+  formula and hand **60 s of that line's measured output × the grade multiplier to research, as
+  items** (the selected node first, then the bank). This rewards a good line, not a lucky click,
+  and it teaches the grade the fold will give. *Paid in kind, not coin (Milestone 1–2 review): a
+  coin windfall sized by current output is the shape of Cookie Clicker's golden cookie.*
+  - Missing one costs nothing. Sparks pause while the tab is hidden (no offline Sparks). While no
+    line has two machines at work, none appears (the timer runs on).
+  - **The Lucky Vein is cut** (the playability pass, 2026-11-08): a random glitter on a patch,
+    clicked for ×3 for 60 s, was Cookie Clicker's golden cookie into Frenzy (the critic's
+    derivative list). *The rate stays 3–6 min*: it was set for Sparks of either kind, and every
+    Spark is now one that grades a real line. Measured on the planner bot (seeds 1000, 8919, 16838,
+    24757, its first 3 h): 38–41 spawns before, 17–22 of them veins, and 39–41 after, all
+    Inspectors (12–15 an hour either way); its coin at 3 h 1.46M against 1.49–1.64M with the vein
+    (2–11% less: the vein's ×3 minutes). The Inspector comes twice as often as it did, so its research gift doubles: about a
+    fifth of one line's output a minute for a player who catches every one (60 s × grade in 4.5
+    min), against the 30% of every node Inspiration gave (§20). The trophies that count Sparks
+    (1, 10 and 100) keep their counts; the first, "Lucky!", is renamed **Spot Check**.
 
 ## 7. The Dock, orders and Mayor Bramble
 
@@ -240,7 +248,7 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
    miner in a 1×1 box graded S; an all-assembler line such as circuits into motors is a line)
    and no Dock, Hopper or Hand Furnace, and every building in it wholly. Belts crossing the box
    edge become the module's **ports** (in or out, by belt direction). Power never crosses the
-   box (§18). While a box is audited, Lucky Veins and Overdrive don't touch it, so a boost is
+   box (§18). While a box is audited, Overdrive doesn't touch it, so a boost is
    never folded in for good. *The final round:* that includes an Overdrive clicked before the
    audit began. Its 3× stops at the audit's first tick for every machine, Miner and module in the
    box, and its timer and cooldown run on. This holds for the Workshop, for nested boxes, and with
@@ -568,10 +576,9 @@ If any answer is no, change the model here before building more.
 - **Trophies (slice preview)**: a short shelf of cosmetic trophies (first sale, first Gizmo,
   1,000 coin, a Spark caught...) shows progress from the first minute; Milestone 11 gives each a
   small, specific bonus tied to what earned it.
-- **Overdrive / Inspiration / Sparks II**: Overdrive 3× for 10 s with a 30 s cooldown per
-  machine. Inspiration: 1 click = 0.1% of the selected node's remaining cost, capped at 30% of
-  each node (clicking helps but never replaces the line). Built in Milestone 6: a click on a
-  Hopper from Act II on (§20).
+- **Overdrive / Sparks II**: Overdrive 3× for 10 s with a 30 s cooldown per machine. (Inspiration,
+  clicks on a Hopper crediting research, was built in Milestone 6 and cut in the playability
+  pass: §20.)
 
 ## 16. The 100-hour pacing model
 
@@ -1401,16 +1408,21 @@ and on every machine, and a forecast is still the morning's report.
   for any other reason keeps nothing by stopping, so its row offers the fix instead. A stop or a
   start re-runs the forecast at once.
 
-### Inspiration (§15)
-- From the slice end (Act II), a click on a Hopper (either floor) credits the selected node with
-  **0.1% of what it still needs**, item by item, as items delivered, up to **30% of each item's
-  cost** per node. A capped click is quiet (no refusal, no research screen opening under a fast
-  clicker). It counts against the 12 clicks/s cap.
-- *Derivation*: of the remaining cost, so each click gives less: 30% takes
-  ln(0.7) / ln(0.999) = 357 clicks, 89 s at the sustained 4 clicks/s (§1), 30 s at the cap. Active
-  play helps research a little and can never replace the line (pillar 1).
-- The Hopper was the target because it is where research is paid, and a click there needs no new
-  building. Before Act II a Hopper click still opens research.
+### Inspiration, cut (the playability pass, 2026-11-08)
+- Built in Milestone 6: from the slice end a click on a Hopper credited the selected node 0.1% of
+  what it still needed, up to 30% of each item's cost. **Cut**: one more currency-like thing to
+  track (the critic counted eleven at 15 h against PLAN.md's six), a chore for the 30% (357 clicks
+  a node, 89 s at 4 clicks/s), and a button press that bypassed the line instead of rewarding it.
+  A click on a Hopper on any floor now opens the research page, as it always did before Act II.
+- **Rule 4 (active over idle) is unchanged by it**: no bot ever clicked a Hopper, so every reading
+  in the table below was already without Inspiration, and coin was never what it paid. Active
+  play keeps building, Overdrive and the Inspector (§6); the readings that sit at the band's
+  floor (1.48-1.50, Overdrive's own duty cycle) are as they were, re-measured after the Lucky
+  Vein's cut below.
+- Its trophies (Inspired: Overdrive cools 2 s sooner; They Know, hidden: the Tinfoil Hopper skin)
+  go with it, the skin and its art too: nothing else needed either (the other four cooling
+  trophies still reach its 10 s cap, §24; the skin was the joke about the clicking). Save v15
+  drops what Inspiration recorded; what it delivered stays.
 
 ### Notation and readability
 - `Num.format` writes four notations, chosen in Options and kept in localStorage (a player
@@ -1463,6 +1475,12 @@ and on every machine, and a forecast is still the morning's report.
   migration (DECISIONS.md "Milestone 14").
 - **Saves v5**: the state gains `inspire` (Inspiration given per node); `paused` on machines and
   modules and the Night Shift in `upgrades` need no migration (absent means none).
+- **Saves v15** (the playability pass's cuts): `inspire`, its click counter, the Lucky Vein (a vein
+  Spark, `veins`, every machine's `boost`), the two Inspiration trophies and the Tinfoil skin
+  (owned and worn) are dropped; an Inspector on the map keeps its place without a `kind`; a
+  Challenge under way stays under way (`challenge` untouched). A click logged on a dropped vein
+  leaves the log; a log replayed past a Spark's spawn is near, not exact (the spawn draws less
+  from the random state). `tests/post-game.test.ts` loads a v14 save holding all of it.
 
 ### Measured (pace tests, `tests/pace-idle-*.test.ts` and `tests/pace-offline.test.ts`)
 Each stage is a saved state of a bot's factory:
@@ -1580,8 +1598,8 @@ asks where each group stands and how its goods get to the next one. The plan and
   answer to a crowded floor (pillar 1: designing beats buying). The World takes depth 3 (§22).
 - **Everything else is the Factory's**: modules run as rate functions (`stepModule`), starved or
   blocked in proportion; a byproduct with no route blocks its module (the slag lesson, one floor
-  up); Overdrive on a module runs every module joined to it by routes; a click on the Hopper is
-  Inspiration; claims and Machine Kits are held by the groups inside (§18), on every floor.
+  up); Overdrive on a module runs every module joined to it by routes; a click on the Hopper opens
+  research; claims and Machine Kits are held by the groups inside (§18), on every floor.
 - **The readout** on every route: its skiffs, what it carries now, what its source makes of the
   item (the "wanted"), and its length. Every rate up here reads **items a minute**, as on the
   floors below (§1; the high floors read /s until the playability pass).
@@ -1820,9 +1838,19 @@ costs under 5% of the coin on hand (20 skiffs' worth), so it never spends a save
 act's chore, placing skiffs, becomes a machine's.
 
 ### Challenges (`src/data/challenges.ts`, `src/sim/systems/challenges.ts`)
-A Challenge is taken at a Reorganize, from the second one on: the next run holds its rule until
-its goal is met, and its reward is kept for good (`meta.challenges`). Patents are filed as for any
-run; giving a Challenge up costs nothing but the reward. A won Challenge isn't taken again.
+A Challenge is the post-game's (the playability pass): it opens once the story has ended, the
+Floating City complete (`postGame`, §21 The core ending; Megaprojects survive every reset, so it
+stays open), never at a Reorganize count. It is chosen on its own page (Options, a key and a tab
+at the back of the book), "Take it next run", and begins at the next Reorganize: the next run
+holds its rule until its goal is met, and its reward is kept for good (`meta.challenges`). The
+Reorganize card offers none; with one taken it says so under the contract (its rule, goal and
+reward, a key back to the page, "Ordinary run" to drop it). Patents are filed as for any run;
+giving a Challenge up costs nothing but the reward. A won Challenge isn't taken again. A save
+already in a Challenge from before this rule keeps it running (save v15).
+*Why after the ending:* the critic counted about 60 concepts by 5 h (PLAN.md wants far fewer);
+fifteen Challenges offered at the first reset were among the ones a player meets before the
+story has taught its own; and picking a Challenge on the reset card was Antimatter Dimensions'
+challenge entry at prestige (flagged, DECISIONS.md). No bot or pace test takes a Challenge.
 
 | Challenge | Rule | Goal | Reward, for good |
 |---|---|---|---|
@@ -1844,7 +1872,8 @@ Dimensions convention (flagged when PLAN.md listed them); here the goals are fac
 rewards rules, never a multiplier on everything.
 
 ### Scenarios (`src/data/scenarios.ts`, `src/sim/scenario.ts`)
-A Scenario is a separate game in its own save slot, open after the first Reorganize: a board fixes
+A Scenario is a separate game in its own save slot, open after the story's end (the Floating City
+complete; the playability pass, with the Challenges: Options, "after the story"): a board fixes
 the land (none for sale), the research (every node of Act I, or of Acts I and II but the Great
 Drill), the coin and one twist; there is no Reorganize. Its score is the best fold of one product
 this game: the design's grade-applied rate of it per minute, or per tile of the fold box. The app
@@ -2654,7 +2683,8 @@ pages), `src/data/cosmetics.ts` (every skin), the Milestone 11 blocks of `src/da
 rule helpers at the foot of `src/sim/systems/challenges.ts`. Tests: `tests/longtail.test.ts`.
 
 ### The Trophy Shelf
-**205 trophies, 18 of them hidden** (shown as "???" until earned: `trophyFace`). They cover every act
+**203 trophies, 17 of them hidden** (shown as "???" until earned: `trophyFace`; the playability
+pass cut Inspiration's two, Inspired and the hidden They Know). They cover every act
 and layer: the slice's 29 and Acts II-III's 26 from before; then the long deliveries (every run
 counted: `meta.lifetime.delivered` plus this run, Act I's gears to Act IV's Sunset Generators), the
 firsts of Acts II-V, the Codex tier by tier, Reorganize and the Drawer, Relocate and the islands, the
@@ -2678,10 +2708,10 @@ full); the last column is every trophy's and Ledger rule's sum against the cap, 
 | `skiffs` | every route takes more skiffs | +1 | +4 (12 -> 16) | a route trophy's (§21: twelve skiffs carry a far feeder); Act III's five: 5 (1.25x) |
 | `routes` | every high floor holds more routes | +5 or +10 | +40 | a third of the 120 (§21); Act III's eight: 45 (1.13x) |
 | `drawer` | the Patent Drawer holds more designs | +1 | +6 (8 -> 14) | under A Deeper Drawer's 4 plus the Legacy's (§19, §22): which lines to keep stays a choice; eight trophies: 8 (1.33x) |
-| `sparkLife` | Sparks stay longer | +2 or +3 s | +10 s (20 -> 30) | §6's 20 s, for a player who catches them; six: 14 s (1.4x) |
+| `sparkLife` | the Inspector (§6's one kind of Spark) stays longer | +2 or +3 s | +10 s (20 -> 30) | §6's 20 s, for a player who catches them; six: 14 s (1.4x) |
 | `heap` | Slag Heaps hold more | +50 | +200 | 400 is about 53 min of one smelter (§4): +50 is 7 min; five: 250 (1.25x) |
 | `startCoin` | every run after a reset starts with more coin (a head start: `granted`) | 10-5,000 | 20,000 | each about the act's first purchase when it is earned (the Bellows' 15 ... the Patent tree's 5,000); the cap an Act II-III run's first heavy machines (a Mixer, a Refinery, a Smelter Mk2: 19,000, §18); 27 trophies, Acts I-III's only: 25,065 (1.25x; was 68,465 uncapped) |
-| `cool` | Overdrive cools sooner | 2-3 s | 10 s (30 -> 20) | still twice its 10 s run (§18); five: 12 s (1.2x) |
+| `cool` | Overdrive cools sooner | 2-3 s | 10 s (30 -> 20) | still twice its 10 s run (§18); four: 10 s (1x; five and 12 s before Inspired was cut) |
 | `repair` | the Old Works' ruins repair cheaper | 10% | 30% | off §22's quarter; four: 40% (1.33x) |
 | `chute` | the Chute holds more of each item | +5 or +10 | +40 (20 -> 60) | Specimen Jars' level (§21); seven: 40 (1x) |
 | `barge` | the World's barges fly faster | +0.25 tiles/s | +1 (3 -> 4) | the Lighthouse's Lens Room's step again (§22), so a World with both flies at 5; three trophies and two Ledger rules: 1.25 (1.25x) |

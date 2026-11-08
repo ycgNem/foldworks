@@ -632,12 +632,12 @@ export class Act2Bot {
   private sparks() {
     const g = this.g;
     const t = g.s.tick;
-    const now = new Set(g.s.sparks.map((p) => `${p.kind}${p.x},${p.y}`));
+    const now = new Set(g.s.sparks.map((p) => `${p.x},${p.y}`));
     for (const k of [...this.sparkSeen.keys()]) if (!now.has(k)) this.sparkSeen.delete(k);
     for (const k of now) if (!this.sparkSeen.has(k)) this.sparkSeen.set(k, t);
     if (t < this.clickAt) return;
     for (const p of g.s.sparks) {
-      const seen = this.sparkSeen.get(`${p.kind}${p.x},${p.y}`)!;
+      const seen = this.sparkSeen.get(`${p.x},${p.y}`)!;
       if (t - seen >= SPARK_NOTICE) {
         if (this.act({ k: 'click', x: p.x, y: p.y })) this.decide('spark');
         return;

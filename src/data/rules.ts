@@ -24,9 +24,6 @@ export const RULES = {
   sparkMin: r(180, '§6 Sparks: one every 3-6 min (uniform)'),
   sparkMax: r(360, '§6 Sparks: one every 3-6 min (uniform)'),
   sparkLife: r(20, '§6 Sparks: visible for 20 s'),
-  /** Lucky Vein: miners on that patch run this much faster for this long */
-  veinMult: r(3, '§6 Lucky Vein: its line runs 3x for 60 s'),
-  veinSeconds: r(60, '§6 Lucky Vein: 3x for 60 s'),
   /** Inspector: pays this many seconds of the line\'s measured output value x the grade multiplier */
   inspectorSeconds: r(60, '§6 Inspector: 60 s of that line\'s measured output value'),
   /** fold box limit, warm-up and window (seconds) */

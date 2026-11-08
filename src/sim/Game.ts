@@ -33,7 +33,6 @@ import type { Tally } from './offline';
 import { runAudits, startAudit, cancelAudit, auditLock, auditTransfer } from './systems/audits';
 import { runStats } from './systems/stats';
 import { setPause, buyIdleUpgrade, type PauseCmd } from './systems/pause';
-import { inspire } from './systems/inspire';
 import type { IdleUpgradeId } from '../data/idle';
 // Reorganize, layer 1 (DESIGN.md §19, Milestone 5)
 import type { PatentId } from '../data/patents';
@@ -131,7 +130,7 @@ export type Cmd =
   // the Factory annex (DESIGN.md §19): one more block east of the floor
   | { k: 'annex' }
   // Act III (DESIGN.md §21): the Factory Chute; the high floors (the District, the World): modules,
-  // skiff routes, lots, Overdrive and Inspiration clicks, and their folds
+  // skiff routes, lots, Overdrive clicks, and their folds
   | { k: 'fchute'; x: number; y: number }
   // auto: fly its routes on its own (DESIGN.md §21 "Auto-routing"); the default, false to place it bare
   | { k: 'hplace'; floor: HighFloorId; design: number; x: number; y: number; auto?: boolean }
@@ -479,12 +478,7 @@ export class Game {
       case 'fremove': return fremove(this, c.x, c.y);
       case 'frotate': return frotate(this, c.x, c.y);
       case 'mode': return this.setMode(c.x, c.y, c.mode);
-      case 'fclick': {
-        // the Factory Hopper takes Inspiration clicks (DESIGN.md §15); a module takes Overdrive
-        const fe = this.fentAt(c.x, c.y);
-        if (fe?.kind === 'fhopper') return this.countClick() ? inspire(this, fe.x + 1, fe.y + 1, 'factory') : no('too fast');
-        return foverdrive(this, c.x, c.y);
-      }
+      case 'fclick': return foverdrive(this, c.x, c.y); // a module takes Overdrive (DESIGN.md §18)
       case 'claim': return buyClaims(this, c.item);
       case 'faudit': return startFAudit(this, { x: c.x, y: c.y, w: c.w, h: c.h });
       case 'fauditCancel': return cancelFAudit(this);
@@ -681,12 +675,6 @@ export class Game {
       if (auditLock(this, e.x, e.y)) return no('Auditing: Overdrive would spoil the measurement');
       return overdrive(this, e);
     }
-    // Inspiration (DESIGN.md §15, Act II on): a click on the Hopper credits the selected node
-    if (e && e.kind === 'hopper') {
-      const r = inspire(this, e.x + 1, e.y + 1);
-      if (r.ok) s.clicks++;
-      return r;
-    }
     if (!e || e.kind === 'miner') {
       const ore = this.oreAt(x, y);
       if (ore) {
@@ -852,7 +840,8 @@ export class Game {
     for (const w of this.watchers) w(x, y, dir, item);
   }
 
-  /** Ticks until the next Spark: 3-6 min, uniform (DESIGN.md §6). */
+  /** Ticks until the next Spark: 3-6 min, uniform (DESIGN.md §6). mulberry32 on the state's own
+   * seed: the sim's only randomness. */
   sparkDelay(): number {
     const r = (this.s.rng = (this.s.rng + 0x6d2b79f5) >>> 0);
     let t = Math.imul(r ^ (r >>> 15), r | 1);

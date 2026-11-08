@@ -27,7 +27,6 @@ import { BYPRODUCTS, defaultName, mainItem, moduleBoost, moduleSecond, stepModul
 import { placeClaimRefusal } from './claims';
 import { hopperWantsWaste } from '../transfer';
 import { inBox, splusGate } from './audits';
-import { inspire } from './inspire';
 import { prules } from '../patents';
 import { lrules } from '../legacy';
 import { hasKernel } from '../kernels';
@@ -637,12 +636,11 @@ export function buyLot(g: Game, id: HighFloorId): ActResult {
   return OK;
 }
 
-/** A click on a high floor: the Hopper takes Inspiration; a module, Overdrive for it and every
- * module joined to it by routes (DESIGN.md §18, as the Factory's trunk groups). */
+/** A click on a high floor's module: Overdrive for it and every module joined to it by routes
+ * (DESIGN.md §18, as the Factory's trunk groups). */
 export function hclick(g: Game, id: HighFloorId, x: number, y: number): ActResult {
   const e = hentAt(g, id, x, y);
   if (!e) return no('nothing here');
-  if (e.kind === 'fhopper') return g.countClick() ? inspire(g, e.x + 1, e.y + 1, id) : no('too fast');
   if (e.kind !== 'module') return no('Click a module to overdrive it');
   if (!g.done('overdrive')) return no('Research Overdrive first');
   if ((e.od ?? 0) > 0) return no('Overdriven already');

@@ -515,7 +515,6 @@ export class Renderer {
       else ctx.drawImage(this.ground.chunk(ch.id), ch.x * TILE, ch.y * TILE);
     }
     this.landLabels(g);
-    this.veins(g);
     drawIsleGround(ctx, g, this.time);
     drawOreFx(ctx, g, this.time, -ox / z, -oy / z, this.W / z, this.H / z);
 
@@ -584,24 +583,6 @@ export class Renderer {
       const ready = !ch.requires || g.done(ch.requires);
       const price = ch.cost.toLocaleString('en-US');
       this.labels.push({ x: s.x, y: s.y, max: x1 - x0, short: ready ? `${ICON.coin}${price}` : ICON.lock, text: ready ? `${ch.name}: ${price} coin` : `${ch.name}: research first`, color: ready ? (g.s.coin.gte(ch.cost) ? C.gold : C.bone) : C.fog, bg: C.ink, sale: { name: ch.name.replace(/\{[^}]*\}/g, '').trim(), price, ready, afford: g.s.coin.gte(ch.cost) } });
-    }
-  }
-
-  private veins(g: Game) {
-    const ctx = this.ctx;
-    for (const k of Object.keys(g.s.veins)) {
-      const p = g.patches[+k];
-      if (!p) continue;
-      const a = 0.25 + 0.15 * Math.sin(this.time * 6);
-      ctx.fillStyle = rgba(C.gold, a);
-      ctx.fillRect(p.x * TILE, p.y * TILE, p.w * TILE, p.h * TILE);
-      for (let i = 0; i < 4; i++) {
-        const t = (this.time * 1.7 + i * 0.37) % 1;
-        const x = p.x * TILE + ((i * 23 + Math.floor(this.time * 3) * 7) % (p.w * TILE));
-        const y = p.y * TILE + p.h * TILE * (1 - t);
-        ctx.fillStyle = C.bone;
-        ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
-      }
     }
   }
 
@@ -1108,8 +1089,8 @@ export class Renderer {
 
   private sparks(g: Game) {
     for (const p of g.s.sparks) {
-      const s = sheet(p.kind === 'vein' ? 'spark_vein' : 'spark_inspector');
-      const bob = p.kind === 'inspector' ? Math.round(Math.sin(this.time * 4) * 1) : 0;
+      const s = sheet('spark_inspector');
+      const bob = Math.round(Math.sin(this.time * 4) * 1);
       // a pulsing gold ring makes it read as clickable, not decoration (§17)
       const a = 0.35 + 0.25 * Math.sin(this.time * 8);
       const ctx = this.ctx;
