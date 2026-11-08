@@ -30,9 +30,7 @@ import { DX, DY, type Ent, type FEnt, type Floor, type SkiffRoute } from '../sim
 import type { Game } from '../sim/Game';
 import { capacity, gridIndex, powered } from '../render/powerview';
 import { nextGoal } from './goals';
-import { button } from './chrome';
 import { DS } from './district';
-import type { Layout } from './layout';
 import type { App } from './app';
 
 export interface Stuck {
@@ -148,17 +146,19 @@ function workshopCause(g: Game, m: Ent, seen: Set<number>): Cause {
   return c(`${name}: its ${ic(out?.item)} ${lc(out?.item)} backs up. A belt carries 120 a minute: a second belt, or fewer feeders.`, [`{pip:blocked} ${ic(out?.item)}`]);
 }
 
-function workshopCauses(g: Game): { cause: Cause; cost: number }[] {
-  const by = new Map<string, { cause: Cause; cost: number }>();
-  const add = (cause: Cause, cost: number) => {
+function workshopCauses(g: Game, goal: Set<string> = new Set()): Ranked[] {
+  const by = new Map<string, Ranked>();
+  const add = (cause: Cause, cost: number, toGoal = 0) => {
     const q = by.get(cause.key);
-    if (q) q.cost += cost;
-    else by.set(cause.key, { cause, cost });
+    if (q) { q.cost += cost; q.goal += toGoal; }
+    else by.set(cause.key, { cause, cost, goal: toGoal });
   };
   for (const m of [...g.miners, ...g.machines]) {
     if (m.paused || (m.state !== 'starved' && m.state !== 'blocked')) continue;
     if (m.state === 'starved' && !m.why && !m.recipe) continue; // idle, no recipe yet
-    add(workshopCause(g, m, new Set()), valuePerMin(m) * lostShare(m));
+    const cost = valuePerMin(m) * lostShare(m);
+    const out = nominal(m).outs[0]?.item;
+    add(workshopCause(g, m, new Set()), cost, out && goal.has(out) ? cost : 0);
   }
   // a brownout: every machine on the grid slowed (DESIGN.md §18 Power)
   g.grids.forEach((gr, i) => {
@@ -169,7 +169,8 @@ function workshopCauses(g: Game): { cause: Cause; cost: number }[] {
     const cap = capacity(g, gr);
     add({ key: 'grid' + i, floor: 'workshop', kind: 'ent', id: at.id, x: at.x + at.w / 2, y: at.y + at.h / 2, name: entName(g, at),
       say: `A brownout: ${Math.round(cap)} kW for ${Math.round(gr.demand)} kW wanted. Every machine on it runs at ${Math.round(gr.sat * 100)}%. An engine more, or more fuel.`,
-      chips: [`{pip:power} ${Math.round(gr.sat * 100)}%`] }, slowed);
+      chips: [`{pip:power} ${Math.round(gr.sat * 100)}%`] }, slowed,
+      gr.consumers.some((m) => m.state === 'work' && goal.has(nominal(m).outs[0]?.item ?? '')) ? slowed : 0);
   });
   void powered;
   return [...by.values()];
@@ -215,15 +216,16 @@ function factoryCause(g: Game, m: FEnt, seen: Set<number>): Cause {
   return c(`${name}: its ${ic(item)} ${lc(item)} backs up. A trunk carries ${FACTORY.trunkSpeed * 60} a minute: give it its own.`, [`{pip:blocked} ${ic(item)}`]);
 }
 
-function factoryCauses(g: Game): { cause: Cause; cost: number }[] {
-  const by = new Map<string, { cause: Cause; cost: number }>();
+function factoryCauses(g: Game, goal: Set<string> = new Set()): Ranked[] {
+  const by = new Map<string, Ranked>();
   for (const m of g.s.factory.ents) {
     if (m.kind !== 'module' || m.paused || (m.state !== 'starved' && m.state !== 'blocked')) continue;
     const cause = factoryCause(g, m, new Set());
     const cost = moduleWorth(g, m) * Math.max(0.25, 1 - m.fAvg);
+    const toGoal = Object.keys(g.design(m.design)?.outs ?? {}).some((k) => goal.has(k)) ? cost : 0;
     const q = by.get(cause.key);
-    if (q) q.cost += cost;
-    else by.set(cause.key, { cause, cost });
+    if (q) { q.cost += cost; q.goal += toGoal; }
+    else by.set(cause.key, { cause, cost, goal: toGoal });
   }
   return [...by.values()];
 }
@@ -320,15 +322,54 @@ function districtCauses(g: Game, f: 'district' | 'world' | 'beyond'): { cause: C
 
 // ------------------------------------------------------------------ the answer
 
-/** The bottleneck on a floor that costs the most output, or what the next goal needs. */
+/** A cause, the coin a minute it costs, and how much of that is output the current goal wants. */
+interface Ranked { cause: Cause; cost: number; goal: number }
+
+/** The items the current goal names (its line and its chips: a research node's, an order's or a
+ * Megaproject's wants), and the items one recipe before them. */
+export function goalItems(g: Game, floor: Floor): Set<string> {
+  const goal = nextGoal(g, floor);
+  const out = new Set<string>();
+  if (!goal) return out;
+  for (const m of [goal.text, ...(goal.chips ?? [])].join(' ').matchAll(/\{i:([A-Za-z0-9]+)\}/g)) if (m[1] in ITEMS) out.add(m[1]);
+  for (let depth = 0; depth < 1; depth++)
+    for (const it of [...out]) for (const r of RECIPES) if (r.outputs.some((o) => o.item === it)) for (const i of r.inputs) out.add(i.item);
+  return out;
+}
+
+/** Every bottleneck on a floor worth naming: the ones holding up the current goal first (by how
+ * much of the goal's output they stop), then by the coin a minute they cost (the playability pass:
+ * at 15 h the answer was "Press 6 starved, 620/min lost", 0.1% of income). On the Workshop and the
+ * Factory a cause under 1% of income is left out (with no income yet, none is). */
+export function rankStuck(g: Game, floor: Floor): Stuck[] {
+  const high = floor === 'district' || floor === 'world' || floor === 'beyond';
+  const want = high ? new Set<string>() : goalItems(g, floor);
+  const all: Ranked[] = floor === 'factory' ? factoryCauses(g, want) : high ? districtCauses(g, floor).map((q) => ({ ...q, goal: 0 })) : workshopCauses(g, want);
+  const cut = high ? 0 : 0.01 * g.incomePerMin();
+  const kept = all.filter((q) => q.cost > 0 && q.cost >= cut);
+  kept.sort((a, b) => b.goal - a.goal || b.cost - a.cost || a.cause.key.localeCompare(b.cause.key));
+  return kept.map((q) => {
+    const { key: _k, ...c } = q.cause;
+    return { ...c, cost: q.cost, chips: [...c.chips, `{coin:${pm(q.cost)}}/min lost`, ...(q.goal > 0 ? ['{warn:holds up the goal}'] : [])] };
+  });
+}
+
+/** rankStuck, asked at most once a game second (the trouble bell asks every frame). */
+export function stuckList(g: Game, floor: Floor): Stuck[] {
+  const at = `${Math.floor(g.s.tick / 20)}|${g.version}|${g.fversion}|${g.hversion}`;
+  const c = cache.get(floor);
+  if (c && c.g === g && c.at === at) return c.v;
+  const v = rankStuck(g, floor);
+  cache.set(floor, { g, at, v });
+  return v;
+}
+const cache = new Map<string, { g: Game; at: string; v: Stuck[] }>();
+
+/** The bottleneck on a floor that holds the goal up most (else costs the most output), or what
+ * the next goal needs. */
 export function findStuck(g: Game, floor: Floor): Stuck {
-  const all = floor === 'factory' ? factoryCauses(g) : floor === 'district' || floor === 'world' || floor === 'beyond' ? districtCauses(g, floor) : workshopCauses(g);
-  all.sort((a, b) => b.cost - a.cost || a.cause.key.localeCompare(b.cause.key));
-  const top = all[0];
-  if (top && top.cost > 0) {
-    const { key: _k, ...c } = top.cause;
-    return { ...c, cost: top.cost, chips: [...c.chips, `{coin:${pm(top.cost)}}/min lost`] };
-  }
+  const top = rankStuck(g, floor)[0];
+  if (top) return top;
   const goal = nextGoal(g);
   return {
     floor, kind: 'goal', id: -1, x: goal?.tile ? goal.tile.x + 0.5 : NaN, y: goal?.tile ? goal.tile.y + 0.5 : NaN, name: 'the next goal', cost: 0,
@@ -337,9 +378,11 @@ export function findStuck(g: Game, floor: Floor): Stuck {
   };
 }
 
-/** Ask, and answer on screen: pan to it, pin its report, the Inspector says what to do. */
-export function whereStuck(app: App) {
-  const s = findStuck(app.game, app.floor);
+/** Ask, and answer on screen: pan to it, pin its report, the Inspector says what to do. `n` picks
+ * the nth cause (the trouble bell steps through them, the one holding up the goal first). */
+export function whereStuck(app: App, n = 0) {
+  const list = stuckList(app.game, app.floor);
+  const s = list.length ? list[n % list.length] : findStuck(app.game, app.floor);
   app.audio.sfx('open');
   if (s.kind === 'ent') { app.selected = s.id; app.lookAt(s.x, s.y); }
   else if (s.kind === 'module' && s.floor === 'factory') { app.fselected = s.id; app.lookAt(s.x, s.y); }
@@ -357,18 +400,6 @@ export function whereStuck(app: App) {
 /** The last answer (e2e and the debug handle). */
 export let last: Stuck | null = null;
 
-/** The button: under the Purse, beside the trouble bell (or in its place), once there is a line to
- * be stuck on. Returns the y under it. */
-export function stuckButton(app: App, L: Layout, top: number, bellBottom: number): number {
-  const g = app.game;
-  const ui = app.ui;
-  const lines = g.has('bellows') && (g.miners.length > 0 || g.s.research.done.length > 0 || g.s.factory.ents.some((e) => e.kind === 'module'));
-  if (!lines || g.s.scenario) return bellBottom;
-  const bell = ui.ids.get('nextProblem');
-  const belled = bellBottom > top;
-  const x = belled && bell ? bell.x + bell.w + 6 : L.bell.x;
-  const y = top + 4;
-  const w = 50, h = 17;
-  if (button(ui, 'whereStuck', x, y + 1, w, h, 'Stuck?', { tip: [{ text: '{big:Where am I stuck?}' }, { text: 'the dearest bottleneck on this floor' }, { text: '{k:LMB} show it  {k:G}' }] })) whereStuck(app);
-  return Math.max(bellBottom, y + h + 1);
-}
+// The "Stuck?" button that stood beside the bell is gone (the playability pass): the trouble bell
+// is the one place for trouble (topbar.ts bell: a click steps through rankStuck's causes, G asks
+// for the first).

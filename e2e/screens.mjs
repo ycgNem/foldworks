@@ -1514,6 +1514,8 @@ STATES.act2hover = { base: 'act2power', post: () => { const a = window.__app; a.
 STATES.lessonCard = { base: 'act2power', post: () => { const a = window.__app; a.selected = null; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.lessons.show(a, 'brownout'); } };
 STATES.lessonStart = { base: 'start', post: () => { const a = window.__app; a.selected = null; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.lessons.show(a, 'starved'); } };
 STATES.lessonDistrict = { base: 'district', post: () => { const a = window.__app; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.lessons.show(a, 'shortRoute'); } };
+// the playability pass (hud): trophies that arrive together are one ribbon in the slips column
+STATES.trophyBatch = { base: 'act2power', post: () => { const a = window.__app; a.toasts = []; a.trophyPops = [{ id: 'estate', t: 0.3, more: ['letThereBeLight', 'dispatcher'] }]; } };
 STATES.stuckAnswer = { base: 'act2power', post: () => { const a = window.__app; a.selected = null; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.whereStuck(); } };
 STATES.stuckFactory = { base: 'factory2', post: () => { const a = window.__app; a.toasts = []; a.onboarding.whereStuck(); } };
 // (every lot bought: the District's pinned report does not keep off the lot's Buy button, a District

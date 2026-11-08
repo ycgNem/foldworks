@@ -48,7 +48,8 @@ registerCounter({
     const pv = perTick(g, 'previewPatents', () => previewPatents(g)).now;
     const m = g.s.meta;
     const last = m.history[m.history.length - 1];
-    const s = `{reset:+${pv}} {u:patents}`;
+    // named, so the number says what it is (the playability pass: a bare "+28" read as nothing)
+    const s = `Reorganize {reset:+${pv}} {u:patents}`;
     const w = 24 + 6 + richWidth(s) + 14;
     const hov = ui.hover(x, y, w, 26);
     ui.mark('reorganizeBar', x, y, w, 26);

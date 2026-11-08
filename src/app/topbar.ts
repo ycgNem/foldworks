@@ -13,7 +13,6 @@ import { RESEARCH } from '../data/research';
 import { TROPHIES } from '../data/trophies';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { MEGA } from '../data/megaprojects';
-import { CLAIM_PRICE } from '../data/land';
 import { TICK_RATE } from '../engine/time';
 import { Num } from '../engine/num';
 import { plain } from '../engine/fmt';
@@ -27,7 +26,7 @@ import { megaStage } from '../data/megaprojects';
 import { offeredOrders, orderFrac } from '../sim/systems/orders';
 import { researchFrac } from '../sim/systems/research';
 import { powered } from '../render/powerview';
-import { sign, tag, tagSize, coinIcon, sparkline, dot, uiIcon, rule, chip, chipWidth, type UIconName } from './chrome';
+import { sign, tag, tagSize, coinIcon, sparkline, dot, uiIcon, rule, chip, chipWidth, button, type UIconName } from './chrome';
 import type { Layout } from './layout';
 import type { Rect } from '../ui/ui';
 import { DS } from './district';
@@ -35,6 +34,8 @@ import { ledgerOpen, ledgerFrac } from '../sim/systems/ledger';
 import type { App } from './app';
 import type { ScreenName } from './screens';
 import { bigSafe, zones } from './tags';
+import { stuckList, whereStuck } from './stuck';
+import { keyLabel } from '../engine/input';
 
 export function fmtRate(v: number) {
   return plain(v, v < 10 ? 1 : 0); // Milestone 6: through the one number helper (DESIGN.md §20)
@@ -266,24 +267,32 @@ export function problems(app: App) {
   return { list, work, starved, blocked, unpowered, showPower };
 }
 
-/** The trouble bell: only while something is wrong. Returns the y under it. */
+/** The most the bell's tag counts before it says "9+". */
+const BELL_CAP = 9;
+
+/** The trouble bell, the one place for trouble (the playability pass merged "Stuck?" into it): only
+ * while something on this floor is worth fixing. Its tag counts causes, not machines (a furnace
+ * choked on slag that starves twelve machines is one), capped at 9+; it swings when a new cause
+ * starts. A click pans to the cause holding up the goal most and the Inspector says what to do; the
+ * next click the next one (G asks for the first). Returns the y under it. */
 export function bell(app: App, L: Layout, y: number): number {
   const ui = app.ui;
   const h = app.hud;
-  const pr = problems(app);
-  const ids = new Set(pr.list.map((p) => p.floor + p.id));
-  // a new problem: the bell swings and rings
+  const g = app.game;
+  // the first minute has one goal: no bell until there is a line to be healthy
+  const lines = g.has('bellows') && (g.miners.length > 0 || g.s.research.done.length > 0 || g.s.factory.ents.some((e) => e.kind === 'module'));
+  if (!lines || g.s.scenario) { h.bellIds = new Set(); return y; }
+  const list = stuckList(g, app.floor);
+  const ids = new Set(list.map((p) => p.kind + p.id));
+  // a new cause: the bell swings and rings
   let fresh = false;
   for (const id of ids) if (!h.bellIds.has(id)) fresh = true;
-  if (fresh && pr.list.length && (app.game.miners.length > 0 || app.game.s.research.done.length > 0)) { h.bellAt = ui.time; app.audio.sfx('spark', 0.5, 0.55); }
+  if (fresh && list.length) { h.bellAt = ui.time; app.audio.sfx('spark', 0.5, 0.55); }
   h.bellIds = ids;
-  // the first minute has one goal: no bell until there is a line to be healthy
-  const g = app.game;
-  const lines = g.miners.length > 0 || g.s.research.done.length > 0 || g.s.factory.ents.some((e) => e.kind === 'module');
-  if (!pr.list.length || !lines) return y;
+  if (!list.length) return y;
   const bx = L.bell.x, by = y + 4;
-  const n = pr.list.length;
-  const s = `{bad:${n}}`;
+  const n = list.length;
+  const s = `{bad:${n > BELL_CAP ? BELL_CAP + '+' : n}}`;
   const sz = tagSize(richWidth(s), LINE_H - 2, 'left');
   const w = 20 + sz.w;
   const hov = ui.hover(bx, by, w, 18);
@@ -311,26 +320,16 @@ export function bell(app: App, L: Layout, y: number): number {
   drawLayout(ui, layoutRich(s), ct.x, ct.y);
   if (hov) {
     ui.hoverId = 'nextProblem';
-    const counts = `{chip:good:${pr.work}} {chip:warn:${pr.starved}} {chip:bad:${pr.blocked}}${pr.showPower ? ` {chip:power:${pr.unpowered}}` : ''}`;
-    ui.tip([{ text: '{big:Trouble}' }, { text: counts }, { text: '{soft:working · starved · blocked}' + (pr.showPower ? '{soft: · no power}' : '') }, { text: `{k:LMB} the next one · worst first` }], 200);
+    // grouped by cause: the first three, each its chip and its name, and how many more
+    const rows = list.slice(0, 3).map((p) => ({ text: `${bigSafe(p.name)}  ${p.chips[0] ?? ''}` }));
+    const more = n > 3 ? [{ text: `{soft:+${n - 3} more}` }] : [];
+    const stuckKey = app.input.binds.stuck?.[0];
+    ui.tip([{ text: `{big:Trouble}  {soft:${n} cause${n === 1 ? '' : 's'}}` }, ...rows, ...more, { text: `{k:LMB} show the next${stuckKey ? `  {k:=${keyLabel(stuckKey)}} the worst` : ''}` }], 220);
     if (ui.clicked) {
       ui.eat();
       ui.sfx('click');
-      h.problemIdx = (h.problemIdx + 1) % pr.list.length;
-      const p = pr.list[h.problemIdx];
-      if (p.floor === 'factory') {
-        app.setFloor('factory');
-        app.fselected = p.id;
-      } else if (p.floor === 'district' || p.floor === 'world' || p.floor === 'beyond') {
-        app.setFloor(p.floor);
-        DS.floor = p.floor;
-        DS.game = app.game;
-        DS.sel = p.id;
-      } else {
-        if (app.floor !== 'workshop') app.setFloor('workshop');
-        app.selected = p.id;
-      }
-      app.lookAt(p.x, p.y);
+      whereStuck(app, h.problemIdx % n);
+      h.problemIdx = (h.problemIdx + 1) % n;
     }
   }
   return by + 18;
@@ -389,143 +388,64 @@ export function counters(app: App, L: Layout, y: number): number {
   return y;
 }
 
-// ------------------------------------------------------------------ the lift
+// ------------------------------------------------------------------ the floors
 
-/** The lift, top-right: a dial whose needle points at the floor you are on, a brass button for
- * each floor (the Factory padlocked until it opens), a dot on a floor that wants you. */
-export function lift(app: App, L: Layout, dt: number) {
+/** The open floors as the lift's buttons show them: id, name, the "seen" flag that clears its dot. */
+const FLOOR_BTN: { f: 'workshop' | 'factory' | 'district' | 'world' | 'beyond'; id: string; name: string; seen: string | null }[] = [
+  { f: 'workshop', id: 'floorWorkshop', name: 'Workshop', seen: null },
+  { f: 'factory', id: 'floorFactory', name: 'Factory', seen: 'factorySeen' },
+  { f: 'district', id: 'floorDistrict', name: 'District', seen: 'districtSeen' },
+  { f: 'world', id: 'floorWorld', name: 'World', seen: 'worldSeen' },
+  { f: 'beyond', id: 'floorBeyond', name: 'Beyond', seen: 'beyondSeen' },
+];
+const FLOOR_H = 14;
+const FLOOR_STEP = 15;
+
+/** The floor buttons' column, top-right: its rect (empty while one floor is open). */
+export function floorsRect(app: App, L: Layout): Rect {
+  const open = app.openFloors();
+  if (open.length < 2) return { x: L.lift.x + L.lift.w, y: L.lift.y, w: 0, h: 0 };
+  const w = Math.max(...FLOOR_BTN.filter((b) => open.includes(b.f)).map((b) => textWidth(b.name))) + 16;
+  return { x: L.lift.x + L.lift.w - w, y: L.lift.y, w, h: open.length * FLOOR_STEP - 2 };
+}
+
+/** The lift, top-right (the playability pass: a "D W F" dial nobody could read): a labelled button
+ * for each open floor, bottom floor on top, the one you are on in gold, a dot on one that wants you
+ * (new, or the goal is there), the Tab key beside the column. Nothing while only the Workshop is
+ * open. The buttons keep the dial's ids (floorWorkshop, floorFactory, ...): a fold still flies to
+ * the Factory's. */
+export function lift(app: App, L: Layout, _dt: number) {
   const ui = app.ui;
   const g = app.game;
-  const R = L.lift;
-  const open = g.flag('factoryOpen');
-  const fresh = open && !g.flag('factorySeen');
-  // the dial's ticks (h180_lift.json): Workshop 180, Factory 120, District 60; the World past it
-  const want = app.floor === 'beyond' ? 0 : app.floor === 'world' ? 20 : app.floor === 'district' ? 60 : app.floor === 'factory' ? 120 : 180;
-  const hs = app.hud;
-  hs.liftAngle += (want - hs.liftAngle) * Math.min(1, dt * 8);
+  const R = floorsRect(app, L);
+  if (!R.w) { app.hud.liftRect = null; return; }
+  const open = app.openFloors();
+  // the Tab key beside the bottom button (clear of the District's tool strip along the top)
+  const kw = richWidth('{k:Tab}') + 3;
+  app.hud.liftRect = { x: R.x - kw, y: R.y, w: R.w + kw, h: R.h };
+  const bx = R.x, bw = R.w;
   ui.region(R.x, R.y, R.w, R.h, 'panel');
-  if (g.s.district || g.s.world || g.s.beyond) districtWing(app, R);
-  const art = hasArt('h180_lift') ? sheet('h180_lift') : null;
-  if (art) ui.ctx.drawImage(art.frames[0], R.x, R.y);
-  else {
-    ui.ctx.fillStyle = C.ink; ui.ctx.fillRect(R.x, R.y, R.w, R.h);
-    ui.ctx.fillStyle = T.wood; ui.ctx.fillRect(R.x + 1, R.y + 1, R.w - 2, R.h - 2);
-    ui.ctx.fillStyle = T.brass; ui.ctx.fillRect(R.x + 14, R.y + 5, 16, 16);
-  }
-  // the needle, from the hub, toward the floor's tick
-  const px = R.x + 22, py = R.y + 15;
-  const a = (hs.liftAngle * Math.PI) / 180;
-  ui.ctx.fillStyle = C.ink;
-  for (let i = 0; i <= 7; i++) ui.ctx.fillRect(Math.round(px + Math.cos(a) * i), Math.round(py - Math.sin(a) * i), 1, 1);
-  ui.ctx.fillStyle = C.red;
-  ui.ctx.fillRect(Math.round(px + Math.cos(a) * 7), Math.round(py - Math.sin(a) * 7), 1, 1);
-  ui.ctx.fillStyle = T.brassDeep;
-  ui.ctx.fillRect(px - 1, py - 1, 2, 2);
-  const btns = hasArt('h180_liftbtn') ? sheet('h180_liftbtn') : null;
-  const holes: [number, number][] = [[2, 9], [32, 9]];
-  const floors = [
-    { id: 'floorWorkshop', f: 'workshop' as const, name: 'Workshop', lit: 'Wlit', off: 'W', locked: false },
-    { id: 'floorFactory', f: 'factory' as const, name: 'Factory', lit: 'Flit', off: 'F', locked: !open },
-  ];
-  floors.forEach((fl, i) => {
-    const bx = R.x + holes[i][0], by = R.y + holes[i][1];
-    ui.mark(fl.id, bx, by, 10, 10);
-    ui.region(bx, by, 10, 10, 'button');
-    const hov = ui.hover(bx - 1, by - 1, 12, 12);
+  let y = R.y;
+  for (const fl of FLOOR_BTN) {
+    if (!open.includes(fl.f)) continue;
     const on = app.floor === fl.f;
-    if (btns) {
-      ui.ctx.drawImage(btns.frames[frameNamed(btns, fl.locked ? 'locked' : on ? fl.lit : fl.off)], bx, by);
-      if (hov && !fl.locked) ui.ctx.drawImage(btns.frames[frameNamed(btns, 'hover')], bx, by);
-    } else {
-      ui.ctx.fillStyle = C.ink; ui.ctx.fillRect(bx, by, 10, 10);
-      ui.ctx.fillStyle = on ? T.brassHi : T.brass; ui.ctx.fillRect(bx + 1, by + 1, 8, 8);
-      ui.small(fl.locked ? 'X' : fl.off, bx + 3, by + 3, T.ink);
+    // (a high floor's audit slip reaches right under the column while it runs: the key still works)
+    if (y === R.y + (open.length - 1) * FLOOR_STEP && !(app.high && g.s.haudit)) ui.rich('{k:Tab}', R.x - kw, y + 2, Infinity, T.ink);
+    if (button(ui, fl.id, bx, y, bw, FLOOR_H, fl.name, { gold: on, tip: [{ text: `{big:${fl.name}}` }, { text: on ? '{soft:you are here}' : '{k:LMB} go  {k:Tab} the next floor' }] }) && !on) {
+      ui.sfx('click');
+      app.setFloor(fl.f);
     }
-    if (fl.f === 'factory' && fresh && Math.floor(ui.time * 3) % 2 === 0) dot(ui, bx + 8, by - 1, C.gold);
-    if (fl.f === 'factory' && !fresh && app.floor !== 'factory' && hs.goalUi === 'factory' && Math.floor(ui.time * 3) % 2 === 0) dot(ui, bx + 8, by - 1, C.gold);
-    if (hov) {
-      ui.hoverId = fl.id;
-      ui.tip(fl.locked ? [{ text: `{big:${fl.name}}` }, { text: '{u:lock} opens with your first fold' }] : [{ text: `{big:${fl.name}}` }, { text: on ? '{soft:you are here}' : '{k:LMB} go  {k:Tab} switch' }], 160);
-      if (ui.clicked && !fl.locked) {
-        ui.eat();
-        ui.sfx('click');
-        app.setFloor(fl.f);
-      }
-    }
-  });
-}
-
-/** How far the lift's wings reach out left of its case, in UI px: the District's, the World's
- *  beside it once the World is open, and Beyond's beside that (the tool strip keeps off them). */
-export function liftWingW(app: App): number {
-  return app.game.s.beyond ? 41 : app.game.s.world ? 28 : 15;
-}
-
-/** The high floors' buttons (DESIGN.md §21, §22): a wooden wing bolted on the lift's left once the
- * District is open, a brass D in it, and a W for the World beside it once the World is open (the
- * lift's art has the Workshop's and the Factory's holes). */
-function districtWing(app: App, R: { x: number; y: number; w: number; h: number }) {
-  const ui = app.ui;
-  const g = app.game;
-  const ctx = ui.ctx;
-  const ww = liftWingW(app) + 2;
-  const wx = R.x - ww + 2, wy = R.y + 4, wh = R.h - 6;
-  ui.region(wx, wy, ww, wh, 'panel');
-  ctx.fillStyle = C.ink;
-  ctx.fillRect(wx, wy, ww, wh);
-  ctx.fillStyle = T.wood;
-  ctx.fillRect(wx + 1, wy + 1, ww - 1, wh - 2);
-  ctx.fillStyle = T.woodHi;
-  ctx.fillRect(wx + 1, wy + 1, ww - 1, 1);
-  ctx.fillStyle = T.woodLo;
-  ctx.fillRect(wx + 1, wy + wh - 2, ww - 1, 1);
-  // two brass bolts where it meets the case
-  ctx.fillStyle = T.brassHi;
-  ctx.fillRect(wx + ww - 2, wy + 3, 1, 1);
-  ctx.fillRect(wx + ww - 2, wy + wh - 4, 1, 1);
-  const keys: { f: 'district' | 'world' | 'beyond'; id: string; letter: string; name: string; x: number; seen: string }[] = [];
-  if (g.s.beyond) keys.push({ f: 'beyond', id: 'floorBeyond', letter: 'B', name: 'Beyond', x: wx + 3, seen: 'beyondSeen' });
-  if (g.s.world) keys.push({ f: 'world', id: 'floorWorld', letter: 'W', name: 'World', x: g.s.beyond ? wx + 16 : wx + 3, seen: 'worldSeen' });
-  if (g.s.district) keys.push({ f: 'district', id: 'floorDistrict', letter: 'D', name: 'District', x: R.x - 12, seen: 'districtSeen' });
-  for (const k of keys) {
-    const bx = k.x, by = R.y + 9;
-    const on = app.floor === k.f;
-    const hov = ui.hover(bx - 1, by - 1, 12, 12);
-    ui.mark(k.id, bx, by, 10, 10);
-    ui.region(bx, by, 10, 10, 'button');
-    ctx.fillStyle = C.ink;
-    ctx.fillRect(bx + 2, by, 6, 10);
-    ctx.fillRect(bx, by + 2, 10, 6);
-    ctx.fillRect(bx + 1, by + 1, 8, 8);
-    ctx.fillStyle = on ? C.lamp2 : T.brass;
-    ctx.fillRect(bx + 2, by + 1, 6, 8);
-    ctx.fillRect(bx + 1, by + 2, 8, 6);
-    ctx.fillStyle = on ? C.lamp3 : T.brassHi;
-    ctx.fillRect(bx + 2, by + 1, 6, 1);
-    ctx.fillStyle = T.brassLo;
-    ctx.fillRect(bx + 2, by + 8, 6, 1);
-    if (hov) { ctx.fillStyle = rgba(C.lamp3, 0.35); ctx.fillRect(bx + 1, by + 1, 8, 8); }
-    if (k.f === 'beyond') {
-      // a four-point star: the night above the World (DESIGN.md §23)
-      ctx.fillStyle = T.ink;
-      for (const [px, py, pw] of [[4, 1, 2], [4, 2, 2], [3, 3, 4], [1, 4, 8], [1, 5, 8], [3, 6, 4], [4, 7, 2], [4, 8, 2]] as const) ctx.fillRect(bx + px, by + py, pw, 1);
-    } else if (k.f === 'world') {
-      // a globe, not a letter: the dial's own W is the Workshop
-      ctx.fillStyle = T.ink;
-      for (const [px, py, pw] of [[3, 2, 4], [2, 3, 1], [4, 3, 2], [7, 3, 1], [2, 4, 6], [2, 5, 6], [2, 6, 1], [4, 6, 2], [7, 6, 1], [3, 7, 4]] as const) ctx.fillRect(bx + px, by + py, pw, 1);
-    } else ui.small(k.letter, bx + 3, by + 3, T.ink);
-    const fresh = !g.flag(k.seen);
-    if (!on && (fresh || app.hud.goalUi === k.f) && Math.floor(ui.time * 3) % 2 === 0) dot(ui, bx + 8, by - 1, C.gold);
-    if (hov) {
-      ui.hoverId = k.id;
-      ui.tip([{ text: `{big:${k.name}}` }, { text: on ? '{soft:you are here}' : '{k:LMB} go  {k:Tab} switch' }], 160);
-      if (ui.clicked) {
-        ui.eat();
-        ui.sfx('click');
-        app.setFloor(k.f);
-      }
-    }
+    const fresh = !!fl.seen && !g.flag(fl.seen);
+    if (!on && (fresh || app.hud.goalUi === fl.f) && Math.floor(ui.time * 3) % 2 === 0) dot(ui, bx + bw - 3, y - 1, C.gold);
+    y += FLOOR_STEP;
   }
+}
+
+/** How far the lift reaches out left of its old case, in UI px (the District's tool strip keeps
+ *  off it: src/app/district.ts). */
+export function liftWingW(app: App): number {
+  const R = floorsRect(app, app.layout);
+  return Math.max(0, R.w - app.layout.lift.w);
 }
 
 // ------------------------------------------------------------------ the notebook and its pages
@@ -543,10 +463,9 @@ export function pages(app: App): Page[] {
   p('orders', 'orders', 'Orders', 'O', 'moss', !g.s.orders.active && offeredOrders(g).length > 0);
   if (g.done('folding')) p('modules', 'fold', 'Modules', 'I', 'gold', g.s.designs.some((d) => d.spare > 0) && app.floor === 'factory' && !g.s.factory.ents.some((e) => e.kind === 'module'));
   if (g.s.orders.rep.unit7 >= 1) p('codex', 'codex', 'Codex', '', 'teal', !h.opened.has('codex') || g.s.codex.length > h.codexSeen);
-  if (g.done('surveying')) {
-    const cheapest = Math.min(...CLAIM_PRICE.map((c) => c.price * (1 + 0.5 * (g.s.claimBlocks[c.item] ?? 0))));
-    p('survey', 'survey', 'Survey', '', 'moss', !h.opened.has('survey') || g.s.coin.gte(cheapest));
-  }
+  // the Survey Office's dot only until first opened (the playability pass: "a claim is affordable"
+  // was true all game long past Act II, so its bookmark said NEW forever)
+  if (g.done('surveying')) p('survey', 'survey', 'Survey', '', 'moss', !h.opened.has('survey'));
   if (g.done('greatDrill')) p('mega', 'mega', MEGA.find((q) => q.stage === g.s.mega.stage + 1) ? 'Megaproject' : 'Great Drill', '', 'red', !h.opened.has('mega'));
   for (const q of MENUS) if (q.show(app)) out.push({ id: q.id, panel: q.panel as ScreenName, icon: q.icon, name: q.name, key: q.key ?? '', dot: q.dot?.(app) ?? false, color: 'violet' });
   const trophies = TROPHIES.filter((t) => g.flag('trophy:' + t.id)).length;
@@ -590,9 +509,11 @@ export function bookmarks(app: App, L: Layout) {
   const gb = ui.ids.get('goalBubble');
   const bottom = Math.min(L.build.y, gb && gb.x < 120 ? gb.y : Infinity) - 4;
   const room = Math.max(0, Math.floor((bottom - app.hud.purseBottom - 6) / MARK_STEP));
-  const ps = pages(app).filter((p) => !IN_BOOK.has(p.id)).slice(0, room);
+  // only the pages with something live on them (a %, PICK, NEW): the rest wait in the notebook
+  // (the playability pass: eight bookmarks at 15 h, five saying NEW after every reload)
+  const rows = pages(app).filter((p) => !IN_BOOK.has(p.id)).map((p) => ({ p, status: markStatus(app, p), name: p.name.replace(/ \d+\/\d+$/, '') })).filter((r) => r.status).slice(0, room);
+  const ps = rows.map((r) => r.p);
   if (!ps.length) { app.hud.marksRect = null; return; }
-  const rows = ps.map((p) => ({ p, status: markStatus(app, p), name: p.name.replace(/ \d+\/\d+$/, '') }));
   const inner = Math.max(...rows.map((r) => textWidth(r.name) + 4 + (r.status ? smallWidth(r.status) + 5 : 0)));
   const w = MARK_TUCK + 5 + 8 + 3 + inner + 5;
   let y = bottom - ps.length * MARK_STEP;
@@ -693,7 +614,7 @@ export function cornerZones(app: App, L: Layout, purseBottom: number): Rect[] {
     ...(gs ? [{ x: gs.x - 2, y: gs.y - 2, w: gs.w + 4, h: app.ui.h - gs.y + 2 }] : []),
     ...(mk ? [{ x: 0, y: mk.y - 4, w: mk.w + 4, h: mk.h + 8 }] : []),
     { x: 0, y: 0, w: L.purse.x + 150, h: purseBottom + 4 },
-    { x: L.lift.x - 4 - (app.game.s.district || app.game.s.world ? liftWingW(app) + 1 : 0), y: 0, w: L.lift.w + 10 + (app.game.s.district || app.game.s.world ? liftWingW(app) + 1 : 0), h: L.lift.y + L.lift.h + 4 },
+    ...(app.hud.liftRect ? [{ x: app.hud.liftRect.x - 4, y: 0, w: app.ui.w - app.hud.liftRect.x + 4, h: app.hud.liftRect.y + app.hud.liftRect.h + 4 }] : []),
     { x: L.notebook.x - 4, y: L.notebook.y - 4, w: app.ui.w - L.notebook.x + 4, h: app.ui.h - L.notebook.y + 4 },
   ];
 }

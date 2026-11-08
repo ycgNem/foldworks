@@ -22,7 +22,7 @@ import { claimLoad, claimsHeld, claimsUsed } from '../sim/systems/claims';
 import { Num } from '../engine/num';
 import { perMin, plain } from '../engine/fmt';
 import { kindRate } from './rates'; // Milestone 13: rates on the wheel's item cards
-import { bigWidth, smallWidth, drawSmall, SMALL_H } from '../ui/font';
+import { bigWidth, smallWidth, drawSmall, drawBig, SMALL_H } from '../ui/font';
 import { richWidth, layoutRich, drawLayout } from '../ui/rich';
 import { art, buttonRaw } from '../ui/paper';
 import { T, onPaper } from '../ui/theme';
@@ -264,8 +264,9 @@ export function wheelSlot(app: App, i: number): void {
     if (W.open) closeWheel(app);
     return;
   }
-  const hs = app.hud;
-  const id: PetalId = W.open && (W.petal === 'build' || W.petal === 'power' || W.petal === 'heavy') ? W.petal : hs.buildTab;
+  // open, the keys pick in the petal on show (its discs carry the numbers); shut, always the Build
+  // petal, so 2 is the Miner whatever was opened last (the playability pass: the keys moved about)
+  const id: PetalId = W.open && (W.petal === 'build' || W.petal === 'power' || W.petal === 'heavy') ? W.petal : 'build';
   const tab = STORE_TABS.find((q) => q.id === id) ?? STORE_TABS[0];
   const kind = tab.kinds[i];
   if (!kind) return;
@@ -744,6 +745,40 @@ function priceTag(app: App, text: string, role: Item['priceRole'], cx: number, c
   app.ui.record('text', tx, ty, tw, th, text);
 }
 
+/** A hotkey's nub on a disc's shoulder: the Pip letter on a little dark key. */
+function keyNub(app: App, k: string, x: number, y: number) {
+  const ctx = app.ui.ctx;
+  const w = smallWidth(k) + 4, h = SMALL_H + 3;
+  ctx.fillStyle = C.ink; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = T.paperHi; ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+  ctx.fillStyle = T.paperLo; ctx.fillRect(x + 1, y + h - 2, w - 2, 1);
+  drawSmall(ctx, k, x + 2, y + 1, T.ink);
+}
+
+/** A name in the display face on a paper tag, hung radially out from (cx, cy) at angle a (`at`:
+ * centred on the point itself), with the price under it when there is one. */
+function nameTag(app: App, name: string, price: string | null, role: Item['priceRole'], cx: number, cy: number, a: number, at = false) {
+  const ui = app.ui;
+  const ctx = ui.ctx;
+  const nw = bigWidth(name);
+  const pw = price ? smallWidth(price) : 0;
+  const tw = Math.max(nw, pw) + 8, th = 13 + (price ? SMALL_H + 2 : 0);
+  const ux = Math.cos(a), uy = Math.sin(a);
+  const sup = Math.abs(ux) * tw / 2 + Math.abs(uy) * th / 2;
+  const d = at ? 0 : DISC / 2 + 3 + sup;
+  const tx = Math.round(Math.max(2, Math.min(ui.w - tw - 2, cx + ux * d - tw / 2)));
+  const ty = Math.round(Math.max(2, Math.min(ui.h - th - 2, cy + uy * d - th / 2)));
+  ctx.fillStyle = rgba(C.ink, 0.5); ctx.fillRect(tx + 1, ty + 1, tw, th);
+  ctx.fillStyle = C.ink; ctx.fillRect(tx, ty, tw, th);
+  ctx.fillStyle = T.paperHi; ctx.fillRect(tx + 1, ty + 1, tw - 2, th - 2);
+  // drawn raw: a hover label over its neighbours' price tags, not layout (the overlap audit)
+  drawBig(ctx, name, tx + Math.floor((tw - nw) / 2), ty + 2, T.ink);
+  if (price) {
+    const col = role === 'coin' ? T.coin : role === 'good' ? T.good : role === 'research' ? T.research : role === 'bad' ? T.bad : T.inkSoft;
+    drawSmall(ctx, price, tx + Math.floor((tw - pw) / 2), ty + 13, col);
+  }
+}
+
 /** The goal's pulse: a gold ring swelling off a disc and fading, twice a second. */
 function ripple(app: App, cx: number, cy: number) {
   const ctx = app.ui.ctx;
@@ -832,8 +867,17 @@ function draw(app: App, mx: number, my: number) {
     if (it.active) ring(app, x, y, 13, T.good, 1);
     if (it.goal) ripple(app, x, y);
     if (it.fresh && !it.goal) dot(ui, x + 7, y - 10, C.pipRed);
+    // its key on the disc's shoulder (the playability pass: the number keys were never shown)
+    if (fan > 0.6 && it.key && it.key.length === 1 && it.key !== 'I') keyNub(app, it.key, x - 12, y - 12);
     if (hov) hovered = { item: it, x, y };
   });
+  // the hovered item's name, big, on its own tag over its price tag (the playability pass: prices
+  // but no names; the info tag beside the wheel was too far from the eye)
+  if (hovered && fan > 0.6) {
+    const h = hovered as { item: Item; x: number; y: number };
+    const a = Math.atan2(h.y - cy, h.x - cx);
+    nameTag(app, h.item.locked ? '???' : h.item.name, h.item.price, h.item.locked ? 'soft' : h.item.priceRole, h.x, h.y, a);
+  }
 
   // ---- the petals
   ps.forEach((p, i) => {
@@ -849,6 +893,17 @@ function draw(app: App, mx: number, my: number) {
     if (p.goal && !isOpen) ripple(app, x, y);
     if ((p.fresh || (p.goal && !isOpen)) && Math.floor(ui.time * 3) % 2 === 0) dot(ui, x + 7, y - 10, p.goal ? C.gold : C.pipRed);
   });
+
+  // ---- the open petal's name across the wheel from its items (where no item ever fans), and the
+  // hovered petal's name on it (the playability pass: the petals had icons only)
+  if (e > 0.9) {
+    const oa = pa[pIdx] + Math.PI;
+    nameTag(app, open.name, null, 'soft', cx + Math.cos(oa) * (R_ITEM - 14), cy + Math.sin(oa) * (R_ITEM - 14), oa, true);
+    if (petalHov >= 0 && petalHov !== pIdx) {
+      const a = pa[petalHov];
+      nameTag(app, ps[petalHov].name, null, 'soft', cx + Math.cos(a) * R_PETAL, cy + Math.sin(a) * R_PETAL, a);
+    }
+  }
 
   // ---- the hub: the last building picked, in its well
   const hubKind = app.floor === 'factory' ? W.hubF : W.hubW;

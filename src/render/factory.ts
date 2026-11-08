@@ -22,6 +22,7 @@ import { sheet, drawRot, frameAt, itemIcon, hasArt } from './sprites';
 import { skinned } from './skins'; // Milestone 11: a chosen skin's sheet
 import { TILE } from './ground';
 import { drawPip, type PipShape } from './pips';
+import { faceArrow } from './arrow';
 import { art, artSig, canvas, hh, named } from './skyart';
 
 const PIP: Record<string, string> = { work: C.pipGreen, starved: C.pipYellow, blocked: C.pipRed, idle: C.pipGrey };
@@ -610,7 +611,7 @@ function overlays(ctx: CanvasRenderingContext2D, g: Game, ov: FactoryOverlay, ti
     label(ctx, `${w}x${h}`, (x0 + w / 2) * TILE, y0 > 0 ? y0 * TILE - 14 : (y0 + h) * TILE + 3, col);
     return;
   }
-  const ghost = (x: number, y: number, rot: Dir, kind: 'trunk' | 'module', design = 0) => {
+  const ghost = (x: number, y: number, rot: Dir, kind: 'trunk' | 'module', design = 0, arrow = true) => {
     const e = g.fentAt(x, y);
     const ok = x >= 0 && y >= 0 && x < g.fw && y < g.fh && (!e || (kind === 'trunk' && e.kind === 'trunk'));
     ctx.globalAlpha = 0.6;
@@ -624,12 +625,11 @@ function overlays(ctx: CanvasRenderingContext2D, g: Game, ov: FactoryOverlay, ti
     ctx.fillStyle = rgba(ok ? C.pipGreen : C.pipRed, 0.25);
     ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
     outline(ctx, x, y, 1, 1, ok ? C.pipGreen : C.pipRed);
-    const cx = x * TILE + 8 + DX[rot] * 9, cy = y * TILE + 8 + DY[rot] * 9;
-    ctx.fillStyle = ok ? C.bone : C.pipRed;
-    ctx.fillRect(cx - 1, cy - 1, 3, 3);
+    // which way it faces: the bold arrow the Workshop's ghosts have (src/render/arrow.ts)
+    if (arrow) faceArrow(ctx, x * TILE + 8, y * TILE + 8, rot, 8, ok, time);
   };
   if (ov.drag) {
-    for (const d of ov.drag) ghost(d.x, d.y, d.rot, 'trunk');
+    ov.drag.forEach((d, i) => ghost(d.x, d.y, d.rot, 'trunk', 0, i === ov.drag!.length - 1));
     return;
   }
   const h = ov.hover;
