@@ -34,7 +34,7 @@ import { ORDER, CUSTOMERS } from '../data/orders';
 import { TITLE } from '../game-info';
 import { Renderer, type Overlay } from '../render/renderer';
 import { TILE } from '../render/ground';
-import { drawHud, drawTitle, newHudState, banner, type HudState } from './hud';
+import { drawHud, drawTitle, drawSmallScreen, newHudState, banner, type HudState } from './hud';
 import { TOWN_ROWS } from '../render/town';
 import { ICON } from '../ui/font';
 import { wheelFrameStart, wheelFrameEnd, wheelOpen, openWheel, closeWheel, wheelSlot } from './wheel';
@@ -58,7 +58,7 @@ import { ambience } from './ambience';
 import { initSound } from './soundopts';
 // Milestone 13 (onboarding, UX and accessibility): keys, UI scale, lesson cards, "where am I stuck?"
 import { initKeys, keysDebug } from './keys';
-import { uiScaleFor } from './settings';
+import { uiScaleFor, tooSmall } from './settings';
 import { lessonEvents, lessonDebug } from './lessons';
 import { isleEvents } from './islands';
 import { isSky, rubbleAt } from '../sim/systems/islands';
@@ -111,6 +111,8 @@ export type Panel = ScreenName | null;
 export interface Toast { title: string; text: string; color: string; t: number; life: number; icon?: string }
 
 const SAVE_SLOT = 1;
+/** seconds the first sale's moment has the screen before its trophies show */
+const MOMENT_S = 2.2;
 /** a save loads only if the game rebuilds from it (DESIGN.md §20, corruption recovery) */
 const validSave = (d: unknown) => void checkSave(d as never);
 
@@ -147,7 +149,9 @@ export class App {
   layout: Layout = layout(480, 300);
   gazette = new Gazette();
   /** trophies just earned, shown as a medal sliding in */
-  trophyPops: { id: string; t: number }[] = [];
+  trophyPops: { id: string; t: number; more?: string[] }[] = [];
+  /** UI time of the first sale: the moment has the screen for a breath, trophies wait behind it */
+  momentAt = -99;
   /** which floor is on screen */
   floor: Floor = 'workshop';
   /** the fold box being dragged (tiles, inclusive corners) */
@@ -187,6 +191,16 @@ export class App {
   mouseIn = false;
   /** seconds the mouse has rested at an edge of the floor view */
   private edgeT = 0;
+  /** a left press on empty ground, nothing in hand: a drag pans, a tap does what a click did (the
+   * playability pass: left-drag on empty ground did nothing, and a new player tries it first) */
+  leftPan: { sx: number; sy: number; cx: number; cy: number; moved: boolean; t: { x: number; y: number } } | null = null;
+  /** the glide still owed from tapped pan keys (world px), and how long a pan key has been held */
+  private nudge = { x: 0, y: 0 };
+  private panHeld = 0;
+  /** frames until the camera is framed again, once the HUD has measured the speaker's bubble */
+  private refit = 0;
+  /** UI time of the last game swap: trophies earned in the catch-up after it are batched */
+  adoptAt = -99;
 
   constructor(public canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -260,11 +274,18 @@ export class App {
     this.panel = null;
     this.toasts = [];
     this.trophyPops = [];
+    this.momentAt = -99;
     this.refusal = null;
     this.renderer.ground = null;
     this.hud = newHudState();
     this.hud.coinShown = g.s.coin.toNumber();
     this.hud.firstMiner = g.miners.length > 0 || g.done('pressing') || g.s.meta.runs > 0;
+    // the pages this save has opened (flags), and the Codex as it stands, are not new; a save from
+    // before pages were remembered, past its first hour, has seen the pages it has
+    if (!g.s.flags.some((f) => f.startsWith('page:')) && (g.s.meta.runs > 0 || g.s.tick > TICK_RATE * 3600))
+      for (const p of ['research', 'orders', 'modules', 'codex', 'survey', 'mega', 'drawer', 'patents', 'stats', 'trophies', 'gazette', 'options', 'keys']) g.first('page:' + p);
+    for (const f of g.s.flags) if (f.startsWith('page:')) this.hud.opened.add(f.slice(5));
+    this.hud.codexSeen = g.s.codex.length;
     this.offline = null;
     this.gradeId = null;
     this.nameDraft = null;
@@ -272,7 +293,13 @@ export class App {
     this.handledRuns = g.s.meta.runs;
     this.floor = 'workshop';
     this.setFloor('workshop', true);
+    this.leftPan = null;
+    this.panDrag = null;
+    this.nudge = { x: 0, y: 0 };
+    this.adoptAt = this.ui.time;
     this.fitCamera(true);
+    // framed again once the speaker's bubble has been drawn and measured
+    this.refit = 2;
     claimSaves();
   }
 
@@ -340,6 +367,7 @@ export class App {
     if (f === 'factory' && !this.game.flag('factorySeen')) {
       this.game.first('factorySeen');
       this.fitCamera(true);
+      this.refit = 2;
     }
     if (f === 'district' && !this.game.flag('districtSeen')) {
       this.game.first('districtSeen');
@@ -497,6 +525,16 @@ export class App {
     const ctx = this.ctx;
     const g = this.game;
     this.events();
+    // a phone held upright: a card asking for a bigger screen, drawn big enough to read (the
+    // playability pass: the HUD came out 4-5 CSS px tall there); the game carries on behind it
+    if (tooSmall(window.innerWidth, window.innerHeight)) {
+      const k = Math.max(1, Math.floor(this.canvas.width / 240));
+      this.ui.begin(ctx, this.input, k, dt, true);
+      drawSmallScreen(this);
+      this.ui.end();
+      this.input.endFrame();
+      return;
+    }
     if (this.screen === 'title') {
       this.ui.begin(ctx, this.input, this.uiScale, dt, true);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -524,6 +562,8 @@ export class App {
     drawHud(this, dt);
     wheelFrameEnd(this);
     this.ui.end();
+    // the first frames after a swap: framed again now the speaker's bubble has its size
+    if (this.refit > 0 && !this.panel && --this.refit === 0 && !this.leftPan && !this.panDrag) this.fitCamera(true);
     if (this.offlineJob) this.panel = 'offline';
     else if (savesLost() && this.screen === 'play') this.panel = 'otherTab';
     else this.worldInput();
@@ -648,11 +688,25 @@ export class App {
         case 'sparkGet': a.sfx('sparkGet'); if (e.id === 'vein') this.toast('Lucky Vein!', 'this patch · Miners ×3 · 60 s', C.gold); break;
         case 'inspected': this.toast(`Graded ${e.id}`, `score ${(e.d ?? 0).toFixed(2)} · ${Num.of(e.value ?? 0).format()} items, a minute of the line, to {research:research}`, C.gold); break;
         case 'firstSlagJam': a.sfx('jam'); if (this.game.s.meta.runs === 0) this.toast('Choked on slag!', '{k:LMB} shovel · or a {i:slag} Heap beside it', C.pipRed); break;
-        case 'firstSale': if (this.game.s.meta.runs === 0) this.toast('First sale!', 'the Dock buys · {coin} buys machines', C.gold); break;
+        // the first sale is one moment: the coins fountain out of the Dock with FIRST SALE! on the
+        // floor (src/render/renderer.ts); its trophies wait until it has passed, and no slip
+        case 'firstSale': this.momentAt = this.ui.time; break;
         case 'orderAccept': a.sfx('open'); break;
         case 'trophy': {
+          if (!e.id || !TROPHY[e.id]) break;
+          // one ribbon for trophies that arrive together: the catch-up after a load, an import or a
+          // time away ("3 trophies!"), any within a second of the last, and those the first sale
+          // earns, which wait until its moment has passed (the playability pass: the first sale
+          // fired five things at once; an import dropped two ribbons over the toolbars)
+          const catchUp = this.ui.time - this.adoptAt < 10 || !!this.offlineJob || this.panel === 'offline';
+          const moment = this.ui.time - this.momentAt < MOMENT_S;
+          const last = this.trophyPops[this.trophyPops.length - 1];
+          if (last && (last.t < 1 || ((catchUp || moment) && last.t < 4))) {
+            (last.more ??= []).push(e.id);
+            break;
+          }
           a.sfx('milestone', 0.7);
-          if (e.id && TROPHY[e.id]) this.trophyPops.push({ id: e.id, t: 0 });
+          this.trophyPops.push({ id: e.id, t: moment ? -(MOMENT_S - (this.ui.time - this.momentAt)) : catchUp ? -0.6 : 0 });
           if (this.trophyPops.length > 3) this.trophyPops.shift();
           break;
         }
@@ -822,15 +876,15 @@ export class App {
     // the offline letter stays up while its run computes: Esc, the page keys and the lift wait
     if (this.offlineJob) { this.panel = 'offline'; return; }
     if (savesLost()) { this.panel = 'otherTab'; return; }
-    const sp = (240 * dt) / Math.max(1, cam.zoom / 2);
-    if (inp.isDown('panLeft')) cam.x -= sp;
-    if (inp.isDown('panRight')) cam.x += sp;
-    if (inp.isDown('panUp')) cam.y -= sp;
-    if (inp.isDown('panDown')) cam.y += sp;
+    this.panKeys(dt);
     this.edgeScroll(dt);
     if (inp.wasPressed('zoomIn')) this.zoom(1);
     if (inp.wasPressed('zoomOut')) this.zoom(-1);
-    if (inp.mouse.wheel && !this.ui.captured) this.zoom(-inp.mouse.wheel);
+    // the mouse wheel zooms toward the cursor, every time (the playability pass)
+    if (inp.mouse.wheel && !this.ui.captured) {
+      const k = this.canvas.width / (this.canvas.clientWidth || this.canvas.width);
+      this.zoom(-inp.mouse.wheel, { x: inp.mouse.x * k, y: inp.mouse.y * k });
+    }
     // the Workbench Wheel: Q or Space opens it at the cursor (again: shuts it), Esc shuts it, and
     // any other tool or page key shuts it first
     const wheel = wheelOpen(this);
@@ -843,10 +897,14 @@ export class App {
     if (wheel && inp.wasPressed('cancel')) { closeWheel(this); inp.consume('cancel'); }
     if (wheel && (['remove', 'floor', 'fold', 'modules', 'research', 'orders', 'help', 'flow'] as const).some((a) => inp.wasPressed(a))) closeWheel(this);
     if (inp.wasPressed('rotate')) {
-      if (wheel || this.mode.k === 'build' || this.mode.k === 'ftrunk' || this.mode.k === 'fmodule') { this.rot = ((this.rot + 1) % 4) as Dir; this.audio.sfx('rotate'); }
+      // R turns clockwise, Shift+R counter-clockwise (the playability pass: one way only was trial
+      // and error); a placed building turns three quarters for the way back
+      const back = inp.wasShiftPressed('rotate') || inp.shift;
+      if (wheel || this.mode.k === 'build' || this.mode.k === 'ftrunk' || this.mode.k === 'fmodule') { this.rot = ((this.rot + (back ? 3 : 1)) % 4) as Dir; this.audio.sfx('rotate'); }
       else if (this.hud.hoverTile && !this.high) {
         const h = this.hud.hoverTile;
-        this.act(this.floor === 'factory' ? { k: 'frotate', x: h.x, y: h.y } : { k: 'rotate', x: h.x, y: h.y });
+        const c: Cmd = this.floor === 'factory' ? { k: 'frotate', x: h.x, y: h.y } : { k: 'rotate', x: h.x, y: h.y };
+        if (this.act(c).ok && back) { this.game.act(c); this.game.act(c); }
       }
     }
     if (inp.wasPressed('remove')) this.setMode(this.mode.k === 'remove' ? { k: 'idle' } : { k: 'remove' });
@@ -871,9 +929,18 @@ export class App {
     // keys 1-9: hidden accelerators into the wheel's last building petal (on the Factory floor,
     // 1 the trunk, 2-9 the designs)
     for (let i = 0; i < 9; i++) if (inp.wasPressed(('slot' + (i + 1)) as 'slot1')) wheelSlot(this, i);
+    this.clampCamera();
+  }
+
+  /** Keep the camera on this floor (a glide that runs into the edge stops there). */
+  clampCamera() {
+    const cam = this.renderer.cam;
+    const x = cam.x, y = cam.y;
     if (this.floor === 'factory') this.renderer.clampCam(Math.ceil(this.factorySpan()), this.game.fh);
     else if (this.high) this.renderer.clampCam(Math.ceil(this.districtSpan()), HIGH[this.high].h);
     else this.renderer.clampCam(this.game.W, this.game.H);
+    if (cam.x !== x) this.nudge.x = 0;
+    if (cam.y !== y) this.nudge.y = 0;
   }
 
   /** A high floor's width the camera frames, in tiles: the floor, and the lot for sale east of it. */
@@ -889,12 +956,39 @@ export class App {
     return g.fw + (annexPrice(g) && g.done(ANNEX.requires) ? ANNEX.cols + 0.25 : 0);
   }
 
+  /** WASD and the arrows (the playability pass: three taps moved ~10 px). A tap glides a step of
+   * about a sixth of the view (two tiles at the least); held, the view runs at about a screen a
+   * second, easing in. Both in screen terms, so they read the same at every zoom. */
+  private panKeys(dt: number) {
+    const inp = this.input;
+    const cam = this.renderer.cam;
+    const vw = this.renderer.view.w / cam.zoom, vh = this.renderer.view.h / cam.zoom;
+    const step = Math.max(2 * TILE, Math.min(vw, vh) / 6);
+    let hx = 0, hy = 0;
+    for (const [a, dx, dy] of [['panLeft', -1, 0], ['panRight', 1, 0], ['panUp', 0, -1], ['panDown', 0, 1]] as const) {
+      if (inp.wasPressed(a)) { this.nudge.x += dx * step; this.nudge.y += dy * step; }
+      if (inp.isDown(a)) { hx += dx; hy += dy; }
+    }
+    this.panHeld = hx || hy ? this.panHeld + dt : 0;
+    if (this.panHeld > 0.2) {
+      const sp = Math.max(vw, vh) * 0.8 * Math.min(1, (this.panHeld - 0.2) * 3) * dt;
+      cam.x += hx * sp;
+      cam.y += hy * sp;
+    }
+    const k = 1 - Math.exp(-dt * 12);
+    const mx = this.nudge.x * k, my = this.nudge.y * k;
+    cam.x += mx;
+    cam.y += my;
+    this.nudge.x = Math.abs(this.nudge.x - mx) < 0.5 ? 0 : this.nudge.x - mx;
+    this.nudge.y = Math.abs(this.nudge.y - my) < 0.5 ? 0 : this.nudge.y - my;
+  }
+
   /** Rest the mouse at an edge of the floor view to pan that way, while the floor runs past it. */
   private edgeScroll(dt: number) {
     const c = this.layout.center;
     const ui = this.ui;
     const m = 10;
-    const inside = this.mouseIn && !this.panel && !wheelOpen(this) && !ui.captured && ui.mx >= c.x && ui.my >= c.y && ui.mx < c.x + c.w && ui.my < c.y + c.h;
+    const inside = this.mouseIn && !this.panel && !wheelOpen(this) && !ui.captured && !this.leftPan && !this.panDrag && ui.mx >= c.x && ui.my >= c.y && ui.mx < c.x + c.w && ui.my < c.y + c.h;
     const dx = !inside ? 0 : ui.mx < c.x + m ? -1 : ui.mx >= c.x + c.w - m ? 1 : 0;
     const dy = !inside ? 0 : ui.my < c.y + m ? -1 : ui.my >= c.y + c.h - m ? 1 : 0;
     if (!dx && !dy) { this.edgeT = 0; return; }
@@ -1001,44 +1095,79 @@ export class App {
     this.audio.sfx(this.panel ? 'open' : 'close');
   }
 
-  zoom(d: number) {
-    const cam = this.renderer.cam;
+  /** Zoom a step; with `at` (screen px) the world point under it stays under it (the mouse wheel),
+   * else about the view's centre (the keys). */
+  zoom(d: number, at?: { x: number; y: number }) {
+    const r = this.renderer;
+    const cam = r.cam;
     const max = this.maxZoom();
     const z = Math.max(1, Math.min(max, cam.zoom + d));
-    if (z !== cam.zoom) cam.zoom = z;
+    if (z === cam.zoom) return;
+    if (!at) { cam.zoom = z; return; }
+    const w = r.screenToWorld(at.x, at.y);
+    cam.zoom = z;
+    const mx = r.view.x + r.view.w / 2, my = r.view.y + r.view.h / 2;
+    cam.x = w.x - (at.x - mx) / z;
+    cam.y = w.y - (at.y - my) / z;
+    this.nudge = { x: 0, y: 0 };
+    this.clampCamera();
   }
 
   maxZoom() {
     return Math.max(2, Math.round(4 * (window.devicePixelRatio || 1)));
   }
 
-  /** The zoom that fills the floor view: the largest whole zoom at which `w` x `h` world px fit,
-   *  one more when that leaves most of the view empty water (the Milestone 4 review: the 24x16
-   *  Workshop drew at 1x in a quarter of a 1280x720 view). Past the fit the floor pans (drag with
-   *  the right button, WASD, or rest the mouse at the view's edge). */
-  private fillZoom(w: number, h: number): number {
+  /** The zoom that fills an area of the view (device px; the whole view by default): the largest
+   *  whole zoom at which `w` x `h` world px fit, one more when that leaves most of it empty water
+   *  and the floor still fits the whole view (the Milestone 4 review: the 24x16 Workshop drew at 1x
+   *  in a quarter of a 1280x720 view). Past the fit the floor pans (drag on empty ground, the right
+   *  or middle button, WASD, or rest the mouse at the view's edge). */
+  private fillZoom(w: number, h: number, a: { w: number; h: number } = this.renderer.view): number {
     const v = this.renderer.view;
-    const availH = v.h - 8 * this.uiScale, availW = v.w - 8 * this.uiScale;
+    const availH = a.h - 8 * this.uiScale, availW = a.w - 8 * this.uiScale;
     let z = Math.max(1, Math.min(this.maxZoom(), Math.floor(Math.min(availW / w, availH / h))));
-    if (z + 1 <= this.maxZoom() && w * z < availW * 0.75 && h * z < availH * 0.75) z++;
+    if (z + 1 <= this.maxZoom() && w * z < availW * 0.75 && h * z < availH * 0.75 && w * (z + 1) <= v.w && h * (z + 1) <= v.h) z++;
     return z;
   }
 
-  /** Centre the camera on rows y0..y1 (world px), showing Bramble's Town above them when the
-   *  floor and the town fit together. */
-  private frameRows(y0: number, y1: number) {
-    const cam = this.renderer.cam;
-    const viewH = this.renderer.view.h / cam.zoom;
-    const town = TOWN_ROWS * TILE;
-    const over = y1 - y0 + town - viewH;
-    // all of it fits: centre floor and town together; a little short: the town on top and the
-    // floor's last few pixels off the bottom (a pan away); far short: the floor alone
-    if (over <= 0) cam.y = (y0 - town + y1) / 2;
-    else if (over <= 2 * TILE) cam.y = y0 - town + viewH / 2;
-    else cam.y = (y0 + y1) / 2;
+  /** The part of the floor view the HUD leaves clear, in device px: above the speaker's bubble and
+   *  the Gazette's slip (the playability pass: they sat over the floor's bottom rows at every size).
+   *  Measured from the last frame drawn; before one, a one-line bubble. */
+  safeView(): { x: number; y: number; w: number; h: number } {
+    const v = this.renderer.view, k = this.uiScale, ui = this.ui;
+    const b = ui.ids.get('goalBubble');
+    const gz = ui.ids.get('gazetteSlip');
+    const top = Math.min(b ? b.y : this.layout.portrait.y + 6, gz ? gz.y : Infinity) - 2;
+    return { x: v.x, y: v.y, w: v.w, h: Math.max(Math.round(v.h * 0.5), Math.min(v.h, top * k - v.y)) };
   }
 
-  /** Zoom to fill the view with the land you own, and centre it. */
+  /** Zoom for a box of w x h world px: the safe area's zoom, framed clear of the bubble, when it is
+   *  at most one step under the whole view's and still 2 or more (a first floor at 3x, all of it in
+   *  sight, beats 4x with its foot under the bubble); else the whole view's (the box's top under the
+   *  top edge, its foot under the bubble, a pan away; a 15 h Workshop stays at 2x, not 1x). */
+  private fitZoom(w: number, h: number): { z: number; area: { x: number; y: number; w: number; h: number } } {
+    const safe = this.safeView();
+    const zs = this.fillZoom(w, h, safe), zf = this.fillZoom(w, h);
+    return zs >= Math.min(zf, Math.max(2, zf - 1)) ? { z: zs, area: safe } : { z: zf, area: this.renderer.view };
+  }
+
+  /** Put the world box x0..x1, y0..y1 (world px) in the middle of `area` at zoom z, with Bramble's
+   *  Town above it when `town` and the two fit together (a little short: the town on top and the
+   *  floor's last rows a pan away); a box taller than the area has its top at the area's top. */
+  private frameBox(x0: number, y0: number, x1: number, y1: number, z: number, area: { x: number; y: number; w: number; h: number }, town: boolean) {
+    const cam = this.renderer.cam;
+    const v = this.renderer.view;
+    const vcx = v.x + v.w / 2, vcy = v.y + v.h / 2;
+    const room = (area.h - 4 * this.uiScale) / z;
+    const T = town ? TOWN_ROWS * TILE : 0;
+    let top = y0;
+    if (T && y1 - y0 + T - room <= 2 * TILE) top = y0 - T;
+    cam.x = (x0 + x1) / 2 - (area.x + area.w / 2 - vcx) / z;
+    if (y1 - top <= room) cam.y = (top + y1) / 2 - (area.y + area.h / 2 - vcy) / z;
+    else cam.y = top + (vcy - area.y - 2 * this.uiScale) / z;
+  }
+
+  /** Zoom to fill the view with the land you own, and centre it in the part the HUD leaves clear. */
   fitCamera(reset = false) {
     const g = this.game;
     const cam = this.renderer.cam;
@@ -1058,10 +1187,9 @@ export class App {
       // price whole (the Milestone 5-6 final round: cut at the screen edge at 1024x640)
       // with a block for sale, a half-tile margin, so the 12x8 keeps its zoom at 1024x640
       const span = this.factorySpan();
-      const z = this.fillZoom((span + (span > g.fw ? 0.5 : 1)) * TILE, (g.fh + 1) * TILE);
-      if (reset || cam.zoom > z) cam.zoom = z;
-      cam.x = (span / 2) * TILE;
-      this.frameRows(0, g.fh * TILE);
+      const f = this.fitZoom((span + (span > g.fw ? 0.5 : 1)) * TILE, (g.fh + 1) * TILE);
+      if (reset || cam.zoom > f.z) cam.zoom = f.z;
+      this.frameBox(0, 0, span * TILE, g.fh * TILE, cam.zoom, f.area, true);
       this.renderer.clampCam(Math.ceil(span), g.fh);
       return;
     }
@@ -1071,12 +1199,10 @@ export class App {
       x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x + c.w); y1 = Math.max(y1, c.y + c.h);
     }
     // show a little of the land around what you own
-    const z = this.fillZoom((x1 - x0 + 2) * TILE, (y1 - y0 + 2) * TILE);
-    if (reset || cam.zoom > z) cam.zoom = z;
-    cam.x = ((x0 + x1) / 2) * TILE;
+    const f = this.fitZoom((x1 - x0 + 2) * TILE, (y1 - y0 + 2) * TILE);
+    if (reset || cam.zoom > f.z) cam.zoom = f.z;
     // the town sits on the water above the top edge: frame it in when the owned land starts there
-    if (y0 === 0) this.frameRows(0, y1 * TILE + 4);
-    else cam.y = ((y0 + y1) / 2) * TILE + 4;
+    this.frameBox(x0 * TILE, y0 * TILE, x1 * TILE, y1 * TILE + 4, cam.zoom, f.area, y0 === 0);
     this.renderer.clampCam(g.W, g.H);
   }
 
@@ -1138,12 +1264,14 @@ export class App {
     this.hud.hoverTile = !overUI && inFloor ? t : null;
     this.townTip = !overUI && !inFloor && this.mouseIn ? this.renderer.townAt(sx, sy) : null;
 
-    // pan with the right or middle button held and moved
+    // pan with the right or middle button held and moved; with something in hand a right press
+    // anywhere (a floor tag, a report) still counts, so a right tap always drops it
     const panBtn = inp.mouse.down[2] || inp.mouse.down[1];
-    if ((inp.mouse.pressed[2] || inp.mouse.pressed[1]) && !overUI) this.panDrag = { sx, sy, cx: this.renderer.cam.x, cy: this.renderer.cam.y, moved: false, right: inp.mouse.pressed[2] };
+    const holding = this.mode.k !== 'idle';
+    if ((inp.mouse.pressed[2] || inp.mouse.pressed[1]) && (!overUI || (holding && inp.mouse.pressed[2]))) this.panDrag = { sx, sy, cx: this.renderer.cam.x, cy: this.renderer.cam.y, moved: false, right: inp.mouse.pressed[2] };
     if (this.panDrag && panBtn) {
       const dx = sx - this.panDrag.sx, dy = sy - this.panDrag.sy;
-      if (Math.abs(dx) + Math.abs(dy) > 4) this.panDrag.moved = true;
+      if (Math.abs(dx) + Math.abs(dy) > this.dragSlop()) this.panDrag.moved = true;
       if (this.panDrag.moved) {
         this.renderer.cam.x = this.panDrag.cx - dx / this.renderer.cam.zoom;
         this.renderer.cam.y = this.panDrag.cy - dy / this.renderer.cam.zoom;
@@ -1163,12 +1291,64 @@ export class App {
 
     // the town's doors: Unit 7's observatory opens the Codex, Dame Voltaire's pavilion her orders
     if (inp.mouse.pressed[0] && !overUI && !inFloor && this.mouseIn && this.mode.k === 'idle' && this.townDoor(sx, sy)) return;
-    if (this.floor === 'factory') return this.factoryInput(t, overUI, pt);
+    if (this.floor === 'factory') {
+      if (this.leftPanInput(sx, sy, pt, overUI)) return;
+      return this.factoryInput(t, overUI, pt);
+    }
     if (this.high) return districtInput(this, t, overUI, pt, this.renderer.screenToWorld(sx, sy));
     if (this.mode.k === 'fold') return this.foldInput(t, overUI, pt);
     if (this.mode.k === 'build' && this.mode.kind === 'belt') return this.beltDrag(t, overUI, pt);
     if (this.mode.k === 'idle' && this.rubbleDrag(t, overUI, pt)) return;
+    if (this.leftPanInput(sx, sy, pt, overUI)) return;
     if (!inp.mouse.pressed[0] || overUI) return;
+    this.leftClick(t);
+  }
+
+  /** px a press may wander and still be a tap (device px: about 5 CSS px) */
+  private dragSlop() {
+    return 5 * (this.canvas.width / (this.canvas.clientWidth || this.canvas.width));
+  }
+
+  /** Empty ground under a press (nothing in hand): off the floor, land for sale, or owned paving
+   * with no building, ore, Spark or rubble on it. A building or the ore keep their press. */
+  private emptyGround(p: { x: number; y: number }): boolean {
+    const g = this.game;
+    if (this.floor === 'factory') return !(p.x >= 0 && p.y >= 0 && p.x < g.fw && p.y < g.fh) || !g.fentAt(p.x, p.y);
+    if (!g.inb(p.x, p.y) || !g.owned(p.x, p.y)) return true;
+    return !g.entAt(p.x, p.y) && !g.oreAt(p.x, p.y) && !g.s.sparks.some((q) => q.x === p.x && q.y === p.y) && !rubbleAt(g, p.x, p.y);
+  }
+
+  /** A left drag on empty ground pans while nothing is in hand; a tap there does on release what a
+   * click did (open the wheel, buy the land, let go of a pinned report). True while it has the mouse. */
+  private leftPanInput(sx: number, sy: number, pt: { x: number; y: number }, overUI: boolean): boolean {
+    const inp = this.input;
+    const cam = this.renderer.cam;
+    if (!this.leftPan && inp.mouse.pressed[0] && !overUI && this.mouseIn && this.mode.k === 'idle' && !this.clearDrag && this.emptyGround(pt)) {
+      // the press point, not where the mouse is by this frame (a quick flick)
+      const k = this.canvas.width / (this.canvas.clientWidth || this.canvas.width);
+      this.leftPan = { sx: inp.mouse.px * k, sy: inp.mouse.py * k, cx: cam.x, cy: cam.y, moved: false, t: { ...pt } };
+    }
+    const lp = this.leftPan;
+    if (!lp) return false;
+    const dx = sx - lp.sx, dy = sy - lp.sy;
+    if (!lp.moved && Math.abs(dx) + Math.abs(dy) > this.dragSlop()) lp.moved = true;
+    if (lp.moved) {
+      cam.x = lp.cx - dx / cam.zoom;
+      cam.y = lp.cy - dy / cam.zoom;
+    }
+    if (!inp.mouse.down[0]) {
+      this.leftPan = null;
+      if (!lp.moved && this.mode.k === 'idle') {
+        if (this.floor === 'factory') this.fselected = null;
+        else this.leftClick(lp.t);
+      }
+    }
+    return true;
+  }
+
+  /** A left click on a Workshop tile (build, remove, buy land, click the world, open a report). */
+  private leftClick(t: { x: number; y: number }) {
+    const g = this.game;
     if (!g.inb(t.x, t.y)) {
       this.selected = null;
       return;
@@ -1385,7 +1565,7 @@ export class App {
     this.canvas.height = Math.floor(window.innerHeight * dpr);
     this.ctx.imageSmoothingEnabled = false;
     // Milestone 13: Auto (the largest whole scale with 480x300 UI px) or the Options page's pick
-    this.uiScale = uiScaleFor(this.canvas.width, this.canvas.height);
+    this.uiScale = uiScaleFor(this.canvas.width, this.canvas.height, undefined, dpr);
     this.layout = layout(Math.floor(this.canvas.width / this.uiScale), Math.floor(this.canvas.height / this.uiScale));
     const c = this.layout.center, k = this.uiScale;
     this.renderer.resize(this.canvas.width, this.canvas.height, { x: c.x * k, y: c.y * k, w: c.w * k, h: c.h * k });

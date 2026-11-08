@@ -6,6 +6,7 @@
 // it, nudged apart, an icon and a number at zoom 1. They are floor, not HUD: drawn under every
 // piece of the HUD, never blocking a click, outside the overlap audit.
 import { ORDER } from '../data/orders';
+import { CHUNKS } from '../data/land';
 import { RESEARCH, type ResearchId } from '../data/research';
 import { megaStage } from '../data/megaprojects';
 import { ITEMS, type ItemId } from '../data/items';
@@ -193,6 +194,9 @@ export function floorTags(app: App, L: Layout) {
       const r = near(at);
       if (!onScreen(r)) return;
       const cap = capacity(g, gr);
+      // only a grid short of what it wants says so (the playability pass: two "100%" tags on the
+      // floor said nothing); its supply and demand are in the hover report of any of its buildings
+      if (!(gr.demand > 0 && (cap <= 0 || gr.sat < 0.995))) return;
       const role: Role = gr.demand > 0 && cap <= 0 ? 'bad' : gr.sat < 1 ? 'warn' : 'power';
       const s = `{u:power} {${role === 'bad' ? 'bad' : role === 'warn' ? 'warn' : 'power'}:${gr.demand > 0 && cap <= 0 ? 'no fuel' : Math.round(gr.sat * 100) + '%'}}`;
       const t = textTag(app, s);
@@ -236,6 +240,23 @@ export function floorTags(app: App, L: Layout) {
     }
   }
 
+  // the tiles you build on (Workshop land you own, the Factory's deck) and the floor's north edge:
+  // the tags hang clear of them (the high floors keep their tags in the east margin)
+  const ground: Rect[] = [];
+  let edgeTop = 0;
+  if (fac) {
+    ground.push(worldRect(app, 0, 0, g.fw, g.fh));
+    edgeTop = ground[0].y;
+  } else if (!dist) {
+    let y0 = Infinity;
+    for (const c of CHUNKS) {
+      if (!g.s.land.includes(c.id)) continue;
+      ground.push(worldRect(app, c.x, c.y, c.w, c.h));
+      y0 = Math.min(y0, c.y);
+    }
+    edgeTop = worldRect(app, 0, Number.isFinite(y0) ? y0 : 0, 0, 0).y;
+  }
+
   // ---- place them: above the anchor, nudged off each other and the HUD; draw
   // keep off the renderer's labels too (land for sale)
   const placed: Rect[] = app.renderer.labels.map((l) => {
@@ -274,11 +295,28 @@ export function floorTags(app: App, L: Layout) {
       y = top(sz.h);
       x = Math.max(2, Math.min(x, ui.w - sz.w - 2));
       const box = () => ({ x, y, w: sz.w, h: sz.h });
-      for (let k = 0; k < 12 && [...placed, ...zones].some((p) => overlap(box(), p)); k++) {
-        const hit = [...placed, ...zones].find((p) => overlap(box(), p))!;
-        y = t.below ? hit.y + hit.h + 2 : hit.y - sz.h - 2;
-      }
+      const nudge = (up: boolean) => {
+        for (let k = 0; k < 12 && [...placed, ...zones].some((p) => overlap(box(), p)); k++) {
+          const hit = [...placed, ...zones].find((p) => overlap(box(), p))!;
+          y = up ? hit.y - sz.h - 2 : hit.y + hit.h + 2;
+        }
+      };
+      nudge(!t.below);
       if (y < 2) y = t.near.y + t.near.h + 5;
+      // off the tiles you build on (the playability pass: "pick research" and "Pressing 40%" sat on
+      // the belt being laid): up past the floor's north edge, over the town's side; with no room
+      // there, the tag shows only while the mouse is on its building or where it would hang
+      if (ground.length && ground.some((p) => overlap(box(), p))) {
+        const home = box();
+        y = edgeTop - sz.h - 4;
+        nudge(true);
+        if (y < 2 || ground.some((p) => overlap(box(), p))) {
+          const m = 3;
+          const near = ui.hover(t.near.x - m, t.near.y - m, t.near.w + 2 * m, t.near.h + 2 * m) || ui.hover(home.x, home.y, home.w, home.h);
+          if (!near) continue;
+          ({ x, y } = home);
+        }
+      }
       const b = box();
       placed.push(b);
       const anchor = { x: Math.round(t.near.x + t.near.w / 2), y: b.y > t.near.y ? t.near.y + t.near.h - 2 : t.near.y + 1 };

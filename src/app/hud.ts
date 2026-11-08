@@ -38,9 +38,8 @@ import { calm } from './soundopts';
 import { districtHud, districtHover, districtHoverKey, districtZones } from './district';
 import { lastFoldPlaying } from './lastfold';
 import { lessonFrame, lessonZones } from './lessons';
-import { stuckButton } from './stuck';
 import { keysFrame } from './keys';
-import { photoOn, photoHud, photoButton } from './photo';
+import { photoOn, photoHud } from './photo';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
 
@@ -107,8 +106,10 @@ export interface HudState {
   /** the trouble bell: the problems it has rung for, when it last swung */
   bellIds: Set<string>;
   bellAt: number;
-  /** the lift's needle, degrees */
+  /** the lift's needle, degrees (kept for old callers: the lift is labelled buttons now) */
   liftAngle: number;
+  /** the floor buttons' column top-right, last frame (null: one floor open) */
+  liftRect: Rect | null;
   /** the notebook's last page */
   lastPage: Parameters<App['togglePanel']>[0] | null;
   /** the Purse's foot and the speaker's corner, last frame (the floor's tags keep off them) */
@@ -131,7 +132,7 @@ export function newHudState(): HudState {
     coinShown: 0, coinBump: 0, hoverTile: null, storeTab: 'build', seen: new Set(), problemIdx: 0, ship: [], focus: null, draft: '', fieldSeen: false, stamped: false, confetti: 0, flakes: [], treePage: 2, buildTab: 'build',
     tabSeen: new Set(), tabRung: new Set(), opened: new Set(), codexSeen: 0, celebs: [], rain: [], coinLast: -1, glints: [], firstMiner: false,
     collapsed: new Set(), goalKey: null, goalAt: -10, goalUi: null, crawlHot: false,
-    foldedAt: -10, cameos: [], offerSeen: null, codexHeard: -1, ordersHeard: -1, bellIds: new Set(), bellAt: -10, liftAngle: 180, lastPage: null, purseBottom: 70, cornerRect: null,
+    foldedAt: -10, cameos: [], offerSeen: null, codexHeard: -1, ordersHeard: -1, bellIds: new Set(), bellAt: -10, liftAngle: 180, liftRect: null, lastPage: null, purseBottom: 70, cornerRect: null,
     marksRect: null, clipRects: [], hoverKey: null, hoverSince: 0, hoverShown: -10,
   };
 }
@@ -141,7 +142,7 @@ const NOT_PAGES = new Set(['grade', 'fgrade', 'offline', 'sliceEnd', 'lastfold']
 
 export function drawHud(app: App, dt: number) {
   const ui = app.ui;
-  const L = layout(ui.w, ui.h);
+  const L = layout(ui.w, ui.h, app.screen === 'play' ? app.openFloors().length : 2);
   app.layout = L;
   app.hud.fieldSeen = false;
   presentation(app);
@@ -205,16 +206,9 @@ function corners(app: App, L: Layout, dt: number) {
   const ui = app.ui;
   rail(app, L);
   const pb = purse(app, L, dt);
-  let bb = stuckButton(app, L, pb, bell(app, L, pb)); // Milestone 13: "Stuck?" beside the bell
-  // Milestone 11: "Photo" beside Stuck? (or where it would be)
-  {
-    const sk = ui.ids.get('whereStuck'), bl = ui.ids.get('nextProblem');
-    const px = sk ? sk.x + sk.w + 4 : bl && bb > pb ? bl.x + bl.w + 6 : L.bell.x;
-    const py = sk ? sk.y : pb + 5;
-    // a high floor's audit slip reaches left over that place while it runs: the key (H) still works
-    const slipUp = !!app.high && !!app.game.s.haudit;
-    if (app.screen === 'play' && !app.offlineJob && !slipUp) { photoButton(app, px, py); bb = Math.max(bb, py + 18); }
-  }
+  // the trouble bell is the one place for trouble (the playability pass: "Stuck?" merged into it);
+  // Photo moved to the Options page (H still takes one)
+  const bb = bell(app, L, pb);
   app.hud.purseBottom = counters(app, L, bb);
   lift(app, L, dt);
   notebook(app, L);
@@ -245,7 +239,11 @@ function presentation(app: App) {
   // a fold flies to the lift's Factory button (or the Modules page's tab)
   const tab = app.ui.ids.get('floorFactory') ?? app.ui.ids.get('page:modules');
   r.factoryTarget = tab ? { x: (tab.x + tab.w / 2) * app.ui.scale, y: (tab.y + tab.h / 2) * app.ui.scale } : null;
-  if (app.panel) app.hud.opened.add(app.panel);
+  // a page opened is remembered in the save (a flag), so a reload does not call every page NEW
+  if (app.panel && !app.hud.opened.has(app.panel)) {
+    app.hud.opened.add(app.panel);
+    if (app.screen === 'play' && !NOT_PAGES.has(app.panel)) app.game.first('page:' + app.panel);
+  }
   if (app.panel && !NOT_PAGES.has(app.panel)) app.hud.lastPage = app.panel;
   if (app.panel === 'codex') app.hud.codexSeen = app.game.s.codex.length;
 }
@@ -290,9 +288,43 @@ function slips(app: App, L: Layout, dt: number) {
   app.trophyPops = app.trophyPops.filter((p) => p.t < 4);
   const S = L.slips;
   const w = S.w;
-  let y = S.y;
   const x0 = S.x;
+  // under the floor buttons, whatever their number
+  let y = Math.max(S.y, app.hud.liftRect ? app.hud.liftRect.y + app.hud.liftRect.h + 6 : 0);
   const bottom = Math.min(S.y + S.h, pinTop - 4);
+  // trophies first, at the top of the column (the playability pass: they dropped from the top
+  // centre over the District's tool strip and the floor's tags): a gold ribbon that slides in with
+  // the trophy's name, or "3 trophies!" for a batch, and its bonus on a slip under it
+  for (const p of app.trophyPops.slice(-2).reverse()) {
+    if (p.t < 0) continue;
+    const t = TROPHIES.find((q) => q.id === p.id);
+    if (!t) continue;
+    const ids = [p.id, ...(p.more ?? [])];
+    const n = ids.length;
+    const title = n > 1 ? `${n} trophies!` : 'Trophy!';
+    const names = ids.map((id) => TROPHIES.find((q) => q.id === id)?.name ?? '').filter(Boolean);
+    // one: its name and what it gives (a kind at its cap says so, the review of 2026-10-22: it read
+    // as a gain that wasn't); a batch: the names
+    const one = n === 1 ? (bonusCapped(app.game, t) ? `{u:lock} ${bonusText(t.bonus).replace(/\{good:([^}]*)\}/g, '$1')} {soft:· capped}` : `{good:+} ${bonusText(t.bonus)}`) : '';
+    const list = names.slice(0, 4).join(' · ') + (names.length > 4 ? ` {soft:+${names.length - 4} more}` : '');
+    const bodyL = n === 1 ? [layoutRich(`{big:${bigSafe(t.name)}}`, w - 22), layoutRich(one, w - 22)] : [layoutRich(list, w - 22)];
+    const bh = 10 + bodyL.reduce((q, l) => q + l.h, 0);
+    const h = 16 + bh;
+    if (y + h > bottom) break;
+    const k = Math.min(1, p.t * 5);
+    const out = Math.max(0, Math.min(1, (p.t - 3.6) / 0.4));
+    const x = x0 + Math.round((1 - k * k * (3 - 2 * k)) * (w + 10)) + Math.round(out * out * (w + 10));
+    const yy = y;
+    ui.floating(() => {
+      const sr = slip(ui, x + 4, yy + 13, w - 8, bh);
+      let ly = sr.y;
+      for (const l of bodyL) { drawLayout(ui, l, sr.x, ly, T.ink); ly += l.h; }
+      ribbon(ui, x, yy, w, '', { color: 'gold' });
+      uiIcon(ui, 'trophies', x + 6, yy + 1, 1);
+      ui.big(title, x + Math.floor(w / 2) + 4, yy + 3, RIBBON.gold.text, { align: 'center' });
+    }, k < 1 || out > 0 ? 'tip' : 'float');
+    y += h + 4;
+  }
   for (const t of app.toasts.slice().reverse()) {
     const icon = t.icon ? (TOAST_ICON[t.icon] ?? (t.icon in UICON ? (t.icon as UIconName) : null)) : null;
     const tx = icon ? 12 : 0;
@@ -317,30 +349,6 @@ function slips(app: App, L: Layout, dt: number) {
     }, k < 1 || out > 0 ? 'tip' : 'float');
     y += h + 3;
   }
-  // trophies: a gold ribbon drops from the top centre, holds, and lifts away
-  app.trophyPops.slice(-2).forEach((p, i) => {
-    const t = TROPHIES.find((q) => q.id === p.id)!;
-    const s = bigSafe(`Trophy! ${t.name}`);
-    const rw = Math.min(ui.w - 40, bigWidth(s) + 40);
-    const drop = p.t < 0.25 ? (1 - p.t / 0.25) * -30 : p.t > 3.6 ? (p.t - 3.6) * -90 : Math.round(Math.sin(Math.min(1, (p.t - 0.25) * 4) * Math.PI) * 2);
-    // Milestone 11: the ribbon says the bonus the trophy gives, on a slip under it (the newest only)
-    const newest = i === Math.min(2, app.trophyPops.length) - 1;
-    // a kind already at its cap says so (the review of 2026-10-22: it read as a gain that wasn't)
-    const bonus = !newest ? '' : bonusCapped(app.game, t) ? `{u:lock} ${bonusText(t.bonus).replace(/\{good:([^}]*)\}/g, '$1')} {soft:· capped: the shelf already gives the most}` : `{good:+} ${bonusText(t.bonus)}`;
-    const bw2 = bonus ? Math.min(ui.w - 40, richWidth(bonus) + 14) : 0;
-    const ry = Math.round(6 + (newest && app.trophyPops.length > 1 ? 34 : i * 20) + drop);
-    ui.floating(() => {
-      if (bonus) {
-        const sr = slip(ui, Math.floor(ui.w / 2 - bw2 / 2), ry + 15, bw2, 17);
-        ui.clip(sr.x, sr.y - 2, sr.w, 12);
-        drawRich(ui, bonus, Math.floor(ui.w / 2), sr.y, Infinity, T.ink, { align: 'center' });
-        ui.unclip();
-      }
-      ribbon(ui, Math.floor(ui.w / 2 - rw / 2), ry, rw, '', { color: 'gold' });
-      uiIcon(ui, 'trophies', Math.floor(ui.w / 2 - rw / 2) + 5, ry + 1, 1);
-      ui.big(s, Math.floor(ui.w / 2) + 5, ry + 3, RIBBON.gold.text, { align: 'center' });
-    }, 'tip');
-  });
 }
 
 /** The refusal at the cursor: a small speech puff in ink, its tail at the cursor. */
@@ -593,6 +601,32 @@ function hoverReport(app: App) {
   if (e.kind === 'heap') { ui.tip([{ text: '{big:Slag Heap}' }, { text: `{i:slag} ${e.count} / ${BUILD.heap.capacity}` }, { text: '{soft:empties out its front}' }], 170, on); return; }
   if (e.kind === 'crate') { ui.tip([{ text: '{big:Buffer Crate}' }, { text: `${e.store.length} / ${BUILD.crate.capacity}${e.store.length ? ` {i:${e.store[0]}}` : ''}` }], 150, on); return; }
   ui.tip([{ text: `{big:${bigSafe(BUILD[e.kind].name)}}` }, { text: BUILD[e.kind].blurb }, ...rx], 180, on);
+}
+
+// ------------------------------------------------------------------ a screen too small
+
+/** A phone held upright (src/app/settings.ts tooSmall): the logo, and a slip asking for a bigger
+ * screen, at a scale that reads (the UI is begun at about 240 UI px across). */
+export function drawSmallScreen(app: App) {
+  const ui = app.ui;
+  const ctx = ui.ctx;
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(0, 0, ui.w, ui.h);
+  let y = Math.max(8, Math.floor(ui.h / 2) - 70);
+  if (hasArt('logo')) {
+    const s = sheet('logo');
+    const k = Math.max(1, Math.floor((ui.w - 16) / s.w));
+    const lw = Math.min(ui.w - 16, s.w * k), lh = Math.round((s.h * lw) / s.w);
+    ctx.drawImage(s.frames[0], Math.floor(ui.w / 2 - lw / 2), y, lw, lh);
+    y += lh + 10;
+  } else {
+    ui.big(TITLE, Math.floor(ui.w / 2), y, T.floorCoin, { scale: 2, align: 'center', outline: T.ink });
+    y += 30;
+  }
+  const w = Math.min(ui.w - 16, 220);
+  const L = layoutRich('{big:Foldworks wants a bigger screen.} Turn your phone sideways, or play on a computer.', w - 14);
+  const r = slip(ui, Math.floor(ui.w / 2 - w / 2), y, w, L.h + 10);
+  drawLayout(ui, L, r.x, r.y, T.ink);
 }
 
 // ------------------------------------------------------------------ title

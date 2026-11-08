@@ -3028,3 +3028,63 @@ stock, the Factory floor and the corner's machine states. **No other data or sim
   Coils line's rubber starvation in the measured runs (the Chute held 80 rubber) is not read yet.
 - **For the owner (no number changed)**: with the gate, the first Relocate's 40-45 h target is no
   longer early by construction; it now waits on the bot finishing the two projects.
+
+## Playability pass (2026-11-08): the HUD, the camera and building
+
+From the playability review (visual QA 2-5 and 10-12, the playtest's problems 2, 5, 6, 7 and 10, the
+critic's finding 10). The 180's look and voice stay; this organises it.
+
+- **The camera.** A left drag on empty ground (off the floor, land for sale, paving with no building,
+  ore, Spark or rubble) pans while nothing is in hand; a tap there does on release what a click did
+  (open the wheel, buy the land, let go of a report), so a drag never buys land by accident. Middle
+  and right drags still pan anywhere. WASD and the arrows: a tap glides about a sixth of the view (two
+  tiles at least), a held key runs at about a screen a second, easing in, in screen terms at every
+  zoom (three taps had moved ~10 px). The mouse wheel always zooms about the cursor. `clampCam` no
+  longer pins a floor narrower than the view to its middle (that pin was why keys and drags did
+  nothing and the wheel's zoom "snapped"): such a floor slides freely as long as it stays wholly in
+  view. `fitCamera` frames the Workshop and the Factory above the speaker's bubble and the Gazette's
+  slip (measured from the drawn frame, re-fitted two frames after a load), keeping the whole view's
+  zoom only when the clear area would cost more than one step or drop below 2x.
+- **Rotation.** R turns clockwise, Shift+R back (a placed building: three quarter turns); Shift is
+  read as it was when R went down. The ghost carries a bold gold arrow (red where it cannot go) from
+  its middle out through its front face, on the Workshop and the Factory (`src/render/arrow.ts`); a
+  belt or trunk drag shows it on its last tile only.
+- **Right-click with something in hand drops it, even over a floor tag or a report**; the wheel opens
+  on a right tap only with nothing in hand (as before).
+- **The wheel.** The hovered item's name hangs in the display face on its own tag over its price;
+  the open petal's name sits across the wheel from its items, the hovered petal's on it. Each item
+  shows its number key on its shoulder. Shut, keys 1-9 always pick from the Build petal (2 is the
+  Miner whatever was opened last); open, from the petal on show.
+- **Declutter.** Photo moved to the Options page (H still works). "Stuck?" merged into the trouble
+  bell, the one place for trouble: the bell counts causes, not machines (rankStuck groups every
+  stopped machine under the cause it traces to), capped at "9+"; its tag lists the first three; a
+  click steps through them, G asks for the worst. The Committee's slip says "Reorganize +28" (a bare
+  "+28" read as nothing). The Gazette's slip shows for a first game's first five minutes, then the
+  paper folds to its icon (hover for the headline, click for the page); breaking news (an order, the
+  town) gets the slip for 7 s. Bookmarks show only pages with something live (a %, PICK, NEW); a
+  page opened is a save flag (`page:<id>`), and a save from before this, past its first hour, counts
+  its pages as seen. The Survey Office's dot is "not opened yet" only (an affordable claim was true
+  all game). The "D W F" dial became labelled floor buttons top-right, only the open floors, the one
+  you are on in gold, the Tab key beside the bottom one. Power tags show only below 100%. Floor tags
+  that would hang over land you build on move up past the floor's north edge (over the town); with
+  no room there they show only while the mouse is on their building.
+- **One moment at a time.** Trophies moved from the top centre into the slips column (top of it),
+  clear of the District's tool strip and the floor's tags. Trophies arriving together become one
+  ribbon ("28 trophies!" with the names): the catch-up for 10 s after a load or import or during
+  an offline run, any within a second of the last, and those the first sale earns, which wait
+  2.2 s behind its moment. The first sale is the floor's FIRST SALE! fountain alone (its slip is gone).
+- **Phones.** Auto UI scale is raised, where 480x270 UI px still fit, to at least 1.5 CSS px a UI px
+  (a phone on its side, 844x390 at 3 device px: 4x, 1.33 CSS px, was 1.0). A window under 480x270
+  CSS px (a phone held upright) shows a card: "Foldworks wants a bigger screen. Turn your phone
+  sideways, or play on a computer." The game carries on behind it.
+- **Stuck? ranking** (Workshop and Factory): causes rank first by how much of the current goal's
+  output they stop (the items the goal's line and chips name, and one recipe before them), then by
+  coin lost; a cause under 1% of income is left out (with no income yet, none is). At the 15 h
+  checkpoint the Workshop's answer went from "Press 6 starved, 620/min lost" (0.1% of 573K/min) to
+  "Nothing stuck on this floor", and the bell from 61 to none.
+- **Not done here**: lesson cards still arrive after the first sale's trophy (src/app/lessons.ts is the
+  fold agent's; it already waits for the trophy ribbon to pass); the District's and the World's own
+  tool strips and high-floor causes are untouched.
+
+**Flagged as derivative:** none new. Drag-to-pan, zoom-to-cursor and a facing arrow on a ghost are
+genre conventions of every builder; a labelled floor switcher is the old lift with words.

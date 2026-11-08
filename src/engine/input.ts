@@ -19,7 +19,7 @@ export const ACTION_LABELS: Record<Action, string> = {
   panUp: 'Pan up', panDown: 'Pan down', panLeft: 'Pan left', panRight: 'Pan right', zoomIn: 'Zoom in', zoomOut: 'Zoom out',
   slot1: 'Wheel pick 1', slot2: 'Wheel pick 2', slot3: 'Wheel pick 3', slot4: 'Wheel pick 4', slot5: 'Wheel pick 5',
   slot6: 'Wheel pick 6', slot7: 'Wheel pick 7', slot8: 'Wheel pick 8', slot9: 'Wheel pick 9',
-  wheel: 'Workbench Wheel', rotate: 'Rotate', remove: 'Remove tool', fold: 'Fold tool', floor: 'Switch floor', research: 'Research',
+  wheel: 'Workbench Wheel', rotate: 'Rotate · Shift back', remove: 'Remove tool', fold: 'Fold tool', floor: 'Switch floor', research: 'Research',
   orders: 'Orders', modules: 'Modules', cancel: 'Cancel', pause: 'Pause', help: 'Options and keys', mute: 'Sound on or off',
   hud: 'Photo mode', flow: 'Flow overlay', debug: 'Debug readout', stuck: 'Where am I stuck?',
 };
@@ -128,6 +128,8 @@ export function keyLabel(code: string): string {
 export class Input {
   down = new Set<string>();
   pressed = new Set<string>();
+  /** keys pressed this frame with Shift down */
+  shiftPressed = new Set<string>();
   released = new Set<string>();
   binds: Record<Action, string[]> = structuredClone(DEFAULT_BINDS);
   /** Mouse position in CSS pixels relative to the element; dx/dy are this frame's movement. */
@@ -153,7 +155,11 @@ export class Input {
         this.typing(e.key);
         return;
       }
-      if (!e.repeat) this.pressed.add(e.code);
+      if (!e.repeat) {
+        this.pressed.add(e.code);
+        // Shift as it was when the key went down (a quick Shift+R lets go of Shift before the frame)
+        if (e.shiftKey) this.shiftPressed.add(e.code);
+      }
       this.down.add(e.code);
       this.ctrl = e.ctrlKey || e.metaKey;
       this.shift = e.shiftKey;
@@ -274,6 +280,12 @@ export class Input {
     return false;
   }
 
+  /** Was the action's key pressed this frame with Shift held (R: clockwise, Shift+R: back)? */
+  wasShiftPressed(a: Action): boolean {
+    for (const k of this.binds[a]) if (this.shiftPressed.has(k)) return true;
+    return false;
+  }
+
   keyPressed(code: string) {
     return this.pressed.has(code);
   }
@@ -290,6 +302,7 @@ export class Input {
 
   endFrame() {
     this.pressed.clear();
+    this.shiftPressed.clear();
     this.released.clear();
     this.mouse.pressed = [false, false, false];
     for (let b = 0; b < 3; b++) if (this.queued[b] > 0) { this.queued[b]--; this.mouse.pressed[b] = true; }
