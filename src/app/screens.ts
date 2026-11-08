@@ -7,6 +7,8 @@
 // Also the page kit the Act II pages share (speaker, caption, discs, pencil lines and circles).
 import { C, rgba } from '../data/palette';
 import { RESEARCH, RESEARCH_LIST, type ResearchId } from '../data/research';
+import { nextGoal } from './goals';
+import { hopperBanking } from './hopperwatch';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { TROPHIES, type TrophyDef } from '../data/trophies';
 import { BUILD_BAR } from '../data/machines';
@@ -329,12 +331,12 @@ export function titleChip(app: App, r: Rect, title: string, free: number, text: 
 
 /** where each node sits: column, row, and 1 when its label goes under it (so neighbours' labels never meet) */
 const TREE: Record<ResearchId, [number, number, number?]> = {
-  pressing: [0, 1.5],
-  surveyEast: [1, 0], gearcutting: [1, 2], slagBricks: [1, 3.2],
-  copperSmelting: [2, 0, 1], splitters: [2.4, 2.2, 1], buffers: [2, 3.2, 1],
-  wireDrawing: [3, 0.4],
-  gizmoTheory: [4, 1.4],
-  folding: [5, 1.4, 1],
+  // Act I (the playability pass: Folding is node 2, everything after it hangs off it)
+  pressing: [0, 1.4], slagBricks: [0.6, 3.2, 1],
+  folding: [1, 1.4, 1],
+  surveyEast: [2, 0.2], copperSmelting: [3, 0, 1], wireDrawing: [4, 0.5],
+  gearcutting: [2, 2.2], splitters: [3.2, 2.9, 1], buffers: [2.1, 3.3, 1],
+  gizmoTheory: [5, 1.4, 1],
   // Act II's page (columns 0-6)
   coalSeams: [0, 1.6],
   steelmaking: [1, 1.0], surveying: [1, 2.6, 1],
@@ -421,7 +423,7 @@ const NODE_R = 13;
 /** Act III's, Act IV's or Act V's page is open (HudState.treePage holds the first two pages'
  *  choice); `drawn` the UI clock at the tree's last frame (a gap is a fresh opening); `pinned` a page
  *  set from outside. */
-const tree = { three: false, four: false, five: false, drawn: -1, pinned: false };
+const tree = { three: false, four: false, five: false, drawn: -1, pinned: false, focus: null as ResearchId | null };
 /** Open the research tree at a page (the e2e states; a goal that names Act III's research). */
 export function setTreePage(app: App, n: 1 | 2 | 3 | 4 | 5) {
   tree.three = n === 3;
@@ -454,8 +456,17 @@ function freshTreePage(app: App, act2: boolean, act3: boolean, act4: boolean) {
   const fresh = Math.abs(ui.time - ui.dt - tree.drawn) > 1e-6 && tree.drawn !== ui.time;
   tree.drawn = ui.time;
   if (!fresh) return;
+  // the page opens on the node the frog's line names (the playability review: its chips opened
+  // whatever node came first)
+  const gl = nextGoal(app.game, app.floor);
+  tree.focus = gl?.node ?? null;
   if (tree.pinned) { tree.pinned = false; return; }
   const g = app.game;
+  if (tree.focus && (RESEARCH[tree.focus].act ?? 1) <= 2) {
+    tree.three = tree.four = tree.five = false;
+    app.hud.treePage = (RESEARCH[tree.focus].act ?? 1) as 1 | 2;
+    return;
+  }
   tree.five = act5Shown(g) && (g.done('lastFold') || available(g, 'lastFold'));
   tree.four = !tree.five && act4 && act4UnderWay(g);
   const three = !tree.five && !tree.four && act3 && ((g.s.mega.stage ?? 0) >= 3 || RESEARCH_LIST.some((d) => d.act === 3 && g.done(d.id)));
@@ -469,7 +480,9 @@ function researchTree(app: App, r: Rect) {
   // the pages: the Workshop's tree, Act II's once Folding is done, Act III's once the Great Drill
   // is researched (DESIGN.md §21: every Act III node waits for the Drill's stage 3, and the page
   // says so while it does)
-  const act2 = g.done('folding');
+  // (Gizmo Theory, the last of Act I's research the slice needs, opens Coal Seams since Folding
+  // became node 2)
+  const act2 = g.done('gizmoTheory');
   const act3 = act2 && (g.done('greatDrill') || RESEARCH_LIST.some((d) => d.act === 3 && g.done(d.id)));
   const act4 = act2 && act4Shown(g, act3);
   const act5 = act4 && act5Shown(g);
@@ -630,9 +643,14 @@ function researchTree(app: App, r: Rect) {
       ui.text(l, lx, spot.ly + k * 10, lcol);
     });
     if (isSel) pencil(ui, spot.lx, spot.ly + spot.lh, spot.lw, T.bad);
-    if (hov && ui.clicked && (can || isSel)) {
+    // a click always does the same (the playability review: it sometimes selected, sometimes only
+    // previewed, and a second click un-selected): the right page holds the node, and a node that
+    // can be researched is selected; clearing is the page's button
+    if (hov && ui.clicked) {
       ui.eat();
-      app.act({ k: 'research', id: isSel ? null : d.id });
+      tree.focus = d.id;
+      if (can && !isSel) app.act({ k: 'research', id: d.id });
+      else ui.sfx('click');
     }
   }
   // the key to the marks, along the page's foot
@@ -649,7 +667,8 @@ function researchTree(app: App, r: Rect) {
     ui.text('locked', kx + 13, ky + 1, T.inkSoft);
   }
   // the right page: the hovered (or selected) node
-  const show = hovered ?? sel ?? nodes.find((d) => available(g, d.id))?.id ?? nodes.find((d) => !g.done(d.id))?.id ?? null;
+  const focus = tree.focus && nodes.some((d) => d.id === tree.focus) ? tree.focus : null;
+  const show = hovered ?? focus ?? sel ?? nodes.find((d) => available(g, d.id))?.id ?? nodes.find((d) => !g.done(d.id))?.id ?? null;
   nodePage(app, detail!, show, page >= 3 && (g.s.mega.stage ?? 0) < 3 && !!show && (RESEARCH[show].drill ?? 0) > (g.s.mega.stage ?? 0));
 }
 
@@ -773,6 +792,10 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
         ui.hint(x, y, w, 10, [{ text: `{i:${item}} {big:${ITEMS[item].name}}` }, { text: `${fmt(have)} of ${fmt(n)} {soft:delivered to the Hopper}` }, ...(done ? [] : [{ text: itemEta(app, item, n - have) }])], 170);
         y += 11;
       }
+      // what the Hopper banks instead (the playability review: ingots went in for a plate node, the
+      // bar sat at 0, and only a corner of the page said "banked")
+      const astray = sel ? hopperBanking(g) : null;
+      if (astray && y + 10 <= end) y += drawRich(ui, `{i:${astray.item}} {bad:${ICON.cross} going to the bank} {soft:it wants} ${(Object.keys(d.cost) as ItemId[]).map((k) => `{i:${k}}`).join(' ')}`, x, y, w, T.ink) + 1;
       // Milestone 13: how long the rest takes at what arrives now (src/app/rates.ts)
       const eta = researchEta(app, show);
       if (eta && y + 10 <= end) y += drawRich(ui, `{u:clock} {soft:${eta} at what is delivered now}`, x, y, w, T.inkSoft) + 1;
@@ -832,9 +855,11 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
       }
       y += 3;
     }
-    // ready now: every node that can be picked, the closest to done marked with a star
+    // ready now: every node that can be picked, closest to done first, with the items it still
+    // owes (the ★ that marked the closest moved about and was never learnt: the playability review)
     const ready = RESEARCH_LIST.filter((q) => !g.done(q.id) && available(g, q.id) && q.id !== show).sort((p, q) => owed(p.id) - owed(q.id));
     if (ready.length && y + 22 <= end) {
+      ui.small('ITEMS OWED', x + w - 1, y + 1, T.inkSoft, { align: 'right' });
       y += caption(ui, 'ready now', x, y, T.research);
       ready.forEach((q, i) => {
         if (y + 12 > end) return;
@@ -843,7 +868,7 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
         ui.region(x, y - 1, w, 12, 'button');
         ui.mark('ready:' + q.id, x, y - 1, w, 12);
         nodeIcon(ui, q.id, x + 1, y, true);
-        const n = best ? `${ICON.star} ${fmt(owed(q.id))}` : fmt(owed(q.id));
+        const n = fmt(owed(q.id));
         const nw = textWidth(n);
         ui.clip(x + 12, y, w - 16 - nw, 10);
         ui.text(q.name, x + 12, y, T.ink);
@@ -852,8 +877,8 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
         // the closest one is underlined in pencil; the hovered one too
         if (best || hv) pencil(ui, x + 12, y + 9, Math.min(w - 16 - nw, textWidth(q.name)), best ? T.coin : T.inkSoft);
         if (hv) {
-          ui.tip([{ text: `{big:${q.name}}` }, ...unlockRows(q.id).map((s) => ({ text: s })), { text: `${fmt(owed(q.id))} {soft:items still owed}${best ? `  {coinc:${ICON.star} closest}` : ''}` }, { text: '{k:LMB} research it' }], 190);
-          if (ui.clicked) { ui.eat(); ui.sfx('click'); app.act({ k: 'research', id: q.id }); }
+          ui.tip([{ text: `{big:${q.name}}` }, ...unlockRows(q.id).map((s) => ({ text: s })), { text: `${fmt(owed(q.id))} {soft:items still owed}${best ? '  {coinc:the closest}' : ''}` }, { text: '{k:LMB} research it' }], 190);
+          if (ui.clicked) { ui.eat(); ui.sfx('click'); tree.focus = q.id; app.act({ k: 'research', id: q.id }); }
         }
         y += 12;
       });

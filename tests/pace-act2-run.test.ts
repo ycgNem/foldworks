@@ -38,8 +38,10 @@ describe('Act II pacing (bot2 after the planner)', () => {
         const h = r.handover;
         const rel = (k: string) => (r.at[k] === undefined ? undefined : r.at[k] - h);
         console.log(`seed ${seed}: S ${hmm(h)} steel ${hmm(r.at.steel)} power ${hmm(r.at.power)} circuits ${hmm(r.at.circuits)} Concrete fold ${hmm(r.at['fold:Concrete'])} Drill works ${hmm(r.at['fold:Drill works'])} stage 1 ${hmm(r.at.greatDrill1)}`);
-        expect(h).toBeGreaterThan(25 * MIN);
-        expect(h).toBeLessThan(40 * MIN);
+        // the planner's plan ends with the slice (~22 min since Folding became node 2, the
+        // playability pass; it was ~31): it hands over a minute after its last step
+        expect(h).toBeGreaterThan(15 * MIN);
+        expect(h).toBeLessThan(30 * MIN);
         // §18 Pacing targets: steel by S+25 min, power by S+35, circuits by S+60, Concrete by S+80
         expect(rel('steel')).toBeLessThanOrEqual(25 * MIN);
         expect(rel('power')).toBeLessThanOrEqual(35 * MIN);

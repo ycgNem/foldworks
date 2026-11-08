@@ -165,7 +165,7 @@ const S = {
   shown: null as LessonId | null,
   shownAt: 0,
   /** the UI time the last card was put away (the next waits a moment) */
-  closedAt: -10,
+  closedAt: -1e9,
   pollAt: 0,
   /** e2e: lessons held off (the HUD audit's states), unless a state asks for one */
   held: false,

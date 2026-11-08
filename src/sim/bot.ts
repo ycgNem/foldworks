@@ -156,15 +156,17 @@ export const PLAN: Step[] = [
     P('miner', 1, 3, S), P('smelter', 1, 4, S), P('heap', 2, 4, E), P('press', 1, 5, E), P('assembler', 2, 5, E), ...belts([[3, 5, E], [4, 5, E], [5, 5, E]]),
   ]),
   P('heap', 4, 4, E), P('heap', 5, 4, E),
-  // the second fold, once L4 runs (an audit holds the plan up for its 70 s): C1 (miner, smelter, wire press: box 9,3
-  // 3x1) folds into "Copper wire", which feeds Gizmo Theory's wire into the Factory Hopper's west
-  // side (9,6) (the Dock-only player: the Dock's top side, (10,0)), and C1 is built again; once the
-  // Festival's chains go down it moves to chain A (copper claims: 3 + 2 for chunk B's deposit, five
-  // copies in all)
-  fold(9, 3, 3, 1, 'Copper wire'),
+  // C4, the last copper tile (wire along row 0 into the Dock's east side), and the second fold once
+  // it runs (an audit holds the plan up for its 70 s, so it comes after L4): C4 (miner, smelter,
+  // wire press: box 12,0 1x3) folds into "Copper wire", which feeds Gizmo Theory's wire into the
+  // Factory Hopper's west side (9,6) (the Dock-only player: the Dock's top side, (10,0)); C4's tiles
+  // stay empty for Act II's lab (bot2.ts). Once the Festival's chains go down the copy moves to chain
+  // A (copper claims: 3 + 2 for chunk B's deposit, five copies in all)
+  P('miner', 12, 2, N), P('smelter', 12, 1, N), P('heap', 13, 1, W), P('heap', 11, 1, E), P('press', 12, 0, W),
+  ...belts([[11, 0, W], [10, 0, W], [9, 0, W], [8, 0, S], [8, 1, W]]),
+  fold(12, 0, 1, 3, 'Copper wire'),
   ...not(['dockOnly'], [fplace('Copper wire', 9, 6, E)]),
   ...not(['planner', 'greedy'], [fplace('Copper wire', 10, 0, S)]),
-  P('miner', 11, 3, W), P('smelter', 10, 3, W), P('press', 9, 3, W),
   need('gizmoTheory'),
   // the Gizmo assembler between the Dock and the Hopper: gears from L1 (west), wire from C1 (east)
   P('assembler', 7, 3, S),
@@ -173,9 +175,6 @@ export const PLAN: Step[] = [
   order('boardwalk'),
   order('gizmoFestival'),
   order('lampPosts'),
-  // C4: the last copper tile, wire along row 0 into the Dock's east side
-  P('miner', 12, 2, N), P('smelter', 12, 1, N), P('heap', 13, 1, W), P('heap', 11, 1, E), P('press', 12, 0, W),
-  ...belts([[11, 0, W], [10, 0, W], [9, 0, W], [8, 0, S], [8, 1, W]]),
   // chunk C (after Gizmo Theory): four gear lines on the second iron patch, up columns 6 and 7 into
   // the Hopper's south side (planner, greedy: the Dock-only player builds no Hopper line)
   ...not(['dockOnly'], [
