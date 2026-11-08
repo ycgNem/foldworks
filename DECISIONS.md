@@ -3413,6 +3413,15 @@ be fed. Decisions (DESIGN.md §8, §11, §13, §16, §19, §21 carry the numbers
   15,244 before; the pattern `BACK_IN_OPEN` logs for seed 1000), and the 1 h reset loop files 3.68
   Patents an hour against the designed runs' 3.36 (the same 4,6,2,1,4,6,0 in both). Neither is this
   pass's; both are for the Reorganize owner to re-derive.
+- **The bot's core ending (pace-act3) is fragile, and fails at the base too.** After this pass the
+  campaign's first Act III run (6:15-15:02) delivers the Spires' 2,000 steel and 150 rotors but no
+  glass: the Glassworks corner line is never folded, so Glass II never stands, and the City is not
+  complete in that run (the test fails). At 44e3b23 the same run ends the same way (the 15 h
+  checkpoint: City stage 1, steel and rotors in, no glass, run 4 begun). With this pass but the
+  Chute's overflow rule taken out, the City stands by 15 h. So a small change upstream flips it
+  either way; the Chute rule is kept (it is what un-jams a player's Factory) and bot3's corner plan
+  is left to its owner. Measured after this pass: District 8:19, City stage 1 9:38, 153 District
+  modules at 40 h, 0.61 ms a tick.
 - **A new game or an imported save ends a catch-up still running** (app.ts `adopt`): the catch-up
   belongs to the game being left, and the new game refused every command while it ran (found by
   `npm run screens`, whose overnight state follows the running-catch-up state).

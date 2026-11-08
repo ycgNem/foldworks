@@ -2020,6 +2020,13 @@ worst** (9:46-12:40; were 40.5 / 30.5 min in the fifth pass). The later Act III 
 early-run wait as before, not looked into); pace-act4 19.9 min on Rime from 20:24. Runs (pace-act3):
 1 0:00-4:22 (14 Patents), 2 4:22-7:24 (7), 3 7:24-16:38 (52), 4 16:38-25:39 (7), 5 25:39-35:23 (6),
 6 35:23-40:00. The District peaks at 156 groups (0.45 ms a tick).
+*Re-measured after the second playtest's pass* (wave 1 merged, the Chute's overflow to the Factory
+Dock): runs 1 0:00-4:10 (15 Patents), 2 4:10-6:15 (6), 3 6:15-15:02 (36), 4 15:02-22:45 (3), 5
+22:45-40:00; the District 8:19, the City's stage 1 9:38, but **not complete in run 3**: its Spires
+get the steel and the rotors and no glass (the Glassworks corner line is never folded). The wave-1
+base (44e3b23) ends run 3 the same way; the same build without the Chute's overflow completes it by
+15 h. A bot-plan fragility, logged for bot3's owner (DECISIONS.md, the second playtest's fixes).
+153 District groups at 40 h, 0.61 ms a tick.
 - **The ending is early for the bot, on target for a player.** The planner knows the plan and
   plays every minute; it reached the first fold at 24 min against §16's 40 and Folding's research in
   about half a first-timer's time (the review), so 12:20-12:40 for the bot reads as about 18-25 h
