@@ -9,6 +9,7 @@
 import { C } from '../data/palette';
 import { MEGA } from '../data/megaprojects';
 import { RESEARCH } from '../data/research';
+import { offeredOrders, orderFilled } from '../sim/systems/orders';
 import { ORDERS, CUSTOMERS, ORDER, type CustomerId, type OrderDef } from '../data/orders';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { RULES } from '../data/rules';
@@ -90,9 +91,13 @@ function ordersPage(app: App, p: Rect) {
   const o = g.s.orders;
   const who = st.tab;
   const mine = ORDERS.filter((q) => q.customer === who);
-  const offered = mine.filter((q) => !o.done.includes(q.id) && q.requires.every((rq) => g.done(rq)));
-  const locked = mine.filter((q) => !o.done.includes(q.id) && !offered.includes(q));
-  const done = mine.filter((q) => o.done.includes(q.id));
+  // an order filled in an earlier run is done for good (the playability pass, DESIGN.md §19), but
+  // for a Challenge's goal, offered again in its run
+  const again = new Set(offeredOrders(g).map((q) => q.id));
+  const isDone = (id: string) => o.done.includes(id) || (orderFilled(g, id) && !again.has(id));
+  const offered = mine.filter((q) => !isDone(q.id) && q.requires.every((rq) => g.done(rq)));
+  const locked = mine.filter((q) => !isDone(q.id) && !offered.includes(q));
+  const done = mine.filter((q) => isDone(q.id));
   const bottom = p.y + p.h;
   let y = p.y;
   for (const d of offered) {
@@ -304,7 +309,7 @@ function customerPage(app: App, p: Rect) {
     }
     if (active) pencil(ui, cx - 3, cy + 35, 30, T.badFill);
     // open orders: a red count on the portrait's corner, bobbing now and then
-    const open = ORDERS.filter((q) => q.customer === c && !o.done.includes(q.id) && q.requires.every((rq) => g.done(rq))).length;
+    const open = ORDERS.filter((q) => q.customer === c && !orderFilled(g, q.id) && q.requires.every((rq) => g.done(rq))).length;
     if (isMet && open && !active) {
       const bob = Math.floor(ui.time * 2 + i) % 4 === 0 ? 1 : 0;
       dot(ui, cx + 21, cy - bob);

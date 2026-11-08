@@ -342,7 +342,7 @@ export async function m5Setup(state) {
   m.runs = 1;
   m.patents = N.of(9);
   m.patentsEarned = N.of(15);
-  m.nodes = ['bellows', 'starterLine', 'notebooks', 'surveyCharter', 'shovelFrog', 'overdriveHabit'];
+  m.nodes = ['copperDeeds', 'coalRights', 'starterLine', 'surveyCharter', 'shovelFrog'];
   // the record on file: Gizmos as now (on file), wire below this run's (better), plates new
   m.patented = { gizmo: { value: 2.2, steps: 2, grade: 'A', tier: 0, run: 1 }, copperWire: { value: 1.6, steps: 2, grade: 'D', tier: 0, run: 1 }, steel: { value: 2.2, steps: 2, grade: 'A', tier: 0, run: 1 } };
   m.drawer = [
@@ -630,7 +630,7 @@ export async function worldSetup(state) {
   // the Town Plan with a layout of both floors kept (its District tiles and its World tiles)
   if (state === 'legacyPlan') m.plans = [{ id: 1, name: 'Gearbox town', tiles: [{ x: 2, y: 2, item: 'gearbox', depth: 2 }, { x: 3, y: 2, item: 'robotArm', depth: 3, floor: 'world' }], routes: [{ fx: 2, fy: 2, tx: 3, ty: 2, item: 'gearbox', skiffs: 2, floor: 'world' }] }];
   m.standing = state === 'legacy' ? 24 : null;
-  m.nodes = ['bellows', 'starterLine', 'notebooks', 'copperDeeds', 'surveyCharter', 'quickAudit', 'moreAuditors', 'draughtsman', 'drawerSpace', 'dispatcher', 'zoningCharter', 'longSkiffs'];
+  m.nodes = ['copperDeeds', 'coalRights', 'starterLine', 'surveyCharter', 'quickAudit', 'moreAuditors', 'draughtsman', 'drawerSpace', 'dispatcher', 'zoningCharter', 'longSkiffs'];
   m.habits = ['quickAudit', 'draughtsman', 'dispatcher'];
   // the World's projects: the Lens Room (here) under way, the Beacon built on Cinder, the Keeper's
   // House half built on Rime (held there)

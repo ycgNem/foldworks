@@ -170,7 +170,7 @@ describe('cross-references', () => {
     const off = PATENT_LIST.reduce((t, d) => t + (d.effect.k === 'offline' ? d.effect.add : 0), RULES.offlineEff.value);
     expect(off).toBeCloseTo(0.65, 5);
     expect(off + IDLE_UPGRADES.reduce((t, u) => t + u.eff, 0)).toBeCloseTo(0.75, 5);
-    expect(PATENTS.bellows.cost).toBe(1);
+    expect(PATENTS.copperDeeds.cost).toBe(1);
   });
   it('the long tail points at real things: trophies, the Codex, cosmetics, Challenges, Scenarios (DESIGN.md §24)', () => {
     const builds = new Set<string>(Object.keys(BUILD));

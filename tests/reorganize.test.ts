@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { Game, type Cmd } from '../src/sim/Game';
 import { N, Num } from '../src/engine/num';
-import { RESEARCH_IDS } from '../src/data/research';
+import { RESEARCH, RESEARCH_IDS } from '../src/data/research';
 import { ANNEX, CHUNKS, FACTORY } from '../src/data/land';
 import { RULES } from '../src/data/rules';
 import { MEGA, megaStage } from '../src/data/megaprojects';
@@ -15,14 +15,14 @@ import { PATENTS, PATENT_IDS, PATENT_LIST, type PatentId } from '../src/data/pat
 import { TICK_RATE } from '../src/engine/time';
 import { auditTicks, foldRefusal } from '../src/sim/systems/audits';
 import { claimLoad, claimsHeld } from '../src/sim/systems/claims';
-import { offeredOrders } from '../src/sim/systems/orders';
+import { offeredOrders, orderFilled, ordersEverFilled } from '../src/sim/systems/orders';
 import { stampCost, megaOpen } from '../src/sim/systems/modules';
 import { annexPrice } from '../src/sim/systems/annex';
-import { billsStanding, billsTerm, chainSteps, designValue, previewPatents, reorganizeRefusal, customerMet, runSeconds, stepsFolded } from '../src/sim/reorganize';
-import { prules, patentRefusal } from '../src/sim/patents';
+import { billsStanding, billsTerm, chainSteps, designValue, previewPatents, reorganizeRefusal, customerMet, runSeconds, stepsFolded, returnCopies } from '../src/sim/reorganize';
+import { prules, patentRefusal, spendable } from '../src/sim/patents';
 import { trules } from '../src/sim/longtail';
 import { offlineEfficiency } from '../src/sim/offline';
-import { decodeDesign, encodeDesign, keptBill, unfoldKeptRefusal } from '../src/sim/drawer';
+import { decodeDesign, encodeDesign, keptBill, unfoldKeptRefusal, dieRefusal } from '../src/sim/drawer';
 import { restore, savePayload, fingerprint, stateFrom } from '../src/sim/snapshot';
 import { migrate, SAVE_VERSION } from '../src/engine/save';
 import type { Dir, ModuleDesign } from '../src/sim/world';
@@ -242,7 +242,9 @@ describe('the reset (DESIGN.md §19)', () => {
     expect(s.codex).toContain('steel');
     expect(s.orders.rep).toMatchObject({ bramble: 3, committee: 2 });
     expect(s.flags).toContain('trophy:pocketMoney');
-    expect(s.flags).not.toContain('sliceEnd');
+    // the returning run (the playability pass): the slice's end and the open Factory are kept
+    expect(s.flags).toContain('sliceEnd');
+    expect(s.flags).toContain('factoryOpen');
     expect(s.counters.folds).toBe(7);
     // the Night Shift bought with coin is kept (the lead's decision 6); the Bellows was a run's
     expect(s.upgrades).toEqual(['nightForeman']);
@@ -252,8 +254,10 @@ describe('the reset (DESIGN.md §19)', () => {
     expect(trules(g).startCoin).toBeGreaterThanOrEqual(25);
     expect(s.earned.toNumber()).toBe(0);
     expect(s.land).toEqual(['A']);
-    expect(s.research.done).toEqual([]);
-    expect(s.designs).toEqual([]);
+    // what you learned is kept (the playability pass, DESIGN.md §19): Acts I-II's research, and the
+    // kept Ingots back as a module design with its free copy
+    expect(s.research.done).toEqual(RESEARCH_IDS.filter((r) => (RESEARCH[r].act ?? 1) <= 2 && !RESEARCH[r].world));
+    expect(s.designs.map((d) => [d.name, d.kept, d.spare, d.stamped])).toEqual([['Ingots', s.meta.drawer[0].id, 1, 0]]);
     expect(s.orders.done).toEqual([]);
     expect(s.annex ?? 0).toBe(0);
     expect(g.fw).toBe(FACTORY.w);
@@ -263,18 +267,21 @@ describe('the reset (DESIGN.md §19)', () => {
     expect(s.factory.ents.filter((e) => e.kind === 'module')).toHaveLength(0);
   });
 
-  it('head starts bought in the tree shape the next run', () => {
+  it('head starts bought in the tree shape the next run: land deeds, Spare Dies, Claims on File', () => {
     const g = sandbox();
-    foldIronLine(g);
-    buy(g, 'bellows', 'starterLine', 'notebooks', 'copperDeeds', 'grant');
+    const ingots = foldIronLine(g);
+    must(g, { k: 'keep', id: ingots.id });
+    buy(g, 'copperDeeds', 'coalRights', 'steelCharter', 'overdriveHabit', 'starterLine');
+    g.s.claimBlocks.ironOre = 2;
     must(g, { k: 'reorganize' });
     const s = g.s;
-    expect(s.upgrades).toContain('bellows');
-    expect(g.entAt(2, 3)?.kind).toBe('miner');
-    expect(s.research.done).toEqual(['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing']);
-    expect(s.land).toContain('B');
-    // the Grant's 2,000, and the coin trophies earned on the way (DESIGN.md §24)
-    expect(s.coin.toNumber()).toBe(2000 + trules(g).startCoin);
+    expect([...s.land].sort()).toEqual(['A', 'B', 'C', 'D', 'E', 'F']);
+    // two free copies with Spare Dies, and the claims bought kept
+    expect(s.designs.find((d) => d.name === 'Ingots')?.spare).toBe(2);
+    expect(s.claimBlocks.ironOre).toBe(2);
+    expect(s.meta.keptClaims?.ironOre).toBe(2);
+    // the coin trophies earned on the way (DESIGN.md §24), and nothing else: no Grant any more
+    expect(s.coin.toNumber()).toBe(trules(g).startCoin);
   });
 
   it('a reset in the command log replays to the same state', () => {
@@ -286,7 +293,7 @@ describe('the reset (DESIGN.md §19)', () => {
     const a = play();
     a.step(100);
     a.act({ k: 'reorganize' });
-    a.act({ k: 'patent', id: 'bellows' });
+    a.act({ k: 'patent', id: 'copperDeeds' });
     a.step(300);
     a.act({ k: 'click', x: 2, y: 3 });
     a.step(300);
@@ -298,7 +305,7 @@ describe('the reset (DESIGN.md §19)', () => {
       b.tick();
     }
     expect(fingerprint(b)).toBe(fingerprint(a));
-    expect(b.s.meta.nodes).toEqual(['bellows']);
+    expect(b.s.meta.nodes).toEqual(['copperDeeds']);
     expect(b.s.meta.runs).toBe(1);
     expect(b.s.meta.patented.gizmo).toBeDefined();
   });
@@ -331,7 +338,9 @@ describe('the reset (DESIGN.md §19)', () => {
     expect(d.v).toBe(SAVE_VERSION);
     expect((d as unknown as { log: unknown[] }).log).toHaveLength(1);
     const s2 = stateFrom(d.snap as string);
-    expect(s2.meta.patents.toNumber()).toBe(3);
+    // 3 banked and the old Bellows on the Bench refunded (v13, the playability pass)
+    expect(s2.meta.patents.toNumber()).toBe(4);
+    expect(s2.meta.nodes).toEqual([]);
     expect(s2.meta.patented).toEqual({});
     expect(s2.meta.drawer).toEqual([]);
     expect(s2.meta.queue).toEqual([]);
@@ -357,16 +366,18 @@ describe('the reset (DESIGN.md §19)', () => {
 });
 
 describe('the Patent tree (DESIGN.md §19)', () => {
-  it('has 39 nodes, 66 Patents in all at flat prices, bought with prerequisites first', () => {
-    expect(PATENT_IDS.length).toBe(39);
-    expect(PATENT_LIST.reduce((t, d) => t + d.cost, 0)).toBe(66);
+  it('has 33 nodes, 65 Patents in all at flat prices, bought with prerequisites first', () => {
+    expect(PATENT_IDS.length).toBe(33);
+    expect(PATENT_LIST.reduce((t, d) => t + d.cost, 0)).toBe(65);
+    // (no node buys back Acts I-II research: a run after a reset knows it, the playability pass)
+    for (const d of PATENT_LIST) if (d.effect.k === 'head') for (const r of d.effect.research ?? []) expect((RESEARCH[r].act ?? 1), `${d.id}: ${r}`).toBeGreaterThan(2);
     const g = sandbox();
-    expect(patentRefusal(g, 'starterLine')).toMatch(/Needs Bellows/);
-    expect(patentRefusal(g, 'bellows')).toMatch(/Costs 1 Patent/);
+    expect(patentRefusal(g, 'coalRights')).toMatch(/Needs Copper Deeds/);
+    expect(patentRefusal(g, 'copperDeeds')).toMatch(/Costs 1 Patent/);
     give(g, 1);
-    must(g, { k: 'patent', id: 'bellows' });
+    must(g, { k: 'patent', id: 'copperDeeds' });
     expect(g.s.meta.patents.toNumber()).toBe(0);
-    expect(g.act({ k: 'patent', id: 'bellows' }).ok).toBe(false);
+    expect(g.act({ k: 'patent', id: 'copperDeeds' }).ok).toBe(false);
   });
 
   it('rules: a wider fold box, quicker and more audits, bigger nested boxes', () => {
@@ -687,5 +698,183 @@ describe('the Great Drill, stages 2 and 3 (DESIGN.md §19)', () => {
     expect(g.oreAt(9, 10)).toBe('ironOre');
     expect(g.oreAt(13, 13)).toBe('copperOre');
     expect(claimsHeld(g, 'copperOre')).toBe(before + RULES.claimsPerDeposit.value);
+  });
+});
+
+describe('the returning run (DESIGN.md §19 "What a Reorganize keeps", the playability pass)', () => {
+  /** A run with the iron line folded and kept, reset once. */
+  function returned(seed = 1): { g: Game; kept: number } {
+    const g = sandbox(seed);
+    const ingots = foldIronLine(g);
+    must(g, { k: 'keep', id: ingots.id });
+    must(g, { k: 'reorganize' });
+    return { g, kept: g.s.meta.drawer[0].id };
+  }
+
+  it('a kept design comes back as a module design at its kept grade and rates, free once, stamped as ever', () => {
+    const g0 = sandbox();
+    const ingots = foldIronLine(g0);
+    must(g0, { k: 'keep', id: ingots.id });
+    const was = { grade: ingots.grade.letter, outs: { ...ingots.outs }, bill: ingots.bill };
+    must(g0, { k: 'reorganize' });
+    const d = g0.s.designs.find((q) => q.name === 'Ingots')!;
+    expect(d.kept).toBe(g0.s.meta.drawer[0].id);
+    expect(d.grade.letter).toBe(was.grade);
+    for (const [it, v] of Object.entries(was.outs)) expect(d.outs[it as never], it).toBeCloseTo(v as number, 9);
+    expect(d.bill).toBe(was.bill);
+    expect(d.spare).toBe(RULES.returnCopies.value);
+    // placeable on the Factory floor from the first tick: the floor is open, no fold needed
+    expect(g0.flag('factoryOpen')).toBe(true);
+    must(g0, { k: 'fplace', design: d.id, x: 2, y: 2, rot: 0 });
+    // the next copy is a stamp at bill x (1 + 0.5 n), as for a design folded now
+    expect(stampCost(g0, d).toNumber()).toBe(d.bill);
+    // it is kept already, never twice; it files nothing new (it is on file)
+    expect(g0.act({ k: 'keep', id: d.id }).why).toMatch(/kept already/);
+    expect(previewPatents(g0).lines.find((l) => l.item === 'ironIngot')?.status).toBe('filed');
+  });
+
+  it('knows Acts I-II from the first tick (keyed off each node\'s act), nothing of Act III', () => {
+    const { g } = returned();
+    const want = RESEARCH_IDS.filter((r) => (RESEARCH[r].act ?? 1) <= 2 && !RESEARCH[r].world);
+    expect(want.length).toBe(26);
+    expect(g.s.research.done).toEqual(want);
+    expect(g.s.research.done).not.toContain('zoning');
+  });
+
+  it('a Challenge run is built from scratch: no design comes back, and its goal order is offered again', () => {
+    const g = sandbox();
+    const ingots = foldIronLine(g);
+    must(g, { k: 'keep', id: ingots.id });
+    g.s.orders.done.push('gizmoFestival');
+    must(g, { k: 'reorganize' });
+    expect(g.s.meta.ordersFilled).toContain('gizmoFestival');
+    expect(offeredOrders(g).some((o) => o.id === 'gizmoFestival')).toBe(false);
+    // a second reset, into the Challenge whose goal is the Festival
+    g.s.research.done = [...RESEARCH_IDS];
+    fakeDesign(g, 'steel', 'S', 1.25);
+    must(g, { k: 'reorganize', challenge: 'smallBoxes' });
+    expect(g.s.designs).toEqual([]);
+    expect(offeredOrders(g).some((o) => o.id === 'gizmoFestival')).toBe(true);
+  });
+
+  it('an order filled once is never offered again, and the Town stands on it after the reset', () => {
+    const g = new Game(5);
+    g.s.research.done.push('pressing');
+    expect(offeredOrders(g).map((o) => o.id)).toContain('boardwalk');
+    g.s.orders.active = 'boardwalk';
+    g.s.orders.progress.boardwalk = { ironPlate: N(80) };
+    g.step(2);
+    expect(g.s.orders.done).toContain('boardwalk');
+    const at = g.s.orders.doneAt!.boardwalk;
+    resettable(g);
+    must(g, { k: 'reorganize' });
+    expect(g.s.orders.done).toEqual([]);
+    expect(g.s.meta.ordersFilled).toEqual(['boardwalk']);
+    expect(g.s.meta.ordersAt?.boardwalk).toBe(at);
+    expect(orderFilled(g, 'boardwalk')).toBe(true);
+    expect(ordersEverFilled(g)).toEqual(['boardwalk']);
+    // the research is known again, and still Bramble does not ask for the Boardwalk twice
+    expect(g.done('pressing')).toBe(true);
+    expect(offeredOrders(g).map((o) => o.id)).not.toContain('boardwalk');
+    expect(offeredOrders(g).map((o) => o.id)).toContain('lampPosts');
+    expect(g.s.orders.rep.bramble).toBe(1);
+    // the Committee's orders are its reputation, the Great Drill's gate: offered every run
+    g.s.meta.ordersFilled!.push('thePile');
+    g.s.research.done.push('folding');
+    g.s.mega.stage = 1;
+    expect(orderFilled(g, 'thePile')).toBe(false);
+    expect(offeredOrders(g).map((o) => o.id)).toContain('thePile');
+  });
+
+  it('Dies on file: a Patent a copy of a kept design, at most four, back as Patents when it is forgotten', () => {
+    const { g, kept } = returned();
+    const d = g.s.designs.find((q) => q.kept === kept)!;
+    g.s.meta.patents = Num.ZERO;
+    expect(dieRefusal(g, kept)).toMatch(/costs 1 Patent/);
+    give(g, 10);
+    const p0 = g.s.meta.patents.toNumber();
+    for (let i = 0; i < RULES.dieCopiesMax.value; i++) must(g, { k: 'die', id: kept });
+    expect(g.act({ k: 'die', id: kept }).why).toMatch(/the most/);
+    expect(g.s.meta.patents.toNumber()).toBe(p0 - RULES.dieCopiesMax.value);
+    // this run's copies came at once; every later run starts with 1 + 4
+    expect(d.spare).toBe(1 + RULES.dieCopiesMax.value);
+    expect(returnCopies(g, g.s.meta.drawer[0])).toBe(1 + RULES.dieCopiesMax.value);
+    fakeDesign(g, 'steel', 'S', 1.25);
+    must(g, { k: 'reorganize' });
+    expect(g.s.designs.find((q) => q.kept === kept)!.spare).toBe(1 + RULES.dieCopiesMax.value);
+    const p1 = g.s.meta.patents.toNumber();
+    must(g, { k: 'forget', id: kept });
+    expect(g.s.meta.patents.toNumber()).toBe(p1 + RULES.dieCopiesMax.value);
+  });
+
+  it('the card can tell when a reset buys nothing: the tree bought out and every die on file', () => {
+    const { g, kept } = returned();
+    expect(spendable(g, 5).nodes.length).toBeGreaterThan(0);
+    expect(spendable(g).full).toBe(false);
+    for (const id of PATENT_IDS) if (!g.s.meta.nodes.includes(id)) g.s.meta.nodes.push(id);
+    expect(spendable(g, 5).nodes).toEqual([]);
+    expect(spendable(g, 5).dies).toBe(RULES.dieCopiesMax.value);
+    expect(spendable(g).full).toBe(false);
+    g.s.meta.dies = { [kept]: RULES.dieCopiesMax.value };
+    expect(spendable(g, 100)).toEqual({ nodes: [], dies: 0, full: true });
+  });
+
+  it('the Floor Plan lays the last Reorganize\'s Factory floor again: trunks paid, modules from spare copies', () => {
+    const g = sandbox();
+    const ingots = foldIronLine(g);
+    must(g, { k: 'keep', id: ingots.id });
+    buy(g, 'shovelFrog', 'draughtsman', 'notebooks');
+    must(g, { k: 'fplace', design: ingots.id, x: 3, y: 3, rot: 0 });
+    must(g, { k: 'ftrunk', x: 4, y: 3, rot: 0 });
+    must(g, { k: 'ftrunk', x: 5, y: 3, rot: 1 });
+    must(g, { k: 'reorganize' });
+    expect(g.s.meta.floorPlan).toEqual([
+      { kind: 'module', x: 3, y: 3, rot: 0, item: 'ironIngot' },
+      { kind: 'trunk', x: 4, y: 3, rot: 0 },
+      { kind: 'trunk', x: 5, y: 3, rot: 1 },
+    ]);
+    g.s.coin = N(1000);
+    g.step(10 * TICK_RATE);
+    const at = (x: number, y: number) => g.fentAt(x, y);
+    expect(at(3, 3)?.kind).toBe('module');
+    expect(g.design(at(3, 3)!.design)?.kept).toBe(g.s.meta.drawer[0].id);
+    expect(at(4, 3)).toMatchObject({ kind: 'trunk', rot: 0 });
+    expect(at(5, 3)).toMatchObject({ kind: 'trunk', rot: 1 });
+    expect(g.s.coin.toNumber()).toBe(1000 - 2 * FACTORY.trunkCost);
+  });
+
+  it('notes the run\'s pace: its Act II floor\'s peak, and when it passed the run before\'s', () => {
+    const g = new Game(3);
+    g.s.income = Array(60).fill(100);
+    for (let i = 0; i < 6 * 60; i++) { g.s.income.fill(100); g.step(TICK_RATE); }
+    expect(g.s.meta.factoryPeak).toBeGreaterThan(0);
+    const peak = g.s.meta.factoryPeak!;
+    resettable(g);
+    must(g, { k: 'reorganize' });
+    expect(g.s.meta.history[0].factoryPeak).toBe(peak);
+    expect(g.s.meta.caughtUp).toBeUndefined();
+    for (let i = 0; i < 10 * 60 && g.s.meta.caughtUp === undefined; i++) { g.s.income.fill(1000); g.step(TICK_RATE); }
+    expect(g.s.meta.caughtUp).toBeGreaterThan(0);
+    expect(g.s.meta.caughtUp).toBeLessThanOrEqual(6 * 60);
+  });
+
+  it('migrates a v12 save: the old head starts refunded, and the orders filled before written down from reputation', () => {
+    const st = {
+      coin: 'N:5',
+      meta: { runs: 2, runStart: 0, patents: 'N:3', patentsEarned: 'N:30', nodes: ['bellows', 'surveyCharter', 'glassNotes', 'copperDeeds'], habits: ['notebooks', 'surveyCharter'], patented: {}, drawer: [], nextKept: 1, queue: [], lifetime: { earned: 'N:0', delivered: {}, folds: 0 }, history: [], peakPerMin: 0, perMinRing: [] },
+      orders: { active: null, progress: {}, done: ['boardwalk'], rep: { bramble: 4, unit7: 1, voltaire: 0, committee: 2 } },
+    };
+    const d = migrate({ v: 12, saved: 0, seed: 1, snap: JSON.stringify(st), log: [] });
+    expect(d.v).toBe(SAVE_VERSION);
+    const s2 = stateFrom(d.snap as string);
+    expect(s2.meta.nodes).toEqual(['surveyCharter']);
+    expect(s2.meta.habits).toEqual(['surveyCharter']);
+    // Bellows 1, Glass and Gravel Notes 2, Copper Deeds 1 (its old price) back: 3 + 4
+    expect(s2.meta.patents.toNumber()).toBe(7);
+    // Bramble's 4: 1 this run (the Boardwalk), so 3 of Acts I-II's before; Unit 7's 1; the Committee's 2
+    expect(s2.meta.ordersFilled).toEqual(['boardwalk', 'lampPosts', 'gizmoFestival', 'calibration', 'thePile', 'midnightOil']);
+    // a first run's save has no earlier runs to write down
+    const first = migrate({ v: 12, saved: 0, seed: 1, snap: JSON.stringify({ ...st, meta: { ...st.meta, runs: 0 } }), log: [] });
+    expect(stateFrom(first.snap as string).meta.ordersFilled).toBeUndefined();
   });
 });

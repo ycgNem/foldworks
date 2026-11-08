@@ -20,6 +20,10 @@ export interface CustomerDef {
   /** met after the first Reorganize (with `meets` done in that run), or in any run once the Great
    * Drill is researched there or its stage 1 stands (the Committee, DESIGN.md §19) */
   afterReset?: boolean;
+  /** its orders are offered again in every run, filled before or not (the Committee: its reputation
+   * is the Great Drill's gate, two orders a run, DESIGN.md §19); every other customer's order is
+   * filled once for good (the playability pass) */
+  repeats?: boolean;
   derivation: string;
 }
 
@@ -86,6 +90,7 @@ export const CUSTOMERS: Record<CustomerId, CustomerDef> = {
     title: 'Three raccoons in a trench coat',
     meets: 'folding',
     afterReset: true,
+    repeats: true,
     thanks: [
       '"we accept." "on behalf of all of us." "which is one of us. hello."',
       '"the coat thanks you." "the coat is very full now." "burp."',

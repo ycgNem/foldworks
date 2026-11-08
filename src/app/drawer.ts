@@ -13,9 +13,10 @@ import { RECIPE } from '../data/recipes';
 import { ITEMS, type ItemId } from '../data/items';
 import { ellipsize, bigWidth } from '../ui/font';
 import { itemIcon } from '../render/sprites';
-import { keepRefusal, keptBill, keptLand, unfoldKeptRefusal, encodeDesign, drawerSlots } from '../sim/drawer';
+import { keepRefusal, keptBill, keptLand, unfoldKeptRefusal, encodeDesign, drawerSlots, dieRefusal } from '../sim/drawer';
 import { lrules } from '../sim/legacy';
-import { previewPatents, designValue } from '../sim/reorganize';
+import { previewPatents, designValue, returnCopies, returnsBuilt } from '../sim/reorganize';
+import { RULES } from '../data/rules';
 import { prules } from '../sim/patents';
 import { mainItem } from '../sim/systems/modules';
 import { Num } from '../engine/num';
@@ -85,6 +86,9 @@ function picture(app: App, parts: DesignPart[], w: number, h: number, x: number,
 /** A kept design's state as a chip: ready, unfolded this run, or what it waits for. */
 function stateChip(app: App, k: KeptDesign): { text: string; role: 'good' | 'soft' | 'warn'; why: string | null } {
   const g = app.game;
+  // the returning run (the playability pass, DESIGN.md §19): it came back built this run
+  const back = g.s.designs.find((d) => d.kept === k.id);
+  if (back) return { text: back.spare ? `built · ${back.spare} spare` : 'built · placed', role: 'good', why: null };
   if ((g.s.drafted ?? []).includes(k.id)) return { text: 'unfolded', role: 'soft', why: null };
   const why = unfoldKeptRefusal(g, k);
   if (!why) return { text: 'ready', role: 'good', why: null };
@@ -104,14 +108,15 @@ export function drawerScreen(app: App, r0: Rect) {
   const iw = layoutRich('{u:blueprint} Import a string').w + 14;
   if (button(ui, 'kdImport', body.x, body.y, iw, 15, '{u:blueprint} Import a string', { disabled: m.drawer.length >= slots, tip: [{ text: '{u:blueprint} paste an FWD1 share string' }, { text: 'a design from another save, kept here like your own', color: T.inkSoft }] })) importPrompt(app);
   const draught = prules(g).draughtsmanEvery;
-  const note = draught ? `{u:build} the Draughtsman unfolds the queue {chip:reset:${m.queue.length}}` : '{u:fold} a kept design unfolds whole onto its box';
+  const note = draught ? `{u:build} the Draughtsman unfolds the queue {chip:reset:${m.queue.length}}` : '{u:blueprint} every kept design comes back built each run';
   const NL = layoutRich(note);
   if (body.x + iw + 8 + NL.w <= body.x + body.w) drawLayout(ui, NL, body.x + body.w, body.y + 4, T.inkSoft, { align: 'right' });
   // ---- the kept designs
   let y = body.y + 20;
   // the Group Drawer (a Legacy node) keeps nested Factory designs too
   const nested = lrules(g).groupDrawer;
-  const runDesigns = g.s.designs.filter((d) => (!d.fparts || (nested && d.fparts.length > 0 && (d.depth ?? 1) < 3)) && !m.drawer.some((k) => k.src === d.id));
+  // (a design that came back from the Drawer is kept already: the playability pass)
+  const runDesigns = g.s.designs.filter((d) => d.kept === undefined && (!d.fparts || (nested && d.fparts.length > 0 && (d.depth ?? 1) < 3)) && !m.drawer.some((k) => k.src === d.id));
   const runH = runDesigns.length ? Math.min(Math.floor(body.h * 0.36), 18 + Math.ceil(runDesigns.length / 2) * 17) : 0;
   const keptEnd = body.y + body.h - (runH ? runH + 4 : 0);
   heading(ui, 'Kept', body.x, y, body.w, 'reset', `{soft:${m.drawer.length} of ${slots} slots}`);
@@ -119,7 +124,7 @@ export function drawerScreen(app: App, r0: Rect) {
   if (!m.drawer.length) {
     // the Committee explains it in their own words
     speak(app, 'committee', '"keep a good one." "it outlives us." "everything does."', body.x, y, Math.min(body.w, 280), { size: 24, fallback: committeeFallback });
-    drawLayout(ui, layoutRich('{u:fold} fold → {u:blueprint} keep → {u:reset} reset → {u:fold} unfold whole', body.w), body.x, y + 32, T.inkSoft);
+    drawLayout(ui, layoutRich('{u:fold} fold → {u:blueprint} keep → {u:reset} reset → {u:factory} it comes back built', body.w), body.x, y + 32, T.inkSoft);
   } else {
     const rowH = 32;
     const per = Math.max(1, Math.floor((keptEnd - y) / rowH));
@@ -191,6 +196,7 @@ function keptCard(app: App, k: KeptDesign, x: number, y: number, w: number, h: n
   const sc = stateChip(app, k);
   const facts = [
     ...(k.rate ? [{ text: `${perMin(k.rate)}/min`, role: 'ink' as const }] : []),
+    ...(returnsBuilt(k) ? [{ text: `×${returnCopies(g, k)} a run`, role: 'reset' as const }] : []),
     { text: `{coin:${Num.of(keptBill(k)).format()}}`, role: 'coin' as const },
     { text: sc.text, role: sc.role },
   ];
@@ -245,6 +251,9 @@ function keptDetail(app: App, k: KeptDesign, r: Rect) {
   row('{u:claim} box', `${k.w}x${k.h} at ${k.x},${k.y} · land ${keptLand(k).join(' ')}`);
   const machines = k.parts.filter((p) => p.kind !== 'belt');
   row('{u:coin} bill', `{coin:${Num.of(keptBill(k)).format()}} · ${machines.length} {u:build} ${k.parts.length - machines.length} belts`);
+  // the returning run (the playability pass): what comes back at every run's start
+  if (returnsBuilt(k)) row('{u:blueprint} comes back', `{reset:${returnCopies(g, k)} ${returnCopies(g, k) === 1 ? 'copy' : 'copies'}} a run · ${g.s.meta.dies?.[k.id] ?? 0}/${RULES.dieCopiesMax.value} dies`);
+  else row('{u:blueprint} comes back', '{soft:no audit on file · unfold it, fold it once}');
   const filed = k.product ? g.s.meta.patented?.[k.product] : undefined;
   if (filed) row('{u:reset} on file', `{reset:${filed.grade} · ${filed.steps} step${filed.steps === 1 ? '' : 's'} · tier ${filed.tier}}`);
   // what it can do in this run
@@ -252,7 +261,8 @@ function keptDetail(app: App, k: KeptDesign, r: Rect) {
   const drafted = (g.s.drafted ?? []).includes(k.id);
   if (y + ROW_H <= foot + 14) {
     const cw = chip(ui, r.x, y + 1, sc.text, { role: sc.role, solid: sc.role === 'good' });
-    const said = drafted ? '{soft:audit it, fold it again, file it better}' : sc.why ? `{warn:${sc.why}}` : '{soft:one click lays every machine and belt}';
+    const back = g.s.designs.some((d) => d.kept === k.id);
+    const said = back ? '{soft:in the inventory · place it on the Factory floor}' : drafted ? '{soft:audit it, fold it again, file it better}' : sc.why ? `{warn:${sc.why}}` : '{soft:one click lays every machine and belt}';
     const L = layoutRich(said, r.w - cw - 4);
     if (y + L.h + 2 <= foot + 14) drawLayout(ui, L, r.x + cw + 4, y + 3, T.ink);
     y += Math.max(ROW_H, L.h + 4);
@@ -278,7 +288,13 @@ function keptDetail(app: App, k: KeptDesign, r: Rect) {
   const q = g.s.meta.queue.includes(k.id);
   if (button(ui, 'kdQueue', r.x + bw + 4, by + 18, bw, 16, q ? 'Unqueue' : 'Queue', { disabled: !draught, active: q, tip: draught ? (q ? '{u:build} out of the Draughtsman\'s queue' : '{u:build} the Draughtsman unfolds it every run · in queue order · as land, research and coin allow') : '{u:lock} needs the Draughtsman · a Patent' })) app.act({ k: 'queueKept', id: k.id });
   const armed = st.armForget === k.id && ui.time < st.armUntil;
-  if (button(ui, 'kdForget', r.x, by + 36, r.w, 14, armed ? 'Sure? Forget it' : 'Forget', { gold: armed, tip: armed ? '{bad:click again} · gone for good' : '{u:remove} two clicks · its slot frees up' })) {
+  // Dies on file (the playability pass, DESIGN.md §19): a Patent a copy, at every run's start
+  const dw = r.w - bw - 4;
+  const dwhy = dieRefusal(g, k.id);
+  if (button(ui, 'kdDie', r.x + bw + 4, by + 36, dw, 14, `+1 copy · ${RULES.dieCopyPrice.value} {u:patents}`, { gold: !dwhy, disabled: !!dwhy, tip: dwhy ? `{warn:${dwhy}}` : [{ text: '{big:A die on file}' }, { text: `{u:blueprint} one more copy at every run's start · ${returnCopies(g, k)} → {good:${returnCopies(g, k) + 1}}` }, { text: '{soft:one more spare at once · back as a Patent if forgotten}' }] })) {
+    if (app.act({ k: 'die', id: k.id }).ok) app.audio.sfx('upgrade');
+  }
+  if (button(ui, 'kdForget', r.x, by + 36, bw, 14, armed ? 'Sure? Forget it' : 'Forget', { gold: armed, tip: armed ? '{bad:click again} · gone for good' : '{u:remove} two clicks · its slot frees up' })) {
     if (armed) { app.act({ k: 'forget', id: k.id }); st.armForget = -1; st.sel = null; }
     else { st.armForget = k.id; st.armUntil = ui.time + 3; }
   }

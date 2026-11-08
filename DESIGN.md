@@ -845,17 +845,67 @@ stage, and fill Committee orders to open the next one (the bills goal, "run N mo
 buildings", was dropped in the final round: it told the player to farm). The Reorganize card
 shows it all, with the runs so far.
 
+### What a Reorganize keeps (the playability pass, 2026-11-08)
+
+*Rewritten in the playability pass (DECISIONS.md): a reset is a slingshot, not the tutorial again.*
+The review measured the 15 h checkpoint's Reorganize at 573K/min before and 90/min after, Bramble
+asking for the Boardwalk again, and every run 2.3-2.5 h back to Act III.
+
+- **Research of Acts I-II** (every node with `act` undefined, 1 or 2: `RULES.keptActs`, 26 nodes) is
+  known from the first tick of every run after the first reset of the save, keyed off each node's
+  `act` field. Research past Act II is lost as before.
+- **The Factory floor is open** from the first tick (`factoryOpen` kept); the first fold and the
+  slice's end are celebrated once (`firstFold`, `sliceEnd` kept).
+- **The Drawer's designs come back built.** Each kept design with its audit card is a module design
+  again at the run's start: its kept grade, rates, box and name, and **one free copy**
+  (`RULES.returnCopies`; Spare Dies adds one, Dies on file up to four). Derivation: its machines
+  were bought once, in the run that folded it; a 25% bill would make the first minute's ~600 coin the
+  gate for no decision, and the decision the Drawer asks is which designs to keep. Later copies are
+  stamped at bill x (1 + 0.5 n). It files nothing new (it is on file). A design imported from a
+  string, or a Group Drawer layout, has no card: it unfolds and is audited as before. A Challenge run
+  gets none back (built from scratch under its rule).
+- **Orders filled once are never offered again** (`meta.ordersFilled`); their Town pieces stay
+  standing (the Town draws every order ever filled). The Committee's orders repeat: their reputation
+  is the Great Drill's gate (two a run, below). A Challenge whose goal is an order offers it again.
+- The Workshop and Factory floors still start empty: a new run is a new layout.
+
+**The card** says how fast the next run is: "back to X/min in ~N min", X the run's Act II floor
+(`meta.factoryPeak`, the best 5-minute income before Zoning) and N the minutes the last returning run
+took to pass it (`meta.caughtUp`), or `RULES.backInMinutes` (15, the campaign's measure, rounded up)
+before one has. When the tree is bought out and every die is on file (`spendable(g).full`), the card
+says "the tree is full. nothing to buy. keep building." and its button is "Sign anyway", not gold.
+
 ### What is kept, what is lost
 
 Kept (`meta`, plus the fields that already lived in the run's state): Patents and the tree, the
-record on file, the Patent Drawer and its queue, Great Drill progress (`mega`), reputation, the
-Codex, the coin Night Shift (§20), trophies and lifetime statistics (coin earned, items delivered,
-folds), the run history. Lost: both floors, coin and items, land (back to chunk A), the Factory
-annex, deposit claims, research, module designs, orders filled this run. The tick and the seeded
-RNG run on: the command log stays one ordered history and replays across resets (a test checks
-it); `meta.runStart` marks a run's first tick.
+record on file, the Patent Drawer (built, above) and its queue and dies, Acts I-II's research, the
+open Factory, the orders ever filled, Great Drill progress (`mega`), reputation, the Codex, the coin
+Night Shift (§20), trophies and lifetime statistics (coin earned, items delivered, folds), the run
+history. Lost: both floors, coin and items, land (back to chunk A; the deeds keep some), the Factory
+annex, deposit claims (Claims on File keeps the blocks), research past Act II, designs not kept. The
+tick and the seeded RNG run on: the command log stays one ordered history and replays across resets
+(a test checks it); `meta.runStart` marks a run's first tick.
 
-### The Patent tree (`src/data/patents.ts`, 29 nodes, 40 Patents in all)
+### The returning run's Patents (the playability pass)
+
+The old head starts (Bellows, a Miner, Old Notebooks, Gear Patterns, the Gizmo Patent, Folding
+Remembered, the Grant, Overdrive by Habit, Glass and Gravel Notes, the Circuit Patent: 15 Patents)
+bought Act I-II progress a returning run now has anyway. A save from before is refunded them (v13).
+What a Patent buys now is what a returning run still rebuilds by hand:
+- **Copper Deeds** 1 (start owning B and C: their deposits are 2 claims each), **Coal Rights** 1 (D
+  and E, 72,000 coin), **Steel Charter** 2 (F, 120,000), **Claims on File** 2 (the Survey Office's
+  blocks kept: the most of each ore so far), **Spare Dies** 3 (a second free copy of every kept
+  design).
+- **The Filing Cabinet** 2 (Drawer 12 -> 16) and **The Floor Plan** 3 (the Factory floor at a
+  Reorganize laid again, a tile every 2 s, trunks paid, module tiles from spare copies, never a stamp).
+- **Dies on file**, the sink that scales: in the Drawer, 1 Patent buys one more copy of one kept
+  design at every run's start, at most 4 a design (`dieCopyPrice`, `dieCopiesMax`: the Act II
+  floor's peak holds 4-6 copies of its busiest product). 8-20 slots make it a 32-80 Patent sink;
+  forgetting a design gives its dies back.
+- The tree is now **33 nodes, 65 Patents**; the Town Archive (Legacy) knows Zoning and Chutes
+  instead of Act I.
+
+### The Patent tree before the playability pass (`src/data/patents.ts`, 29 nodes, 40 Patents in all; history)
 
 Flat prices with prerequisites, never a growing price; no "+X% everything" node. A price is about
 a Patent per 10-15 min of a run the node saves. Four branches:

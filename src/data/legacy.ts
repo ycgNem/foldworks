@@ -70,7 +70,7 @@ export const LEGACY: Record<LegacyId, LegacyDef> = {
     effect: { k: 'purse', patents: 10 },
     text: '{u:relocate} every island starts with {good:10} Patents',
     flavor: 'Sewn into the lining. The Committee knows where.',
-    derivation: '§22 The Legacy tree: 10 Patents are the head starts of Act I and most of Act II (the 13 head-start nodes cost 15, §19), so a new island\'s first hour is a choice of head starts, not the slice again; 4 Legacy, the cheapest node, about a sixth of the first Relocate',
+    derivation: '§22 The Legacy tree: 10 Patents are most of a returning run\'s head starts (re-derived in the playability pass, §19: the land deeds, Claims on File and Spare Dies cost 9; Acts I-II\'s research is known anyway), so a new island\'s first hour is a choice of head starts, not the slice again; 4 Legacy, the cheapest node, about a sixth of the first Relocate',
   }),
   oldHabits: L({
     id: 'oldHabits', name: 'Old Habits', branch: 'start', cost: 5, requires: [], pos: [0, 1],
@@ -89,9 +89,9 @@ export const LEGACY: Record<LegacyId, LegacyDef> = {
   townArchive: L({
     id: 'townArchive', name: 'The Town Archive', branch: 'start', cost: 8, requires: ['patentPurse'], pos: [1, 0],
     effect: { k: 'archive' },
-    text: '{u:reset} every run starts knowing all of Act I\'s research',
-    flavor: 'Ten drawers of notes, three of them about Gizmos.',
-    derivation: '§22 The Legacy tree: Act I\'s ten nodes are the slice\'s 30-40 min of research (§16) in every run of every world, the head starts of the Patent tree\'s first branch without their Patents',
+    text: '{u:reset} every run starts knowing {research:Zoning} · {research:Chutes} · the District open from the first minute',
+    flavor: 'Ten drawers of notes, three of them about Gizmos, one about zoning law.',
+    derivation: '§22 The Legacy tree, re-derived in the playability pass (DESIGN.md §19: every run after the first reset knows Acts I-II, which this node gave): the Zoning Charter\'s research (Zoning, Chutes: about 35-40 min of a fresh run\'s Act II floor, §21 Patents) in every run of every world, so the Patent tree\'s Act III head start outlives a Relocate without its Patents',
   }),
   standingCharts: L({
     id: 'standingCharts', name: 'Standing Charts', branch: 'start', cost: 7, requires: ['townArchive'], pos: [2, 0],

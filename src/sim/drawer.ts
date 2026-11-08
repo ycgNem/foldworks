@@ -21,11 +21,11 @@ import type { DesignPart, Dir, KeptDesign, ModuleDesign } from './world';
 import { prules } from './patents';
 import { lrules } from './legacy';
 import { recipeKnown } from './transfer';
-import { finb, fplace, mainItem } from './systems/modules';
+import { finb, fplace, fplaceRefusal, mainItem } from './systems/modules';
 import { fauditLock } from './systems/nested';
 import { islandTileRefusal } from './systems/islands';
 import { inBox } from './systems/audits';
-import { chainSteps } from './reorganize';
+import { chainSteps, returnCopies, returnsBuilt } from './reorganize';
 
 // ------------------------------------------------------------------ keeping and forgetting
 
@@ -40,6 +40,8 @@ export function keepRefusal(g: Game, designId: number): string | null {
   if ((d.depth === 2 || d.fparts) && !(lrules(g).groupDrawer && d.fparts?.length)) return 'A nested design lives on the Factory floor: keep the Workshop lines it was folded from (the Group Drawer, a Legacy node, keeps it)';
   if (!d.parts.length && !d.fparts?.length) return 'Nothing in this design to unfold';
   const m = g.s.meta;
+  // a design that came back from the Drawer at the run's start is kept already (the playability pass)
+  if (d.kept !== undefined && m.drawer.some((k) => k.id === d.kept)) return 'It came back from the Patent Drawer: it is kept already';
   if (m.drawer.some((k) => k.src === d.id)) return 'Already in the Patent Drawer';
   const slots = drawerSlots(g);
   if (m.drawer.length >= slots) return `The drawer is full (${slots}): forget a design first`;
@@ -108,7 +110,51 @@ export function forgetKept(g: Game, id: number): ActResult {
   if (!m.drawer.some((k) => k.id === id)) return no('No such design in the drawer');
   m.drawer = m.drawer.filter((k) => k.id !== id);
   m.queue = m.queue.filter((q) => q !== id);
+  // its Dies on file go back as Patents (they were bought for this design's copies)
+  const n = m.dies?.[id] ?? 0;
+  if (n > 0) {
+    m.patents = m.patents.add(n * RULES.dieCopyPrice.value);
+    delete m.dies![id];
+  }
   return OK;
+}
+
+// ------------------------------------------------------------------ Dies on file (the playability pass)
+
+/** Why one more copy of this kept design can't be bought to come back at every run's start, or null
+ * (DESIGN.md §19 Dies on file: 1 Patent a copy, flat, at most RULES.dieCopiesMax a design). */
+export function dieRefusal(g: Game, id: number): string | null {
+  const m = g.s.meta;
+  const k = m.drawer.find((q) => q.id === id);
+  if (!k) return 'No such design in the drawer';
+  if (!returnsBuilt(k)) return k.nested ? 'A group layout unfolds from each run\'s own copies: it has no die' : 'An imported design has no audit on file: unfold it and fold it once';
+  const n = m.dies?.[id] ?? 0;
+  if (n >= RULES.dieCopiesMax.value) return `It comes back with ${returnCopies(g, k)} copies already, the most`;
+  const price = RULES.dieCopyPrice.value;
+  if (m.patents.lt(price)) return `A die costs ${price} Patent: you have ${m.patents.format()}`;
+  return null;
+}
+
+/** Buy one more copy of a kept design at every run's start: a die on file. It also comes back in
+ * this run, as a spare copy of the design that came back (if one did). */
+export function buyDie(g: Game, id: number): ActResult {
+  const why = dieRefusal(g, id);
+  if (why) return no(why);
+  const m = g.s.meta;
+  m.patents = m.patents.sub(RULES.dieCopyPrice.value);
+  (m.dies ??= {})[id] = (m.dies[id] ?? 0) + 1;
+  const d = g.s.designs.find((q) => q.kept === id);
+  if (d) d.spare++;
+  g.bump('diesBought');
+  g.emit({ type: 'patent', id: 'die', value: RULES.dieCopyPrice.value });
+  return OK;
+}
+
+/** Dies on file left to buy over the whole Drawer (0: the sink is full). */
+export function diesOpen(g: Game): number {
+  let n = 0;
+  for (const k of g.s.meta.drawer) if (returnsBuilt(k)) n += Math.max(0, RULES.dieCopiesMax.value - (g.s.meta.dies?.[k.id] ?? 0));
+  return n;
 }
 
 export function renameKept(g: Game, id: number, name: string): ActResult {
@@ -255,6 +301,7 @@ function unfoldNested(g: Game, k: KeptDesign, x: number, y: number): ActResult {
  * unfolded this run that can be, in the player's order. One waiting only for coin holds the queue
  * (the coin is saved for it); one waiting on land, research or room is passed over for now. */
 export function runDraughtsman(g: Game) {
+  runFloorPlan(g);
   const every = prules(g).draughtsmanEvery;
   const m = g.s.meta;
   if (!every || !m.queue.length || g.s.tick % (every * TICK_RATE) !== 0) return;
@@ -272,8 +319,40 @@ export function runDraughtsman(g: Game) {
   }
 }
 
+// ------------------------------------------------------------------ the Floor Plan (a Patent)
+
+/** The Floor Plan (a Patent, DESIGN.md §19, the playability pass): every few seconds, the first tile
+ * of the last Reorganize's Factory floor not standing yet: a trunk at its price, a module tile with a
+ * spare copy of a depth-1 design making its product (the best graded). A tile something else stands
+ * on, one off the floor (an annex block not bought), one short of claims or with no spare copy is
+ * passed over for now; one waiting only on a trunk's coin holds the plan. It never stamps. */
+export function runFloorPlan(g: Game) {
+  const every = prules(g).floorPlanEvery;
+  const plan = g.s.meta.floorPlan;
+  if (!every || !plan?.length || g.s.scenario || g.s.challenge || g.s.tick % (every * TICK_RATE) !== 0) return;
+  if (!g.flag('factoryOpen')) return;
+  for (const t of plan) {
+    if (!finb(g, t.x, t.y)) continue;
+    const e = g.fentAt(t.x, t.y);
+    if (t.kind === 'trunk') {
+      if (e) continue;
+      if (g.s.coin.lt(FACTORY.trunkCost)) return;
+      if (fplace(g, 'trunk', t.x, t.y, t.rot).ok) { g.bump('floorPlanTiles'); return; }
+      continue;
+    }
+    if (e) continue;
+    const d = g.s.designs
+      .filter((q) => (q.depth ?? 1) === 1 && !q.fparts && q.spare >= 1 && mainItem(q) === t.item)
+      .sort((a, b) => b.grade.mult - a.grade.mult || a.id - b.id)[0];
+    if (!d || fplaceRefusal(g, 'module', t.x, t.y, d.id)) continue;
+    if (fplace(g, 'module', t.x, t.y, t.rot, d.id).ok) { g.bump('floorPlanTiles'); return; }
+  }
+}
+
 /** A kept design's state in this run, in a few words (the drawer's line for it). */
 export function keptState(g: Game, k: KeptDesign): string {
+  const back = g.s.designs.find((d) => d.kept === k.id);
+  if (back) return `came back built: ${back.spare} spare ${back.spare === 1 ? 'copy' : 'copies'}`;
   if ((g.s.drafted ?? []).includes(k.id)) return 'unfolded this run';
   const why = unfoldKeptRefusal(g, k);
   return why ? why.why : `ready: ${keptBill(k).toLocaleString('en-US')} coin`;

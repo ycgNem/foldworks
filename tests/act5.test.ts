@@ -224,9 +224,10 @@ describe('the Last Fold (DESIGN.md §23)', () => {
     expect(m.visited).toEqual(['home']);
     expect(m.world).toBe('home');
     expect(g.s.world).toBeUndefined();
-    expect(g.s.designs).toEqual([]);
-    // the Seed knows Acts I-II's research, nothing of Act III on
-    expect(g.s.research.done).toEqual(RESEARCH_IDS.filter((r) => (RESEARCH[r].act ?? 1) <= 2));
+    expect(g.s.designs.every((d) => d.kept !== undefined)).toBe(true);
+    // the Seed knows Acts I-II's research, and the Town Archive (kept by the Seed) Zoning and Chutes
+    // (the playability pass re-derived the Archive: every run after a reset knows Acts I-II anyway)
+    expect(g.s.research.done).toEqual(RESEARCH_IDS.filter((r) => (RESEARCH[r].act ?? 1) <= 2 || r === 'zoning' || r === 'chutes'));
     expect(g.s.land).toEqual(['A']);
     // the Seed stands in the new Workshop, not removable, and is planted again by every later run
     const seed = g.entAt(RULES.seedX.value, RULES.seedY.value)!;
