@@ -290,7 +290,10 @@ export function previewPatents(g: Game): Preview {
   const designs = lines.reduce((t, l) => t + l.patents, 0);
   const mega = s.megaPatents ?? 0;
   const billValue = billsStanding(g);
-  const bills = billsTerm(billValue);
+  // filed as the designs are (the playability pass): only a rise over the bills term on file pays,
+  // so a run that rebuilds the same factory in minutes is never paid for it again (measured: a
+  // 35-minute reset loop rebuilt the returning floor each run and out-filed the designed runs)
+  const bills = Math.max(0, billsTerm(billValue) - billsOnFile(g));
   const total = designs + mega + bills;
   const now = Math.floor(total + 1e-9);
   const goals: PatentGoal[] = [];
@@ -367,9 +370,19 @@ const KEEP_FLAG = (f: string) => f.startsWith('trophy:') || f === 'ordersSeen' |
 /** The Night Shift bought with coin (src/data/idle.ts) outlives a run (the lead's decision 6). */
 const KEEP_UPGRADE = new Set<string>(IDLE_UPGRADES.map((u) => u.id));
 
-/** File this run's best design of each product with the Patent Office (only a rise is kept). */
+/** The bills term on file in this world and universe (the playability pass, DESIGN.md §19): a
+ * Relocate or a Last Fold starts it again, as it does the designs' record. */
+export function billsOnFile(g: Game): number {
+  const m = g.s.meta, f = m.billsFiled;
+  return f && f.world === (m.relocations ?? 0) && f.universe === (m.lastFolds ?? 0) ? f.value : 0;
+}
+
+/** File this run's best design of each product with the Patent Office (only a rise is kept), and
+ * the bills term (the playability pass). */
 export function fileDesigns(g: Game) {
   const m = g.s.meta;
+  const b = billsTerm(billsStanding(g));
+  if (b > billsOnFile(g)) m.billsFiled = { value: b, world: m.relocations ?? 0, universe: m.lastFolds ?? 0 };
   m.patented ??= {};
   for (const v of bestThisRun(g).values()) {
     const on = m.patented[v.item];

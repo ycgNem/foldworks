@@ -10,6 +10,7 @@ import { ANNEX1, Act2Bot, LANE, PLAN2, type Step as Step2 } from './bot2';
 import { Act3Bot } from './bot3';
 import { TICK_RATE } from '../engine/time';
 import { previewPatents, reorganizeRefusal, runSeconds } from './reorganize';
+import { keepRefusal } from './drawer';
 import { patentRefusal, hasPatent } from './patents';
 import type { PatentId } from '../data/patents';
 import { ORDER } from '../data/orders';
@@ -62,6 +63,9 @@ export const EXTRA_CHAINS: Step2[] = ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'].fl
   { k: 'fmod', id: 'ing' + c, design: 'Iron ingots', to: { k: 'mod', id: 'giz' + c }, by: { k: 'dock' }, opt: i >= 2, annex: i >= 2 },
   { k: 'fmod', id: 'wire' + c, design: 'Copper wire', to: { k: 'mod', id: 'giz' + c }, by: { k: 'dock' }, opt: i >= 2, annex: i >= 2 },
 ]);
+
+/** The Act I planner's chain designs the campaign keeps at the hand-over (src/sim/bot.ts PLAN). */
+export const SLICE_KEEPS = ['Gizmo works', 'Copper wire', 'Iron ingots'];
 
 /** Minutes the District stands full (nothing placed, no lot bought, the plan through) before the
  * campaign's Act III player resets. */
@@ -210,6 +214,15 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
           const extra = [...deep, ...(hasPatent(g, 'surveyCharter') ? EXTRA_CHAINS : [])];
           bot = new Act2Bot(g, {}, [...extra, ...PLAN2]);
           handover = runSeconds(g);
+          // the slice's three chain designs into the Patent Drawer, one a hand-beat, while it has
+          // room (the playability pass, DESIGN.md §19: a kept design comes back built every run, and
+          // a sensible player keeps the Gizmo chain it stamps the most of)
+          for (const name of SLICE_KEEPS) {
+            const d = g.s.designs.find((q) => q.name === name && q.kept === undefined);
+            if (!d || g.s.meta.drawer.some((k) => k.name === name) || keepRefusal(g, d.id)) continue;
+            g.act({ k: 'keep', id: d.id });
+            g.step(TICK_RATE / 4);
+          }
         }
       } else if (act4) act4.update();
       else if (act3) act3.update();

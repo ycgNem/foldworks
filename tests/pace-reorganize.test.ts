@@ -116,7 +116,10 @@ describe('Reorganize pacing (the campaign bot)', () => {
       const perH = banked / (horizon / H);
       const name = at === 'burn' ? 'at 35 min, burning its coin' : `at ${at === 'slice' ? 'the slice end' : hmm(at)}`;
       rows.push(`${name}: ${loop.length} runs, ${banked} Patents, ${perH.toFixed(2)}/h (${loop.map((l) => l.patents).join(',')})`);
-      expect(perH).toBeLessThan(designed);
+      console.log(rows[rows.length - 1]);
+      // never beats it (the playability pass: a returning run is quick, so a 2 h loop can tie the
+      // designed runs, filing the same products and Drill stages; it never files more)
+      expect(perH).toBeLessThanOrEqual(designed + 1e-9);
     }
     console.log(`designed: ${logs[0].patents} + ${logs[1].patents} Patents in ${hmm(horizon)}, ${designed.toFixed(2)}/h; loops over the same hours: ${rows.join('; ')}`);
   }, 900_000);

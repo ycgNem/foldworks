@@ -74,7 +74,10 @@ export function claimsUsed(g: Game, ore: ItemId): number {
   let used = 0;
   for (const d of g.s.designs) {
     const n = claimLoad(g, d)[ore] ?? 0;
-    if (n) used += n * copiesOf(g, d);
+    // a design that came back from the Drawer (the playability pass, DESIGN.md §19): its spare
+    // copies are dies in the inventory and hold a claim only once placed (measured: the free copies
+    // held the copper and iron claims the run's Gizmo chains needed, and run 2 never passed run 1)
+    if (n) used += n * (d.kept !== undefined ? copiesOf(g, d) - d.spare : copiesOf(g, d));
   }
   return used;
 }

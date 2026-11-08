@@ -180,6 +180,18 @@ describe('the filing model (DESIGN.md §19)', () => {
     g.step(70 * TICK_RATE);
     expect(billsStanding(g)).toBeGreaterThan(0);
     expect(previewPatents(g).bills).toBeCloseTo(billsTerm(billsStanding(g)), 9);
+    // filed like a design (the playability pass): after a reset only a rise over it pays
+    fakeDesign(g, 'gizmo', 'S', 1.25);
+    const filed = billsTerm(billsStanding(g));
+    must(g, { k: 'reorganize' });
+    expect(g.s.meta.billsFiled?.value).toBeCloseTo(filed, 9);
+    expect(previewPatents(g).bills).toBe(0);
+    g.s.coin = N(1e7);
+    g.s.land = CHUNKS.map((c) => c.id);
+    g.rebuild();
+    ironLine(g);
+    g.step(70 * TICK_RATE);
+    expect(previewPatents(g).bills).toBeCloseTo(Math.max(0, billsTerm(billsStanding(g)) - filed), 9);
     // coin on hand is not a bill
     const b = billsStanding(g);
     g.s.coin = g.s.coin.add(1e9);

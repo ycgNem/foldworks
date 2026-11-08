@@ -527,6 +527,9 @@ export interface MetaState {
    * them with this run's), and the tick each was filled on */
   ordersFilled?: string[];
   ordersAt?: Record<string, number>;
+  /** the bills term on file (the playability pass, DESIGN.md §19): only a rise pays; `world` and
+   * `universe` are the Relocates and Last Folds when it was filed (another starts it again) */
+  billsFiled?: { value: number; world: number; universe: number };
   /** Dies on file: copies of a kept design bought to come back at every run's start, by its id */
   dies?: Record<number, number>;
   /** Claims on File (a Patent): the most claims blocks bought of each ore, kept through a Reorganize */
