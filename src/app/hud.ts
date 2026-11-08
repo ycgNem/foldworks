@@ -42,6 +42,7 @@ import { keysFrame } from './keys';
 import { photoOn, photoHud } from './photo';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
+import { crateCap } from '../sim/transfer';
 
 export interface HudState {
   /** the coin number shown, counting up toward the real value */
@@ -599,7 +600,7 @@ function hoverReport(app: App) {
     return;
   }
   if (e.kind === 'heap') { ui.tip([{ text: '{big:Slag Heap}' }, { text: `{i:slag} ${e.count} / ${BUILD.heap.capacity}` }, { text: '{soft:empties out its front}' }], 170, on); return; }
-  if (e.kind === 'crate') { ui.tip([{ text: '{big:Buffer Crate}' }, { text: `${e.store.length} / ${BUILD.crate.capacity}${e.store.length ? ` {i:${e.store[0]}}` : ''}` }], 150, on); return; }
+  if (e.kind === 'crate') { ui.tip([{ text: '{big:Buffer Crate}' }, { text: `${e.store.length} / ${crateCap(app.game)}${e.store.length ? ` {i:${e.store[0]}}` : ''}` }], 150, on); return; }
   ui.tip([{ text: `{big:${bigSafe(BUILD[e.kind].name)}}` }, { text: BUILD[e.kind].blurb }, ...rx], 180, on);
 }
 

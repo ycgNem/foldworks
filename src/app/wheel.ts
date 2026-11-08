@@ -17,7 +17,7 @@ import { type ItemId } from '../data/items';
 import { annexPrice } from '../sim/systems/annex';
 import { prules } from '../sim/patents';
 import { poleReach } from '../sim/systems/power';
-import { stampCost, stampRefusal, kitsFor } from '../sim/systems/modules';
+import { stampCost, stampRefusal } from '../sim/systems/modules';
 import { claimLoad, claimsHeld, claimsUsed } from '../sim/systems/claims';
 import { Num } from '../engine/num';
 import { perMin, plain } from '../engine/fmt';
@@ -547,7 +547,6 @@ function moduleItems(app: App): Item[] {
     const out1 = mainOutput(g, d.id);
     const cost = stampCost(g, d);
     const why = stampRefusal(g, d);
-    const kits = kitsFor(g, d);
     const letter = d.grade.letter;
     const draw = (x: number, y: number, k: 1 | 2) => {
       const ctx = app.ui.ctx;
@@ -563,7 +562,6 @@ function moduleItems(app: App): Item[] {
     const chips: Item['chips'] = [
       { text: cost.isZero() ? 'stamp free' : `stamp ${cost.format()}`, o: { role: g.s.coin.gte(cost) ? 'coin' : 'bad', icon: 'coin' } },
     ];
-    if (kits > 0) chips.push({ text: `${kits}`, o: { role: g.s.parts.gte(kits) ? 'ink' : 'bad', icon: 'kit' } });
     for (const [ore, n] of Object.entries(claimLoad(g, d)) as [ItemId, number][]) {
       if (!n) continue;
       const held = claimsHeld(g, ore), used = claimsUsed(g, ore);

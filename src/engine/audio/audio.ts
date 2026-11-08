@@ -24,13 +24,13 @@ const N = (semis: number) => 261.63 * Math.pow(2, semis / 12);
 const C6 = N(24);
 
 /** Sounds the interface makes (the UI bus): clicks, pages opening and closing, refusals. */
-export const UI_SOUNDS: ReadonlySet<string> = new Set(['click', 'hover', 'open', 'close', 'tab', 'error', 'mode']);
+export const UI_SOUNDS: ReadonlySet<string> = new Set(['click', 'hover', 'open', 'close', 'tab', 'error']);
 
 /** Every named sound (the test plays each one through a fake context). */
 export const SOUND_IDS = [
   'click', 'hover', 'open', 'close', 'error', 'mine', 'crank', 'bellows', 'place', 'belt', 'remove', 'rotate', 'coin', 'buy',
   'upgrade', 'land', 'hopper', 'research', 'order', 'jam', 'shovel', 'spark', 'sparkGet', 'foldStart', 'auditTick', 'fold',
-  'gradeD', 'gradeC', 'gradeB', 'gradeA', 'gradeS', 'gradeS+', 'stamp', 'milestone', 'overdrive', 'mode', 'codex', 'kit', 'claim',
+  'gradeD', 'gradeC', 'gradeB', 'gradeA', 'gradeS', 'gradeS+', 'stamp', 'milestone', 'overdrive', 'codex', 'claim',
   'fanfare', 'megaStage', 'challengeWon', 'brownout', 'powerOn', 'whoosh', 'stampLand', 'tab',
 ] as const;
 
@@ -262,15 +262,11 @@ export class Audio {
         this.noise(0.12, 0.06 * v, 'highpass', 5000, 1, 0.3);
         this.tone(1568, 'square', { a: 0.002, d: 0.12 }, 0.025 * v, B, 0.38);
         break;
-      // a mode change: a two-click dial turn
-      case 'mode': this.tone(1100, 'square', { a: 0.001, d: 0.025 }, 0.03 * v, B); this.tone(1400, 'square', { a: 0.001, d: 0.03 }, 0.03 * v, B, 0.06); break;
       // the Codex pays: a cascade of coins down a scale, then a chime
       case 'codex':
         for (let i = 0; i < 8; i++) this.tone(C6 * Math.pow(2, PENTA[i] / 12), 'square', { a: 0.002, d: 0.06 }, 0.025 * v, B, i * 0.045);
         this.tone(N(36), 'triangle', { a: 0.004, d: 0.4 }, 0.04 * v, B, 0.38);
         break;
-      // a Machine Kit lands in the parts bank: a wooden crate clunk and a latch
-      case 'kit': this.tone(110, 'triangle', { a: 0.002, d: 0.12 }, 0.12 * v, B, 0, 0.7); this.noise(0.06, 0.1 * v, 'bandpass', 800, 2); this.tone(1800, 'square', { a: 0.001, d: 0.02 }, 0.03 * v, B, 0.09); break;
       // claims staked: a mallet on a stake, twice, then a little flourish
       case 'claim':
         for (const t of [0, 0.16]) { this.tone(150, 'triangle', { a: 0.002, d: 0.1 }, 0.12 * v, B, t, 0.6); this.noise(0.05, 0.1 * v, 'bandpass', 2000, 2, t); }

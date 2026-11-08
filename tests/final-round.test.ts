@@ -224,7 +224,7 @@ describe('a kept design unfolded unchanged refolds after a short check (DESIGN.m
     expect(d2.ins).toEqual(d.ins);
   });
 
-  it('a changed layout, a stopped input or a machine out of its normal mode gets a full audit', () => {
+  it('a changed layout or a stopped input gets a full audit', () => {
     // a belt inside the box turned another way
     let { g } = kept();
     must(g, { k: 'place', kind: 'belt', x: 3, y: 12, rot: 0 });
@@ -242,12 +242,6 @@ describe('a kept design unfolded unchanged refolds after a short check (DESIGN.m
     expect(g.s.audits[0].result).toBeNull();
     g.step(auditTicks(g));
     expect(g.s.audits[0].result).toBeTruthy();
-    // a machine in another mode (set straight on the state: a test of the rule, not of the mode UI)
-    ({ g } = kept());
-    g.entAt(3, 11)!.mode = 'overclock';
-    must(g, { k: 'audit', x: 2, y: 11, w: 2, h: 2 });
-    g.step(check + 1);
-    expect(g.s.audits[0].result).toBeNull();
   });
 
   it('an imported string keeps no card: it refolds after a full audit', () => {

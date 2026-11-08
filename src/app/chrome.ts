@@ -27,7 +27,8 @@ export const UICON = {
   build: 0, research: 1, orders: 2, stats: 3, trophies: 4, options: 5, fold: 6, flow: 7, remove: 8, rotate: 9,
   factory: 10, workshop: 11, coin: 12, heart: 13, clock: 14, lock: 15, star: 16, play: 17, pause: 18, ff: 19,
   // Act II (append-only, STYLE.md)
-  power: 20, heavy: 21, codex: 22, survey: 23, mega: 24, kit: 25, claim: 26, overdrive: 27, mode: 28,
+  // (28 is the atlas's own 'mode': machine modes were cut in the playability pass)
+  power: 20, heavy: 21, codex: 22, survey: 23, mega: 24, kit: 25, claim: 26, overdrive: 27,
   // Milestones 5 and 6 (append-only)
   patents: 29, blueprint: 30, reset: 31, overnight: 32,
   // Act III (append-only; 33 is the atlas's own 'bearings'): pixel-art/act3/ui3.py
@@ -44,7 +45,7 @@ const GLYPH: Record<UIconName, string> = {
   build: ICON.cog, research: ICON.flask, orders: ICON.crate, stats: '#', trophies: ICON.star, options: ICON.cog, fold: ICON.module,
   flow: '~', remove: ICON.cross, rotate: '@', factory: ICON.module, workshop: ICON.cog, coin: ICON.coin, heart: ICON.heart,
   clock: ICON.clock, lock: ICON.lock, star: ICON.star, play: ICON.right, pause: '|', ff: '>',
-  power: ICON.bolt, heavy: ICON.cog, codex: '?', survey: ICON.flask, mega: ICON.star, kit: ICON.crate, claim: '^', overdrive: ICON.bolt, mode: '=',
+  power: ICON.bolt, heavy: ICON.cog, codex: '?', survey: ICON.flask, mega: ICON.star, kit: ICON.crate, claim: '^', overdrive: ICON.bolt,
   patents: ICON.star, blueprint: ICON.module, reset: '@', overnight: ICON.clock,
   district: ICON.module, chute: ICON.down,
   world: ICON.star, legacy: ICON.star, relocate: ICON.right,

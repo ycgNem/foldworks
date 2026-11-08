@@ -59,7 +59,7 @@ export const CUSTOMERS: Record<CustomerId, CustomerDef> = {
     rewards: [
       { rep: 1, text: '{u:codex} the Codex · a first delivery of each item pays {coinc:30×}' },
       { rep: 2, text: 'Recycled Glass · 3 {i:gravel} → {i:glass} in the Kiln' },
-      { rep: 3, text: '{u:mode} Precision yields {good:+35%}, was +25%' },
+      { rep: 3, text: 'Sorting Crates · Buffer Crates hold {good:100}, was 50' },
       { rep: 4, text: 'Specimen Jars · the Chute holds {good:60} of each item, was 20' },
       { rep: 5, text: '{u:codex} Field Notes · on every island its exotic and tier 4 firsts pay the Codex\'s {coinc:30×} again' },
     ],
@@ -100,7 +100,7 @@ export const CUSTOMERS: Record<CustomerId, CustomerDef> = {
       { rep: 1, text: 'Coat Pockets · modules hold 6 s of each input and output, was 2' },
       { rep: 2, text: 'the Night Crew · {u:overnight} away, each Slag Heap loses 1 {i:slag} per 10 s' },
       { rep: 3, text: '{u:mega} the Great Drill\'s stage 2 opens' },
-      { rep: 4, text: 'Pocketed Kits · a stamp needs 1 {i:machineKit} fewer' },
+      { rep: 4, text: 'Pocketed Claims · {u:claim} a Survey Office block is {good:5} claims, was 4' },
       { rep: 5, text: '{u:mega} the Great Drill\'s stage 3 opens' },
       { rep: 6, text: 'Pocket Skiffs · a route\'s first skiff costs nothing' },
       { rep: 7, text: 'Rubble Rousers · on the Old Works a tile of rubble cleared clears the rubble touching it' },

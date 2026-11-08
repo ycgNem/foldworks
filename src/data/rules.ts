@@ -67,21 +67,12 @@ export const RULES = {
   /** Poles: reach (a square of side 2r+1) and the distance that joins two into one grid */
   poleReach: r(2, '§18 Power: a Pole powers everything within 2 tiles (5x5)'),
   poleLink: r(6, '§18 Power: Poles within 6 tiles join one grid'),
-  /** modes: speed and power multipliers, and Precision\'s extra main output */
-  modeEfficientSpeed: r(0.75, '§18 Modes: Efficient 0.75x speed at 0.5x power'),
-  modeEfficientPower: r(0.5, '§18 Modes: Efficient 0.75x speed at 0.5x power'),
-  modeOverclockSpeed: r(1.5, '§18 Modes: Overclocked 1.5x speed at 2.2x power'),
-  modeOverclockPower: r(2.2, '§18 Modes: Overclocked 1.5x speed at 2.2x power'),
-  modePrecisionSpeed: r(0.8, '§18 Modes: Precision 0.8x speed, +25% of the main output'),
-  modePrecisionYield: r(0.25, '§18 Modes: Precision 0.8x speed, +25% of the main output'),
   /** a Boiler or Generator holds this much fuel */
   fuelCap: r(4, '§18 Power: a burner holds 4 fuel, like a machine holding 2 crafts of a 2-item input (§4)'),
   /** Overdrive: speed, seconds on, seconds cooling */
   overdriveMult: r(3, '§18 Machines: Overdrive runs a machine 3x for 10 s, then it cools 30 s'),
   overdriveSeconds: r(10, '§18 Machines: Overdrive runs a machine 3x for 10 s, then it cools 30 s'),
   overdriveCool: r(30, '§18 Machines: Overdrive runs a machine 3x for 10 s, then it cools 30 s'),
-  /** Machine Kits per stamp of a design with Act II buildings: 1 + floor(bill / this) */
-  kitDivisor: r(5000, '§18 Machine Kits: 1 + floor(bill / 5,000); at 1,500 a stamp took 2-3 kits, a chore with no weight (the Milestone 3 gate review), so 500; then Act II machine prices rose 10x against the measured income (Act II pacing, the bot), so 5,000 keeps the same kits per stamp'),
   /** deposit claims: the start, per Workshop deposit owned, per Survey Office block, block growth */
   claimsBase: r(3, '§18 Land and deposits: 3 claims per ore plus 2 per Workshop deposit'),
   claimsPerDeposit: r(2, '§18 Land and deposits: 3 claims per ore plus 2 per Workshop deposit'),
@@ -91,7 +82,7 @@ export const RULES = {
   drillBoost: r(0.5, '§18 Megaproject #1: stage 1 runs every Miner and source module +50%'),
   /** reputation rewards (Act II customers) */
   voltaireSteam: r(0.25, '§18 Customers: Dame Voltaire rep 2, Steam Engines +25%'),
-  unit7Precision: r(0.1, '§18 Customers: Unit 7 rep 3 adds +10% to Precision'),
+  unit7Crate: r(100, '§18 Customers: Unit 7 rep 3, Sorting Crates: a Buffer Crate holds 100, was 50 (§4); 50 is 25 s of a Mk2 smelter\'s 120 ingots a minute, 100 is 50 s, so one crate rides out a module\'s round-robin or an order\'s wait on an Act II line (the playability pass: it replaced Precision mode\'s yield when machine modes were cut)'),
   codexMult: r(30, '§18 Customers: Unit 7 rep 1, the Codex pays 30x a first delivery (100x paid ~71K in one burst, a motor 42K: the Milestone 3 gate audit)'),
   /** nested folds: the box limit on the Factory floor */
   nestedMax: r(6, '§18 Nested folds: a box up to 6x6 of modules and trunks'),
@@ -110,7 +101,7 @@ export const RULES = {
   /** the Patent Drawer: designs kept, the box limit of a share string */
   drawerSlots: r(8, '§19 The Patent Drawer: 8 kept designs, one fewer than the nine products the Act II bot folds, so which lines to keep is a choice (A Deeper Drawer adds 4)'),
   /** the playability pass (DESIGN.md §19 "What a Reorganize keeps"): what a run after a Reorganize remembers */
-  keptActs: r(2, '§19 What a Reorganize keeps (the playability pass): every research node of Acts I-II (26, `act` undefined, 1 or 2) is known in every run after the first reset: the critic measured each later run replaying 2.3-2.5 h of them before Act III, the tutorial again'),
+  keptActs: r(2, '§19 What a Reorganize keeps (the playability pass): every research node of Acts I-II (24, `act` undefined, 1 or 2; 26 before Machine Kits and Tuning were cut) is known in every run after the first reset: the critic measured each later run replaying 2.3-2.5 h of them before Act III, the tutorial again'),
   returnCopies: r(1, '§19 What a Reorganize keeps: each kept design comes back with 1 copy, free (its machines were bought once, in the run that folded it); later copies are stamped at bill x (1 + 0.5 n) as ever. A 25% bill would make the first minute\'s coin the gate (a run starts with almost none) for no decision; the decision is which designs the Drawer keeps'),
   backInMinutes: r(15, '§19 What a Reorganize keeps: the Reorganize card\'s "back in" before a run has measured its own: the campaign bot\'s returning runs pass the run before\'s peak in 9-16 min (§19 Measured pace), rounded up'),
   dieCopyPrice: r(1, '§19 Dies on file (the playability pass): one more copy of one kept design at every run\'s start for 1 Patent, flat (no price curve, CLAUDE.md); the cheapest node\'s price, as a copy is one module, not a rule'),
@@ -121,12 +112,9 @@ export const RULES = {
   /** the Committee\'s reputation rewards (§19) */
   coatBuffer: r(6, '§19 The Committee rep 1: module buffers hold 6 s of each rate (was 2, §11)'),
   nightCrewSeconds: r(10, '§19 The Committee rep 2: while you are away (the tab hidden or the game closed), each Slag Heap loses one slag every 10 s (a smelter makes one every 8 s: a heap fed by one smelter fills at a fifth of the speed overnight); never while you play, so Act I\'s slag lesson stands'),
-  /** the Committee rep 3: Machine Kits a stamp needs fewer */
-  pocketedKits: r(1, '§19 The Committee rep 4: every stamp needs 1 Machine Kit fewer (never below none; §18 Machine Kits)'),
+  /** the Committee rep 4: claims in a block bought at the Survey Office */
+  pocketedClaims: r(5, '§19 The Committee rep 4, Pocketed Claims: a Survey Office block is 5 claims, was 4 (§18 Land and deposits), every block bought before or after: claims are what binds stamping by Act III (106 of 107 held at 15 h, the playability review), so a quarter more a block is a quarter more source copies for the same coin (the playability pass: it replaced Pocketed Kits when Machine Kits were cut)'),
   // ---- Act III (DESIGN.md §21)
-  /** Recycling and Byproduct modes: speed (the byproduct cadence is halved or doubled in byEvery) */
-  modeRecyclingSpeed: r(0.9, '§21 Modes: Recycling makes half the byproduct at 0.9x speed: less waste costs a little time, as Precision\'s extra yield does (§18)'),
-  modeByproductSpeed: r(1.1, '§21 Modes: Byproduct makes twice the byproduct at 1.1x speed: for a line whose waste is another\'s input (fertilizer from sludge, gravel from slag)'),
   /** the Chute: items of each kind the dropped stock holds at most */
   chuteStock: r(20, '§21 The Chute: 20 of each item between the Factory Chute and the Chute Mouths, 10 s of a full belt: enough to ride out a module\'s round-robin, small enough that a full stock backs the trunk up at once (the pip says so)'),
   /** the Scrap Transmuter: what a byproduct sells for, as a share of its cheapest recipe's main output */
@@ -170,7 +158,7 @@ export const RULES = {
   kernelMin: r(1, '§23 The Last Fold: at least one Kernel, so the reset is never a loss by accident (as patentMin, §19)'),
   /** the Seed: seconds between digs on each side, and its tile in chunk A */
   /** the Seed: every run of a universe after the first knows the research of Acts up to this */
-  seedActs: r(2, '§23 The Seed (the prestige review: universe 2 replayed Acts I-II for 30 h with every Megaproject done): every run of a later universe knows Acts I-II\'s 26 research nodes (the Town Archive\'s ten and the Factory\'s sixteen, the Great Drill\'s research last), what the first universe researched in its first 4-5 h and the Purse\'s Patents only half bought back; Act III\'s chemistry and the District are still researched, so a run still climbs'),
+  seedActs: r(2, '§23 The Seed (the prestige review: universe 2 replayed Acts I-II for 30 h with every Megaproject done): every run of a later universe knows Acts I-II\'s 24 research nodes (the Town Archive\'s ten and the Factory\'s fourteen, the Great Drill\'s research last; 26 until Machine Kits and Tuning were cut), what the first universe researched in its first 4-5 h and the Purse\'s Patents only half bought back; Act III\'s chemistry and the District are still researched, so a run still climbs'),
   seedSeconds: r(4, '§23 The Seed: one of each raw ore every 4 s a side, 15 a minute, half a Miner\'s 30 (§4): a little of each, so the new universe\'s Act I has copper, coal and sand in chunk A before chunk B or E, and its Miners are still the main supply'),
   seedX: r(4, '§23 The Seed: at (4, 6) in chunk A, below the start belt: four free sides on Home, clear of the Hand Furnace\'s patch, the head-start Miner (§19), the Old Works\' ruins (§22) and the Dock and Hopper'),
   seedY: r(6, '§23 The Seed: at (4, 6) in chunk A (seedX)'),

@@ -21,7 +21,7 @@ import { mainOutput } from '../render/factory';
 import { auditTicks, projectAudit, entsIn, gradedAudit } from '../sim/systems/audits';
 import { BUILD } from '../data/machines';
 import { gradeFAudit } from '../sim/systems/nested';
-import { inBill, defaultName, stampCost, stampRefusal, unfoldRefusal, fname, feedsDock, productCopies, kitsFor, mainItem, sliceEndParts, stampFree, stampStep } from '../sim/systems/modules';
+import { inBill, defaultName, stampCost, stampRefusal, unfoldRefusal, fname, feedsDock, productCopies, mainItem, sliceEndParts, stampFree, stampStep } from '../sim/systems/modules';
 import { claimsHeld, claimsUsed, oresOf, copiesOf } from '../sim/systems/claims';
 import type { AuditResult, AuditState, Box, FAuditState, ModuleDesign } from '../sim/world';
 import { frame, button, uiIcon, portrait, coinIcon, clipboard, chip, chipWidth, meter, tag, tagSize, bubble, ribbon, rule, twine, RIBBON_H, CHIP_H, T, type Role } from './chrome';
@@ -1007,8 +1007,8 @@ function bigModule(app: App, d: ModuleDesign, x: number, y: number) {
 }
 
 /** A design as a folded paper card: a brass band across its top (the module's own), a turned
- * corner, the module and its red grade stamp on the left; its name, rates, copies, stamp price,
- * Machine Kits and claims on the right; Place, Stamp and Unfold along the foot. */
+ * corner, the module and its red grade stamp on the left; its name, rates, copies, stamp price
+ * and claims on the right; Place, Stamp and Unfold along the foot. */
 function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, h: number) {
   const ui = app.ui;
   const g = app.game;
@@ -1092,14 +1092,10 @@ function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, 
     { text: `next {coin:${next.format()}} · the 5th copy costs 3× the 1st` },
   ], 220);
   yy += LINE_H + 1;
-  // Machine Kits and claims, as chips
-  const kits = kitsFor(g, d);
+  // claims, as chips (a design with miners inside: a copy holds one of each ore)
   cx = tx;
-  const ks = kits ? `${kits}` : 'no kits';
-  const kw = chip(ui, cx, yy, ks, { role: kits ? (g.s.parts.gte(kits) ? 'ink' : 'bad') : 'soft', icon: 'kit' });
-  ui.hint(cx, yy, kw, CHIP_H, kits ? [{ text: `{big:Machine Kits}  ${kits} a copy` }, { text: `1 + ${fmt(d.bill)} ÷ ${fmt(RULES.kitDivisor.value)}, rounded down · you have ${g.s.parts.format()}` }] : [{ text: '{big:No kits}' }, { text: 'slice-era machines · copies cost coin alone' }], 200);
-  cx += kw + 3;
-  for (const ore of Object.keys(oresOf(g, d)) as ItemId[]) {
+  const ores = Object.keys(oresOf(g, d)) as ItemId[];
+  for (const ore of ores) {
     const held = claimsHeld(g, ore), used = claimsUsed(g, ore);
     const s = `${used}/${held}`;
     const w2 = chipWidth(s, { item: ore });
@@ -1108,7 +1104,7 @@ function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, 
     ui.hint(cx, yy, w2, CHIP_H, [{ text: `{big:${itemName(ore)} claims}` }, { text: `a copy holds one · ${used} of ${held} in use` }], 170);
     cx += w2 + 3;
   }
-  yy += CHIP_H + 1;
+  if (ores.length) yy += CHIP_H + 1;
   // why not, in red ink
   const whyNot = stampRefusal(g, d);
   if (whyNot) {
@@ -1126,7 +1122,7 @@ function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, 
   if (button(ui, 'place:' + d.id, x + 6, by, pw1, 15, pl, { gold: d.spare > 0, disabled: d.spare < 1 || !g.flag('factoryOpen'), tip: [{ text: '{big:Place}' }, { text: 'a spare copy onto the {u:factory} Factory floor' }] })) app.pickModule(d.id);
   const free = cost.isZero();
   const label = free ? 'Stamp · free' : richWidth(`Stamp {coin:${cost.format()}}`) <= pw2 - 6 ? `Stamp {coin:${cost.format()}}` : `{coin:${cost.format()}}`;
-  if (button(ui, 'stamp:' + d.id, x + 9 + pw1, by, pw2, 15, label, { disabled: !!whyNot, tip: [{ text: `{big:Stamp a copy}  {coin:${cost.format()}}${kits ? ` + {u:kit} ${kits}` : ''}` }, { text: whyNot ? `{bad:${whyNot}}` : `copies so far ${copies} · next {coin:${next.format()}} · +${stampStep(d).format()} each (linear)` }] })) app.act({ k: 'stamp', id: d.id });
+  if (button(ui, 'stamp:' + d.id, x + 9 + pw1, by, pw2, 15, label, { disabled: !!whyNot, tip: [{ text: `{big:Stamp a copy}  {coin:${cost.format()}}` }, { text: whyNot ? `{bad:${whyNot}}` : `copies so far ${copies} · next {coin:${next.format()}} · +${stampStep(d).format()} each (linear)` }] })) app.act({ k: 'stamp', id: d.id });
   const uwhy = unfoldRefusal(g, d);
   if (button(ui, 'unfold:' + d.id, x + w - 6 - b3w, by, b3w, 15, 'Unfold', { disabled: !!uwhy, tip: [{ text: '{big:Unfold}' }, { text: uwhy ? `{bad:${uwhy}}` : `back onto the ${deep ? '{u:factory} Factory floor' : '{u:workshop} Workshop'} at ${d.box.x},${d.box.y}` }, ...(uwhy ? [] : [{ text: `${deep ? 'trunks' : 'belts'} bought again` }])] })) {
     if (app.act({ k: 'unfold', id: d.id }).ok) {
@@ -1137,8 +1133,8 @@ function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, 
   }
 }
 
-/** The ledger, the Modules book's right page: Machine Kits, products and their copies, claims, and
- * how far the Factory is from the slice's end, as ruled rows. */
+/** The ledger, the Modules book's right page: products and their copies, claims, and how far the
+ * Factory is from the slice's end, as ruled rows. */
 function ledger(app: App, D: Rect, foot = 0) {
   const ui = app.ui;
   const g = app.game;
@@ -1147,15 +1143,6 @@ function ledger(app: App, D: Rect, foot = 0) {
   ui.big('The ledger', x, yy, T.ink);
   yy += 13;
   rule(ui, x, yy, w, true);
-  yy += 3;
-  // the parts bank
-  uiIcon(ui, 'kit', x, yy, 1);
-  ui.text('Machine Kits', x + 11, yy, T.ink);
-  ui.big(g.s.parts.format(), x + w, yy - 1, g.s.parts.gt(0) ? T.coin : T.inkSoft, { align: 'right' });
-  yy += LINE_H;
-  drawRich(ui, g.done('machineKits') ? '{i:machineKit} → the Hopper banks them' : '{u:research} Machine Kits first', x + 11, yy, Infinity, T.inkSoft);
-  yy += LINE_H + 1;
-  rule(ui, x, yy, w);
   yy += 3;
   // products: copies so far and the next stamp's factor
   const prods = new Map<ItemId, number>();
@@ -1196,7 +1183,7 @@ function ledger(app: App, D: Rect, foot = 0) {
       yy += LINE_H;
     }
     if (g.done('coalSeams') && yy + 16 <= end - 26) {
-      if (button(ui, 'openSurvey', x, yy + 1, w, 15, '{u:survey} Survey Office', { tip: [{ text: '{big:Survey Office}' }, { text: 'claims, 4 at a time' }] })) app.panel = 'survey';
+      if (button(ui, 'openSurvey', x, yy + 1, w, 15, '{u:survey} Survey Office', { tip: [{ text: '{big:Survey Office}' }, { text: `claims, ${prules(g).claimsPerBlock} at a time` }] })) app.panel = 'survey';
       yy += 19;
     }
   }

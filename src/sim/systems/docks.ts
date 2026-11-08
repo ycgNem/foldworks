@@ -1,8 +1,7 @@
 // The Dock and the Hopper (DESIGN.md §7, §8): what belts handed them this tick. The Dock fills
 // the active special order first, then sells at the item's value (Bramble's rep 1: plates +20%);
-// the Hopper counts toward the selected research, or banks it by type. Act II (§18): Machine Kits
-// at a Hopper go to the parts bank; with Unit 7's rep 1 the Codex pays 30x an item's value for
-// its first delivery to a Dock.
+// the Hopper counts toward the selected research, or banks it by type. Act II (§18): with Unit 7's
+// rep 1 the Codex pays 30x an item's value for its first delivery to a Dock.
 import type { Game } from '../Game';
 import { Num } from '../../engine/num';
 import { ITEMS, type ItemId } from '../../data/items';
@@ -72,9 +71,6 @@ export function runDocks(g: Game) {
       if (v > 0) g.earn(pay);
       g.emit({ type: 'sell', x: it.x, y: it.y, id: it.item, value: pay.toNumber(), floor });
       if (v > 0 && g.first('firstSale')) g.emit({ type: 'firstSale', x: it.x, y: it.y });
-    } else if (ITEMS[it.item].parts) {
-      g.s.parts = g.s.parts.add(n);
-      g.emit({ type: 'parts', x: it.x, y: it.y, id: it.item, value: n.toNumber(), floor });
     } else {
       creditResearch(g, it.item, n);
       g.emit({ type: 'hopper', x: it.x, y: it.y, id: it.item, floor });

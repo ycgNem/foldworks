@@ -1,7 +1,8 @@
 """Item icons, 8x8, hand-drawn for Lantern Bayou. Silhouette first (STYLE.md): ore is lumps,
 ingots slanted bars, plates flat bevelled squares, wire a coil, gears teeth round a hole, slag a
 crumbly heap, bricks a brick, the Gizmo its own odd box with an antenna. Colour second.
-items.png holds ITEM_IDS 0-9, items2.png 10-21 (src/data/items.ts order)."""
+items.png holds ITEM_IDS 0-9, items2.png 10-20 (src/data/items.ts order; the Machine Kit's cell went
+when Machine Kits were cut, the playability pass)."""
 from common import P, from_rows, export, scale, on_bg, new, OUT
 from PIL import Image
 
@@ -157,16 +158,6 @@ CIRCUIT = [
     "o212b21o",
     "oooooooo",
 ]
-KIT = [   # a crate with a gear stamp
-    "oooooooo",
-    "o222221o",
-    "o2o33o1o",
-    "o2o33o1o",
-    "o222221o",
-    "o000000o",
-    "o211110o",
-    "oooooooo",
-]
 MOTOR = [
     "........",
     ".ooooo..",
@@ -289,13 +280,12 @@ ICONS = {
     "concrete": ic(CONCRETE, P["earth2"], P["earth3"], P["steel3"], P["steel4"]),
     "plastic": ic(PLASTIC, P["slag0"], P["slag1"], P["violet"], P["bone"]),
     "circuit": ic(CIRCUIT, P["moss1"], P["moss3"], P["moss5"], P["brass3"], a=P["lamp2"], b=P["red"]),
-    "machineKit": ic(KIT, P["wood1"], P["wood2"], P["wood4"], P["brass3"]),
     "motor": ic(MOTOR, P["steel1"], P["steel2"], P["steel3"], P["steel4"], b=P["copper2"]),
     "oil": ic(OIL, P["ink"], P["ink2"], P["slag0"], P["violet"]),
     "drillBit": ic(DRILLBIT, P["brass1"], P["brass2"], P["brass3"], P["lamp3"]),
 }
 ORDER = ['ironOre', 'copperOre', 'ironIngot', 'copperIngot', 'slag', 'ironPlate', 'copperWire', 'gear', 'slagBrick', 'gizmo',
-         'coal', 'sand', 'steel', 'glass', 'gravel', 'concrete', 'plastic', 'circuit', 'machineKit', 'motor', 'oil', 'drillBit']
+         'coal', 'sand', 'steel', 'glass', 'gravel', 'concrete', 'plastic', 'circuit', 'motor', 'oil', 'drillBit']
 
 
 def build():

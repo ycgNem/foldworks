@@ -505,7 +505,7 @@ export function returnKept(g: Game) {
       bill,
       stamped: 0,
       spare: returnCopies(g, k),
-      normal: true,
+      refolds: true,
       kept: k.id,
     });
   }

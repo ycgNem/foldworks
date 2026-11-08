@@ -745,7 +745,6 @@ export class App {
         }
         // ---- Act II (Milestone 4)
         case 'overdrive': break; // the renderer plays its burst, sound and kick
-        case 'mode': a.sfx('click'); break;
         case 'powerOn':
           a.sfx('powerOn');
           this.renderer.fx.kick(2);
@@ -760,7 +759,6 @@ export class App {
           break;
         }
         case 'claim': a.sfx('upgrade'); this.toast('Claims staked', `+${e.value ?? 4} ${ITEMS[e.id as ItemId] ? `{i:${e.id}}` : ''} claims · more copies of its modules`, C.leaf, 'claim'); break;
-        case 'parts': a.sfx('hopper', 0.5); break;
         case 'bayOpen':
           a.sfx('milestone', 0.7);
           if (e.floor === 'district') this.toast('The District Bay', 'fly {i:liftRotor} {i:concrete} in → the Floating City', C.gold, 'mega');

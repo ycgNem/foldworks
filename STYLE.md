@@ -110,8 +110,8 @@ grey-brown, a copper vein across it; coal two jagged shards with
 sheen and an ember; sand a low pale-gold heap with a ripple), ingots = slanted bars, plates = flat squares, gears = teeth with a
 hole, wire = a coil, slag = a crumbly lump, bricks = a coursed block, the Gizmo = its own odd box
 with an antenna, steel = an I-beam end-on, glass = a pane with a shine, concrete = a cinder block
-with two holes, plastic = a little moulded bottle, oil = a drop, the machine kit = a crate with a
-gear stamp, the drill bit = a spiral cone. Colour is the second cue.
+with two holes, plastic = a little moulded bottle, oil = a drop, the drill bit = a spiral cone
+(the machine kit's crate left `items2.png` when Machine Kits were cut). Colour is the second cue.
 
 ## Modules
 

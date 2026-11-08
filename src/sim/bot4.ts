@@ -107,7 +107,7 @@ export class Act4Bot {
     this.a3 = new Act3Bot(g, b);
     // (Act III's batteries and Hydroponics after Charting, the World first, and before the Sky Anchor,
     // whose 800 bearings nothing here makes yet: measured, the third pass)
-    const late: ResearchId[] = ['batteries', 'recycling', 'hydroponics', 'sandwiches', 'sandwichEngineering', 'scrapTransmuter'];
+    const late: ResearchId[] = ['batteries', 'hydroponics', 'sandwiches', 'sandwichEngineering', 'scrapTransmuter'];
     this.a3.wish = [...WISH3.filter((r) => !late.includes(r)), 'charting', ...late, 'skyAnchor', 'lighthouse', 'relocation', ...ISLAND_WISH[worldOf(g)]];
     this.grewAt = g.seconds;
   }

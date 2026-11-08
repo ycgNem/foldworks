@@ -2,7 +2,7 @@
 // are the same tag: hovered, it hangs on a string from what it reports on and shows the few rows
 // that matter (the status chip and its cause, the recipe and its rate, Overdrive, the verbs);
 // clicked, it is pinned (a pushpin) and shows every row: who feeds it and how much, where its
-// byproduct goes, its front, power, mode and Overdrive, and the line around it. Rows are built
+// byproduct goes, its front, power and Overdrive, and the line around it. Rows are built
 // from game state here, never parsed from src/sim/analysis.ts's sentences (those stay for the
 // tests and the offline history). Pillar 3: every fact the pre-180 report gave is a row here.
 import { C } from '../data/palette';
@@ -25,7 +25,7 @@ import { itemIcon } from '../render/sprites';
 import { nominal, feeders, entName, endsAtSink, outLinks, lineOf } from '../sim/analysis';
 import { shares } from '../sim/systems/stats';
 import { powerFactor, poleReach, drawKw } from '../sim/systems/power';
-import { modeSpeed, baseSpeed, veinBoost, byEvery } from '../sim/systems/machines';
+import { baseSpeed, veinBoost } from '../sim/systems/machines';
 import { islandDef, islandMiners, isWarm, warmPlant, plantReach, isPlant, repairPrice, softened, workingNeighbours, coldFactor } from '../sim/systems/islands';
 import { SEED_ORES, seedSide } from '../sim/systems/seed';
 import { krules } from '../sim/kernels';
@@ -35,7 +35,7 @@ import { ITEM_IDS } from '../data/items';
 import { mouthLook } from './mouths';
 import type { Game } from '../sim/Game';
 import { gridIndex, capacity, powered, burnerOf, fuelCount, engineOf, producerKw, kw } from '../render/powerview';
-import { DX, DY, MODES, opposite, type Ent, type FEnt, type Mode } from '../sim/world';
+import { DX, DY, opposite, type Ent, type FEnt } from '../sim/world';
 import { tag, tagSize, rule, meter, button, uiIcon, type UIconName } from './chrome';
 import type { Rect, TipPlace } from '../ui/ui';
 import type { Layout } from './layout';
@@ -62,10 +62,6 @@ export interface Report {
   more?: Row[];
   /** the keycap verbs along the foot */
   verbs?: string;
-  /** a powered Workshop machine with Tuning (or Recycling): its mode buttons under the rows (pinned) */
-  modes?: Ent;
-  /** the modes it offers now (Tuning's, Recycling's), in MODES order */
-  modeList?: Mode[];
   /** a Chute Mouth: the items it can be set to, as buttons under the rows (pinned) */
   picker?: { e: Ent; items: ItemId[] };
   /** a ruin of the Old Works: its Repair button under the rows (pinned; Act IV, DESIGN.md §22) */
@@ -86,9 +82,6 @@ const RULE: Row = { t: 'rule' };
 const pm = (n: number) => plain(n, n < 10 ? 1 : 0);
 const lc = (id: string | null | undefined) => (id ? itemName(id).toLowerCase() : 'input');
 const icon = (id: string | null | undefined) => (id && id in ITEMS ? `{i:${id}}` : '');
-
-export const MODE_NAME: Record<Mode, string> = { normal: 'Normal', efficient: 'Efficient', overclock: 'Overclocked', precision: 'Precision', recycling: 'Recycling', byproduct: 'Byproduct' };
-const MODE_SHORT: Record<Mode, string> = { normal: 'Norm', efficient: 'Eff', overclock: 'Over', precision: 'Prec', recycling: 'Recy', byproduct: 'Byp' };
 
 // ------------------------------------------------------------------ the Workshop's machines
 
@@ -275,9 +268,8 @@ function machineReport(app: App, e: Ent): Report {
   else if (odOn && cool > 0) rows.push(rich(`{chip:soft:COOLING ${Math.ceil(cool / TICK_RATE)}s}`));
   // ---- the recipe, the rate now, a bar against its rate when busy
   if (nom.outs.length) {
-    // Milestone 13: at its recipe and its mode (Tuning's speeds), and what it makes now
-    // Pebble Isle's Miners dig 1.5x (Act IV)
-    const busy = nom.outs[0].perMin * (powered(e.kind) ? modeSpeed(e) : 1) * (e.kind === 'miner' ? islandMiners(g) : 1);
+    // Milestone 13: at its recipe, and what it makes now; Pebble Isle's Miners dig 1.5x (Act IV)
+    const busy = nom.outs[0].perMin * (e.kind === 'miner' ? islandMiners(g) : 1);
     const now = busy * sh.work * pf;
     const ins = nom.ins.map((i) => icon(i.item)).join(' ');
     const outs = nom.outs.map((o) => icon(o.item)).join(' ');
@@ -305,7 +297,7 @@ function machineReport(app: App, e: Ent): Report {
   if (r.byproduct) {
     const full = e.by >= RULES.outputCap.value;
     const to = byproductTo(app, e);
-    const route = `side ${icon(r.byproduct.item)} 1 per ${byEveryNow(e, r)} → ${full ? '{bad:nowhere}' : to ? to : '{warn:nowhere yet}'}`;
+    const route = `side ${icon(r.byproduct.item)} 1 per ${r.byproduct.every} → ${full ? '{bad:nowhere}' : to ? to : '{warn:nowhere yet}'}`;
     if (full || (e.state === 'blocked' && e.why === e.byItem)) rows.push(rich(route));
     else more.push(rich(route));
   }
@@ -316,18 +308,10 @@ function machineReport(app: App, e: Ent): Report {
     if (e.state === 'blocked' && !(e.why && e.why === e.byItem)) rows.push(rich(s));
     else more.push(rich(s));
   } else if (e.kind !== 'miner' && endsAtSink(g, e)) more.push(rich('front → {good:Dock or Hopper}'));
-  // ---- power and mode
+  // ---- power
   if (pw.rows.length) {
     if (pw.none) rows.push(...pw.rows);
     else more.push(...pw.rows);
-    const list = modesFor(g, e, r);
-    if (list.length > 1) {
-      const m = e.mode ?? 'normal';
-      const by = r.byproduct ? byEveryNow(e, r) : 0;
-      more.push(rich(`mode ${m === 'normal' ? '{soft:Normal}' : MODE_NAME[m]} · ${modeSpeed(e)}x speed${by && (m === 'recycling' || m === 'byproduct') ? ` · ${icon(r.byproduct!.item)} 1 per ${by}` : ''}`));
-      rep.modes = e;
-      rep.modeList = list;
-    }
   }
   // ---- the line around it (the first rows to go when the tag is too tall)
   more.push(...lineRows(app, e));
@@ -383,19 +367,6 @@ function lineRows(app: App, m: Ent): Row[] {
   const jams = ms.filter((e) => e.state === 'blocked' && e.why && e.why === e.byItem);
   if (jams.length) out.push(rich(`{bad:slag stuck} at ${jams.map((e) => entName(g, e)).join(', ')}`, true));
   return out;
-}
-
-/** Crafts per byproduct in the machine's mode now (Recycling halves the waste, Byproduct doubles it). */
-const byEveryNow = (e: Ent, r: RecipeDef) => byEvery(e, r) || r.byproduct?.every || 0;
-
-/** The modes a powered machine offers now: Normal, Tuning's three once researched, Recycling's
- * two once researched and only for a recipe with a byproduct (DESIGN.md §18, §21 Modes), and
- * whatever it runs in now. */
-export function modesFor(g: Game, e: Ent, r: RecipeDef | null): Mode[] {
-  const cur = e.mode ?? 'normal';
-  return MODES.filter((m) => m === 'normal' || m === cur
-    || ((m === 'efficient' || m === 'overclock' || m === 'precision') && g.done('tuning'))
-    || ((m === 'recycling' || m === 'byproduct') && g.done('recycling') && !!r?.byproduct));
 }
 
 // ------------------------------------------------------------------ the Chute (DESIGN.md §21)
@@ -587,7 +558,7 @@ function factoryReport(app: App, e: FEnt): Report {
   if (e.kind === 'fhopper') {
     rep.uicon = 'research';
     const sel = g.s.research.selected;
-    rows.push(rich(sel ? `{u:research} counts toward ${RESEARCH[sel].name}` : '{u:research} counts toward research'), rich('{i:machineKit} → the kits bank'));
+    rows.push(rich(sel ? `{u:research} counts toward ${RESEARCH[sel].name}` : '{u:research} counts toward research'));
     rep.verbs = '{k:LMB} inspire';
     return rep;
   }
@@ -669,17 +640,11 @@ function factoryChuteReport(app: App, e: FEnt, rep: Report): Report {
 
 // ------------------------------------------------------------------ laying out and drawing
 
-interface Laid { rep: Report; rows: { row: Row; h: number }[]; cw: number; w: number; h: number; verbsH: number; modesH: number; /** the Chute Mouth's item picker */ pickH: number; /** rows left out to fit (optional ones count half) */ cut: number; /** the brief hover: the name in Reed */ brief: boolean }
+interface Laid { rep: Report; rows: { row: Row; h: number }[]; cw: number; w: number; h: number; verbsH: number; /** the Chute Mouth's item picker */ pickH: number; /** rows left out to fit (optional ones count half) */ cut: number; /** the brief hover: the name in Reed */ brief: boolean }
 
 const ROW_GAP = 1;
 const BAR_H = 9;
-const MODES_H = 15;
 const REPAIR_H = 17;
-/** After a Repair the report's mode keys stand where the Repair button was: they ignore clicks this
- * long (a double click on Repair would otherwise switch the mode). */
-const REPAIR_GUARD = 0.4;
-/** when the last Repair went through (UI time) */
-let repairedAt = -10;
 const MIN_CW = 116;
 /** the brief hover's narrowest content and most rows */
 const BRIEF_CW = 64;
@@ -696,7 +661,7 @@ function briefOf(rep: Report): Report {
   let room = BRIEF_ROWS - all.filter(cause).length;
   const rows = all.length <= BRIEF_ROWS ? all : all.filter((r) => cause(r) || room-- > 0);
   const lmb = rep.verbs?.split('  ').find((v) => v.startsWith('{k:LMB}'));
-  return { ...rep, rows, more: [], modes: undefined, verbs: lmb ? lmb.replace(/^\{k:LMB\} pin$/, '{k:LMB} more') : undefined };
+  return { ...rep, rows, more: [], verbs: lmb ? lmb.replace(/^\{k:LMB\} pin$/, '{k:LMB} more') : undefined };
 }
 
 function rowH(r: Row, cw: number): number {
@@ -714,12 +679,11 @@ function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: 
   const titleW = (brief ? textWidth(rep.title) : bigWidth(bigSafe(rep.title))) + (rep.item || rep.uicon ? 12 : 0) + (closeBtn ? 16 : 0);
   const natural = Math.max(...rows.map((r) => (r.t === 'rich' ? richWidth(r.s) : r.t === 'bar' ? 150 : 0)), rep.verbs ? richWidth(rep.verbs) : 0);
   const cw = Math.min(maxCw, Math.max(brief ? BRIEF_CW : MIN_CW, titleW, natural));
-  const modesH = full && rep.modes ? modeGrid(rep.modeList?.length ?? 4).rows * MODES_H + ROW_GAP : 0;
   const pickH = (full && rep.picker ? pickGrid(rep.picker.items.length, cw).h + ROW_GAP : 0) + (full && (rep.repair || rep.turn) ? REPAIR_H + ROW_GAP : 0) + (full && rep.skin ? skinKeysH(rep.skin) : 0);
   const verbsH = rep.verbs ? layoutRich(rep.verbs, cw).h + 4 : 0;
   const measure = (rs: Row[]) => {
     const hs = rs.map((row) => ({ row, h: rowH(row, cw) }));
-    const ch = titleH + 3 + hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + modesH + pickH + verbsH;
+    const ch = titleH + 3 + hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + pickH + verbsH;
     return { hs, outer: tagSize(cw, ch, 'left').h };
   };
   let m = measure(rows);
@@ -733,8 +697,8 @@ function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: 
     rows = [...rows.slice(0, keep), rich(`{soft:+${more} more ${more > 1 ? 'rows' : 'row'}}`)];
     m = measure(rows);
   }
-  const sz = tagSize(cw, titleH + 3 + m.hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + modesH + pickH + verbsH, 'left');
-  return { rep, rows: m.hs, cw, w: sz.w, h: sz.h, verbsH, modesH, pickH, cut, brief };
+  const sz = tagSize(cw, titleH + 3 + m.hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + pickH + verbsH, 'left');
+  return { rep, rows: m.hs, cw, w: sz.w, h: sz.h, verbsH, pickH, cut, brief };
 }
 
 /** Draw a laid-out report as a tag at (x, y): on a string to `anchor`, or pinned. */
@@ -763,19 +727,6 @@ function drawLaid(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: nu
     } else rule(ui, r.x, yy + 2, L.cw);
     yy += h + ROW_GAP;
   }
-  if (L.modesH && rep.modes) {
-    const e = rep.modes;
-    const list = rep.modeList ?? MODES.slice(0, 4);
-    const grid = modeGrid(list.length);
-    const bw = Math.floor((L.cw - 3 * (grid.per - 1)) / grid.per);
-    const r0 = e.recipe ? RECIPE[e.recipe] : null;
-    list.forEach((m, i) => {
-      const cur = (e.mode ?? 'normal') === m;
-      const bx = r.x + (i % grid.per) * (bw + 3), by = yy + Math.floor(i / grid.per) * MODES_H;
-      if (button(ui, 'mode_' + m, bx, by, bw, MODES_H - 1, richWidth(MODE_NAME[m]) + 8 <= bw ? MODE_NAME[m] : MODE_SHORT[m], { active: cur, tip: modeTip(m, BUILD[e.kind].kw ?? 0, cur, r0) }) && !cur && ui.time - repairedAt > REPAIR_GUARD) app.act({ k: 'mode', x: e.x, y: e.y, mode: m });
-    });
-    yy += L.modesH;
-  }
   if (L.pickH && rep.picker) {
     drawPicker(app, rep.picker.e, rep.picker.items, r.x, yy, L.cw);
     yy += L.pickH;
@@ -787,7 +738,7 @@ function drawLaid(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: nu
     const afford = app.game.s.coin.gte(p);
     const label = p ? `Repair · {coin:${p.toLocaleString('en-US')}}` : 'Repair · free';
     const tip = [{ text: `{big:Repair}` }, { text: `${p ? `{coin:${p.toLocaleString('en-US')}}` : 'free'} · a quarter of a new one` }, { text: afford ? '{k:LMB} it runs as it was set' : '{bad:not enough coin yet}' }];
-    if (button(ui, 'repairRuin', r.x, yy, L.cw, REPAIR_H - 1, label, { gold: afford, tip }) && app.act({ k: 'repair', x: e.x, y: e.y }).ok) repairedAt = ui.time;
+    if (button(ui, 'repairRuin', r.x, yy, L.cw, REPAIR_H - 1, label, { gold: afford, tip })) app.act({ k: 'repair', x: e.x, y: e.y });
     yy += REPAIR_H + ROW_GAP;
   }
   if (L.pickH && rep.turn) {
@@ -852,23 +803,6 @@ function skinKeys(app: App, slot: SkinSlot, x: number, y: number, cw: number): n
     h += SKIN_ROW;
   }
   return h;
-}
-
-function modeTip(m: Mode, base: number, cur: boolean, r: RecipeDef | null = null) {
-  const sp = m === 'efficient' ? RULES.modeEfficientSpeed.value : m === 'overclock' ? RULES.modeOverclockSpeed.value : m === 'precision' ? RULES.modePrecisionSpeed.value
-    : m === 'recycling' ? RULES.modeRecyclingSpeed.value : m === 'byproduct' ? RULES.modeByproductSpeed.value : 1;
-  const pw = m === 'efficient' ? RULES.modeEfficientPower.value : m === 'overclock' ? RULES.modeOverclockPower.value : 1;
-  let extra = m === 'precision' ? ` · +${Math.round(RULES.modePrecisionYield.value * 100)}% main output` : '';
-  // Recycling and Byproduct (DESIGN.md §21 Modes): the byproduct every 2x or 0.5x the crafts
-  const by = r?.byproduct;
-  if (r && by && (m === 'recycling' || m === 'byproduct' || m === 'normal')) extra += ` · ${icon(by.item)} 1 per ${byEvery({ mode: m }, r)}${m === 'recycling' ? ' · half the waste' : m === 'byproduct' ? ' · twice the waste' : ''}`;
-  return [{ text: `{big:${MODE_NAME[m]}}` }, { text: `${sp}x speed · ${pw}x power · {power:${Math.round(base * pw)} kW}${extra}` }, { text: cur ? '{soft:its mode now}' : '{k:LMB} switch' }];
-}
-
-/** The mode buttons' grid: up to four in a row, six in two rows of three. */
-function modeGrid(n: number): { per: number; rows: number } {
-  const per = n <= 4 ? Math.max(1, n) : Math.ceil(n / 2);
-  return { per, rows: Math.ceil(Math.max(1, n) / per) };
 }
 
 const PICK = 16;

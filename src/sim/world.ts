@@ -31,12 +31,6 @@ export type ModFloor = Exclude<Floor, 'workshop'>;
  * is 'starved' with why = 'power' (the blue pip, §18). */
 export type MState = 'work' | 'starved' | 'blocked' | 'idle';
 
-/** A powered machine's mode (DESIGN.md §18 Modes, research Tuning). */
-export type Mode = 'normal' | 'efficient' | 'overclock' | 'precision'
-  // Act III (DESIGN.md §21 Modes, research Recycling): half the byproduct, or twice it
-  | 'recycling' | 'byproduct';
-export const MODES: Mode[] = ['normal', 'efficient', 'overclock', 'precision', 'recycling', 'byproduct'];
-
 /** The tiles just outside a footprint's face in direction d: one for a 1x1, two for a 2x2. */
 export function faceTiles(e: { x: number; y: number; w: number; h: number }, d: Dir): [number, number][] {
   const out: [number, number][] = [];
@@ -95,13 +89,9 @@ export interface Ent {
   /** ticks in each state this second: work, starved, blocked on output, blocked on byproduct */
   sec: [number, number, number, number];
   // ---- Act II (DESIGN.md §18); absent on older saves, read with ?? defaults
-  /** a powered machine's mode */
-  mode?: Mode;
   /** Overdrive: ticks left at 3x, then ticks left cooling */
   od?: number;
   cool?: number;
-  /** Precision's extra output, a fraction of an item carried between crafts */
-  bonus?: number;
   /** a Lucky Vein's boost on every machine of its line: ticks left (DESIGN.md §6) */
   boost?: number;
   // ---- Milestone 6 (DESIGN.md §20); absent on older saves
@@ -232,9 +222,11 @@ export interface ModuleDesign {
   spare: number;
   /** the Stamp Press keeps one spare copy of it (DESIGN.md §19, a Patent node) */
   auto?: boolean;
-  /** every machine in the box ran in its normal mode when it was folded (a kept design refolds
-   * after a short check only then: the final round); absent on designs from before */
-  normal?: boolean;
+  /** its audit can come back as a kept copy's card (a kept design refolds after a short check only
+   * then: DESIGN.md §19, the final round): set on every fold since; absent on a design folded
+   * before the final round, and on one a v14 save folded with a machine in a mode (machine modes
+   * were cut in the playability pass: no machine runs at those rates now) */
+  refolds?: boolean;
   /** it came back at a run's start from this kept design in the Patent Drawer (DESIGN.md §19, the
    * playability pass: a Reorganize keeps what you learned); absent on a design folded this run */
   kept?: number;
@@ -392,7 +384,7 @@ export interface KeptDesign {
   /** the audit it was folded with, before the grade multiplier (rates through its ports, and the
    * grade card): an unchanged layout refolds at it after a short check (DESIGN.md §19, the final
    * round). Absent for an imported string, a design kept before the final round, or one folded
-   * with a machine out of its normal mode: those refold after a full audit */
+   * with a machine in a mode (before modes were cut): those refold after a full audit */
   card?: { grade: GradeCard; ins: Partial<Record<ItemId, number>>; outs: Partial<Record<ItemId, number>> };
   /** a nested Factory design kept by the Group Drawer (a Legacy node, DESIGN.md §22): its box is on
    * the Factory floor, and each module tile is named by its product (filled from this run's spare
@@ -667,8 +659,6 @@ export interface State {
   nextDesign: number;
   factory: FactoryState;
   // ---- Act II (DESIGN.md §18)
-  /** Machine Kits in the parts bank (a Hopper takes them there) */
-  parts: Num;
   /** deposit claim blocks bought at the Survey Office, by ore */
   claimBlocks: Partial<Record<ItemId, number>>;
   /** items whose first delivery the Codex has paid for */
@@ -815,7 +805,6 @@ export function newState(seed: number): State {
     designs: [],
     nextDesign: 1,
     factory: newFactory(),
-    parts: Num.ZERO,
     claimBlocks: {},
     codex: [],
     mega: { stage: 0, progress: {} },

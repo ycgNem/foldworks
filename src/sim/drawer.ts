@@ -91,7 +91,7 @@ export function keepDesign(g: Game, designId: number): ActResult {
     src: d.id,
   };
   // the audit it was folded with, before the grade (the refold check, DESIGN.md §19)
-  if (d.normal && d.grade.mult > 0) {
+  if (d.refolds && d.grade.mult > 0) {
     const raw = (t: Partial<Record<ItemId, number>>) => {
       const o: Partial<Record<ItemId, number>> = {};
       for (const [it, v] of Object.entries(t) as [ItemId, number][]) o[it] = v / d.grade.mult;
@@ -387,8 +387,10 @@ export function importDesign(g: Game, code: string): ActResult {
 export const KINDS: BuildKind[] = ['belt', 'miner', 'smelter', 'press', 'assembler', 'heap', 'splitter', 'merger', 'crate', 'boiler', 'steamEngine', 'generator', 'pole', 'kiln', 'mixer', 'refinery', 'smelterMk2', 'pressMk2', 'assemblerMk2',
   // Act III (the playability review: these were missing, and any Act III line's string came back "damaged")
   'chemVat', 'greenhouse', 'chuteMouth'];
-/** Recipes by code, 1-based (0 = none; append only). */
-export const RECIPES_BY_CODE = ['smeltIron', 'smeltCopper', 'pressPlate', 'drawWire', 'pressBrick', 'cutGear', 'gizmo', 'smeltSteel', 'fireGlass', 'recycledGlass', 'crushGravel', 'mixConcrete', 'refinePlastic', 'etchCircuit', 'packKit', 'buildMotor', 'forgeDrillBit',
+/** Recipes by code, 1-based (0 = none; append only). A cut recipe keeps its code as `null`, so a
+ *  string made before the cut still decodes, with that machine left unset: 15 was Machine Kits
+ *  (cut in the playability pass, 2026-11-08). */
+export const RECIPES_BY_CODE: readonly (string | null)[] = ['smeltIron', 'smeltCopper', 'pressPlate', 'drawWire', 'pressBrick', 'cutGear', 'gizmo', 'smeltSteel', 'fireGlass', 'recycledGlass', 'crushGravel', 'mixConcrete', 'refinePlastic', 'etchCircuit', null, 'buildMotor', 'forgeDrillBit',
   // Acts III-V and the alternates (the playability review), in the order recipes.ts defines them
   'mixSolvent', 'cureRubber', 'cellBattery', 'brewFertilizer', 'pressBearing', 'buildGearbox',
   'growProduce', 'buildSensor', 'etchProcessor', 'buildServo', 'makeSandwich', 'windFrog',
@@ -500,7 +502,7 @@ export function decodeDesign(code: string): Omit<KeptDesign, 'id' | 'run'> {
   for (const p of out) {
     if (!HAS_RECIPE(p.kind)) continue;
     const rc = at();
-    if (!rc) continue;
+    if (!rc || RECIPES_BY_CODE[rc - 1] === null) continue;
     const recipe = RECIPES_BY_CODE[rc - 1];
     if (!recipe || !RECIPE[recipe]) throw new Error('The design has a recipe this game does not know');
     const d = BUILD[p.kind];

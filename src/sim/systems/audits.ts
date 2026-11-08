@@ -17,7 +17,6 @@ import { ITEMS, itemName, type ItemId } from '../../data/items';
 import { DX, DY, opposite, type AuditResult, type AuditState, type Box, type Dir, type Ent, type KeptDesign, type Port } from '../world';
 import { entName, feeders } from '../analysis';
 import { powerFactor } from './power';
-import { byEvery } from './machines';
 import { compactFull, splusShare, strictGrade } from './challenges';
 
 export const inBox = (b: Box, x: number, y: number) => x >= b.x && y >= b.y && x < b.x + b.w && y < b.y + b.h;
@@ -156,9 +155,9 @@ export function findPorts(g: Game, b: Box): Port[] {
  * The kept design (the Patent Drawer, DESIGN.md §19) this box is an unchanged copy of, or null: the
  * box exactly where the design was folded (the land and the ore lie the same every run), holding
  * exactly its parts (every building, turned the same way, every crafting machine on the same
- * recipe, nothing else in the box), every machine in its normal mode and none stopped, and the
- * design kept with its audit (not imported, not folded out of its normal modes). Such a box refolds
- * at its kept grade after a short check instead of a full audit.
+ * recipe, nothing else in the box), no machine stopped, and the design kept with its audit (not
+ * imported, not folded before the final round). Such a box refolds at its kept grade after a short
+ * check instead of a full audit.
  */
 export function keptMatch(g: Game, b: Box): KeptDesign | null {
   const ents = entsIn(g, b);
@@ -167,7 +166,7 @@ export function keptMatch(g: Game, b: Box): KeptDesign | null {
     const same = k.parts.every((p) => {
       const e = g.entAt(b.x + p.dx, b.y + p.dy);
       if (!e || e.kind !== p.kind || e.x !== b.x + p.dx || e.y !== b.y + p.dy || e.rot !== p.rot) return false;
-      if (isMachine(e.kind) && ((e.mode ?? 'normal') !== 'normal' || e.paused)) return false;
+      if (isMachine(e.kind) && e.paused) return false;
       return !p.recipe || e.recipe === p.recipe;
     });
     if (same) return k;
@@ -311,8 +310,8 @@ const STOCK_NOISE = 3;
 /** The window's item counts net of stock already in the box (DESIGN.md §10 Audit; the Milestone 3
  * gate and Milestone 4 reviews): what was drawn down of an item that also left the box comes off
  * that output (a crate of Gizmos draining out is not a Gizmo factory), and the rest of what was
- * drawn down is an input the module will need (a crate of steel feeding a kit assembler inside
- * makes a module that takes steel, not one that makes kits from nothing, whatever kits are worth). */
+ * drawn down is an input the module will need (a crate of steel feeding a motor assembler inside
+ * makes a module that takes steel, not one that makes motors from nothing). */
 function netCounts(g: Game, a: AuditState): { ins: Record<string, number>; outs: Record<string, number> } {
   const outs: Record<string, number> = { ...a.outs };
   const ins: Record<string, number> = { ...a.ins };
@@ -355,9 +354,9 @@ export function gradeAudit(g: Game, a: AuditState): AuditResult {
     const crafts = m.crafts - (a.crafts0[m.id] ?? m.crafts);
     if (r.byproduct) {
       byItems.add(r.byproduct.item);
-      byMade += Math.floor(crafts / byEvery(m, r));
+      byMade += Math.floor(crafts / r.byproduct.every);
       const jammed = a.stall?.[m.id]?.[`blocked:${r.byproduct.item}`] ?? 0;
-      byMade += Math.floor(jammed / (r.time * TICK_RATE) / byEvery(m, r));
+      byMade += Math.floor(jammed / (r.time * TICK_RATE) / r.byproduct.every);
     }
   }
   for (const m of ms) {

@@ -25,8 +25,44 @@ export const OLD_HEAD_STARTS: Record<string, number> = {
 /** An order of Acts I-II (every research it needs is Act I or II's). */
 const actOneTwo = (o: { requires: ResearchId[] }) => o.requires.every((r) => (RESEARCH[r]?.act ?? 1) <= 2);
 
+/** Research nodes the playability pass cut with Machine Kits and machine modes (v15). */
+export const CUT_NODES: ReadonlySet<string> = new Set(['machineKits', 'tuning', 'recycling']);
+const KIT = 'machineKit';
+const PACK = 'packKit';
+
+/** Is this object a building on a floor (an Ent or an FEnt)? Its fields are emptied, never the
+ * building dropped; any other record naming kits (a route, a plan's tile) is dropped (v15). */
+const isBuilding = (o: Record<string, unknown>) => 'kind' in o && 'id' in o && 'inBuf' in o;
+
+/** Take every Machine Kit out of a parsed state, in place (v15): keys named for the item go, a list
+ * loses the item and every record (not a building) naming it, a building or machine holding kits
+ * holds nothing, a packKit recipe (or a kit filter) becomes none and the machine's craft is lost. */
+function scrubKits(v: unknown): unknown {
+  if (Array.isArray(v)) {
+    return v
+      .filter((x) => x !== KIT && !(x && typeof x === 'object' && !Array.isArray(x) && (x as Record<string, unknown>).item === KIT && !isBuilding(x as Record<string, unknown>)))
+      .map(scrubKits);
+  }
+  if (!v || typeof v !== 'object') return v;
+  const o = v as Record<string, unknown>;
+  for (const k of Object.keys(o)) {
+    const x = o[k];
+    if (k === KIT) delete o[k];
+    else if (x === KIT || x === PACK) {
+      o[k] = null;
+      if (k === 'outItem') o.out = 0;
+      else if (k === 'byItem') o.by = 0;
+      else if (k === 'item') { if ('p' in o) o.p = 0; if ('count' in o) o.count = 0; }
+      else if (k === 'item2') o.p2 = 0;
+      else if (k === 'recipe' && 'inBuf' in o) { o.inBuf = {}; o.active = false; o.prog = 0; }
+    } else if (x && typeof x === 'object' && !Array.isArray(x) && (x as Record<string, unknown>).item === KIT && !isBuilding(x as Record<string, unknown>)) delete o[k];
+    else o[k] = scrubKits(x);
+  }
+  return o;
+}
+
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 14;
+export const SAVE_VERSION = 15;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -251,6 +287,47 @@ export const MIGRATIONS: Record<number, Migration> = {
       m.ordersFilled = filled;
     }
     return { ...d, snap: JSON.stringify(st), v: 14 };
+  },
+  // v15 (the playability pass, DESIGN.md §18 and DECISIONS.md "cuts, Machine Kits and machine
+  // modes"): Machine Kits and machine modes are gone, with their research (Machine Kits, Tuning,
+  // Recycling). The nodes leave research done, selected and progress (and the Inspiration credited
+  // to them) with no refund: research is paid in items, and the items delivered are spent. Every
+  // Machine Kit goes: the parts bank, the Hoppers' and the Docks' tallies, belts, crates, machine
+  // and module buffers, the Chute, designs' rates (a design that made only kits takes and makes
+  // nothing), filings and records; packKit recipes are cleared (the assembler goes idle); a route
+  // or a plan's tile carrying kits is dropped. Every machine loses its mode (and Precision's
+  // fraction); a design folded with every machine in Normal (`normal`) keeps its audit for a
+  // refold (`refolds`), one folded with a machine in a mode does not, since nothing runs at those
+  // rates now. Logged commands that set a mode, a packKit recipe or a kit filter, pick a cut node or
+  // fly kits leave the log. The replay is exact against these rules (the same save loads to the
+  // same state every time), not against v14's: no mode's speed and no kit's cost apply now, as with
+  // the v12 Heater.
+  14: (d) => {
+    const drop = (c: { k?: string; recipe?: unknown; id?: unknown; item?: unknown }) =>
+      c.k === 'mode' || (c.k === 'recipe' && (c.recipe === PACK || c.recipe === KIT)) || (c.k === 'research' && CUT_NODES.has(String(c.id))) || (c.k === 'route' && c.item === KIT);
+    const log = Array.isArray(d.log) ? d.log.filter((l: { c?: { k?: string } }) => !(l?.c && drop(l.c))) : d.log;
+    if (typeof d.snap !== 'string') return { ...d, log, v: 15 };
+    const st = JSON.parse(d.snap);
+    const r = st.research;
+    if (r) {
+      if (Array.isArray(r.done)) r.done = r.done.filter((id: string) => !CUT_NODES.has(id));
+      if (CUT_NODES.has(r.selected)) r.selected = null;
+      for (const id of CUT_NODES) if (r.progress) delete r.progress[id];
+    }
+    for (const id of CUT_NODES) if (st.inspire) delete st.inspire[id];
+    delete st.parts;
+    const kitOnly = new Set<number>((st.designs ?? []).filter((q: { outs?: Record<string, number> }) => q.outs && KIT in q.outs).map((q: { id: number }) => q.id));
+    scrubKits(st);
+    for (const q of st.designs ?? []) {
+      if (kitOnly.has(q.id) && !Object.keys(q.outs ?? {}).length) q.ins = {};
+      if (q.normal === true) q.refolds = true;
+      delete q.normal;
+    }
+    for (const e of st.ents ?? []) {
+      delete e.mode;
+      delete e.bonus;
+    }
+    return { ...d, snap: JSON.stringify(st), log, v: 15 };
   },
 };
 

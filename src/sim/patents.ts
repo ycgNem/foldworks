@@ -52,7 +52,8 @@ export interface PatentRules {
   offline: number;
   /** the Committee's rewards (reputation, kept across runs) */
   nightCrew: boolean;
-  kitsOff: number;
+  /** claims in a Survey Office block (Pocketed Claims, rep 4: 5, was 4) */
+  claimsPerBlock: number;
   /** Act III (DESIGN.md §21): skiff speed added, the District's fold box, the Dispatcher's seconds */
   skiffSpeed: number;
   highFoldMax: number;
@@ -92,7 +93,7 @@ export function prules(g: Game): PatentRules {
     floorPlanEvery: 0,
     offline: RULES.offlineEff.value,
     nightCrew: rep >= 2,
-    kitsOff: rep >= 4 ? RULES.pocketedKits.value : 0,
+    claimsPerBlock: rep >= 4 ? RULES.pocketedClaims.value : RULES.claimsPerBlock.value,
     skiffSpeed: 0,
     highFoldMax: 0,
     dispatcherEvery: 0,

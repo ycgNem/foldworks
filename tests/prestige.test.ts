@@ -288,7 +288,7 @@ describe('the Seed carries Acts I-II\'s research into each new universe (§23)',
     const { g } = graded();
     must(g, { k: 'lastFold' });
     const acts = RESEARCH_IDS.filter((r) => (RESEARCH[r].act ?? 1) <= RULES.seedActs.value);
-    expect(acts.length).toBe(26);
+    expect(acts.length).toBe(24); // 26 until Machine Kits and Tuning were cut (the playability pass)
     // (and the Town Archive's Zoning and Chutes: the Seed keeps the Archive, re-derived in the
     // playability pass since every run after a reset knows Acts I-II)
     const want = RESEARCH_IDS.filter((r) => acts.includes(r) || r === 'zoning' || r === 'chutes');

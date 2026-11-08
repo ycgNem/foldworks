@@ -52,7 +52,7 @@ export const SCENARIOS: Record<ScenarioId, ScenarioDef> = {
     land: ['A', 'C', 'E', 'F'], research: 'act2', coin: 250000,
     miners: 2, power: 0.5,
     product: 'glass', measure: 'rate', unit: 'glass/min',
-    derivation: '§21 Scenarios: Miners dig 2x and Steam Engines and Generators make 0.5x, so sand is free and kW dear: glass comes from the Kiln, a powered machine (steel did not: a Mk1 smelter draws none, the second gate), so the fastest glass fold is a plant sized to its kilns in Efficient mode; 250,000 coin is a glass line and its plant (§18 prices)',
+    derivation: '§21 Scenarios: Miners dig 2x and Steam Engines and Generators make 0.5x, so sand is free and kW dear: glass comes from the Kiln, a powered machine (steel did not: a Mk1 smelter draws none, the second gate), so the fastest glass fold is the most kilns its plant runs at full speed (a brownout slows every kiln on the grid, §18); 250,000 coin is a glass line and its plant (§18 prices)',
   },
   scarceBelts: {
     id: 'scarceBelts', name: 'Scarce Belts',
@@ -93,7 +93,7 @@ export const SCENARIOS: Record<ScenarioId, ScenarioDef> = {
     land: ['A', 'E', 'F'], research: 'act2', coin: 400000,
     power: 0.75,
     product: 'plastic', measure: 'perKw', unit: 'plastic/min a kW',
-    derivation: '§24 Scenarios: the Refinery is the hungriest Act II machine (120 kW, §18) and makes plastic out of coal, so the score is plastic a minute per kW drawn by the box\'s machines: Efficient mode at 0.5x power and 0.75x speed (§18) scores 1.5x Normal\'s; Steam Engines and Generators at 0.75x; coal in E and F; 400,000 coin is a refinery line and its plant',
+    derivation: '§24 Scenarios: the Refinery is the hungriest Act II machine (120 kW, §18) and makes plastic out of coal, so the score is plastic a minute per kW drawn by the box\'s machines at full speed: every refinery draws its 120 kW, so the score is the grade (a refinery fed all the time, its oil used or carried off, a compact box: §10) on 15 plastic a minute a refinery; Steam Engines and Generators at 0.75x; coal in E and F; 400,000 coin is a refinery line and its plant',
   },
   thinVein: {
     id: 'thinVein', name: 'Thin Vein',

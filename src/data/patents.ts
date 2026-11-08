@@ -261,10 +261,10 @@ export const PATENTS: Record<PatentId, PatentDef> = {
   }),
   senseNotes: P({
     id: 'senseNotes', name: 'Sense and Logic', branch: 'head', cost: 3, requires: ['chemNotes'], pos: [4, 1],
-    effect: { k: 'head', research: ['sensors', 'processors', 'recycling', 'hydroponics'] },
-    text: '{u:reset} start knowing {research:Sensors} · {research:Processors} · {research:Recycling} · {research:Hydroponics}',
+    effect: { k: 'head', research: ['sensors', 'processors', 'hydroponics'] },
+    text: '{u:reset} start knowing {research:Sensors} · {research:Processors} · {research:Hydroponics}',
     flavor: 'Half of it is diagrams of eyes. The other half is diagrams of thinking.',
-    derivation: '§21 Patents: head starts, 3; four nodes (700 circuits, 350 rubber, 200 solvent, 300 sludge, 600 glass, 60 gearboxes), about 40-45 min',
+    derivation: '§21 Patents: head starts, 3; three nodes (700 circuits, 200 rubber, 200 solvent, 300 sludge, 600 glass), about 35 min, as the Robotics Patent (Recycling was the fourth, 15 min, until machine modes were cut: the playability pass)',
   }),
   roboticsPatent: P({
     id: 'roboticsPatent', name: 'The Robotics Patent', branch: 'head', cost: 3, requires: ['senseNotes', 'bearingPatent'], pos: [5, 1],

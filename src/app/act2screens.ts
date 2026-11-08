@@ -17,6 +17,7 @@ import { itemIcon, sheet, hasArt, frameNamed } from '../render/sprites';
 import { bayFrame, megaFrac, mainOutput } from '../render/factory';
 import { claimsHeld, claimsUsed, claimPrice, copiesOf, oresOf } from '../sim/systems/claims';
 import { megaOpen } from '../sim/systems/modules';
+import { prules } from '../sim/patents';
 import { Num } from '../engine/num';
 import { button, meter, chip, chipWidth, rule, pencil, slip, stamp, ribbon, pushpin, portrait, T, type Role } from './chrome';
 import { menuTemplate, fmt, perMin, slamScale, rays, cells, type MenuTab } from './widgets';
@@ -38,7 +39,7 @@ function titleChip(app: App, r: Rect, title: string, free: number, text: string,
 
 // ------------------------------------------------------------------ the Codex
 
-/** Items the Codex can log: the ones the Dock pays for (slag, kits and drill bits never sell). */
+/** Items the Codex can log: the ones the Dock pays for (slag and drill bits never sell). */
 export const CODEX_ITEMS = ITEM_IDS.filter((id) => ITEMS[id].value > 0);
 
 /** Unit 7's line on its Codex (ALL CAPS, clipped, counting). */
@@ -250,7 +251,7 @@ function deed(app: App, ore: ItemId, x: number, y: number, w: number, h: number)
   void csW;
   cells(app, left, c.y + 13, midR - left, 6, used, held, freeN >= 0 ? T.goodFill : T.badFill);
   // where the claims come from, as a sum
-  const pd = RULES.claimsPerDeposit.value, pb = RULES.claimsPerBlock.value;
+  const pd = RULES.claimsPerDeposit.value, pb = prules(g).claimsPerBlock;
   const long = `{soft:${RULES.claimsBase.value} start} + ${deps} {soft:deposit${deps === 1 ? '' : 's'}} ×${pd} + ${blocks} {soft:block${blocks === 1 ? '' : 's'}} ×${pb}`;
   const sum = richWidth(long) <= midR - left ? long : `{soft:${RULES.claimsBase.value}} + ${deps} {u:survey}×${pd} + ${blocks} {u:claim}×${pb}`;
   ui.clip(left, c.y + 21, midR - left, 11);
@@ -574,7 +575,7 @@ function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, page:
       const can = g.s.coin.gte(cheap.p);
       const sw2 = 46;
       drawRich(ui, `{soft:meanwhile} {u:claim} {i:${cheap.o}} {soft:claims} ${can ? `{good:${cheap.p.format()}}` : `{coin:${cheap.p.format()}}`}`, x, y + 1, w - sw2 - 4, T.ink);
-      if (button(ui, 'bayToSurvey', x + w - sw2, y - 2, sw2, 13, 'Survey', { tip: [{ text: '{u:survey} the Survey Office' }, { text: `{u:claim} ${RULES.claimsPerBlock.value} more claims a block · more copies of the modules that mine` }] })) { app.panel = 'survey'; app.audio.sfx('open'); }
+      if (button(ui, 'bayToSurvey', x + w - sw2, y - 2, sw2, 13, 'Survey', { tip: [{ text: '{u:survey} the Survey Office' }, { text: `{u:claim} ${prules(g).claimsPerBlock} more claims a block · more copies of the modules that mine` }] })) { app.panel = 'survey'; app.audio.sfx('open'); }
       y += 14;
     }
   }
