@@ -342,8 +342,8 @@ describe('the World floor (DESIGN.md §22)', () => {
     expect(h.s.world).toBeUndefined();
     const d2 = design(g, { depth: 2, outs: { robotArm: 0.1 } });
     const d3 = design(g, { depth: 3, outs: { robotArm: 0.1 } });
-    expect(g.act({ k: 'hplace', floor: 'world', design: d2.id, x: 2, y: 2 }).why).toMatch(/depth-3/);
-    must(g, { k: 'hplace', floor: 'world', design: d3.id, x: 2, y: 2 });
+    expect(g.act({ k: 'hplace', auto: false, floor: 'world', design: d2.id, x: 2, y: 2 }).why).toMatch(/depth-3/);
+    must(g, { k: 'hplace', auto: false, floor: 'world', design: d3.id, x: 2, y: 2 });
     // a World fold is the Last Fold, Act V's
     expect(g.act({ k: 'haudit', floor: 'world', x: 0, y: 0, w: 4, h: 4 }).ok).toBe(false);
   });
@@ -356,7 +356,7 @@ describe('the World floor (DESIGN.md §22)', () => {
     expect(skiffRate(f, 5)).toBeCloseTo(0.41, 2);
     expect(skiffRate(f, 17)).toBeCloseTo(0.16, 2); // across the floor with its lots
     const d = design(g, { depth: 3, outs: { robotArm: 0.5 } });
-    must(g, { k: 'hplace', floor: 'world', design: d.id, x: f.dock.x - 1, y: f.dock.y });
+    must(g, { k: 'hplace', auto: false, floor: 'world', design: d.id, x: f.dock.x - 1, y: f.dock.y });
     must(g, { k: 'route', floor: 'world', fx: f.dock.x - 1, fy: f.dock.y, tx: f.dock.x, ty: f.dock.y, item: 'robotArm' });
     const r = g.s.world!.routes[0];
     expect(routeCap(g, 'world', r)).toBeCloseTo(skiffRate(f, 1.5811), 3);
@@ -369,7 +369,7 @@ describe('the World floor (DESIGN.md §22)', () => {
   it('modules on the World pause, singly or by their routes', () => {
     const g = sandbox();
     const d = design(g, { depth: 3, outs: { robotArm: 0.5 } });
-    must(g, { k: 'hplace', floor: 'world', design: d.id, x: 3, y: 3 });
+    must(g, { k: 'hplace', auto: false, floor: 'world', design: d.id, x: 3, y: 3 });
     must(g, { k: 'pause', floor: 'world', x: 3, y: 3, on: true });
     expect(hentAt(g, 'world', 3, 3)!.paused).toBe(true);
     must(g, { k: 'pause', floor: 'world', x: 3, y: 3, on: false });
@@ -494,7 +494,7 @@ describe('Relocate (DESIGN.md §22)', () => {
     // the World's best counts once a module has run there 60 s at half speed or better
     const wd = design(g, { depth: 3, ins: {}, outs: { robotArm: 0.1 } });
     const wdk = HIGH.world.dock;
-    must(g, { k: 'hplace', floor: 'world', design: wd.id, x: wdk.x - 1, y: wdk.y });
+    must(g, { k: 'hplace', auto: false, floor: 'world', design: wd.id, x: wdk.x - 1, y: wdk.y });
     must(g, { k: 'route', floor: 'world', fx: wdk.x - 1, fy: wdk.y, tx: wdk.x, ty: wdk.y, item: 'robotArm' });
     let p = previewLegacy(g, 'pebble');
     expect(p.floors.world).toBeNull();
@@ -635,8 +635,8 @@ describe('the Legacy tree (DESIGN.md §22): every node', () => {
     const g = ready('regrader', 'townPlan');
     const a = design(g, { depth: 2, outs: { steel: 1 } });
     const b = design(g, { depth: 2, ins: { steel: 1 }, outs: { gearbox: 0.1 } });
-    must(g, { k: 'hplace', floor: 'district', design: a.id, x: 3, y: 3 });
-    must(g, { k: 'hplace', floor: 'district', design: b.id, x: 4, y: 3 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: a.id, x: 3, y: 3 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: b.id, x: 4, y: 3 });
     must(g, { k: 'route', floor: 'district', fx: 3, fy: 3, tx: 4, ty: 3, item: 'steel' });
     must(g, { k: 'skiff', floor: 'district', id: g.s.district!.routes[0].id, n: 1 });
     must(g, { k: 'keepPlan', name: 'Gearboxes' });
@@ -658,11 +658,11 @@ describe('the Legacy tree (DESIGN.md §22): every node', () => {
     const a = design(g, { depth: 3, outs: { steel: 1 } });
     const b = design(g, { depth: 3, ins: { steel: 1 }, outs: { gearbox: 0.1 } });
     const c = design(g, { depth: 2, outs: { gear: 1 } });
-    must(g, { k: 'hplace', floor: 'world', design: a.id, x: 3, y: 3 });
-    must(g, { k: 'hplace', floor: 'world', design: b.id, x: 4, y: 3 });
+    must(g, { k: 'hplace', auto: false, floor: 'world', design: a.id, x: 3, y: 3 });
+    must(g, { k: 'hplace', auto: false, floor: 'world', design: b.id, x: 4, y: 3 });
     must(g, { k: 'route', floor: 'world', fx: 3, fy: 3, tx: 4, ty: 3, item: 'steel' });
     must(g, { k: 'skiff', floor: 'world', id: g.s.world!.routes[0].id, n: 1 });
-    must(g, { k: 'hplace', floor: 'district', design: c.id, x: 2, y: 2 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: c.id, x: 2, y: 2 });
     must(g, { k: 'keepPlan', name: 'Both floors' });
     const plan = g.s.meta.plans![0];
     expect(plan.tiles.filter((t) => t.floor === 'world').length).toBe(2);
@@ -701,7 +701,7 @@ describe('the Legacy tree (DESIGN.md §22): every node', () => {
   it('the Skiff Guild: a route starts with a second skiff, free, and it is not refunded', () => {
     const g = ready('skiffGuild');
     const d = design(g, { depth: 2, outs: { steel: 1 } });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 3, y: 3 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 3, y: 3 });
     const c0 = g.s.coin;
     must(g, { k: 'route', floor: 'district', fx: 3, fy: 3, tx: HIGH.district.dock.x, ty: HIGH.district.dock.y, item: 'steel' });
     const r = g.s.district!.routes[0];

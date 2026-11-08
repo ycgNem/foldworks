@@ -113,7 +113,7 @@ describe('the offline report sees the high floors (the Acts IV-V review)', () =>
     const g = sandbox();
     const d = design(g, { name: 'Steel works II', outs: { steel: 1 } });
     // across the floor from the Dock on one skiff: it carries a fraction of the 1 a second made
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 0, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 0, y: DK.y });
     must(g, { k: 'route', floor: 'district', fx: 0, fy: DK.y, tx: DK.x, ty: DK.y, item: 'steel' });
     const r = g.s.district!.routes[0];
     const a = hent(g, 'district', r.from)!, b = hent(g, 'district', r.to)!;
@@ -138,8 +138,8 @@ describe('the offline report sees the high floors (the Acts IV-V review)', () =>
     // a gear group routed into one that takes a tenth of them: it backs up as soon as the buffer fills
     const a = design(g, { name: 'Gears II', outs: { gear: 1 } });
     const b = design(g, { name: 'Servos II', ins: { gear: 0.1 }, outs: { servo: 0.1 } });
-    must(g, { k: 'hplace', floor: 'district', design: a.id, x: DK.x - 2, y: DK.y });
-    must(g, { k: 'hplace', floor: 'district', design: b.id, x: DK.x - 1, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: a.id, x: DK.x - 2, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: b.id, x: DK.x - 1, y: DK.y });
     must(g, { k: 'route', floor: 'district', fx: DK.x - 2, fy: DK.y, tx: DK.x - 1, ty: DK.y, item: 'gear' });
     must(g, { k: 'route', floor: 'district', fx: DK.x - 1, fy: DK.y, tx: DK.x, ty: DK.y, item: 'servo' });
     for (const r of g.s.district!.routes) for (let i = 0; i < 4; i++) must(g, { k: 'skiff', floor: 'district', id: r.id, n: 1 });
@@ -160,7 +160,7 @@ describe('the compute budget (the Acts IV-V review: the replay cost 24-38 s)', (
     const c0 = tickCostMs(g);
     expect(c0).toBeCloseTo(IDLE.tickBaseMs.value + tickLoad(g).workshop * IDLE.tickWorkshopMs.value, 9);
     const d = design(g, { outs: { steel: 1 } });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 0, y: 0 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 0, y: 0 });
     must(g, { k: 'route', floor: 'district', fx: 0, fy: 0, tx: DK.x, ty: DK.y, item: 'steel' });
     expect(tickLoad(g).high).toBe(2);
     expect(tickCostMs(g)).toBeCloseTo(c0 + 2 * IDLE.tickHighMs.value, 9);
@@ -183,7 +183,7 @@ describe('the compute budget (the Acts IV-V review: the replay cost 24-38 s)', (
       // a District packed with groups, each routed to the Dock, and a stack more listed as ticking
       for (let y = 0; y < HIGH.district.h; y++)
         for (let x = 0; x < 10; x++) {
-          if (g.act({ k: 'hplace', floor: 'district', design: d.id, x, y }).ok) g.act({ k: 'route', floor: 'district', fx: x, fy: y, tx: DK.x, ty: DK.y, item: 'steel' });
+          if (g.act({ k: 'hplace', auto: false, floor: 'district', design: d.id, x, y }).ok) g.act({ k: 'route', floor: 'district', fx: x, fy: y, tx: DK.x, ty: DK.y, item: 'steel' });
         }
       return g;
     };

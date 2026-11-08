@@ -189,8 +189,8 @@ describe('"where am I stuck?" (findStuck)', () => {
     };
     g.s.designs.push(d);
     const DK = HIGH.district.dock;
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: DK.x - 1, y: DK.y });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 0, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: DK.x - 1, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 0, y: DK.y });
     must(g, { k: 'route', floor: 'district', fx: DK.x - 1, fy: DK.y, tx: DK.x, ty: DK.y, item: 'steel' });
     must(g, { k: 'route', floor: 'district', fx: 0, fy: DK.y, tx: DK.x, ty: DK.y, item: 'steel' });
     g.step(20 * 10);

@@ -120,7 +120,7 @@ async function fillFloors() {
     for (let y = 0; y < H.h && mods < 200; y++) for (let x = 0; x < w && mods < 200; x++) {
       if (st.ents.some((e) => x >= e.x && x < e.x + e.w && y >= e.y && y < e.y + e.h)) continue;
       const d = designs[f][(x + y) % 2];
-      const r = a.act({ k: 'hplace', floor: f, design: d.id, x, y });
+      const r = a.act({ k: 'hplace', auto: false, floor: f, design: d.id, x, y });
       if (!r.ok) { refused = r.why; continue; }
       mods++;
       const to = y < H.h / 2 ? H.dock : H.hopper;

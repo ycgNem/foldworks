@@ -14,7 +14,7 @@ import { Num } from './num';
 import { OLD_RUBBLE } from '../data/worlds';
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 12;
+export const SAVE_VERSION = 13;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -193,6 +193,13 @@ export const MIGRATIONS: Record<number, Migration> = {
     }
     const log = Array.isArray(d.log) ? d.log.filter((l: { c?: { k?: string; kind?: string } }) => !(l?.c?.k === 'place' && l.c.kind === 'heater')) : d.log;
     return { ...d, snap: JSON.stringify(st), log, v: 12 };
+  },
+  // v13 (the playability pass, DESIGN.md §21 "Auto-routing"): placing a group on a high floor flies
+  // its routes on its own. A placement logged before did not, so it replays bare (`auto: false`) and
+  // the save stays exact.
+  12: (d) => {
+    const log = Array.isArray(d.log) ? d.log.map((l: { c?: { k?: string } }) => (l?.c?.k === 'hplace' ? { ...l, c: { ...l.c, auto: false } } : l)) : d.log;
+    return { ...d, log, v: 13 };
   },
 };
 

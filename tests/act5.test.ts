@@ -100,7 +100,7 @@ function worldAtWork(g: Game) {
   return WORLD_ITEMS.map((item, i) => {
     const d = design(g, { depth: 3, outs: { [item]: 0.05 } });
     const [x, y] = WORLD_AT[i];
-    must(g, { k: 'hplace', floor: 'world', design: d.id, x, y });
+    must(g, { k: 'hplace', auto: false, floor: 'world', design: d.id, x, y });
     must(g, { k: 'route', floor: 'world', fx: x, fy: y, tx: dk.x, ty: dk.y, item });
     return d;
   });
@@ -166,7 +166,7 @@ describe('the Last Fold (DESIGN.md §23)', () => {
     // a module that did not run is not counted, and is a goal
     const idle = design(g, { depth: 3, ins: { gear: 1 }, outs: { robotArm: 0.05 } });
     must(g, { k: 'hauditCancel' });
-    must(g, { k: 'hplace', floor: 'world', design: idle.id, x: 2, y: 2 });
+    must(g, { k: 'hplace', auto: false, floor: 'world', design: idle.id, x: 2, y: 2 });
     must(g, { k: 'lastFoldAudit' });
     g.step(auditTicks(g));
     const q = previewKernels(g);
@@ -390,7 +390,7 @@ describe('the Kernel tree (DESIGN.md §23): every node', () => {
     g.step(2);
     expect(g.s.beyond).toBeUndefined();
     expect(hfoldRefusal(g, 'world', { x: 12, y: 1, w: 2, h: 2 })).toMatch(/Beyond/);
-    expect(g.act({ k: 'hplace', floor: 'beyond', design: design(g, { depth: 4, outs: { verySmallSun: 0.01 } }).id, x: 2, y: 2 }).why).toMatch(/Kernel/);
+    expect(g.act({ k: 'hplace', auto: false, floor: 'beyond', design: design(g, { depth: 4, outs: { verySmallSun: 0.01 } }).id, x: 2, y: 2 }).why).toMatch(/Kernel/);
     kernels(g, 'beyond');
     g.step(1);
     expect(g.s.beyond).toBeTruthy();
@@ -454,7 +454,7 @@ describe('Beyond (DESIGN.md §23)', () => {
     expect(skiffRate(f, 17)).toBeCloseTo(0.095, 2);
     const g = beyond();
     const d = design(g, { depth: 4, outs: { verySmallSun: 0.02 } });
-    must(g, { k: 'hplace', floor: 'beyond', design: d.id, x: f.dock.x - 1, y: f.dock.y });
+    must(g, { k: 'hplace', auto: false, floor: 'beyond', design: d.id, x: f.dock.x - 1, y: f.dock.y });
     must(g, { k: 'route', floor: 'beyond', fx: f.dock.x - 1, fy: f.dock.y, tx: f.dock.x, ty: f.dock.y, item: 'verySmallSun' });
     // (the Lighthouse's Beacon, done in this sandbox, halves the dwell on every high floor)
     expect(routeCap(g, 'beyond', g.s.beyond!.routes[0])).toBeCloseTo(skiffRate(f, 1.5811, f.load, f.speed, f.dwell * RULES.lighthouseDwell.value), 3);
@@ -468,9 +468,9 @@ describe('Beyond (DESIGN.md §23)', () => {
   it('takes depth-4 modules only', () => {
     const g = beyond();
     const d3 = design(g, { depth: 3, outs: { robotArm: 0.1 } });
-    expect(g.act({ k: 'hplace', floor: 'beyond', design: d3.id, x: 2, y: 2 }).why).toMatch(/depth-4/);
+    expect(g.act({ k: 'hplace', auto: false, floor: 'beyond', design: d3.id, x: 2, y: 2 }).why).toMatch(/depth-4/);
     const d4 = design(g, { depth: 4, outs: { quietEngine: 0.1 } });
-    must(g, { k: 'hplace', floor: 'beyond', design: d4.id, x: 2, y: 2 });
+    must(g, { k: 'hplace', auto: false, floor: 'beyond', design: d4.id, x: 2, y: 2 });
     expect(hentAt(g, 'beyond', 2, 2)!.design).toBe(d4.id);
   });
 
@@ -479,7 +479,7 @@ describe('Beyond (DESIGN.md §23)', () => {
     worldAtWork(g);
     const f = HIGH.beyond;
     const d = design(g, { depth: 4, outs: { verySmallSun: 0.02 } });
-    must(g, { k: 'hplace', floor: 'beyond', design: d.id, x: f.dock.x - 1, y: f.dock.y });
+    must(g, { k: 'hplace', auto: false, floor: 'beyond', design: d.id, x: f.dock.x - 1, y: f.dock.y });
     must(g, { k: 'route', floor: 'beyond', fx: f.dock.x - 1, fy: f.dock.y, tx: f.dock.x, ty: f.dock.y, item: 'verySmallSun' });
     g.step((RULES.legacyRunSeconds.value + 5) * TICK_RATE);
     const p = previewKernels(g);
@@ -490,7 +490,7 @@ describe('Beyond (DESIGN.md §23)', () => {
     const g = beyond();
     const f = HIGH.beyond;
     const d = design(g, { depth: 4, outs: { quietEngine: 0.2 } });
-    must(g, { k: 'hplace', floor: 'beyond', design: d.id, x: f.dock.x - 1, y: f.dock.y });
+    must(g, { k: 'hplace', auto: false, floor: 'beyond', design: d.id, x: f.dock.x - 1, y: f.dock.y });
     must(g, { k: 'route', floor: 'beyond', fx: f.dock.x - 1, fy: f.dock.y, tx: f.dock.x, ty: f.dock.y, item: 'quietEngine' });
     g.step(30 * TICK_RATE);
     const c0 = g.s.coin;

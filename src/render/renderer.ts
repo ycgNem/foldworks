@@ -436,6 +436,8 @@ export class Renderer {
           this.sfx('place', 0.7, 1.3);
           break;
         }
+        // a group placed on a high floor flew its routes on its own (DESIGN.md §21 "Auto-routing")
+        case 'autoRoute': fx.text(px + 8, py - 10, e.value ? `+${e.value} ROUTE${e.value === 1 ? '' : 'S'}` : e.id === 'cap' ? 'ROUTE CAP' : 'SHORT OF COIN', e.value ? C.gold : C.lamp1, 1.8); break;
         case 'firstRoute': fx.text(px + 8, py - 14, e.floor === 'beyond' ? 'FIRST COURIER ROUTE!' : e.floor === 'world' ? 'FIRST BARGE ROUTE!' : 'FIRST SKIFF ROUTE!', C.gold, 2, true); fx.kick(3); this.sfx('fanfare', 0.5); break;
         case 'bayOpen': fx.ring(px, py, C.gold, 40, 0.9, 6); fx.burst(px, py, 30, [C.gold, C.iron2, C.hot], 70, 40, 1, 1); fx.kick(3); break;
         case 'megaGive': fx.pop(px, py - 20, e.value ?? 1, 'mega:' + e.id, C.gold, e.id ?? null); fx.burst(px, py, 4, [C.gold, C.iron2], 25, 40); break;

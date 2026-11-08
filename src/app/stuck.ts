@@ -22,7 +22,10 @@ import { shares } from '../sim/systems/stats';
 import { poleReach } from '../sim/systems/power';
 import { fname } from '../sim/systems/modules';
 import type { HighFloorId } from '../data/floors';
-import { routeCap, routeWant, hent, hname, skiffRateNow, routeDist } from '../sim/systems/high';
+import { routeCap, routeWant, hent, hname, skiffRateNow, routeDist, maxRoutes, lotPrice, skiffsPrice } from '../sim/systems/high';
+import { perMin } from '../engine/fmt';
+import { BYPRODUCTS } from '../sim/systems/modules';
+import { RULES } from '../data/rules';
 import { DX, DY, type Ent, type FEnt, type Floor, type SkiffRoute } from '../sim/world';
 import type { Game } from '../sim/Game';
 import { capacity, gridIndex, powered } from '../render/powerview';
@@ -236,11 +239,14 @@ function routeCause(g: Game, r: SkiffRoute): Cause | null {
   const cap = routeCap(g, HF, r), want = routeWant(g, HF, r);
   const each = skiffRateNow(g, HF, routeDist(a, b));
   const more = Math.max(1, Math.ceil((want - cap) / Math.max(1e-6, each)));
+  const w = HF === 'beyond' ? 'courier' : HF === 'world' ? 'barge' : 'skiff';
+  // per minute, as every rate the player sees (the playability pass), and what the skiffs cost now
+  // (each one flying makes the next dearer: DESIGN.md §21 "Skiffs and coin")
   return {
     key: 'r' + r.id, floor: HF, kind: 'route', id: r.id, x: (a.x + a.w / 2 + b.x + b.w / 2) / 2, y: (a.y + a.h / 2 + b.y + b.h / 2) / 2,
     name: `${hname(g, a)} to ${hname(g, b)}`,
-    say: `The route from ${hname(g, a)} carries ${plain(cap, 2)} of ${plain(want, 2)} ${lc(r.item)} a second. ${more} ${HF === 'beyond' ? 'courier' : HF === 'world' ? 'barge' : 'skiff'}${more > 1 ? 's' : ''} more, or move them closer.`,
-    chips: [`{pip:starved} ${ic(r.item)} ${Math.round((cap / Math.max(1e-6, want)) * 100)}%`],
+    say: `The route from ${hname(g, a)} carries ${perMin(cap)} of ${perMin(want)} ${lc(r.item)} a minute. ${more} ${w}${more > 1 ? 's' : ''} more, or move them closer.`,
+    chips: [`{pip:starved} ${ic(r.item)} ${Math.round((cap / Math.max(1e-6, want)) * 100)}%`, `+${more} {coin:${pm(skiffsPrice(g, HF, more))}}`],
   };
 }
 
@@ -252,7 +258,7 @@ function districtCause(g: Game, m: FEnt, seen: Set<number>): Cause {
   const item = m.why as ItemId | null;
   if (m.state === 'starved') {
     const ins = st.routes.filter((r) => r.to === m.id && r.item === item);
-    if (!ins.length) return c(`${name}: no route brings it ${ic(item)} ${lc(item)}. The Route tool, from a group that makes it.`, [`{pip:starved} ${ic(item)} none`]);
+    if (!ins.length) return limitCause(g) ?? c(`${name}: no route brings it ${ic(item)} ${lc(item)}. Place a group that makes it (its routes fly on their own), or the Route tool.`, [`{pip:starved} ${ic(item)} none`]);
     const short = ins.find((r) => routeCap(g, HF, r) < 0.9 * routeWant(g, HF, r));
     if (short) return routeCause(g, short) ?? c('', []);
     const src = ins.map((r) => hent(g, HF, r.from)).find((f): f is FEnt => !!f && f.kind === 'module' && f.state !== 'work' && !seen.has(f.id));
@@ -260,12 +266,29 @@ function districtCause(g: Game, m: FEnt, seen: Set<number>): Cause {
     return c(`${name}: starved of ${ic(item)} ${lc(item)}. Its sources make less than it wants: another group making it.`, [`{pip:starved} ${ic(item)}`]);
   }
   const outs = st.routes.filter((r) => r.from === m.id && (!item || r.item === item));
-  if (!outs.length) return c(`${name}: nothing takes its ${ic(item)} ${lc(item)}. A route to the Dock or a group.`, [`{pip:blocked} ${ic(item)}`]);
+  if (!outs.length) return limitCause(g) ?? c(`${name}: nothing takes its ${ic(item)} ${lc(item)}. A route to the Dock or a group.`, [`{pip:blocked} ${ic(item)}`]);
   const short = outs.find((r) => routeCap(g, HF, r) < 0.9 * routeWant(g, HF, r));
   if (short) return routeCause(g, short) ?? c('', []);
   const dst = outs.map((r) => hent(g, HF, r.to)).find((f): f is FEnt => !!f && f.kind === 'module' && f.state !== 'work' && !seen.has(f.id));
   if (dst) return districtCause(g, dst, seen);
+  // into the Dock, the Hopper or the Bay (they take all), not short: Overdrive's surplus draining
+  // as it cools, nothing to fix (the review: "Stuck?" picked trivia)
+  if (outs.every((r) => hent(g, HF, r.to)?.kind !== 'module')) return c('', []);
   return c(`${name}: its ${ic(item)} ${lc(item)} backs up. Another route out, or a group that uses it.`, [`{pip:blocked} ${ic(item)}`]);
+}
+
+/** The floor's route cap, when it is what keeps a group unrouted (DESIGN.md §21 "The floor's
+ *  limit"): a lot adds 20, a fold packs a group's routes into one tile. */
+function limitCause(g: Game): Cause | null {
+  const st = g.s[HF]!;
+  const max = maxRoutes(g, HF);
+  if (st.routes.length < max) return null;
+  const lot = lotPrice(g, HF);
+  return {
+    key: 'cap', floor: HF, kind: 'goal', id: -1, x: NaN, y: NaN, name: 'the route cap',
+    say: `Every route this floor holds is flown (${st.routes.length}/${max}). ${lot ? `A lot adds ${RULES.routesPerLot.value} routes, ` : ''}${HF === 'beyond' ? 'or lift a group that sells least.' : 'or fold a group into one tile: its routes pack into its ports.'}`,
+    chips: [`{warn:routes ${st.routes.length}/${max}}`, ...(lot ? [`a lot {coin:${lot.format()}}`] : [])],
+  };
 }
 
 function districtCauses(g: Game, f: 'district' | 'world' | 'beyond'): { cause: Cause; cost: number }[] {
@@ -285,9 +308,14 @@ function districtCauses(g: Game, f: 'district' | 'world' | 'beyond'): { cause: C
   }
   for (const m of st.ents) {
     if (m.kind !== 'module' || m.paused || (m.state !== 'starved' && m.state !== 'blocked')) continue;
+    // a waste with nowhere to go blocks nothing up here (the chute takes it): never a cause
+    if (m.state === 'blocked' && m.why && BYPRODUCTS.has(m.why as ItemId)) continue;
     add(districtCause(g, m, new Set()), moduleWorth(g, m) * Math.max(0.25, 1 - m.fAvg));
   }
-  return [...by.values()];
+  // under 1% of the income a minute is trivia on a floor this big (the review: "Press 6 starved,
+  // 620/min lost" at 15 h, 0.1% of income)
+  const floor = g.incomePerMin() * 0.01;
+  return [...by.values()].filter((q) => q.cost >= floor);
 }
 
 // ------------------------------------------------------------------ the answer
