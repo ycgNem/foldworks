@@ -2520,7 +2520,7 @@ Each was a measured stall; none moved a data number.
   Legacy preview is 21 against the model's ~35; the Patent preview over 30-40 h is 6.3-6.5 before
   run 5's reset and 0.1-1.8 after it.
 - **A number that may block honest play** (not changed; for the owner): coal claims. Nearly every
-  Act II-III design digs coal, the block's price grows by half its base a block (ง18), and the
+  Act II-III design digs coal, the block's price grows by half its base a block (ยง18), and the
   District's growth takes every block. Rubber II, Processors II and Sensors II each waited on coal,
   not on layout. Either coal claims should grow more slowly, or a depth-2 fold should hold fewer
   claims than its parts.
