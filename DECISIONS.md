@@ -3330,3 +3330,105 @@ each run) resembles "start with N of X" prestige upgrades in many idles (Antimat
 start-with upgrades, Realm Grinder's). Kept because each copy is one specific design the player
 folded, placed by hand under claims and room, bounded at 4, and never a multiplier on production.
 Not done: unspent Patents boosting production (Cookie Clicker's heavenly chips, AdCap's angels).
+
+## Playability pass (2026-11-08): the second playtest's fixes
+
+A second first-time playtest of the merged build: income at 0 from minute 10 to 15, a goal naming
+a node that was not on screen for 15 minutes, the 15 h checkpoint's Factory standing still, a
+Reorganize card promising "~455 min", and the Festival given up because a two-input module could not
+be fed. Decisions (DESIGN.md §8, §11, §13, §16, §19, §21 carry the numbers):
+
+- **The Hopper pays the Dock price until the first fold** (was: until Pressing; `RULES.firstNodePay`,
+  docks.ts). Picking Folding sent the hand line's ingots into the Hopper as the wrong item, banked for
+  nothing. Chosen over "until Gizmo Theory", which would have made all of Act I's research free and
+  §13 check 11 (Hopper or Dock) meaningless. Measured: first fold 5:17 → 5:02, Gizmo Theory 13:27 →
+  12:22, the Dock-only player 4.1 → 5.1 min behind (check 11 wants 3.1+), slice end 21:35 → 20:36.
+- **Income 0 is said** (goals.ts `noIncome`): after 15 s at 0 while lines feed the Hopper, the frog
+  says where the coin goes and the fix. The Hopper's floor tag marks an item its node does not take
+  "→ bank", so a wrong item never reads as progress.
+- **A goal points at the nearest step on screen** (claims.ts `claimFix`, goals.ts `claimStep`): a
+  claim short names the Survey Office, a chunk with a deposit of that ore, Surveying when it can be
+  picked, or the node on the way. When the step cannot be taken now it rides as the goal's note
+  (quiet) rather than holding the bubble. The stamp refusal and the fold card use the same words.
+- **A research fill over 10 minutes says its time and the stamp that shortens it** (goals.ts
+  `LONG_FILL_MIN`, hopperwatch.ts `hopperRate`). The Coal Seams wall measured 11.0 and 12.5 min after
+  Gizmo Theory for the bots and ~40 min for the playtester at 15 gears/min; Coal Seams' cost is in
+  research.ts (cutsA's file this pass), so the wait became a decision (a gear copy to the Hopper)
+  instead of a cut.
+- **The Factory Chute never jams the floor** (modules.ts `dockTakes`): what its 20-a-item stock has
+  no room for goes on to the Factory Dock, which sells it or scraps slag, as the Bay does. The
+  checkpoint's stall was on main before this pass too (loaded under 1d0e84c: 9 of 9 blocked), so it is
+  a rule change, not a revert. Only items no Dock buys still back up, and the bell gives a full Chute
+  one cause, not one per module. Measured: 7 of 9 modules working after 2 minutes; the checkpoint's
+  income drop is the District's Overdrive wearing off, not the Factory.
+- **The Reorganize card's "back in" is honest** (reorganize.ts `nextRunPace`, `RULES.backInCap` 30): a
+  catch-up counts only against a record kept under the returning run's rules (`factoryPeak` on file),
+  and a measured number past twice the model is not shown. A slow run is the player's pace; a number
+  like 455 reads as a penalty for resetting. No save change: the fields already existed.
+- **Two-input modules: the rule stays, the words change.** Every input enters at the back on one
+  trunk, and trunks join side-on, so no part is needed; the screen said "one trunk feeds one module".
+  The report and the wheel card now say what the module needs at its back and how ("run each feed into
+  that trunk"); a starved module names the placed module whose front should run into it; a module
+  held back by a slower consumer reads **PACED** with per-minute numbers, not BLOCKED with a
+  per-second rate labelled per minute; a refused byproduct says "a trunk out of its side to the Factory
+  Dock carries slag off".
+- **A line's fix names the first short stage from the source** (tags.ts `lineRows`), so the Press's
+  report and the bell agree (+1 Smelter, not +1 Press).
+- **The audit's heap words are true** (audits.ts): the first audit said "a heap caps it at S" while
+  later boxes with a heap inside scored waste 0%. A heap inside the box is now counted and named ("N of
+  M slag piled in a heap inside the box. A module holds no heap: leave the heap outside, belt the slag
+  out to it"), and the S text says the heap is outside.
+- **Refusals keep their markup and are said where they happened** (hud.ts, app.ts `Refusal.at`): the
+  playtester read "no spare copy · k:SHIFTk:LMB stamps one" with its braces stripped, and a fold box's
+  refusal appeared far from the box.
+- **"a" or "an" by the word** (fmt.ts `aWord`): the Modules page read "Needs a iron claim"; the
+  helper is used wherever a name follows an article (claims, the bell, the rail, patents, trophies).
+- **Stamp prices say they are linear** ("250, then +50 each", "each copy adds half the bill"), not
+  "copy 250 = 100 × 2.5", which read as a multiplier.
+  The playtester's wire stamp "250 → 500" was two stamps (Shift held over two clicks), 250 → 375 →
+  500, the existing rule; nothing in the price changed.
+- **Belts and trunks show their facing and R** in their tag ("Belt → east", "R turns it"); it said only
+  "Belt · empty".
+- **Hints wait 0.4 s and sit above or below their row** (ui.ts `hintOn`, TipPlace `vertical`), never
+  over the next button. **Slips arrive one at a time** (1.6 s apart, at most 2 on screen) and banners
+  wait for the one before: three cards arrived at once at 6:30, and the Reputation banner sat on the
+  "Order filled" banner. The tooltips over the Reorganize card's "You keep" column and the fold card's
+  "Fold it!" button are what the hint placement fixes.
+- **The District Dock lights only its 6 busiest routes** when focused (render/district.ts
+  `FOCUS_SINK`), and its tag says how many land there: hovering it drew ~100 lines.
+- **The wheel opens on the goal's petal, else Build (Modules on the Factory).** It reopened on the
+  last section used, so a click where the Miner had been turned on the flow view. Chosen over fixed
+  icon positions: the petals' contents change with what is unlocked.
+- **Lessons a save has earned count as seen** (lessons.ts merges `pastLessons`): an imported save
+  brought the Factory floor's lesson card back.
+- **Zoom-out stops where the island fills the view** (app.ts `minZoom`). At 1280×720 that is 1×, so
+  it changes nothing there; on bigger screens the island no longer floats small in a void. Panning
+  was not re-pinned: the HUD pass removed pinning on purpose.
+- **Act II's rule 4 at 2 h stays open, re-measured**: active/idle 1.10 and 0.77 at this pass's base
+  (44e3b23), 1.05 and 0.92 after it (seeds 1000, 8919); both Bay floors are laid inside the window
+  (2:08, 2:06), the reason the test already logs. Its OPEN strings (1.10, 1.46) were written before
+  wave 1 merged and are left for the pass that re-measures Act II after the Machine Kit cut.
+- **Two Reorganize pace tests fail at this pass's base and after it, alike** (re-run on 44e3b23's
+  sources): seed 8919's run 2 never passes run 1's peak (14,046 against 14,642 after, 13,919 against
+  15,244 before; the pattern `BACK_IN_OPEN` logs for seed 1000), and the 1 h reset loop files 3.68
+  Patents an hour against the designed runs' 3.36 (the same 4,6,2,1,4,6,0 in both). Neither is this
+  pass's; both are for the Reorganize owner to re-derive.
+- **A new game or an imported save ends a catch-up still running** (app.ts `adopt`): the catch-up
+  belongs to the game being left, and the new game refused every command while it ran (found by
+  `npm run screens`, whose overnight state follows the running-catch-up state).
+- Files outside this agent's list touched minimally: `src/app/reorganize.ts` (the card's one text
+  line), `src/sim/systems/modules.ts` (the Chute and `dockTakes` only, no kit parts),
+  `src/app/app.ts` (refusal position, toast queue, banner delay, zoom; not the Hopper-click
+  handlers), `src/app/hud.ts` (refusals, slips, banners, the belt tag; not the Spark tip),
+  `src/app/district.ts` (the Dock tag row), `src/app/drawer.ts` (one row's value shortened: "no
+  audit on file · unfold it, fold it once" ran over its label at every size once `npm run screens`
+  ran on a fresh dev server; the +1 copy button's tip keeps the full reason).
+- **Run `npm run screens` on a freshly started dev server.** After a source file is hot-updated, a
+  setup that imports a module by its bare path (`import('/src/app/drawer.ts')`) gets a second copy
+  of it, so what it sets never reaches the game: the Drawer showed no design and the overnight
+  forecast none, and both read "clean".
+
+**Flagged as derivative.** Nothing new. A hover delay before a tooltip and a queue for notification
+toasts are general UI conventions, not one shipped game's. The PACED status sits beside the existing
+pips; it reads like Factorio's "output full", but it names a consumer and a rate rather than a state
+of the machine.

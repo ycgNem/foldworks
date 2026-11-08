@@ -253,7 +253,8 @@ function keptDetail(app: App, k: KeptDesign, r: Rect) {
   row('{u:coin} bill', `{coin:${Num.of(keptBill(k)).format()}} · ${machines.length} {u:build} ${k.parts.length - machines.length} belts`);
   // the returning run (the playability pass): what comes back at every run's start
   if (returnsBuilt(k)) row('{u:blueprint} comes back', `{reset:${returnCopies(g, k)} ${returnCopies(g, k) === 1 ? 'copy' : 'copies'}} a run · ${g.s.meta.dies?.[k.id] ?? 0}/${RULES.dieCopiesMax.value} dies`);
-  else row('{u:blueprint} comes back', '{soft:no audit on file · unfold it, fold it once}');
+  // (short: the value has half the row at 1024x640; the +1 copy button's tip says why in full)
+  else row('{u:blueprint} comes back', k.nested ? '{soft:no die · a group layout}' : '{soft:after a refold}');
   const filed = k.product ? g.s.meta.patented?.[k.product] : undefined;
   if (filed) row('{u:reset} on file', `{reset:${filed.grade} · ${filed.steps} step${filed.steps === 1 ? '' : 's'} · tier ${filed.tier}}`);
   // what it can do in this run

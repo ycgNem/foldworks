@@ -292,6 +292,9 @@ export class App {
     for (const f of g.s.flags) if (f.startsWith('page:')) this.hud.opened.add(f.slice(5));
     this.hud.codexSeen = g.s.codex.length;
     this.offline = null;
+    // a catch-up still running belongs to the game being left: it ends with it (else the new game
+    // refused every command as "catching up on your time away first")
+    if (this.offlineJob) { this.offlineJob = null; this.loop.job = null; }
     this.gradeId = null;
     this.nameDraft = null;
     this.sliceAt = null;

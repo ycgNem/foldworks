@@ -22,7 +22,7 @@ import { claimLoad, claimsHeld, claimsUsed } from '../sim/systems/claims';
 import { Num } from '../engine/num';
 import { perMin, plain } from '../engine/fmt';
 import { kindRate } from './rates'; // Milestone 13: rates on the wheel's item cards
-import { bigWidth, smallWidth, drawSmall, drawBig, SMALL_H, textWidth } from '../ui/font';
+import { bigWidth, smallWidth, drawSmall, drawBig, SMALL_H } from '../ui/font';
 import { richWidth, layoutRich, drawLayout } from '../ui/rich';
 import { art, buttonRaw } from '../ui/paper';
 import { T, onPaper } from '../ui/theme';
@@ -981,7 +981,13 @@ function infoTag(app: App, it: Item, anchor: { x: number; y: number }) {
   const rows = it.rows.map((r) => layoutRich(r, INFO_W));
   const verbs = it.verbs ? layoutRich(it.verbs, INFO_W) : null;
   const lines = chipRows(it.chips);
-  const head = Math.max(34, 15 + lines.length * (CHIP_H + 2));
+  // the name: in the display face when it fits beside its key, else wrapped in the text face (the
+  // second playtest read "Iron ingot x3." and "Copper wire x." cut to the display face's room)
+  const kw = it.key ? keycapWidthOf(it.key) + 3 : 0;
+  const bigName = bigWidth(it.name) <= INFO_W - 36 - kw;
+  const nameL = bigName ? null : layoutRich(it.name.replace(/[{}]/g, ''), INFO_W - 36 - kw);
+  const nameH = nameL ? Math.max(14, nameL.h + 2) : 14;
+  const head = Math.max(34, nameH + 1 + lines.length * (CHIP_H + 2));
   let ch = head + 2;
   for (const r of rows) ch += r.h;
   if (verbs) ch += 3 + verbs.h;
@@ -1008,21 +1014,13 @@ function infoTag(app: App, it: Item, anchor: { x: number; y: number }) {
     if (it.locked) padlock(app, r.x + 25, r.y + 25);
   }
   const tx = r.x + 36;
-  const tw = cw - 36;
-  // the name, shrunk to fit, the hotkey beside it
-  const kw = it.key ? keycapWidthOf(it.key) + 3 : 0;
-  // in the display face when it fits, else in the text face (the second playtest read "Iron ingot
-  // ×3." and "Copper wire x." when a module's name was cut to the display face's room)
+  // the name, the hotkey beside it
   const ink = it.locked ? T.inkSoft : T.ink;
-  if (bigWidth(it.name) <= tw - kw) ui.big(it.name, tx, r.y + 1, ink);
-  else {
-    let name = it.name;
-    while (name.length > 3 && textWidth(name) > tw - kw) name = name.slice(0, -2) + '.';
-    ui.text(name, tx, r.y + 3, ink);
-  }
+  if (bigName) ui.big(it.name, tx, r.y + 1, ink);
+  else drawLayout(ui, nameL!, tx, r.y + 2, ink);
   if (it.key) keycapK(ui, it.key, r.x + cw - kw + 3, r.y);
   // the price and the counts as chips under the name
-  let cy = r.y + 15;
+  let cy = r.y + nameH + 1;
   for (const line of lines) {
     let x = tx;
     for (const c of line) x += chip(ui, x, cy, c.text, c.o) + 2;
