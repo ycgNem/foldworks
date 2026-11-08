@@ -78,6 +78,14 @@ export function runDocks(g: Game) {
     } else {
       creditResearch(g, it.item, n);
       g.emit({ type: 'hopper', x: it.x, y: it.y, id: it.item, floor });
+      // the first node (DESIGN.md §8): until Pressing is researched the Hopper pays like the Dock,
+      // so the one line a new player has never takes the income to 0 while it feeds research
+      const v = g.done('pressing') ? 0 : ITEMS[it.item].value * RULES.firstNodePay.value;
+      if (v > 0) {
+        const pay = n.mul(v);
+        g.earn(pay);
+        g.emit({ type: 'sell', x: it.x, y: it.y, id: it.item, value: pay.toNumber(), floor });
+      }
     }
   }
   g.intake.length = 0;

@@ -51,7 +51,9 @@ export type Step =
   | { k: 'stamp'; design: string; copies: number; only?: Policy[] }
   // the Factory floor (DESIGN.md §11)
   | { k: 'fplace'; design: string; x: number; y: number; rot: Dir; only?: Policy[] }
-  | { k: 'ftrunk'; x: number; y: number; rot: Dir; only?: Policy[] };
+  | { k: 'ftrunk'; x: number; y: number; rot: Dir; only?: Policy[] }
+  // a module lifted off the Factory floor back into the inventory (a spare copy to place elsewhere)
+  | { k: 'fremove'; x: number; y: number; only?: Policy[] };
 
 const P = (kind: BuildKind, x: number, y: number, rot: Dir): Step => ({ k: 'place', kind, x, y, rot });
 const SW = (kind: BuildKind, x: number, y: number, rot: Dir): Step => ({ k: 'swap', kind, x, y, rot });
@@ -60,7 +62,7 @@ const need = (research: ResearchId): Step => ({ k: 'need', research });
 const order = (id: string): Step => ({ k: 'order', id });
 const fold = (x: number, y: number, w: number, h: number, name: string): Step => ({ k: 'fold', x, y, w, h, name });
 /** Lines folded from ore alone: their designs take nothing in through their ports. */
-const SOURCE_LINES = new Set(['Iron ingots', 'Copper wire']);
+const SOURCE_LINES = new Set(['Iron plates', 'Iron ingots', 'Copper wire']);
 const fplace = (design: string, x: number, y: number, rot: Dir): Step => ({ k: 'fplace', design, x, y, rot });
 const trunks = (pts: [number, number, Dir][]): Step[] => pts.map(([x, y, rot]) => ({ k: 'ftrunk', x, y, rot }));
 const not = (policies: Policy[], steps: Step[]): Step[] => {
@@ -120,6 +122,15 @@ export const PLAN: Step[] = [
   need('pressing'),
   SW('press', 4, 3, E),
   SW('press', 4, 2, E),
+  // the first fold (DESIGN.md §10 The first fold, §13 check 6): Folding is node 2 (40 plates, L1's
+  // into the Hopper); L2 (miner, smelter, press: box 2,2 3x1) folds into "Iron plates", which goes
+  // to work beside the Factory Dock by itself (11,0); its free first copy goes beside it at (10,3),
+  // and L2 is built again in the Workshop
+  need('folding'),
+  fold(2, 2, 3, 1, 'Iron plates'),
+  { k: 'stamp', design: 'Iron plates', copies: 1 },
+  fplace('Iron plates', 10, 3, N),
+  P('miner', 2, 2, E), P('smelter', 3, 2, E), P('press', 4, 2, E),
   // L3: miner -> smelter -> press -> row 0 -> Dock from above
   P('miner', 1, 2, N), P('smelter', 1, 1, N), P('heap', 0, 1, N), P('heap', 0, 0, E),
   P('press', 1, 0, E), ...belts([[2, 0, E], [3, 0, E], [4, 0, E], [5, 0, E], [6, 0, S]]),
@@ -145,6 +156,15 @@ export const PLAN: Step[] = [
     P('miner', 1, 3, S), P('smelter', 1, 4, S), P('heap', 2, 4, E), P('press', 1, 5, E), P('assembler', 2, 5, E), ...belts([[3, 5, E], [4, 5, E], [5, 5, E]]),
   ]),
   P('heap', 4, 4, E), P('heap', 5, 4, E),
+  // the second fold, once L4 runs (an audit holds the plan up for its 70 s): C1 (miner, smelter, wire press: box 9,3
+  // 3x1) folds into "Copper wire", which feeds Gizmo Theory's wire into the Factory Hopper's west
+  // side (9,6) (the Dock-only player: the Dock's top side, (10,0)), and C1 is built again; once the
+  // Festival's chains go down it moves to chain A (copper claims: 3 + 2 for chunk B's deposit, five
+  // copies in all)
+  fold(9, 3, 3, 1, 'Copper wire'),
+  ...not(['dockOnly'], [fplace('Copper wire', 9, 6, E)]),
+  ...not(['planner', 'greedy'], [fplace('Copper wire', 10, 0, S)]),
+  P('miner', 11, 3, W), P('smelter', 10, 3, W), P('press', 9, 3, W),
   need('gizmoTheory'),
   // the Gizmo assembler between the Dock and the Hopper: gears from L1 (west), wire from C1 (east)
   P('assembler', 7, 3, S),
@@ -178,7 +198,6 @@ export const PLAN: Step[] = [
   // assembler, box 4,3 4x1: ingots and wire in, Gizmos out). Each line is audited once it runs.
   ...not(['dockOnly'], [fold(3, 11, 2, 2, 'Iron ingots')]),
   ...not(['planner', 'greedy'], [fold(1, 1, 1, 2, 'Iron ingots')]),
-  fold(12, 0, 1, 3, 'Copper wire'),
   fold(4, 3, 4, 1, 'Gizmo works'),
   // the Workshop gets L1's tail back (Gizmos for coin at the Workshop Dock)
   P('press', 4, 3, E), P('assembler', 5, 3, E), P('belt', 6, 3, N), P('assembler', 7, 3, N),
@@ -192,6 +211,9 @@ export const PLAN: Step[] = [
   //    3 >^..Z     chain B (stamped copies): I (8,4) -> (9,4) -> (10,4) -> (11,4) -> Z (11,3) north
   //    4 ^I>>^              into the Dock; W (9,5) north into (9,4), its slag (8,5) W, (7,5) N,
   //    5 ^<W..              (7,4) N into (7,3); I's slag north into (8,3); chain C (below) west of it
+  // the Copper wire copy that fed Gizmo Theory comes off the floor for chain A
+  ...not(['dockOnly'], [{ k: 'fremove', x: 9, y: 6 }]),
+  ...not(['planner', 'greedy'], [{ k: 'fremove', x: 10, y: 0 }]),
   fplace('Gizmo works', 9, 1, E), fplace('Iron ingots', 7, 1, E), fplace('Copper wire', 8, 0, S),
   ...trunks([[8, 1, E], [9, 0, E], [10, 0, S], [7, 2, S], [7, 3, E], [8, 3, N], [8, 2, E], [9, 2, E]]),
   // chain B: one stamped copy of each
@@ -535,6 +557,10 @@ export class Bot {
         const e = g.fentAt(s.x, s.y);
         return !!e && e.kind === 'trunk' && e.rot === s.rot;
       }
+      case 'fremove': {
+        const e = g.fentAt(s.x, s.y);
+        return !e || e.kind !== 'module';
+      }
     }
   }
 
@@ -581,6 +607,8 @@ export class Bot {
         if (!d || d.spare < 1 || g.fentAt(s.x, s.y)) return false;
         return this.buy({ k: 'fplace', design: d.id, x: s.x, y: s.y, rot: s.rot }, 'module');
       }
+      case 'fremove':
+        return this.buy({ k: 'fremove', x: s.x, y: s.y }, 'lift');
       case 'ftrunk':
         if (!g.flag('factoryOpen') || g.s.coin.lt(FACTORY.trunkCost)) return false;
         return this.buy({ k: 'ftrunk', x: s.x, y: s.y, rot: s.rot }, 'trunk');
