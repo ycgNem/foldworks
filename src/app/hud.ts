@@ -29,7 +29,7 @@ import { purse, bell, counters, lift, notebook, bookmarks, sectionTabs, edgeArro
 import { rail, diegetic, type Cameo } from './rail';
 import { newspaper } from './gazette';
 import { floorTags } from './floortags';
-import { pinnedReport, hoverEnt, worldTip, zones, pinTop, bigSafe } from './tags';
+import { pinnedReport, hoverEnt, worldTip, zones, pinTop, bigSafe, facing, worldRect } from './tags';
 import { isleTileKey, isleTileTip, isleFrame, clearDragTip } from './islands';
 import { drawWheel } from './wheel';
 import { nextGoal } from './goals';
@@ -83,6 +83,9 @@ export interface HudState {
   rain: { x: number; y: number; vx: number; vy: number; f: number; spin: number; gold?: boolean }[];
   /** the first Miner has been celebrated */
   firstMiner: boolean;
+  /** seconds until the next slip may slide in (one moment at a time: the second playtest saw a
+   * trophy and two toasts land at once at 6:30) */
+  slipGate: number;
   /** the last coin value seen, and sparkles around the counter while it climbs */
   coinLast: number;
   glints: { x: number; y: number; t: number }[];
@@ -130,7 +133,7 @@ export interface HudState {
 export function newHudState(): HudState {
   return {
     coinShown: 0, coinBump: 0, hoverTile: null, storeTab: 'build', seen: new Set(), problemIdx: 0, ship: [], focus: null, draft: '', fieldSeen: false, stamped: false, confetti: 0, flakes: [], treePage: 2, buildTab: 'build',
-    tabSeen: new Set(), tabRung: new Set(), opened: new Set(), codexSeen: 0, celebs: [], rain: [], coinLast: -1, glints: [], firstMiner: false,
+    tabSeen: new Set(), tabRung: new Set(), opened: new Set(), codexSeen: 0, celebs: [], rain: [], coinLast: -1, glints: [], firstMiner: false, slipGate: 0,
     collapsed: new Set(), goalKey: null, goalAt: -10, goalUi: null, crawlHot: false,
     foldedAt: -10, cameos: [], offerSeen: null, codexHeard: -1, ordersHeard: -1, bellIds: new Set(), bellAt: -10, liftAngle: 180, liftRect: null, lastPage: null, purseBottom: 70, cornerRect: null,
     marksRect: null, clipRects: [], hoverKey: null, hoverSince: 0, hoverShown: -10,
@@ -268,6 +271,9 @@ function panArrows(app: App, L: Layout) {
 // ------------------------------------------------------------------ slips, trophies, refusals
 
 const TOAST_ICON: Record<string, UIconName> = { flask: 'research', crate: 'orders', module: 'fold' };
+/** seconds between two slips sliding in, and how many rest at once */
+const SLIP_STAGGER = 1.6;
+const SLIP_MAX = 2;
 
 /** The slips under the lift: toasts as paper slips that slide in from the right, rest, and slide
  * out (newest on top). Every line is wrapped to the slip; a slip with no room in full shows its
@@ -282,9 +288,27 @@ function slips(app: App, L: Layout, dt: number) {
     if (app.trophyPops.length > 2) app.trophyPops = app.trophyPops.slice(-2);
     return;
   }
-  for (const t of app.toasts) t.t += dt;
+  // one at a time: a slip waits for the one before it to land and be read (SLIP_STAGGER), and no
+  // more than SLIP_MAX rest at once; trophies go first, then toasts in the order they came
+  const hs = app.hud;
+  hs.slipGate = Math.max(0, hs.slipGate - dt);
+  let showing = app.trophyPops.filter((p) => p.on).length + app.toasts.filter((t) => t.on).length;
+  const start = (q: { on?: boolean }) => {
+    if (q.on || hs.slipGate > 0 || showing >= SLIP_MAX) return;
+    q.on = true;
+    showing++;
+    hs.slipGate = SLIP_STAGGER;
+  };
+  for (const p of app.trophyPops) {
+    if (p.t < 0) { p.t = Math.min(0, p.t + dt); continue; }
+    start(p);
+    if (p.on) p.t += dt;
+  }
+  for (const t of app.toasts) {
+    start(t);
+    if (t.on) t.t += dt;
+  }
   app.toasts = app.toasts.filter((t) => t.t < t.life);
-  for (const p of app.trophyPops) p.t += dt;
   app.trophyPops = app.trophyPops.filter((p) => p.t < 4);
   const S = L.slips;
   const w = S.w;
@@ -296,7 +320,7 @@ function slips(app: App, L: Layout, dt: number) {
   // centre over the District's tool strip and the floor's tags): a gold ribbon that slides in with
   // the trophy's name, or "3 trophies!" for a batch, and its bonus on a slip under it
   for (const p of app.trophyPops.slice(-2).reverse()) {
-    if (p.t < 0) continue;
+    if (p.t < 0 || !p.on) continue;
     const t = TROPHIES.find((q) => q.id === p.id);
     if (!t) continue;
     const ids = [p.id, ...(p.more ?? [])];
@@ -326,6 +350,7 @@ function slips(app: App, L: Layout, dt: number) {
     y += h + 4;
   }
   for (const t of app.toasts.slice().reverse()) {
+    if (!t.on) continue;
     const icon = t.icon ? (TOAST_ICON[t.icon] ?? (t.icon in UICON ? (t.icon as UIconName) : null)) : null;
     const tx = icon ? 12 : 0;
     const cw = w - 12 - tx;
@@ -358,12 +383,17 @@ function refusal(app: App, dt: number) {
   r.t -= dt;
   if (r.t <= 0) { app.refusal = null; return; }
   const ui = app.ui;
-  const L = layoutRich(`{bad:${r.text.replace(/[{}]/g, '')}}`, 200);
+  // its markup kept (keycaps, coin, research names) in red ink: the second playtest read "no spare
+  // copy · k:SHIFTk:LMB stamps one coin:150" when the braces were stripped to wrap it in {bad:}
+  const L = layoutRich(r.text, 200);
   const w = L.w + 12, h = L.h + 7;
-  const x = Math.max(2, Math.min(ui.w - w - 2, ui.mx - Math.floor(w / 2))), y = Math.max(2, ui.my - h - 10);
+  // at a tile it is about (a fold box's top edge), else at the cursor
+  const at = r.at ? worldRect(app, r.at.x, r.at.y, 0, 0) : null;
+  const ax = at ? at.x : ui.mx, ay = at ? at.y : ui.my;
+  const x = Math.max(2, Math.min(ui.w - w - 2, ax - Math.floor(w / 2))), y = Math.max(2, ay - h - 10);
   ui.floating(() => {
     ui.ctx.globalAlpha = Math.min(1, r.t * 3);
-    bubbleRaw(ui.ctx, x, y, w, h, 'bottom', Math.max(6, Math.min(w - 12, ui.mx - x - 3)));
+    bubbleRaw(ui.ctx, x, y, w, h, 'bottom', Math.max(6, Math.min(w - 12, ax - x - 3)));
     drawLayout(ui, L, x + 6, y + 4, T.bad);
     ui.ctx.globalAlpha = 1;
   });
@@ -374,8 +404,11 @@ const BANNER_S = 2.8;
 
 /** Put up a banner for a first (a Codex entry, the first Mk2, a reputation level): a ribbon that
  * drops from the top centre. */
-export function banner(app: App, title: string, sub: string, color: string = C.gold) {
-  app.hud.celebs.push({ kind: 'banner', t: 0, x: 0, y: 0, title, sub, color });
+export function banner(app: App, title: string, sub: string, color: string = C.gold, delay = 0) {
+  // one at a time (the second playtest: the Reputation banner landed on "ORDER FILLED!"): it waits
+  // `delay`, and for the banner before it to lift away
+  const last = app.hud.celebs.filter((c) => c.kind === 'banner').reduce((m, c) => Math.max(m, BANNER_S - c.t), 0);
+  app.hud.celebs.push({ kind: 'banner', t: -Math.max(delay, last), x: 0, y: 0, title, sub, color });
 }
 
 /** A ribbon with a title in the display face (scale 1-3) and a sub line on a tag under it, centred
@@ -473,7 +506,8 @@ function celebrations(app: App, L: Layout, dt: number) {
       }
       ctx.globalAlpha = 1;
     } else if (c.kind === 'banner') {
-      // a first: a ribbon drops in at the top centre, holds, and lifts away; several stack
+      // a first: a ribbon drops in at the top centre, holds, and lifts away; one at a time
+      if (c.t < 0) continue;
       const i = bannerN++;
       if (i > 2) continue;
       const col: RibbonColor = c.color ? ribbonFor(accentRole(c.color)) : 'gold';
@@ -595,7 +629,9 @@ function hoverReport(app: App) {
   if (e.kind === 'dock') { ui.tip([{ text: '{big:The Dock}' }, { text: BUILD.dock.blurb }, { text: '{k:LMB} orders' }], 180, on); return; }
   if (e.kind === 'hopper') { ui.tip([{ text: '{big:The Hopper}' }, { text: BUILD.hopper.blurb }, { text: '{k:LMB} research' }], 180, on); return; }
   if (e.kind === 'belt') {
-    ui.tip([{ text: '{big:Belt}' }, { text: e.item ? `{i:${e.item}} ${itemName(e.item).toLowerCase()}${e.mv ? '' : ' · {bad:stuck}'}` : '{soft:empty}' }, ...rx], 170, on);
+    // its facing, and that R turns it, even on the brief tag (the second playtest: "Belt · empty"
+    // hid which way a placed belt ran)
+    ui.tip([{ text: `{big:Belt} ${facing(e.rot)}` }, { text: e.item ? `{i:${e.item}} ${itemName(e.item).toLowerCase()}${e.mv ? '' : ' · {bad:stuck}'}` : '{soft:empty}' }, { text: brief ? '{k:R} turns it' : '{k:R} turn  {k:SHIFT}{k:R} back  {k:X} remove' }], 170, on);
     return;
   }
   if (e.kind === 'heap') { ui.tip([{ text: '{big:Slag Heap}' }, { text: `{i:slag} ${e.count} / ${BUILD.heap.capacity}` }, { text: '{soft:empties out its front}' }], 170, on); return; }

@@ -22,7 +22,7 @@ import { auditTicks, projectAudit, entsIn, gradedAudit } from '../sim/systems/au
 import { BUILD } from '../data/machines';
 import { gradeFAudit } from '../sim/systems/nested';
 import { inBill, defaultName, stampCost, stampRefusal, unfoldRefusal, fname, feedsDock, productCopies, kitsFor, mainItem, sliceEndParts, stampFree, stampStep } from '../sim/systems/modules';
-import { claimsHeld, claimsUsed, oresOf, copiesOf } from '../sim/systems/claims';
+import { claimsHeld, claimsUsed, oresOf, copiesOf, claimRefusal, claimShort } from '../sim/systems/claims';
 import type { AuditResult, AuditState, Box, FAuditState, ModuleDesign } from '../sim/world';
 import { frame, button, uiIcon, portrait, coinIcon, clipboard, chip, chipWidth, meter, tag, tagSize, bubble, ribbon, rule, twine, RIBBON_H, CHIP_H, T, type Role } from './chrome';
 import { perMin as perMinW, menuTemplate, cells, fmt, rays, slamScale } from './widgets';
@@ -646,8 +646,9 @@ export function adviceRow(text: string): AdviceRow {
   if ((m = /^(.+?) ran (\d+)% of the time\. Balance the ratio: (.+)$/.exec(s))) return { act: 'Balance the ratio', cause: `${m[1]} {warn:${m[2]}%} · ${m[3]}`, worth, to };
   if ((m = /^(.+?) ran (\d+)% \((.+?)\)\. (.+?): (.+)$/.exec(s))) return { act: m[4], cause: `${m[1]} {warn:${m[2]}%} ${why(m[3])} · ${m[5]}`, worth, to };
   if ((m = /^(\d+) of (\d+) (.+?) went nowhere(?: useful)?\. (.+)$/.exec(s))) return { act: m[4], cause: `${itemTok(m[3])} ${m[1]} of ${m[2]} {bad:went nowhere}`, worth, to };
+  if ((m = /^(\d+) of (\d+) (.+?) piled in a heap inside the box\. A module holds no heap: (.+)$/.exec(s))) return { act: m[4].charAt(0).toUpperCase() + m[4].slice(1), cause: `${itemTok(m[3])} ${m[1]} of ${m[2]} {bad:in a heap inside the box} · a module holds no heap`, worth, to };
   if ((m = /^(\d+) of (\d+) tiles are (machines|modules); (\d+) would be fully compact\. (.+)$/.exec(s))) return { act: m[5], cause: `${m[3]} on ${m[1]} of ${m[2]} tiles · ${m[4]} for full marks`, worth, to };
-  if ((m = /^One step to S\+: use the (.+?) inside the box/.exec(s))) return { act: `Use the ${m[1].split(' and ').map(itemTok).join(' and ')} inside the box`, cause: '{i:slagBrick} a press · {i:gravel} a crusher · a heap caps it at S', worth, to };
+  if ((m = /^One step to S\+: use the (.+?) inside the box/.exec(s))) return { act: `Use the ${m[1].split(' and ').map(itemTok).join(' and ')} inside the box`, cause: '{i:slagBrick} a press · {i:gravel} a crusher · a heap outside caps it at S', worth, to };
   if ((m = /^(Flawless|Nothing to fix): (.+)$/.exec(s))) return { act: `{good:${m[1]}}`, cause: m[2], worth, to };
   if ((m = /^Refolded at its kept grade \((.+?)\)/.exec(s))) {
     const n = /for (\d+) s \((\d+)% busy\)/.exec(s);
@@ -1080,7 +1081,9 @@ function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, 
   const factor = 1 + RULES.stampGrowth.value * copies;
   const next = Num.of(Math.round(d.bill * (1 + RULES.stampGrowth.value * (copies + 1))));
   ui.small('COPY', tx, yy + 2, T.inkSoft);
-  const ps = `{coin:${cost.format()}} {soft:= ${fmt(d.bill)} ×${factor.toFixed(1)}}`;
+  // linear, and said so: "250, then +50 each" (the second playtest read "250 = 100 ×2.5" as a curve)
+  void factor;
+  const ps = cost.isZero() ? `{good:free} {soft:then ${fmt(d.bill)}, +${stampStep(d).format()} each}` : `{coin:${cost.format()}} {soft:then +${stampStep(d).format()} each}`;
   const pxo = smallWidth('COPY') + 5;
   ui.clip(tx + pxo, yy, tr - tx - pxo, LINE_H);
   drawRich(ui, ps, tx + pxo, yy);
@@ -1089,7 +1092,7 @@ function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, 
     { text: '{big:The stamp price}  per product' },
     { text: `bill {coin:${fmt(d.bill)}} × 1 + 0.5n · n = ${copies}` },
     { text: `n counts every copy of ${item ? `{i:${item}} ${itemName(item).toLowerCase()}` : 'this product'}, any design` },
-    { text: `next {coin:${next.format()}} · the 5th copy costs 3× the 1st` },
+    { text: `next {coin:${next.format()}} · each copy adds half the bill, {coin:${stampStep(d).format()}}` },
   ], 220);
   yy += LINE_H + 1;
   // Machine Kits and claims, as chips
@@ -1113,7 +1116,10 @@ function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, 
   const whyNot = stampRefusal(g, d);
   if (whyNot) {
     ui.clip(x + 6, yy, w - 12, LINE_H);
-    ui.text(ellipsize(whyNot, w - 12), x + 6, yy, T.bad);
+    // a claim short in its short form (the ore's icon and the nearest fix); the rest as they are
+    const cs = whyNot === claimRefusal(g, d) ? claimShort(g, d) : null;
+    if (cs) drawRich(ui, `{bad:${cs}}`, x + 6, yy);
+    else ui.text(ellipsize(whyNot, w - 12), x + 6, yy, T.bad);
     ui.unclip();
     ui.hint(x + 6, yy, w - 12, LINE_H, [{ text: `{bad:${whyNot}}` }], 180);
   }
@@ -1176,8 +1182,10 @@ function ledger(app: App, D: Rect, foot = 0) {
     ui.text(ITEMS[it].name, x + 11, yy, T.ink);
     ui.unclip();
     ui.text(String(n), x + w - 30, yy, T.ink, { align: 'right' });
-    ui.text(`×${(1 + RULES.stampGrowth.value * n).toFixed(1)}`, x + w, yy, T.coin, { align: 'right' });
-    ui.hint(x, yy, w, LINE_H, [{ text: `{big:${ITEMS[it].name}}  ${n} cop${n === 1 ? 'y' : 'ies'}` }, { text: `next stamp of any design making it · bill ×${(1 + RULES.stampGrowth.value * n).toFixed(1)}` }], 190);
+    // the next copy's price (of the design making it that the page lists first), not a factor
+    const pd = g.s.designs.find((q) => mainItem(q) === it)!;
+    ui.text(stampCost(g, pd).format(), x + w, yy, T.coin, { align: 'right' });
+    ui.hint(x, yy, w, LINE_H, [{ text: `{big:${ITEMS[it].name}}  ${n} cop${n === 1 ? 'y' : 'ies'}` }, { text: `next stamp {coin:${stampCost(g, pd).format()}} · then +${stampStep(pd).format()} each` }], 190);
     yy += LINE_H;
     rule(ui, x, yy - 1, w);
   }

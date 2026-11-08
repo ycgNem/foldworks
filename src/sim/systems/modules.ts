@@ -666,12 +666,23 @@ export function runModules(g: Game) {
   for (const e of f.ents) {
     if (e.kind === 'fchute') {
       // the Chute drops what it was given to the Workshop's stock (fractions too: the Chute Mouths
-      // push out whole items), DESIGN.md §21
+      // push out whole items), DESIGN.md §21. It never jams the floor (the second playtest: the 15 h
+      // checkpoint's Factory stood with 9 of 9 modules blocked on items no Chute Mouth took): what
+      // the stock has no room for goes on to the Factory Dock and sells, as the Bay's does
       const st = (g.s.chute ??= {});
+      const cap = chuteCap(g);
       for (const k of Object.keys(e.inBuf)) {
         if (e.inBuf[k] <= 0) continue;
-        st[k as ItemId] = (st[k as ItemId] ?? 0) + e.inBuf[k];
-        e.inBuf[k] = 0;
+        const have = st[k as ItemId] ?? 0;
+        const keep = Math.min(e.inBuf[k], Math.max(0, cap - have));
+        st[k as ItemId] = have + keep;
+        e.inBuf[k] -= keep;
+        const n = Math.floor(e.inBuf[k] + 1e-9);
+        if (n >= 1 && dockTakes(k)) {
+          e.inBuf[k] -= n;
+          const dock = f.ents.find((q) => q.kind === 'fdock');
+          g.intake.push({ to: 'dock', item: k as ItemId, x: (dock ?? e).x + 1, y: (dock ?? e).y + 1, n: Num.of(n), floor: 'factory' });
+        }
       }
       continue;
     }
@@ -783,11 +794,17 @@ function megaCheck(g: Game, bay: FEnt) {
   }
 }
 
+/** Does the Factory Dock take it (it sells it, or scraps a waste for nothing)? Machine Kits and
+ * Drill Bits it refuses. */
+export function dockTakes(item: string): boolean {
+  return !!ITEMS[item as ItemId]?.waste || !ITEMS[item as ItemId]?.refused;
+}
+
 /** How much more of `item` the destination can take this tick. */
 export function acceptRoom(g: Game, to: FEnt, item: string): number {
   // the Factory Dock scraps slag for nothing and refuses what the Dock refuses (Machine Kits,
   // Drill Bits); the Factory Hopper takes slag only while research wants it (DECISIONS.md)
-  if (to.kind === 'fdock') return !!ITEMS[item as ItemId]?.waste || !ITEMS[item as ItemId]?.refused ? Infinity : 0;
+  if (to.kind === 'fdock') return dockTakes(item) ? Infinity : 0;
   if (to.kind === 'fhopper') return (item !== 'slag' && item !== 'sludge') || hopperWantsWaste(g, item) ? Infinity : 0;
   if (to.kind === 'fbay') {
     // the Bay takes whatever some stage of the Drill is built from, always: what the stage now
@@ -796,7 +813,9 @@ export function acceptRoom(g: Game, to: FEnt, item: string): number {
     if (!MEGA_ITEMS.has(item)) return 0;
     return Infinity;
   }
-  if (to.kind === 'fchute') return Math.max(0, chuteCap(g) - (g.s.chute?.[item as ItemId] ?? 0) - (to.inBuf[item] ?? 0));
+  // the Chute takes everything: past its stock's room it sells on at the Factory Dock (above); what
+  // no Dock buys (Machine Kits, Drill Bits) it takes only while the stock has room
+  if (to.kind === 'fchute') return dockTakes(item) ? Infinity : Math.max(0, chuteCap(g) - (g.s.chute?.[item as ItemId] ?? 0) - (to.inBuf[item] ?? 0));
   if (to.kind !== 'module' || to.paused) return 0;
   const d = g.design(to.design);
   const r = d?.ins[item as ItemId];

@@ -303,7 +303,7 @@ function keepColumn(ui: UI, g: Game, c: Rect) {
   const pace = nextRunPace(g);
   if (pace.perMin > 0 || pace.district) {
     const to = pace.perMin > 0 ? `{coinc:${Num.of(Math.round(pace.perMin)).format()}/min}` : 'your Act II floor';
-    const L = layoutRich(`{u:ff} back to ${to} in ~${pace.minutes} min`, c.w);
+    const L = layoutRich(`{u:ff} back to ${to}${pace.minutes !== null ? ` in ~${pace.minutes} min` : ''}`, c.w);
     drawLayout(ui, L, c.x, y, T.ink);
     const sub = [pace.built ? `${pace.built} design${pace.built === 1 ? '' : 's'} back built` : 'keep designs: they come back built', pace.district ? 'the District after' : ''].filter(Boolean).join(' · ');
     const S = layoutRich(`{soft:${sub}}`, c.w);

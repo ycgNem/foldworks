@@ -48,7 +48,7 @@ import { previewKernels, lastFoldAuditRefusal } from '../sim/lastfold';
 import { KERNEL_GRADE } from '../data/kernels';
 import { sheet, itemIcon, hasArt } from '../render/sprites';
 import { mainOutput } from '../render/factory';
-import { routeAtWorld, routeEnds, routeShort, routeItems, districtMegaFrac, carrier, drawModuleTile } from '../render/district';
+import { routeAtWorld, routeEnds, routeShort, routeItems, districtMegaFrac, carrier, drawModuleTile, FOCUS_SINK } from '../render/district';
 import { liftWingW } from './topbar';
 import { button, tag, tagSize, rule, meter, chip, chipWidth, clipboard, twine, uiIcon, dot, type UIconName } from './chrome';
 import { bigSafe, worldRect, place, zones } from './tags';
@@ -280,6 +280,7 @@ function entRep(app: App, e: FEnt): DRep {
     rows.push(`{coin} buys what the ${word()}s bring`);
     if (ins.length) rows.push(ins.slice(0, 4).map((r) => `${icon(r.item)} ${rate(r.flow)}/min`).join('  '));
     else rows.push('{soft:no route lands here yet}');
+    if (ins.length > FOCUS_SINK) rows.push(`{soft:${ins.length} routes land here · the ${FOCUS_SINK} busiest drawn}`);
     const o = g.s.orders.active;
     if (o) more.push('fills the active order first');
     return { title: `${HIGH[ID].name} Dock`, uicon: 'orders', rows, more, verbs: '{k:LMB} orders' };

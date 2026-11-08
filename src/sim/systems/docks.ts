@@ -78,9 +78,11 @@ export function runDocks(g: Game) {
     } else {
       creditResearch(g, it.item, n);
       g.emit({ type: 'hopper', x: it.x, y: it.y, id: it.item, floor });
-      // the first node (DESIGN.md §8): until Pressing is researched the Hopper pays like the Dock,
-      // so the one line a new player has never takes the income to 0 while it feeds research
-      const v = g.done('pressing') ? 0 : ITEMS[it.item].value * RULES.firstNodePay.value;
+      // the first nodes (DESIGN.md §8): until the first fold the Hopper pays like the Dock, so the
+      // lines a new player has never take the income to 0 while they feed Pressing and Folding
+      // (the second playtest: Folding wants plates, the hand line's ingots went in as the wrong
+      // item, banked for nothing, and income sat at 0 from minute 10 to 15)
+      const v = g.flag('firstFold') ? 0 : ITEMS[it.item].value * RULES.firstNodePay.value;
       if (v > 0) {
         const pay = n.mul(v);
         g.earn(pay);

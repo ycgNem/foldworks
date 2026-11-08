@@ -8,7 +8,10 @@
 import type { Game, ActResult } from '../Game';
 import { OK, no } from '../Game';
 import { Num } from '../../engine/num';
-import { CLAIM_PRICE, patchOpen } from '../../data/land';
+import { CLAIM_PRICE, CHUNKS, patchOpen } from '../../data/land';
+import { RESEARCH, type ResearchId } from '../../data/research';
+import { available } from './research';
+import { aWord } from '../../engine/fmt';
 import { islandDef, islandPatches } from './islands';
 import { prules } from '../patents';
 import { RECIPE } from '../../data/recipes';
@@ -88,10 +91,40 @@ export function claimRefusal(g: Game, d: ModuleDesign): string | null {
     const held = claimsHeld(g, ore), used = claimsUsed(g, ore);
     if (used + n > held + 1e-9) {
       const name = itemName(ore).toLowerCase().replace(' ore', '');
-      return g.done('surveying')
-        ? `Needs a ${name} claim (${used} of ${held} in use): buy more at the Survey Office`
-        : `Needs a ${name} claim (${used} of ${held} in use): research Surveying to buy more`;
+      return `Needs ${aWord(name)} claim (${used}/${held} used): ${claimFix(g, ore)}`;
     }
+  }
+  return null;
+}
+
+/** The nearest way to more claims on an ore that the player can see now (the second playtest:
+ * "research Surveying" while Surveying sat on a page not yet open): the Survey Office, a chunk for
+ * sale with a deposit of it, Surveying, or the node on the way to it. Short: it ends a refusal. */
+export function claimFix(g: Game, ore: ItemId, short = false): string {
+  if (g.done('surveying')) return short ? 'the Survey Office' : 'buy more at the Survey Office';
+  const s = g.s;
+  const chunk = CHUNKS.find((c) => !s.land.includes(c.id) && (!c.requires || g.done(c.requires))
+    && islandPatches(g).some((p) => p.item === ore && patchOpen(p, s.mega.stage) && p.x >= c.x && p.x < c.x + c.w && p.y >= c.y && p.y < c.y + c.h));
+  if (chunk) return short ? `buy ${chunk.name.split(' · ')[0]}` : `buy ${chunk.name.split(' · ')[0]} for ${RULES.claimsPerDeposit.value} more`;
+  if (available(g, 'surveying')) return short ? 'research Surveying' : 'research Surveying to buy more';
+  const seen = new Set<ResearchId>();
+  const walk = (id: ResearchId): ResearchId | null => {
+    if (g.done(id) || seen.has(id)) return null;
+    seen.add(id);
+    if (available(g, id)) return id;
+    for (const q of RESEARCH[id].requires) { const r = walk(q); if (r) return r; }
+    return null;
+  };
+  const step = walk('surveying');
+  if (short) return step ? `Surveying, after ${RESEARCH[step].name}` : 'Surveying, later';
+  return step ? `Surveying sells more, after ${RESEARCH[step].name}` : 'Surveying sells more, later';
+}
+
+/** A claim refusal in a card's one line: the ore's icon, "full", and the nearest fix (the second
+ * playtest: "Needs a iron claim (5 of 5 in use): r.." was cut off on the Modules page). */
+export function claimShort(g: Game, d: ModuleDesign): string | null {
+  for (const [ore, n] of Object.entries(claimLoad(g, d)) as [ItemId, number][]) {
+    if (claimsUsed(g, ore) + n > claimsHeld(g, ore) + 1e-9) return `{i:${ore}} claims full: ${claimFix(g, ore, true)}`;
   }
   return null;
 }
@@ -113,7 +146,7 @@ export function placeClaimRefusal(g: Game, d: ModuleDesign): string | null {
     const held = claimsHeld(g, ore), placed = placedClaims(g, ore);
     if (placed + n > held + 1e-9) {
       const name = itemName(ore).toLowerCase().replace(' ore', '');
-      return `Out of ${name} claims (${placed} of ${held} digging): ${g.done('surveying') ? 'buy more at the Survey Office' : 'research Surveying to buy more'}`;
+      return `Out of ${name} claims (${placed}/${held} digging): ${claimFix(g, ore)}`;
     }
   }
   return null;

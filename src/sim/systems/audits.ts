@@ -383,12 +383,16 @@ export function gradeAudit(g: Game, a: AuditState): AuditResult {
     return o;
   };
   const ins = rate(net.ins), outs = rate(outCounts);
-  const advice = advise(g, ms, busy, { u, w, c }, score, byMade, byHandled, machineTiles, boxTiles, outs, a.stall ?? {});
+  // a Slag Heap inside the box keeps its slag in the box: a module holds no heap, so it counts as
+  // going nowhere, and the advice says why (the second playtest read "a heap caps it at S", then
+  // "7 of 7 went nowhere" for a box with its heap inside)
+  const heapIn = g.s.ents.some((e) => e.kind === 'heap' && e.x >= a.box.x && e.y >= a.box.y && e.x < a.box.x + a.box.w && e.y < a.box.y + a.box.h);
+  const advice = advise(g, ms, busy, { u, w, c }, score, byMade, byHandled, machineTiles, boxTiles, outs, a.stall ?? {}, heapIn);
   // S+ is a zero-waste line: its byproducts are used inside the box (bricks, gravel), or it makes
   // none. A line that only routes its slag out to a heap or a Dock tops out at S (the Milestone 4
   // review: a miner and a smelter graded S+)
   const gated = splusGate(gr, score, byMade, usedInside, splusShare(g));
-  if (gated !== gr) advice.unshift(`One step to S+: use the ${[...byItems].map((i) => itemName(i as ItemId).toLowerCase()).join(' and ')} inside the box (a press making bricks, a crusher making gravel); routed out to a heap, it caps the grade at S.`);
+  if (gated !== gr) advice.unshift(`One step to S+: use the ${[...byItems].map((i) => itemName(i as ItemId).toLowerCase()).join(' and ')} inside the box (a press making bricks, a crusher making gravel); belted out to a heap outside the box, it caps the grade at S.`);
   // the Strict Inspector (a Challenge, DESIGN.md §24): a letter lower while it holds
   const gr2 = strictGrade(g, gated);
   if (gr2 !== gated) advice.unshift(`The Strict Inspector marks it down a letter this run: ${gated.letter} becomes ${gr2.letter}.`);
@@ -421,7 +425,7 @@ function worth(score: number, lost: number): string {
 
 /** What would raise the grade, weakest part first, each line naming a machine or a number and
  * what it is worth. Every grade gets advice, S included (S+ is above it). */
-function advise(g: Game, ms: Ent[], busy: Record<string, number>, p: { u: number; w: number; c: number }, score: number, byMade: number, byHandled: number, mt: number, bt: number, outs: Partial<Record<ItemId, number>>, stall: Record<string, Record<string, number>>): string[] {
+function advise(g: Game, ms: Ent[], busy: Record<string, number>, p: { u: number; w: number; c: number }, score: number, byMade: number, byHandled: number, mt: number, bt: number, outs: Partial<Record<ItemId, number>>, stall: Record<string, Record<string, number>>, heapIn = false): string[] {
   const lines: { lost: number; text: string }[] = [];
   if (!Object.keys(outs).length) lines.push({ lost: 1, text: 'Nothing left the box: run a belt out of it to a Dock, a Hopper or the next line.' });
   // utilisation: find the slowest stage, not just the idlest machine
@@ -459,7 +463,9 @@ function advise(g: Game, ms: Ent[], busy: Record<string, number>, p: { u: number
   }
   if (byMade > 0 && byHandled < byMade) {
     const lost = SCORE_WEIGHTS.w * (1 - p.w);
-    lines.push({ lost, text: `${byMade - byHandled} of ${byMade} slag went nowhere useful. Belt it out through a port, or press it into bricks inside. (${worth(score, lost)})` });
+    lines.push({ lost, text: heapIn
+      ? `${byMade - byHandled} of ${byMade} slag piled in a heap inside the box. A module holds no heap: leave the heap outside, belt the slag out to it. (${worth(score, lost)})`
+      : `${byMade - byHandled} of ${byMade} slag went nowhere useful. Belt it out through a port, or press it into bricks inside. (${worth(score, lost)})` });
   }
   if (p.c < 1) {
     const lost = SCORE_WEIGHTS.c * (1 - p.c);

@@ -11,6 +11,20 @@ export function amount(x: NumLike): string {
   return Num.from(x).format();
 }
 
+/** "a" or "an" before a word, by its sound (the second playtest read "a iron claim"): an iron, an
+ * Assembler, a Unit, a Smelter. Markup ({i:..}) and keycaps say nothing about the sound: "a". */
+export function article(word: string): 'a' | 'an' {
+  const w = word.trim().toLowerCase();
+  if (/^(uni|use|usu|one|eu)/.test(w)) return 'a';
+  if (/^(hour|honest|heir)/.test(w)) return 'an';
+  return /^[aeiou]/.test(w) ? 'an' : 'a';
+}
+
+/** The word with its article: "an iron", "a Smelter". */
+export function aWord(word: string): string {
+  return `${article(word)} ${word}`;
+}
+
 /** A small plain number with at most `d` decimals, trailing zeros dropped: 2.5, 0.75, 12. Big
  * values (10,000 and up) go through the notation. */
 export function plain(x: number, d = 1): string {

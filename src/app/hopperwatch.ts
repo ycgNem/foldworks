@@ -19,25 +19,32 @@ interface Watch {
   /** the tick the selected node's progress last rose */
   filled: number;
   node: ResearchId | null;
+  /** everything the Hopper has taken (bank and every node's progress), and the tick it last rose */
+  total: number;
+  fed: number;
+  /** items a second the selected node's bar has been filling (smoothed over about half a minute) */
+  rate: number;
 }
 
 const watches = new WeakMap<Game, Watch>();
 
-function read(g: Game): { bank: Record<string, number>; prog: Record<string, number> } {
+function read(g: Game): { bank: Record<string, number>; prog: Record<string, number>; total: number } {
   const r = g.s.research;
   const bank: Record<string, number> = {};
-  for (const [k, v] of Object.entries(r.bank)) bank[k] = v?.toNumber() ?? 0;
+  let total = 0;
+  for (const [k, v] of Object.entries(r.bank)) { bank[k] = v?.toNumber() ?? 0; total += bank[k]; }
   const prog: Record<string, number> = {};
   const sel = r.selected;
   if (sel) for (const [k, v] of Object.entries(r.progress[sel] ?? {})) prog[k] = v?.toNumber() ?? 0;
-  return { bank, prog };
+  for (const p of Object.values(r.progress)) for (const v of Object.values(p ?? {})) total += v?.toNumber() ?? 0;
+  return { bank, prog, total };
 }
 
 function watch(g: Game): Watch {
   let w = watches.get(g);
   const now = g.s.tick;
   if (!w) {
-    w = { tick: now, ...read(g), wrong: null, filled: -Infinity, node: g.s.research.selected };
+    w = { tick: now, ...read(g), wrong: null, filled: -Infinity, node: g.s.research.selected, fed: -Infinity, rate: 0 };
     watches.set(g, w);
     return w;
   }
@@ -55,8 +62,13 @@ function watch(g: Game): Watch {
       if (!want[k as ItemId] || full) if (!best || n > best.n) best = { item: k as ItemId, n };
     }
     if (best) w.wrong = { item: best.item, tick: now, node: sel };
-    for (const [k, v] of Object.entries(cur.prog)) if (v > (w.prog[k] ?? 0)) w.filled = now;
-  } else w.filled = -Infinity;
+    let rose = 0;
+    for (const [k, v] of Object.entries(cur.prog)) if (v > (w.prog[k] ?? 0)) { w.filled = now; rose += v - (w.prog[k] ?? 0); }
+    const dt = (now - w.tick) / TICK_RATE;
+    if (dt > 0) w.rate = w.rate > 0 ? w.rate * 0.8 + (rose / dt) * 0.2 : rose / dt;
+  } else { w.filled = -Infinity; w.rate = 0; }
+  if (cur.total > w.total + 1e-9) w.fed = now;
+  w.total = cur.total;
   w.tick = now;
   w.bank = cur.bank;
   w.prog = cur.prog;
@@ -76,4 +88,15 @@ export function hopperBanking(g: Game): { item: ItemId; node: ResearchId } | nul
 export function hopperFilling(g: Game): boolean {
   const w = watch(g);
   return g.s.tick - w.filled <= 10 * TICK_RATE;
+}
+
+/** Did the Hopper take anything (for any node, or the bank) in the last ~10 s? */
+export function hopperFed(g: Game): boolean {
+  const w = watch(g);
+  return g.s.tick - w.fed <= 10 * TICK_RATE;
+}
+
+/** How fast the selected node's bar fills, items a second (0 until it has been watched a while). */
+export function hopperRate(g: Game): number {
+  return watch(g).rate;
 }

@@ -376,6 +376,17 @@ export function drawDistrict(ctx: CanvasRenderingContext2D, g: Game, time: numbe
   // rest a faint hatching once the floor is busy (DESIGN.md §17: problems and what you look at,
   // not spaghetti)
   const focus = focusIds(g, ov, F);
+  // a Dock, Hopper or Bay looked at lights its FOCUS_SINK busiest routes in, not all of them (the
+  // second playtest: hovering the District Dock drew ~100 lines across the floor); its tag counts them
+  const capped = new Set<number>(), lit = new Set<number>();
+  for (const id of focus) {
+    const fe = hent(g, F, id);
+    if (!fe || fe.kind === 'module') continue;
+    const rs = st.routes.filter((r) => r.to === id);
+    if (rs.length <= FOCUS_SINK) continue;
+    capped.add(id);
+    for (const r of rs.sort((a, b) => b.flow - a.flow).slice(0, FOCUS_SINK)) lit.add(r.id);
+  }
   const quietOn = st.routes.length > QUIET_FROM;
   const lines: RouteLine[] = [], quiet: RouteLine[] = [], over: RouteLine[] = [];
   for (const r of st.routes) {
@@ -383,7 +394,7 @@ export function drawDistrict(ctx: CanvasRenderingContext2D, g: Game, time: numbe
     if (!e) continue;
     const sel = r.id === ov.selRoute, hov = r.id === ov.hoverRoute;
     const short = routeShort(g, r, F);
-    const mine = focus.has(r.from) || focus.has(r.to);
+    const mine = focus.has(r.from) || (focus.has(r.to) && (!capped.has(r.to) || lit.has(r.id)));
     // short of skiffs: warning orange, bold (the bottleneck); selected gold; under the mouse, or a
     // route of the module looked at, bone; the rest quiet
     // what is looked at flies over the buildings (a route across the floor is hidden under them
@@ -528,6 +539,8 @@ function problem(g: Game, F: HighFloorId, e: FEnt): boolean {
  * draws as before, a pencil line with its arrow. */
 const QUIET_FROM = 24;
 const FAINT_ALPHA = 0.28;
+/** routes into a looked-at Dock, Hopper or Bay drawn in full, the busiest first */
+export const FOCUS_SINK = 6;
 
 /** The modules whose routes are drawn in full: the one under the mouse (with no tool that places)
  * and the pinned one, and the Route tool's source. */

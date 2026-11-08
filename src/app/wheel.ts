@@ -22,7 +22,7 @@ import { claimLoad, claimsHeld, claimsUsed } from '../sim/systems/claims';
 import { Num } from '../engine/num';
 import { perMin, plain } from '../engine/fmt';
 import { kindRate } from './rates'; // Milestone 13: rates on the wheel's item cards
-import { bigWidth, smallWidth, drawSmall, drawBig, SMALL_H } from '../ui/font';
+import { bigWidth, smallWidth, drawSmall, drawBig, SMALL_H, textWidth } from '../ui/font';
 import { richWidth, layoutRich, drawLayout } from '../ui/rich';
 import { art, buttonRaw } from '../ui/paper';
 import { T, onPaper } from '../ui/theme';
@@ -150,11 +150,13 @@ export function openWheel(app: App, x: number, y: number): void {
   W.rclick = false;
   W.mx = ui.mx;
   W.my = ui.my;
-  // the goal's petal fans first, else the last one open on this floor
+  // the goal's petal fans first, else the floor's home petal (Build, or Modules on the Factory): the
+  // second playtest's click where the Miner had been turned on the flow view, because the wheel had
+  // reopened on the Tools petal used last; a stable start keeps every icon where it was
   const ps = petals(app);
   const goalPetal = ps.find((p) => p.goal);
-  const last = app.floor === 'factory' ? W.lastF : W.lastW;
-  const want = goalPetal?.id ?? (ps.some((p) => p.id === last) ? last : ps[app.floor === 'factory' && !app.game.s.designs.length ? 0 : Math.min(1, ps.length - 1)].id);
+  const home = app.floor === 'factory' ? 'modules' : 'build';
+  const want = goalPetal?.id ?? (ps.some((p) => p.id === home) ? home : ps[0].id);
   setPetal(app, want, false);
   app.audio.sfx('open');
 }
@@ -580,6 +582,8 @@ function moduleItems(app: App): Item[] {
       rows: [
         `grade {big:${letter}} ×${d.grade.mult.toFixed(2)} · ${d.spare} spare`,
         ins ? `${ins} → ${outs} /min` : `a source → ${outs} /min`,
+        // what it needs and how (the second playtest): every input trunked into its back
+        ...(Object.keys(d.ins).length > 1 ? ['{soft:both in at its back, on one trunk: run each feed into it}'] : Object.keys(d.ins).length ? ['{soft:its input trunked into its back}'] : []),
         ...(why ? [`{bad:${why.replace(/[{}]/g, '')}}`] : []),
       ],
       verbs: d.spare ? '{k:LMB} place  {k:SHIFT}{k:LMB} stamp' : '{k:SHIFT}{k:LMB} stamp a copy',
@@ -1007,9 +1011,15 @@ function infoTag(app: App, it: Item, anchor: { x: number; y: number }) {
   const tw = cw - 36;
   // the name, shrunk to fit, the hotkey beside it
   const kw = it.key ? keycapWidthOf(it.key) + 3 : 0;
-  let name = it.name;
-  while (name.length > 3 && bigWidth(name) > tw - kw) name = name.slice(0, -2) + '.';
-  ui.big(name, tx, r.y + 1, it.locked ? T.inkSoft : T.ink);
+  // in the display face when it fits, else in the text face (the second playtest read "Iron ingot
+  // ×3." and "Copper wire x." when a module's name was cut to the display face's room)
+  const ink = it.locked ? T.inkSoft : T.ink;
+  if (bigWidth(it.name) <= tw - kw) ui.big(it.name, tx, r.y + 1, ink);
+  else {
+    let name = it.name;
+    while (name.length > 3 && textWidth(name) > tw - kw) name = name.slice(0, -2) + '.';
+    ui.text(name, tx, r.y + 3, ink);
+  }
   if (it.key) keycapK(ui, it.key, r.x + cw - kw + 3, r.y);
   // the price and the counts as chips under the name
   let cy = r.y + 15;
