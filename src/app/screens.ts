@@ -343,21 +343,22 @@ const TREE: Record<ResearchId, [number, number, number?]> = {
   surveyEast: [2, 0.2], copperSmelting: [3, 0, 1], wireDrawing: [4, 0.5],
   gearcutting: [2, 2.2], splitters: [3.2, 2.9, 1], buffers: [2.1, 3.3, 1],
   gizmoTheory: [5, 1.4, 1],
-  // Act II's page (columns 0-6)
+  // Act II's page (columns 0-6; the playability pass took Machine Kits and Tuning off it, so the
+  // last columns spread down the page)
   coalSeams: [0, 1.6],
   steelmaking: [1, 1.0], surveying: [1, 2.6, 1],
   overdrive: [2, 0], steamPower: [2, 1.4], crushing: [2, 2.8, 1],
-  glassworks: [3, 0.5], refining: [3, 1.6, 1], machineKits: [3, 2.9, 1],
+  glassworks: [3, 0.5], refining: [3, 1.6, 1],
   circuits: [4, 1.0], concrete: [4, 2.6, 1],
-  heavyMachines: [5, 0.2], motors: [5, 1.3, 1], nestedFolds: [5, 2.6],
-  tuning: [6, 0.2, 1], greatDrill: [6, 1.9],
+  heavyMachines: [5, 0.2], motors: [5, 1.4, 1], nestedFolds: [5, 3.0, 1],
+  greatDrill: [6, 2.6, 1],
   // Act III's page (columns 0-6, each node a column after what it needs, rows ordered so the
   // pencil lines cross as little as they can)
   zoning: [0, 1.6],
   chutes: [1, 1.6, 1],
   chemistry: [2, 0.8], bearings: [2, 2.6, 1],
   vulcanizing: [3, 0], processors: [3, 0.8, 1], batteries: [3, 1.6, 1], hydroponics: [3, 2.4, 1], servos: [3, 3.2, 1],
-  sensors: [4, 0], recycling: [4, 0.8, 1], sandwiches: [4, 2.4, 1], floatingCity: [4, 3.2, 1],
+  sensors: [4, 0], sandwiches: [4, 2.4, 1], floatingCity: [4, 3.2, 1],
   robotics: [5, 0.8, 1], scrapTransmuter: [5, 2.4, 1],
   districtFolds: [6, 0.2, 1], sandwichEngineering: [6, 1.8, 1],
   // Act IV's page (DESIGN.md §22): Charting and what it opens down the left (the World floor, the
@@ -385,10 +386,10 @@ const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
   pressing: 'ironPlate', surveyEast: 'workshop', copperSmelting: 'copperIngot', wireDrawing: 'copperWire', gearcutting: 'gear',
   splitters: 'flow', buffers: 'orders', gizmoTheory: 'gizmo', slagBricks: 'slagBrick', folding: 'fold',
   coalSeams: 'coal', steelmaking: 'steel', overdrive: 'overdrive', steamPower: 'power', surveying: 'survey', glassworks: 'glass',
-  crushing: 'gravel', concrete: 'concrete', refining: 'plastic', machineKits: 'machineKit', circuits: 'circuit',
-  heavyMachines: 'heavy', tuning: 'mode', motors: 'motor', nestedFolds: 'fold', greatDrill: 'mega',
+  crushing: 'gravel', concrete: 'concrete', refining: 'plastic', circuits: 'circuit',
+  heavyMachines: 'heavy', motors: 'motor', nestedFolds: 'fold', greatDrill: 'mega',
   zoning: 'district', chutes: 'chute', chemistry: 'solvent', bearings: 'bearing', vulcanizing: 'rubber', batteries: 'battery',
-  servos: 'servo', sensors: 'sensor', processors: 'processor', recycling: 'mode', hydroponics: 'produce', sandwiches: 'sandwich',
+  servos: 'servo', sensors: 'sensor', processors: 'processor', hydroponics: 'produce', sandwiches: 'sandwich',
   robotics: 'robotArm', floatingCity: 'mega', scrapTransmuter: 'mega', sandwichEngineering: 'sandwichEngineer', districtFolds: 'fold',
   // Act IV (placeholders until the art director draws the islands' icons)
   charting: 'world', thermals: 'power', skyglassCutting: 'skyglassLens', horizonOptics: 'horizonLens',

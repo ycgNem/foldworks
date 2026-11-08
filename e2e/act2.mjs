@@ -93,7 +93,7 @@ await shot('05-unpowered-hover');
 // 5. a Mk2 ghost (2x2) where it fits, and where it does not
 await page.evaluate(() => {
   const a = window.__app;
-  a.game.s.research.done.push('refining', 'machineKits', 'circuits', 'heavyMachines');
+  a.game.s.research.done.push('refining', 'circuits', 'heavyMachines');
   a.setMode({ k: 'build', kind: 'smelterMk2' });
   a.rot = 1;
 });
@@ -107,12 +107,11 @@ await page.evaluate(() => { window.__app.setMode({ k: 'build', kind: 'pole' }); 
 await hoverTile(page, 20, 8);
 await shot('08-pole-ghost');
 
-// 7. a placed Mk2 smelter on the grid, overdriven, with Tuning's mode buttons; a cooling Mk1
+// 7. a placed Mk2 smelter on the grid, overdriven, its report pinned; a cooling Mk1
 await page.evaluate(() => {
   const a = window.__app;
   const g = a.game;
   a.setMode({ k: 'idle' });
-  g.s.research.done.push('tuning');
   a.act({ k: 'place', kind: 'pole', x: 18, y: 8, rot: 0 });
   a.act({ k: 'place', kind: 'smelterMk2', x: 16, y: 9, rot: 0 });
   a.act({ k: 'recipe', x: 16, y: 9, recipe: 'smeltSteel' });
@@ -130,10 +129,7 @@ await page.evaluate(() => {
   a.lookAt(19, 8);
 });
 await page.mouse.move(Math.floor(w / 2), h - 60);
-await shot('09-mk2-overdrive-modes');
-// the mode tooltip
-const b = await page.evaluate(() => { const r = window.__app.ui.ids.get('mode_overclock'); const k = window.__app.uiScale / (window.devicePixelRatio || 1); return r ? { x: (r.x + r.w / 2) * k, y: (r.y + r.h / 2) * k } : null; });
-if (b) { await page.mouse.move(b.x, b.y); await shot('10-mode-tooltip'); }
+await shot('09-mk2-overdrive');
 // hover the cooling Mk1 smelter: the Overdrive line in its report
 await page.evaluate(() => { window.__app.selected = null; });
 await hoverTile(page, 19, 10);
@@ -151,7 +147,7 @@ await page.waitForTimeout(700);
 await page.evaluate(() => window.__app.freeze());
 await shot('12-toasts');
 
-// 9. events: an Overdrive burst, a Codex fountain, a kit pop, the claim flag and the Megaproject
+// 9. events: an Overdrive burst, a Codex fountain, the claim flag and the Megaproject
 await page.evaluate(() => {
   const a = window.__app;
   const g = a.game;
@@ -167,10 +163,9 @@ await page.evaluate(() => {
   const a = window.__app;
   a.lookAt(7, 3);
   a.game.emit({ type: 'codex', x: 6.5, y: 1.5, id: 'glass', value: 800 });
-  a.game.emit({ type: 'parts', x: 7, y: 5, id: 'machineKit', value: 1 });
 });
 await page.waitForTimeout(350);
-await shot('14-codex-kit');
+await shot('14-codex');
 await page.evaluate(() => {
   const a = window.__app;
   a.game.emit({ type: 'claim', id: 'coal', value: 4 });

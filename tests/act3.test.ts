@@ -1,6 +1,6 @@
 // Act III (ROADMAP.md Milestone 7, DESIGN.md §21): the District and its skiff routes (throughput by
 // distance), the District's Dock, Hopper and Bay (Megaprojects #2 and #3), the Factory Chute and the
-// Chute Mouth, the Recycling and Byproduct modes, depth-3 folds on the District, the Scrap
+// Chute Mouth, byproducts at their recipe's cadence (the modes were cut: DECISIONS.md), depth-3 folds on the District, the Scrap
 // Transmuter, and what a Reorganize keeps.
 import { describe, expect, it } from 'vitest';
 import { Game, type Cmd } from '../src/sim/Game';
@@ -13,7 +13,6 @@ import { routeCap, hentAt, highW, maxRoutes, routeWant, drillFactor, skiffPrice,
 import { migrate } from '../src/engine/save';
 import { saleValue } from '../src/sim/systems/docks';
 import { foldRefusal } from '../src/sim/systems/audits';
-import { byEvery } from '../src/sim/systems/machines';
 import { RECIPE } from '../src/data/recipes';
 import { claimsUsed } from '../src/sim/systems/claims';
 import type { ModuleDesign } from '../src/sim/world';
@@ -252,21 +251,24 @@ describe('the Chute (DESIGN.md §21)', () => {
   });
 });
 
-describe('Recycling and Byproduct modes (DESIGN.md §21)', () => {
-  it('halve or double the byproduct a recipe makes', () => {
-    const r = RECIPE.mixSolvent;
-    expect(byEvery({ mode: 'normal' }, r)).toBe(2);
-    expect(byEvery({ mode: 'recycling' }, r)).toBe(4);
-    expect(byEvery({ mode: 'byproduct' }, r)).toBe(1);
-    expect(byEvery({ mode: 'byproduct' }, RECIPE.smeltIron)).toBe(2);
-  });
-
-  it('need Recycling researched and a powered machine', () => {
+describe('Act III machines (DESIGN.md §21)', () => {
+  it('a byproduct comes every `every` crafts of its recipe, whatever the machine (no modes: the playability pass)', () => {
     const g = sandbox();
     must(g, { k: 'place', kind: 'chemVat', x: 10, y: 10, rot: 0 });
-    must(g, { k: 'mode', x: 10, y: 10, mode: 'recycling' });
-    g.s.research.done = g.s.research.done.filter((r) => r !== 'recycling');
-    expect(g.act({ k: 'mode', x: 10, y: 10, mode: 'byproduct' }).why).toMatch(/Recycling/);
+    must(g, { k: 'place', kind: 'generator', x: 10, y: 12, rot: 0 });
+    must(g, { k: 'place', kind: 'pole', x: 11, y: 11, rot: 0 });
+    const vat = g.entAt(10, 10)!, gen = g.entAt(10, 12)!;
+    vat.recipe = 'mixSolvent';
+    let sludge = 0;
+    for (let i = 0; i < 60 * TICK_RATE; i++) {
+      vat.inBuf.oil = 4; vat.inBuf.sand = 4; gen.inBuf.coal = 4;
+      vat.out = 0;
+      sludge += vat.by;
+      vat.by = 0;
+      g.tick();
+    }
+    expect(vat.crafts).toBeGreaterThan(4);
+    expect(sludge).toBe(Math.floor(vat.crafts / RECIPE.mixSolvent.byproduct!.every));
   });
 
   it('the Engineer is an Assembler Mk2 recipe only', () => {

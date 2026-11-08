@@ -66,7 +66,7 @@ export function claimsHeld(g: Game, ore: ItemId): number {
   for (const p of islandPatches(g)) if (p.item === ore && patchOpen(p, g.s.mega.stage) && g.owned(p.x, p.y)) deposits++;
   // Harbour Rights (Bramble's rep 5, DESIGN.md §22): two more claims on the island's exotic
   const harbour = g.s.orders.rep.bramble >= 5 && islandDef(g).exotic === ore ? RULES.harbourClaims.value : 0;
-  return harbour + RULES.claimsBase.value + RULES.claimsPerDeposit.value * deposits + RULES.claimsPerBlock.value * (g.s.claimBlocks[ore] ?? 0);
+  return harbour + RULES.claimsBase.value + RULES.claimsPerDeposit.value * deposits + prules(g).claimsPerBlock * (g.s.claimBlocks[ore] ?? 0);
 }
 
 /** Claims in use on an ore: one per copy of every design that digs it. */
@@ -130,10 +130,10 @@ export function buyClaims(g: Game, ore: ItemId): ActResult {
   if (!g.done('surveying')) return no('Research Surveying first');
   const price = claimPrice(g, ore);
   if (!price) return no('No claims are sold on that');
-  if (g.s.coin.lt(price)) return no(`A block of ${RULES.claimsPerBlock.value} costs ${price.format()} coin`);
+  if (g.s.coin.lt(price)) return no(`A block of ${prules(g).claimsPerBlock} costs ${price.format()} coin`);
   g.s.coin = g.s.coin.sub(price);
   g.s.claimBlocks[ore] = (g.s.claimBlocks[ore] ?? 0) + 1;
   g.bump('claimBlocks');
-  g.emit({ type: 'claim', id: ore, value: RULES.claimsPerBlock.value });
+  g.emit({ type: 'claim', id: ore, value: prules(g).claimsPerBlock });
   return OK;
 }

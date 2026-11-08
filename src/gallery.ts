@@ -289,7 +289,7 @@ function old() {
   uiIcon(ui, 'patents', c3.x, c3.y + 28);
   uiIcon(ui, 'blueprint', c3.x + 20, c3.y + 28);
   uiIcon(ui, 'codex', c3.x + 40, c3.y + 28);
-  uiIcon(ui, 'mode', c3.x + 60, c3.y + 28);
+  uiIcon(ui, 'claim', c3.x + 60, c3.y + 28);
 
   // every ui.panel style
   label(ui, 'ui.panel styles', 8, 182);

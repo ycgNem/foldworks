@@ -78,7 +78,7 @@ export const CHALLENGES: Record<ChallengeId, ChallengeDef> = {
     goal: { k: 'deliver', item: 'circuit', n: 300 }, goalText: 'Deliver 300 circuits this run',
     reward: 'Steam Engines and Generators make 10% more, for good',
     flavor: 'The coal merchant is on holiday. Nobody knows where.',
-    derivation: '§21 Challenges: circuits are Act II\'s first powered line (§18), 300 of them about 30 min of two circuit lines; a delivery this run, so no head start meets it (the second gate: Circuits were known from a head start); at half power the player learns Efficient mode and shed load; the reward is a tenth of the plant they did without',
+    derivation: '§21 Challenges: circuits are Act II\'s first powered line (§18), 300 of them about 30 min of two circuit lines; a delivery this run, so no head start meets it (the second gate: Circuits were known from a head start); at half power the player learns to shed load (a brownout slows every machine on its grid, §18); the reward is a tenth of the plant they did without',
   }),
   threeKinds: C({
     id: 'threeKinds', name: 'Three Kinds',
@@ -121,9 +121,9 @@ export const CHALLENGES: Record<ChallengeId, ChallengeDef> = {
     id: 'handMade', name: 'Hand-Made', act: 2,
     rule: 'No stamping this run: every module is folded',
     goal: { k: 'standing', floor: 'factory', n: 8 }, goalText: 'Stand 8 modules on the Factory at once',
-    reward: 'A design\'s first stamp takes no Machine Kits, for good',
+    reward: 'A design\'s first stamp is free, for good',
     flavor: 'The Patent Office has lost the stamp. It was in a coat pocket. The coat denies it.',
-    derivation: '§21 Challenges, §24: eight modules standing at once is the slice-end Factory (§11, three to six) and Act II\'s first steel and glass modules, each folded again where a stamp would do; the reward is the kits of one stamp a design (1 + floor(bill / 5,000), §18), which matters while kits are made by hand in Act II',
+    derivation: '§21 Challenges, §24: eight modules standing at once is the slice-end Factory (§11, three to six) and Act II\'s first steel and glass modules, each folded again where a stamp would do; the reward is one stamp a design, its bill (§10 Stamp: the first copy is the bill alone), the same free copy the first fold ever gives (§10 The first fold), so the next design is worth folding where another copy of the old one would do (pillar 1); it was the Machine Kits of that stamp until Machine Kits were cut (the playability pass)',
   }),
   strictInspector: C({
     id: 'strictInspector', name: 'The Strict Inspector', act: 2,

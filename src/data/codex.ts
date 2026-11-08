@@ -24,7 +24,7 @@ export const ITEM_TIER: Record<ItemId, Tier> = (() => {
   return out;
 })();
 
-/** Does the Codex log this item? Only what the Dock pays for (slag, kits and project parts never
+/** Does the Codex log this item? Only what the Dock pays for (slag and project parts never
  * reach the collection: `codex()` skips a value of nothing). */
 export const inCodex = (id: ItemId) => ITEMS[id].value > 0;
 

@@ -16,7 +16,7 @@ import { recipeKnown } from './transfer';
 import { RECIPE } from '../data/recipes';
 import { ITEMS, type ItemId } from '../data/items';
 import { RULES } from '../data/rules';
-import { DX, DY, MODES, newEnt, newState, opposite, type Box, type Dir, type Ent, type FEnt, type Mode, type ModuleDesign, type State } from './world';
+import { DX, DY, newEnt, newState, opposite, type Box, type Dir, type Ent, type FEnt, type ModuleDesign, type State } from './world';
 import { ANNEX, FACTORY, FACTORY_MAX_H, FACTORY_MAX_W } from '../data/land';
 import { runMiners } from './systems/miners';
 import { runBelts } from './systems/belts';
@@ -103,7 +103,6 @@ export type Cmd =
   | { k: 'fremove'; x: number; y: number }
   | { k: 'frotate'; x: number; y: number }
   // Act II (DESIGN.md §18)
-  | { k: 'mode'; x: number; y: number; mode: Mode }
   | { k: 'fclick'; x: number; y: number }
   | { k: 'claim'; item: ItemId }
   | { k: 'faudit'; x: number; y: number; w: number; h: number }
@@ -478,7 +477,6 @@ export class Game {
       case 'ftrunk': return fplace(this, 'trunk', c.x, c.y, c.rot);
       case 'fremove': return fremove(this, c.x, c.y);
       case 'frotate': return frotate(this, c.x, c.y);
-      case 'mode': return this.setMode(c.x, c.y, c.mode);
       case 'fclick': {
         // the Factory Hopper takes Inspiration clicks (DESIGN.md §15); a module takes Overdrive
         const fe = this.fentAt(c.x, c.y);
@@ -530,20 +528,6 @@ export class Game {
       case 'boards': return takeBoards(this, c.boards);
       default: return no('unknown command');
     }
-  }
-
-  /** Set a powered machine's mode (DESIGN.md §18 Modes, research Tuning). */
-  private setMode(x: number, y: number, mode: Mode): ActResult {
-    if (!MODES.includes(mode)) return no('no such mode');
-    if ((mode === 'recycling' || mode === 'byproduct') ? !this.done('recycling') : !this.done('tuning')) return no(mode === 'recycling' || mode === 'byproduct' ? 'Research Recycling first' : 'Research Tuning first');
-    const e = this.entAt(x, y);
-    if (!e || !isMachine(e.kind) || !(BUILD[e.kind].kw ?? 0)) return no('Modes are for powered machines');
-    const lock = auditLock(this, x, y);
-    if (lock) return no(lock);
-    if ((e.mode ?? 'normal') === mode) return OK;
-    e.mode = mode;
-    this.emit({ type: 'mode', x: e.x, y: e.y, id: mode });
-    return OK;
   }
 
   /** Why a build here would be refused, or null if it can go. */

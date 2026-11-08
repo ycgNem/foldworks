@@ -34,7 +34,7 @@ import { TICK_RATE } from '../engine/time';
 import { available } from './systems/research';
 import { offeredOrders, orderFrac } from './systems/orders';
 import { auditLock, foldRefusal } from './systems/audits';
-import { BYPRODUCTS, buildRoutes, kitsFor, mainItem, stampCost, stampRefusal } from './systems/modules';
+import { BYPRODUCTS, buildRoutes, mainItem, stampCost, stampRefusal } from './systems/modules';
 import { fauditLock, ffoldRefusal } from './systems/nested';
 import { shares } from './systems/stats';
 import { accepts, recipeKnown } from './transfer';
@@ -245,7 +245,7 @@ export const PARTS: Record<string, Pl[]> = {
     ...belts([[14, 1, N], [14, 0, W], [13, 0, W], [12, 0, W]]),
   ],
   oilBoiler: draw(19, 5, ['Sv']),
-  // ---- once the Drill works is folded the lab's last job is research (Tuning, Nested Folds):
+  // ---- once the Drill works is folded the lab's last job is research (Nested Folds):
   // circuits east into the loop and out to the Hopper with the concrete
   circuitZ: [...draw(15, 2, ['a>'], { '15,2': 'etchCircuit' }), ...belts([[15, 5, S]])],
   // ---- standing once Slag Bricks is researched (the final round): slag bricks for Surveying (the
@@ -303,7 +303,7 @@ export type Step =
 // never hold the plan's research up)
 export const WISH: ResearchId[] = [
   'coalSeams', 'slagBricks', 'steelmaking', 'steamPower', 'overdrive', 'glassworks', 'crushing', 'refining', 'circuits', 'splitters', 'concrete',
-  'motors', 'greatDrill', 'machineKits', 'heavyMachines', 'tuning', 'nestedFolds', 'surveying',
+  'motors', 'greatDrill', 'heavyMachines', 'nestedFolds', 'surveying',
 ];
 
 const BASE = ['spine', 'corridor', 'coalFeed'];
@@ -442,7 +442,6 @@ export const PLAN2: Step[] = [
   { k: 'fplan', name: 'annex1', items: [...BAY_PLAN, ...ANNEX1, ...LANE], opt: true },
   { k: 'fplan', name: 'dock1', items: [...BAY_PLAN, ...ANNEX1, ...LANE, ...DOCKS.slice(0, 1)], opt: true },
   { k: 'fplan', name: 'dock2', items: [...BAY_PLAN, ...ANNEX1, ...LANE, ...DOCKS], opt: true },
-  { k: 'need', r: 'tuning' },
   { k: 'need', r: 'nestedFolds' },
   // a deeper fold (§19: more steps folded files a better Gizmo): the annex chain as one module,
   // put back where its Gizmo works stood, and copies of it in the annex's later blocks
@@ -1308,7 +1307,7 @@ export class Act2Bot {
       if (c && c !== 'short') return c;
       const why = stampRefusal(g, d);
       // an optional copy short of claims waits for the coin to buy them (DEFER); one refused for
-      // anything but coin (Machine Kits) is left out
+      // anything but coin (a Challenge's rule) is left out
       if (why && s.opt && c === 'short') return DEFER;
       if (why && s.opt && !g.s.coin.lt(stampCost(g, d))) return this.drop(s.id, s.design, why);
       if (why) return `stamp ${s.design}: ${why}`;
@@ -1634,7 +1633,7 @@ const tileOk = (h: FHaz, x: number, y: number, d: Dir) => !h.arrive[y * FW + x] 
 
 /** Does `e` take everything in `items` arriving travelling `d`? */
 function takes(g: Game, e: FEnt, d: Dir, items: ItemId[]): boolean {
-  if (e.kind === 'fdock') return items.every((i) => i === 'slag' || i === 'oil' || (i !== 'machineKit' && i !== 'drillBit'));
+  if (e.kind === 'fdock') return items.every((i) => i === 'slag' || i === 'oil' || i !== 'drillBit');
   if (e.kind === 'fhopper') return items.every((i) => i !== 'slag');
   if (e.kind === 'fbay') return true;
   if (e.kind === 'fchute') return true;
@@ -1856,4 +1855,4 @@ export function playAct2(
   return { g, planner, bot, handover };
 }
 
-export { ORDERS, ORDER, kitsFor, stampCost, mainItem };
+export { ORDERS, ORDER, stampCost, mainItem };

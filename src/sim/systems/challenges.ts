@@ -165,8 +165,8 @@ export const splusShare = (g: Game) => (won(g, 'strictInspector') ? CHALLENGES.s
 /** Hand-Made: no stamping while it holds. */
 export const stampRule = (g: Game): string | null => (ruled(g, 'handMade') ? 'No stamping this run (the Challenge): fold the line again' : null);
 
-/** Hand-Made won: a design's first stamp takes no Machine Kits. */
-export const firstStampKitFree = (g: Game, stamped: number) => stamped === 0 && won(g, 'handMade');
+/** Hand-Made won: a design's first stamp is free. */
+export const handMadeFree = (g: Game, stamped: number) => stamped === 0 && won(g, 'handMade');
 
 /** A high floor's skiff numbers under the Challenges (Headwinds, Rough Seas, Light Fleet). */
 export function skiffRules(g: Game, id: 'district' | 'world' | 'beyond', k: { load: number; speed: number; dwell: number }): { load: number; speed: number; dwell: number } {

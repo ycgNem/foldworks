@@ -218,6 +218,10 @@ describe('cross-references', () => {
       expect(d.derivation).toMatch(/§2[14]/);
     }
   });
+  it('the research nodes are numbered 1..N in order, with no gap (the playability pass cut Machine Kits, Tuning and Recycling)', () => {
+    expect(RESEARCH_IDS.map((id) => RESEARCH[id].num)).toEqual(RESEARCH_IDS.map((_, i) => i + 1));
+    for (const id of RESEARCH_IDS) expect(RESEARCH[id].id).toBe(id);
+  });
   it('the research tree has no cycles and every node can be reached', () => {
     const done = new Set<string>();
     for (let pass = 0; pass < 20; pass++)

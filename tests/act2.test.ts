@@ -1,6 +1,7 @@
 // Act II (ROADMAP.md Milestone 4, DESIGN.md §18): power grids and brownouts, boilers and engines,
-// Mk2 machines, modes, Overdrive, deposit claims, Machine Kits, the Codex, the Megaproject Bay and
+// Mk2 machines, Overdrive, deposit claims, stamps in coin only, the Codex, the Megaproject Bay and
 // the Great Drill, nested folds, power never crossing a fold box, and the v2 -> v3 save migration.
+// (Machine Kits and machine modes were cut in the playability pass: DECISIONS.md.)
 import { describe, expect, it } from 'vitest';
 import { Game, type Cmd } from '../src/sim/Game';
 import { N, Num } from '../src/engine/num';
@@ -10,7 +11,8 @@ import { RULES, GRADES, gradeFor } from '../src/data/rules';
 import { TICK_RATE } from '../src/engine/time';
 import { drawKw } from '../src/sim/systems/power';
 import { claimsHeld, claimPrice } from '../src/sim/systems/claims';
-import { kitsFor, stampRefusal } from '../src/sim/systems/modules';
+import { stampCost, stampRefusal } from '../src/sim/systems/modules';
+import { accepts, crateCap } from '../src/sim/transfer';
 import { foldRefusal, splusGate } from '../src/sim/systems/audits';
 import { auditTicks } from '../src/sim/systems/audits';
 import { machineRecipes } from '../src/sim/transfer';
@@ -138,7 +140,7 @@ describe('power (DESIGN.md §18 Power)', () => {
   });
 });
 
-describe('Mk2, modes and Overdrive (DESIGN.md §18 Machines)', () => {
+describe('Mk2 and Overdrive (DESIGN.md §18 Machines)', () => {
   /** A powered sandbox: a generator kept fuelled and a pole at (19,4) reaching x 17-21, y 2-6. */
   function powered(kind: 'smelterMk2' | 'kiln', x: number, y: number) {
     const g = sandbox();
@@ -183,47 +185,14 @@ describe('Mk2, modes and Overdrive (DESIGN.md §18 Machines)', () => {
     expect(seen.has('22,4')).toBe(true);
   });
 
-  it('modes trade speed for power: Overclocked 1.5x at 2.2x, Efficient 0.75x at 0.5x', () => {
+  it('a powered machine runs at its own speed and draws its own kW: there are no modes (the playability pass)', () => {
     const { g, m, run } = powered('kiln', 21, 4);
-    must(g, { k: 'mode', x: 21, y: 4, mode: 'overclock' });
-    expect(drawKw(m)).toBeCloseTo(60 * 2.2);
+    expect(drawKw(m)).toBeCloseTo(60);
     run(60 * TICK_RATE, 'sand');
-    expect(m.crafts).toBeGreaterThanOrEqual(44);
-    expect(m.crafts).toBeLessThanOrEqual(45);
-    must(g, { k: 'mode', x: 21, y: 4, mode: 'efficient' });
-    expect(drawKw(m)).toBeCloseTo(30);
-    const c0 = m.crafts;
-    run(60 * TICK_RATE, 'sand');
-    expect(m.crafts - c0).toBeGreaterThanOrEqual(22);
-    expect(m.crafts - c0).toBeLessThanOrEqual(23);
-  });
-
-  it('Precision makes +25% of the main output at 0.8x speed (Unit 7 rep 3: +35%)', () => {
-    const { g, m } = powered('kiln', 21, 4);
-    must(g, { k: 'mode', x: 21, y: 4, mode: 'precision' });
-    let made = 0;
-    m.recipe = 'fireGlass';
-    const gens = [at(g, 19, 6), at(g, 18, 6)];
-    for (let i = 0; i < 100 * TICK_RATE; i++) {
-      m.inBuf.sand = 4;
-      for (const q of gens) q.inBuf.coal = 4;
-      g.tick();
-      made += m.out;
-      m.out = 0;
-    }
-    // 0.8 x 30/min x 100/60 min = 40 crafts, x1.25 = 50 glass
-    expect(m.crafts).toBeGreaterThanOrEqual(39);
-    expect(made).toBeGreaterThanOrEqual(Math.floor(m.crafts * 1.25) - 1);
-    expect(made).toBeLessThanOrEqual(Math.ceil(m.crafts * 1.25));
-  });
-
-  it('modes need Tuning and a powered machine', () => {
-    const g = sandbox();
-    must(g, { k: 'place', kind: 'smelter', x: 3, y: 6, rot: 0 });
-    expect(g.act({ k: 'mode', x: 3, y: 6, mode: 'overclock' }).why).toMatch(/powered/);
-    g.s.research.done = g.s.research.done.filter((r) => r !== 'tuning');
-    must(g, { k: 'place', kind: 'kiln', x: 21, y: 4, rot: 0 });
-    expect(g.act({ k: 'mode', x: 21, y: 4, mode: 'overclock' }).why).toMatch(/Tuning/);
+    // 2.0 s glass: 30 a minute
+    expect(m.crafts).toBeGreaterThanOrEqual(29);
+    expect(m.crafts).toBeLessThanOrEqual(30);
+    expect(g.act({ k: 'mode', x: 21, y: 4, mode: 'overclock' } as unknown as Cmd).why).toBe('unknown command');
   });
 
   it('Overdrive: a click runs a machine 3x for 10 s, then it cools for 30 s', () => {
@@ -294,7 +263,7 @@ describe('the Lucky Vein (DESIGN.md §6)', () => {
   });
 });
 
-describe('claims and Machine Kits (DESIGN.md §18)', () => {
+describe('claims and stamps (DESIGN.md §18)', () => {
   it('a design with miners inside holds a claim per copy; more are bought 4 at a time at x(1 + 0.5 b)', () => {
     const g = sandbox();
     const d = design(g, { parts: [{ kind: 'miner', dx: 0, dy: 0, rot: 0, recipe: 'mineCoal' }, { kind: 'smelter', dx: 1, dy: 0, rot: 0, recipe: null }], outs: { coal: 0.5 } });
@@ -309,20 +278,42 @@ describe('claims and Machine Kits (DESIGN.md §18)', () => {
     must(g, { k: 'stamp', id: d.id });
   });
 
-  it('stamping a design with Act II buildings costs Machine Kits; a Hopper banks them', () => {
+  it('a stamp of a design with Act II buildings costs coin only, as in Act I (Machine Kits were cut)', () => {
     const g = sandbox();
+    g.s.counters.stamps = 1; // past the first stamp ever (free, §10)
     const d = design(g, { parts: [{ kind: 'kiln', dx: 0, dy: 0, rot: 0, recipe: null }, { kind: 'pole', dx: 1, dy: 0, rot: 0, recipe: null }], bill: 32000, outs: { glass: 0.5 } });
-    expect(kitsFor(g, d)).toBe(7); // 1 + floor(32,000 / 5,000)
-    expect(g.act({ k: 'stamp', id: d.id }).why).toMatch(/7 Machine Kits/);
-    // seven kits into the Workshop Hopper
-    g.intake.push({ to: 'hopper', item: 'machineKit', x: 7, y: 5, n: N(7) });
-    g.tick();
-    expect(g.s.parts.toNumber()).toBe(7);
+    expect(stampRefusal(g, d)).toBeNull();
+    const coin = g.s.coin;
+    const cost = stampCost(g, d);
+    expect(cost.toNumber()).toBe(32000);
     must(g, { k: 'stamp', id: d.id });
-    expect(g.s.parts.toNumber()).toBe(0);
-    // slice-era designs stay coin-only
-    const plain = design(g, { parts: [{ kind: 'smelter', dx: 0, dy: 0, rot: 0, recipe: null }], bill: 60 });
-    expect(kitsFor(g, plain)).toBe(0);
+    expect(coin.sub(g.s.coin).toNumber()).toBe(32000);
+    expect(d.spare).toBe(2);
+  });
+
+  it('the Committee\'s rep 4 (Pocketed Claims): a Survey Office block is 5 claims, was 4, every block', () => {
+    const g = sandbox();
+    must(g, { k: 'claim', item: 'coal' });
+    must(g, { k: 'claim', item: 'coal' });
+    // 3 + 2 per owned coal deposit (two) + 4 a block
+    expect(claimsHeld(g, 'coal')).toBe(15);
+    g.s.orders.rep.committee = 4;
+    expect(claimsHeld(g, 'coal')).toBe(17);
+    expect(RULES.pocketedClaims.value).toBe(5);
+  });
+
+  it('Unit 7\'s rep 3 (Sorting Crates): a Buffer Crate holds 100, was 50', () => {
+    const g = sandbox();
+    must(g, { k: 'place', kind: 'crate', x: 3, y: 6, rot: 0 });
+    const c = at(g, 3, 6);
+    c.store = new Array(60).fill('ironPlate');
+    expect(crateCap(g)).toBe(50);
+    expect(accepts(g, c, 'ironPlate', 0)).toBe(false);
+    g.s.orders.rep.unit7 = 3;
+    expect(crateCap(g)).toBe(100);
+    expect(accepts(g, c, 'ironPlate', 0)).toBe(true);
+    c.store = new Array(100).fill('ironPlate');
+    expect(accepts(g, c, 'ironPlate', 0)).toBe(false);
   });
 });
 
@@ -685,12 +676,12 @@ describe('fold rules (DESIGN.md §10, §18; the Milestone 1-2 review)', () => {
 });
 
 describe('saves v3 and v4', () => {
-  it('migrates a v2 save: parts bank, claims, Codex, Megaproject, Act II reputation', () => {
+  it('migrates a v2 save: claims, Codex, Megaproject, Act II reputation (the parts bank it gained went at v15)', () => {
     const st = { coin: 'N:5', orders: { active: null, progress: {}, done: [], rep: { bramble: 2 } } };
     const d = migrate({ v: 2, saved: 0, seed: 1, snap: JSON.stringify(st) });
     expect(d.v).toBe(SAVE_VERSION);
     const s2 = JSON.parse(d.snap as string);
-    expect(s2.parts).toBe('N:0');
+    expect('parts' in s2).toBe(false);
     expect(s2.orders.rep).toMatchObject({ bramble: 2, unit7: 0, voltaire: 0 });
     expect(s2.mega).toEqual({ stage: 0, progress: {} });
     expect(s2.codex).toEqual([]);

@@ -3330,3 +3330,117 @@ each run) resembles "start with N of X" prestige upgrades in many idles (Antimat
 start-with upgrades, Realm Grinder's). Kept because each copy is one specific design the player
 folded, placed by hand under claims and room, bounded at 4, and never a multiplier on production.
 Not done: unspent Patents boosting production (Cookie Clicker's heavenly chips, AdCap's angels).
+
+## Playability pass (2026-11-08): cuts, Machine Kits and machine modes
+
+Wave 2 of the playability pass, agent "cutsA". The critic's finding 6 (the complexity budget: about
+eleven currency-like things against PLAN.md's six) named both. The owner made the cuts in advance;
+this records how they were made and what took the place of the rewards that named them.
+
+**Machine Kits are cut.** Gone: the *Machine Kits* research node, the `machineKit` item, the
+`packKit` recipe, the kit cost on stamps of designs with an Act II building, the parts bank
+(`s.parts`) and the Hopper's kit credit, the kit chips on the fold card and the wheel, the offline
+report's kits line, the Gazette line, the kit pop and sound, and the kit icon (the `items2` atlas
+regenerated, 11 frames). *Why:* a second currency for a decision coin already makes. The critic
+counted 3,955 banked unused at 15 h, and a kit's goods (2 steel + 2 gears, 72 coin at the Dock)
+were 1-2% of the stamp they went with. **§10's stamp pacing still holds with coin alone**: the
+price is `bill × (1 + 0.5·n)`, the kit cost was never the binding one, so no coin price was
+re-derived. What limits stamping in Act II is claims and the annex (DESIGN.md §18 Stamps in coin).
+
+**Machine modes are cut, and so is Act III's Recycling node.** Gone: *Tuning* (Efficient,
+Overclocked, Precision), *Recycling* (the Recycling and Byproduct modes; its only content was the
+two modes, so it went too), each entity's `mode` and Precision's `bonus`, the `mode` command, the
+mode grid on the hover report, the mode pop, the mode sound, the bots' mode steps and the UI icon
+slot's name (slot 28 stays in the append-only atlas, unnamed, like 33). A machine runs at its
+kind's speed, draws its kind's kW, and a recipe's byproduct comes every `every` crafts. *Why:* a
+knob on each machine of a line that is folded away within the hour, so a fold's measured rate
+already absorbs it, and Factorio's modules by another name. Nothing replaces it (the brief: no
+other knob). The Sense and Logic Patent's head start names three nodes (Sensors, Processors,
+Hydroponics), about 35 min, was four.
+
+**No research required a cut node.** Nothing in `research.ts` listed `machineKits`, `tuning` or
+`recycling` in `requires`, so there was no parent to re-point to; the only reference was the
+Patent head start above. No trophy named a mode or a kit.
+
+**Three rewards re-pointed, each to a quantity that already exists** (no new concept):
+- *Hand-Made* (Challenge, Act II): "a design's first stamp takes no Machine Kits" is now **a
+  design's first stamp is free, for good** (`handMadeFree` in `systems/challenges.ts`, read by
+  `stampCost`). The same free copy the first fold ever gives (§10 The first fold), so the next
+  design is worth folding where another copy of the old one would do (pillar 1). A Challenge that
+  forbids stamping pays out in stamping.
+- *Unit 7 rep 3*: Precision's +10% yield is now **Sorting Crates**, a Buffer Crate holds 100, was
+  50 (`crateCap` in `transfer.ts`; RULES.unit7Crate). 100 is 50 s of a Mk2 smelter, enough to ride
+  out a module's round-robin or an order's wait: a rule a player plans around, not a multiplier.
+- *The Committee rep 4*: Pocketed Kits is now **Pocketed Claims**, a Survey Office block is 5
+  claims, was 4, every block bought before or after (`prules(g).claimsPerBlock`;
+  RULES.pocketedClaims). Claims are what binds stamping by Act III (106 of 107 held at 15 h).
+
+**Research `num` renumbered 1..59** in `RESEARCH_IDS` order (a data test pins it: no gap, no
+repeat). The research page's Act II columns were re-cut for two nodes fewer (Circuits and Concrete
+share column 4; Heavy Machines, Motors and Nested Folds column 5; the Great Drill alone in 6) and
+looked at in 1024×640 and 1280×720; Act III's page loses Recycling's slot.
+
+**Save v15 (migration `14:`).**
+- The cut nodes leave research `done`, `selected` and `progress`. **No refund**: research is paid
+  in items, minutes of the floor that paid them (400 steel + 300 gears, 200 circuits, 150 rubber +
+  60 gearboxes), and a refund would be a burst of goods for no decision.
+- Machine Kits leave every stock: the research bank, the Hopper, belts, machine buffers, crates,
+  module stocks, docks, the Factory's stores and the parts bank. A `packKit` assembler is left with
+  no recipe (idle), its buffer and progress cleared; a design whose only output was kits loses its
+  inputs too. `mode` and `bonus` leave every entity. A design's `normal` flag (no machine in a mode,
+  which a refold card needed) becomes `refolds`.
+- The command log drops `mode` commands, `packKit` recipe commands, research of a cut node and
+  routes that carry kits. The replay cannot be exact all the same: the snapshot is the truth, and
+  the commands after the last snapshot replay against the new rules (no mode speed, no kit cost),
+  as the v12 Heater migration did. A test loads a v14 save holding kits, modes and all three nodes.
+
+**Share strings (FWD1).** `RECIPES_BY_CODE` is append-only, so code 15 (`packKit`) stays as a
+retired `null`: a string made before the cut still decodes, its kit assembler left unset (tested),
+instead of being refused as damaged.
+
+**The Act III bot's kit line was also its riser.** Its column-15 belt carried other lines' output up
+to the Hopper; it stays as `RISER`, the kit assembler and its feeds gone.
+
+**Pacing, before and after** (the pace tests the cut touches, base `37fffce` against this change):
+- *pace-act2-run* (seeds 1000 / 8919): every milestone the same to the minute (S 0:20 / 0:20, steel
+  0:37 / 0:39, power 0:48 / 0:45, circuits 1:09 / 1:10, the Concrete fold 1:19 / 1:18, the Drill
+  works 2:09 / 2:00, stage 1 4:03 / 3:55; Patents at 2, 3, 4, 5 h 8, 12, 15, 15 / 9, 12, 16, 15;
+  rule 4 1.10 / 0.77), 14 passed in both. One number moved: rule 1 while the Bay fills on seed
+  1000, 20.4 min (ending 3:33) before, 22.8 (ending 2:27) after, because Tuning's research was one
+  of the goals reached there and nothing replaces it. Logged, not tested (an `it.todo`), as before.
+- *pace-reorganize*: the same run for run (Patents 15, 6, 0 / 16, 6, 0; hand-overs 0:20, 0:06,
+  0:04; loops 2.40 and 3.68 an hour); seed 1000's run 3 peaks at 18,155 a minute, was 17,748. 7 of
+  9 pass in both: rule 3's returning run on seed 8919 and the 1 h reset loop (3.68 an hour against
+  the designed 3.36) fail on the base commit too, so they are not this cut's and are left for the
+  lead (DESIGN.md §19 records 9 of 9 at a designed 3.26).
+- *pace-act3* (seed 1000, 40 h): the City complete at **13:10 in run 3, the first Act III run**,
+  was 19:03 in run 4 (the base failed that test: its run 3 reset a stage short at 14:36); 8 of 8
+  pass, was 7 of 8. Act III before the City 19.2 min at worst, was 19.3. Not traced; DESIGN.md §21
+  names the likeliest causes (the kit line's ingots, gears and steel; stamps no longer waiting on
+  kits; Recycling's rubber and gearboxes).
+- *pace-act4* (seed 1000, 40 h): the base passes 5 of 5 (the City 14:29, the first Relocate 35:25, open as
+  before at a 40-45 h target). The after run had not finished when this was committed (it ran under
+  memory pressure past 3 h): unverified.
+- *pace-offline* and *pace-hopper-vs-dock* (the offline report and the Hopper lost their kit
+  credit): identical before and after, 5 of 5 (offline / open idle 0.56 at e = 0.5 and 0.78 at
+  0.75; dock-only Gizmo Theory 4.1 min behind the planner).
+
+**The concept count** (DESIGN.md has no §16 count to update): one item, one stock the player
+tracked (the parts bank), three research nodes, five modes, one command and one hover-report
+section fewer. Nothing new: the three rewards reuse the stamp price, the crate's capacity and the
+claims per block.
+
+**Files touched outside this cut's own** (small, local): `src/engine/save.ts` (the migration; it
+also deletes the cut nodes' keys under `inspire`, which cutsB cuts whole in its own step), `Game.ts`
+(the `mode` command), `world.ts` (the `Mode` type, `mode`, `bonus`, `parts`, `normal` →
+`refolds`), bot2/bot3/bot4, `systems/challenges.ts` (`handMadeFree`), `data/challenges.ts`
+(Hand-Made's reward, Lean Power's derivation), `data/scenarios.ts` (two derivations named modes),
+`data/patents.ts` (the head start), `src/sim/drawer.ts` (the retired recipe code), DESIGN.md, PLAN.md
+and STYLE.md.
+
+**Flagged as derivative.**
+- Machine modes (Efficient, Overclocked, Precision, Recycling, Byproduct): Factorio's modules
+  (speed, efficiency, productivity) by another name. Removed, not replaced.
+- Sorting Crates (bigger buffers) and Pocketed Claims (more land a purchase) are generic upgrades
+  found in many factory and idle games; kept because each is a fixed rule (one number, once), not a
+  multiplier on production, and each replaces a reward that already existed.

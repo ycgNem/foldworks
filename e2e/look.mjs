@@ -172,12 +172,12 @@ if (H180.includes(state)) {
       if (st === 'refuse180') { a.refusal = { text: 'Not enough coin: a Smelter costs 60', t: 2 }; return [f.x + 2, f.y + 1]; }
       return st === 'jamHover' ? [f.x, f.y] : st === 'purse180' ? 'purse' : st === 'bell180' ? 'nextProblem' : null;
     }
-    // power180: the act2power state of e2e/screens.mjs, with Tuning
+    // power180: the act2power state of e2e/screens.mjs
     a.freeze();
     a.grant(2.4e6);
     g.s.land = ['A', 'B', 'C', 'D', 'E', 'F'];
     g.s.upgrades.push('bellows');
-    g.s.research.done = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding', 'coalSeams', 'steelmaking', 'overdrive', 'steamPower', 'glassworks', 'crushing', 'concrete', 'refining', 'machineKits', 'tuning'];
+    g.s.research.done = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding', 'coalSeams', 'steelmaking', 'overdrive', 'steamPower', 'glassworks', 'crushing', 'concrete', 'refining'];
     g.s.research.selected = 'circuits';
     g.s.research.progress = { circuits: { copperWire: g.s.coin.constructor.of(310), glass: g.s.coin.constructor.of(44) } };
     g.s.flags.push('factoryOpen', 'factorySeen', 'sliceEnd', 'ordersSeen');
@@ -185,7 +185,6 @@ if (H180.includes(state)) {
     g.s.orders.rep = { bramble: 3, unit7: 1, voltaire: 1 };
     g.s.orders.active = 'lensArray';
     g.s.orders.progress = { lensArray: { glass: g.s.coin.constructor.of(212), circuit: g.s.coin.constructor.of(18) } };
-    g.s.parts = g.s.coin.constructor.of(14);
     g.s.income = Array(60).fill(140);
     a.renderer.ground = null;
     g.rebuild();

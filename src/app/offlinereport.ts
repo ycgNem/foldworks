@@ -1,6 +1,6 @@
 // The offline report (DESIGN.md §12, §20; Milestone 6), as a letter from Mayor Bramble
 // (docs/hud-180.md): he opens it in a speech bubble in his own voice, then the totals (the coin in
-// the display face, the Hopper, Machine Kits, the Megaproject, what sold), then the timeline as
+// the display face, the Hopper, the Megaproject, what sold), then the timeline as
 // rows (each line that stopped as one row: its first machine to block, the cause and how many
 // machines it stopped as chips, the fix to build as a chip, a jump-to button; on the District, the
 // World and Beyond the same for a module that stopped, and a row for each route short of carriers,
@@ -141,7 +141,6 @@ export function offlineReportCard(app: App, L: Layout) {
   const rw = c.x + c.w - rx;
   const right: string[] = [];
   if (!rep.hopper.isZero()) right.push(`{u:research} ${rep.hopper.format()} into the Hopper`);
-  if (!rep.parts.isZero()) right.push(`{i:machineKit} ${rep.parts.format()} Machine Kits`);
   const given = (Object.entries(rep.mega.given) as [ItemId, Num][]).filter(([, v]) => v.gt(0));
   if (given.length) right.push(`{u:mega} ${given.map(([k, v]) => `{i:${k}} +${v.format()}`).join(' ')}`);
   const sold = soldRow(rep);

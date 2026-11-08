@@ -8,8 +8,8 @@
 // machine's buffer slots); what reaches the Dock or Hopper is paid out as whole items, as Nums.
 // Byproducts (slag, oil) leave a module by a side onto a trunk pointing away, like a Workshop
 // machine's (§4); with no such trunk they go out of the front with the rest.
-// Act II (§18): stamps of designs holding Act II buildings cost Machine Kits; copies of designs
-// with miners inside hold deposit claims; the Megaproject Bay takes its stage's items by trunk.
+// Act II (§18): copies of designs with miners inside hold deposit claims; the Megaproject Bay
+// takes its stage's items by trunk. A stamp costs coin only, in every act.
 import type { Game, ActResult } from '../Game';
 import { OK, no } from '../Game';
 import { Num } from '../../engine/num';
@@ -30,7 +30,7 @@ import { prules } from '../patents';
 import { hunfold, hunfoldRefusal } from './high';
 import { krules } from '../kernels';
 import { trules } from '../longtail';
-import { firstStampKitFree, stampRule } from './challenges';
+import { handMadeFree, stampRule } from './challenges';
 
 const DT = 1 / TICK_RATE;
 
@@ -92,9 +92,8 @@ export function foldAudited(g: Game, name: string | null, id?: number): ActResul
     bill,
     stamped: 0,
     spare: 1,
-    // a kept design refolds after a short check only if its machines ran in their normal modes
-    // (the parts list keeps no mode, so an overclocked line unfolds slower than it was graded)
-    normal: ents.every((e) => !isMachine(e.kind) || (e.mode ?? 'normal') === 'normal'),
+    // its audit can come back as a kept copy's card (the refold check, DESIGN.md §19)
+    refolds: true,
   };
   g.s.designs.push(d);
   // the machines go into the module; the belts and the rest are refunded; the box empties
@@ -160,23 +159,16 @@ export function productCopies(g: Game, d: ModuleDesign): number {
 }
 
 /** What the next copy of a design costs: bill x (1 + 0.5 n), linear (DESIGN.md §10 Stamp), n
- * counted over every design of the same product. */
+ * counted over every design of the same product. Free: the first stamp ever (§10 The first fold),
+ * and each design's first once Hand-Made is won (a Challenge, §24). */
 export function stampCost(g: Game, d: ModuleDesign): Num {
-  if (stampFree(g)) return Num.ZERO;
+  if (stampFree(g) || handMadeFree(g, d.stamped)) return Num.ZERO;
   return Num.of(Math.round(d.bill * (1 + RULES.stampGrowth.value * productCopies(g, d))));
 }
 
 /** What each further copy of this product adds to the stamp price: half the bill (linear, §10). */
 export function stampStep(d: ModuleDesign): Num {
   return Num.of(Math.round(d.bill * RULES.stampGrowth.value));
-}
-
-/** Does the design hold an Act II building (directly, or in a module it was folded from)? */
-export function holdsAct2(g: Game, d: ModuleDesign, depth = 0): boolean {
-  if (depth > 4) return false;
-  const sub = subDesigns(g, d);
-  if (sub) return sub.some((c) => holdsAct2(g, c, depth + 1));
-  return d.parts.some((p) => !!BUILD[p.kind].act2);
 }
 
 /** The designs a folded group was made of (a depth-2 design's modules, a depth-3's groups), one
@@ -187,27 +179,12 @@ export function subDesigns(g: Game, d: ModuleDesign): ModuleDesign[] | null {
   return null;
 }
 
-/** Machine Kits a copy of this design takes (DESIGN.md §18): 1 + floor(bill / 1,500), or none for
- * a design of slice-era machines only. */
-export function kitsFor(g: Game, d: ModuleDesign): number {
-  // the Committee's Pocketed Kits (reputation 3, §19) takes one off, never below none; Hand-Made
-  // won (a Challenge, §24) makes a design's first stamp take none
-  if (firstStampKitFree(g, d.stamped)) return 0;
-  return holdsAct2(g, d) ? Math.max(0, 1 + Math.floor(d.bill / RULES.kitDivisor.value) - prules(g).kitsOff) : 0;
-}
-
 /** Why the next copy can't be stamped, or null. */
 export function stampRefusal(g: Game, d: ModuleDesign): string | null {
   const rule = stampRule(g);
   if (rule) return rule;
   const cost = stampCost(g, d);
   if (g.s.coin.lt(cost)) return `A copy costs ${cost.format()} coin`;
-  const kits = kitsFor(g, d);
-  if (kits > 0 && g.s.parts.lt(kits)) {
-    return g.done('machineKits')
-      ? `A copy takes ${kits} Machine Kit${kits > 1 ? 's' : ''}: you have ${g.s.parts.format()}`
-      : `A copy takes ${kits} Machine Kit${kits > 1 ? 's' : ''}: research Machine Kits`;
-  }
   return claimRefusal(g, d);
 }
 
@@ -218,8 +195,6 @@ export function stamp(g: Game, id: number): ActResult {
   if (why) return no(why);
   const cost = stampCost(g, d);
   g.s.coin = g.s.coin.sub(cost);
-  const kits = kitsFor(g, d);
-  if (kits > 0) g.s.parts = g.s.parts.sub(kits);
   d.stamped++;
   d.spare++;
   g.bump('stamps');
@@ -785,8 +760,8 @@ function megaCheck(g: Game, bay: FEnt) {
 
 /** How much more of `item` the destination can take this tick. */
 export function acceptRoom(g: Game, to: FEnt, item: string): number {
-  // the Factory Dock scraps slag for nothing and refuses what the Dock refuses (Machine Kits,
-  // Drill Bits); the Factory Hopper takes slag only while research wants it (DECISIONS.md)
+  // the Factory Dock scraps slag for nothing and refuses what the Dock refuses (Drill Bits); the
+  // Factory Hopper takes slag only while research wants it (DECISIONS.md)
   if (to.kind === 'fdock') return !!ITEMS[item as ItemId]?.waste || !ITEMS[item as ItemId]?.refused ? Infinity : 0;
   if (to.kind === 'fhopper') return (item !== 'slag' && item !== 'sludge') || hopperWantsWaste(g, item) ? Infinity : 0;
   if (to.kind === 'fbay') {

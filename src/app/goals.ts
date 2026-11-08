@@ -21,11 +21,11 @@
 //     "CALIBRATION WEIGHTS IN PROGRESS. UNIT 7 IS COUNTING."
 //     "THE COLLECTION HAS GAPS. GAPS ARE INTOLERABLE."
 //     "SPECIMEN LOGGED. GRATITUDE SUBROUTINE ENGAGED."
-//   Dame Voltaire (inventor; power, her orders, Mk2, modes): grand, exacting, a little vain.
+//   Dame Voltaire (inventor; power, her orders, Mk2): grand, exacting, a little vain.
 //     "A Boiler, darling, with a Steam Engine at its front."
 //     "Now light it, darling. Poles, coal, and something hungry for current."
 //     "Think bigger, darling. A Mk2 machine, from the Heavy petal."
-//     "Study {research:Tuning}, darling. I have plans for it. {k:T}"
+//     "Study {research:Heavy Machines}, darling. I have plans for it. {k:T}"
 //     "Streetlamps, darling. I am waiting, beautifully."
 //   The Committee (three raccoons in a coat; Patents, Reorganize, the Drill's later stages):
 //   three quoted voices in one bubble, lowercase, conspiratorial.
@@ -108,7 +108,7 @@ function costChips(g: Game, id: ResearchId, picked: boolean): string[] {
 
 /** Who talks about a research node: its subject's owner, Bramble otherwise. */
 const RESEARCH_WHO: Partial<Record<ResearchId, Speaker>> = {
-  folding: 'inspector', nestedFolds: 'inspector', steamPower: 'voltaire', heavyMachines: 'voltaire', tuning: 'voltaire',
+  folding: 'inspector', nestedFolds: 'inspector', steamPower: 'voltaire', heavyMachines: 'voltaire',
 };
 
 /** "Pick this node next", per speaker; `via` is the node it leads to, when it is a step on the way. */

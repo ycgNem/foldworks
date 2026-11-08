@@ -24,7 +24,7 @@ import { trules, craftSpeed, freeBuild, codexCompletion, codexPages, grantCosmet
 import { prules } from '../src/sim/patents';
 import { checkTrophies, trophyValue } from '../src/sim/systems/stats';
 import { maxRoutes, maxSkiffs, skiffStats, lotPrice, routeRefusal } from '../src/sim/systems/high';
-import { chuteCap, kitsFor, stampRefusal } from '../src/sim/systems/modules';
+import { chuteCap, stampCost, stampRefusal } from '../src/sim/systems/modules';
 import { repairPrice } from '../src/sim/systems/islands';
 import { buildPrice, compactFull, splusShare, strictGrade, challengeRefusal, challengeProgress, powerMult } from '../src/sim/systems/challenges';
 import { scenarioMiners, designScore } from '../src/sim/scenario';
@@ -354,7 +354,7 @@ describe('Challenges 6-15 (DESIGN.md §24)', () => {
     expect(buildPrice(g, 'smelter')).toBe(BUILD.smelter.cost);
   });
 
-  it('Hand-Made: no stamping; 8 modules standing on the Factory; then a design\'s first stamp takes no kits', () => {
+  it('Hand-Made: no stamping; 8 modules standing on the Factory; then a design\'s first stamp is free', () => {
     const g = take('handMade');
     const d = design(g, { bill: 20000, parts: [{ kind: 'kiln', dx: 0, dy: 0, rot: 0, recipe: null }] });
     expect(stampRefusal(g, d)).toMatch(/No stamping/);
@@ -363,9 +363,10 @@ describe('Challenges 6-15 (DESIGN.md §24)', () => {
     for (let x = 0; x < 8; x++) must(g, { k: 'fplace', design: d.id, x, y: 0, rot: 0 });
     expect(challengeProgress(g, 'handMade')).toEqual({ have: 8, want: 8 });
     winNow(g, 'handMade');
-    expect(kitsFor(g, d)).toBe(0);
+    g.s.counters.stamps = 1; // past the first stamp ever (free for everyone, §10)
+    expect(stampCost(g, d).toNumber()).toBe(0);
     d.stamped = 1;
-    expect(kitsFor(g, d)).toBeGreaterThan(0);
+    expect(stampCost(g, d).toNumber()).toBeGreaterThan(0);
   });
 
   it('The Strict Inspector: a letter lower; a fold at A; then S+ needs 70% used inside', () => {

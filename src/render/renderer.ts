@@ -37,6 +37,7 @@ import { drawPip, shapeOf, stateShape, type PipShape } from './pips';
 import { drawIsleGround, drawOverlaid, drawHeatReach, workshopLand } from './isleground';
 import { isSky, plantReach } from '../sim/systems/islands';
 import { SEED_ORES, seedSide } from '../sim/systems/seed';
+import { crateCap } from '../sim/transfer';
 
 /** The Seed's notches: each raw ore's colour (its icon's) */
 const SEED_INK: Record<string, string> = { ironOre: C.sky, copperOre: C.copper, coal: C.fog, sand: C.tan };
@@ -247,7 +248,6 @@ export class Renderer {
         this.sfx(e.type === 'megaDone' ? 'fanfare' : 'claim');
       }
       if (e.type === 'codex') this.sfx('codex');
-      if (e.type === 'parts') this.sfx('kit', 0.7);
       if (e.type === 'order' && e.id) {
         this.town.times[e.id] = e.tick;
         this.orderCascade(g, e.id);
@@ -394,14 +394,6 @@ export class Renderer {
           fx.ring(bx, by, C.glow, c + 8, 0.4, c - 4);
           break;
         }
-        case 'mode': {
-          const ent = g.entAt(e.x ?? 0, e.y ?? 0);
-          const c = ent && ent.w > 1 ? 16 : 8;
-          fx.ring(px + c, py + c, C.teal1, c + 8, 0.4, c - 2);
-          fx.text(px + c, py - 6, MODE_WORD[e.id ?? ''] ?? '', C.teal1, 1.2);
-          this.sfx('mode');
-          break;
-        }
         case 'codex': {
           // a gold fountain out of the Dock and a big number
           fx.fountain(px + 8, py, 44, [C.gold, C.hot, C.brass1, C.gold], 120, 2, 1.4);
@@ -410,12 +402,6 @@ export class Renderer {
           fx.kick(2);
           const s = this.toScreen((e.x ?? 0) + 0.5, e.y ?? 0);
           for (let i = 0; i < 8; i++) fx.fly(s.x + (i - 4) * 5, s.y, this.coinTarget.x, this.coinTarget.y);
-          break;
-        }
-        case 'parts': {
-          fx.pop(px + 8, py - 10, e.value ?? 1, 'kit', C.brass1, 'machineKit', '+', true);
-          fx.burst(px + 8, py + 4, 10, [C.brass1, C.brass0, C.hot], 45, 60);
-          fx.ring(px + 8, py + 8, C.brass1, 16, 0.4, 4);
           break;
         }
         case 'fold': {
@@ -911,7 +897,7 @@ export class Renderer {
           ctx.fillStyle = rgba(C.bone, 0.35);
           ctx.fillRect(x + 2, y + 3, W - 4, Ht - 5);
         }
-        if (e.kind === 'crate' && e.store.length) this.fillBar(x, y, e.store.length / (BUILD.crate.capacity ?? 50));
+        if (e.kind === 'crate' && e.store.length) this.fillBar(x, y, e.store.length / crateCap(g));
         if ((e.kind === 'splitter' || e.kind === 'merger') && e.store.length) ctx.drawImage(itemIcon(e.store[0]), x + 4, y + 4);
         if (isMachine(e.kind)) {
           this.machineDetails(g, e);
@@ -1660,8 +1646,6 @@ export class Renderer {
     return (ITEMS as Record<string, { value: number }>)[id]?.value ?? 0;
   }
 }
-
-const MODE_WORD: Record<string, string> = { normal: 'Normal', efficient: 'Efficient', overclock: 'Overclocked!', precision: 'Precision' };
 
 /** Land for sale (the 180): a paper sign tag on a stake with the chunk's name and a price chip
  *  (coin ink when you can pay, soft when not; a padlock while it waits on research), centred on

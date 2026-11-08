@@ -11,8 +11,7 @@
 //     are replayed live so the jam spreads as it would, and the new rates are measured. Lines run
 //     at the same physical speed as live (heaps fill and lines jam at the same times); what they
 //     deliver while extrapolated counts at the offline efficiency, paid through the same functions
-//     as live (orders first, then sales; research credit; Machine Kits to the parts bank; the
-//     Bay's stage).
+//     as live (orders first, then sales; research credit; the Bay's stage).
 // The report is a timeline: one row per line that stopped (a cascade of jams is one line, named by
 // the first machine to block and why, with a fix the player can build and how many machines it
 // stopped), each heap filling on its own, orders filled, research finished and the Megaproject's
@@ -44,6 +43,7 @@ import { lrules } from './legacy';
 import { standingDue } from './systems/automation';
 import { BUILD } from '../data/machines';
 import type { SkiffRoute } from './world';
+import { crateCap } from './transfer';
 
 /** The offline efficiency now (DESIGN.md §12, §20): the base 0.5 plus the Patent tree's offline
  * nodes (§19) plus the Night Shift bought with coin, capped at 0.75. The one function every
@@ -125,10 +125,8 @@ export interface OfflineReport {
   /** the offline efficiency the extrapolated part was paid at */
   eff: number;
   coin: Num;
-  /** items delivered to Hoppers (research and the parts bank) */
+  /** items delivered to Hoppers (research) */
   hopper: Num;
-  /** Machine Kits into the parts bank */
-  parts: Num;
   /** items delivered to the Docks, by item */
   sold: Partial<Record<ItemId, Num>>;
   research: ResearchId[];
@@ -202,7 +200,6 @@ function jammedHist(hist: string, n: number): boolean {
 }
 
 const heapCap = (g: Game) => prules(g).heapCap; // Deep Heaps (§19)
-const crateCap = () => BUILD.crate.capacity ?? 50;
 
 /** Stopped `n` seconds straight on a high floor: starved, blocked or blocked by its waste (a
  * module runs at a fraction there: a starved one runs short of an input, not only at 0). */
@@ -243,7 +240,7 @@ export function tickCostMs(g: Game): number {
 }
 
 /** "copper ingots", "gears"; slag, oil, sand and the other stuffs stay as they are. */
-const COUNTED = ['ingot', 'plate', 'gear', 'gizmo', 'circuit', 'motor', 'kit', 'bit', 'brick'];
+const COUNTED = ['ingot', 'plate', 'gear', 'gizmo', 'circuit', 'motor', 'bit', 'brick'];
 const plural = (name: string) => (COUNTED.includes(name.split(' ').pop()!) ? name + 's' : name);
 
 type Cause = { heap: Ent } | { crate: Ent } | { chute: ItemId } | { bay: ItemId } | { hbay: HighFloorId; item: ItemId } | { order: string } | { research: ResearchId };
@@ -291,7 +288,6 @@ export class OfflineRun {
   private extrapolated = 0;
   private visible0: boolean;
   private earned0: Num;
-  private parts0: Num;
   private research0: Set<string>;
   private orders0: Set<string>;
   private seenResearch: Set<string>;
@@ -350,7 +346,6 @@ export class OfflineRun {
     this.visible0 = s.visible;
     s.visible = false;
     this.earned0 = s.earned;
-    this.parts0 = s.parts;
     this.research0 = new Set(s.research.done);
     this.orders0 = new Set(s.orders.done);
     this.seenResearch = new Set(s.research.done);
@@ -509,7 +504,7 @@ export class OfflineRun {
       for (const c of this.g.logistics) {
         if (c.kind !== 'crate' || !this.crates0.has(c.id)) continue;
         const rate = (c.store.length - this.crates0.get(c.id)!) / this.measureSecs;
-        if (rate > 1e-6 && c.store.length < crateCap()) this.crateRate.set(c.id, rate);
+        if (rate > 1e-6 && c.store.length < crateCap(this.g)) this.crateRate.set(c.id, rate);
       }
       const ch = this.g.s.chute ?? {};
       for (const [item, n] of Object.entries(ch) as [ItemId, number][]) {
@@ -563,8 +558,8 @@ export class OfflineRun {
     }
     for (const [id, rate] of this.crateRate) {
       const c = g.byId.get(id);
-      if (!c || c.store.length >= crateCap() || !c.store.length) continue;
-      const tf = (crateCap() - c.store.length) / rate;
+      if (!c || c.store.length >= crateCap(g) || !c.store.length) continue;
+      const tf = (crateCap(g) - c.store.length) / rate;
       if (tf < dt) { dt = tf; cause = { crate: c }; }
     }
     for (const [item, rate] of this.chuteRate) {
@@ -607,7 +602,7 @@ export class OfflineRun {
     }
     const sel = s.research.selected;
     if (sel && this.eff > 0) {
-      const tr = this.timeToFill(RESEARCH[sel].cost, s.research.progress[sel] ?? {}, (i) => (ITEMS[i].parts ? 0 : rates.hopper[i] ?? 0));
+      const tr = this.timeToFill(RESEARCH[sel].cost, s.research.progress[sel] ?? {}, (i) => rates.hopper[i] ?? 0);
       if (tr !== null && tr < dt) { dt = tr; cause = { research: sel }; }
     }
     dt = Math.max(0, dt);
@@ -630,7 +625,7 @@ export class OfflineRun {
     for (const [id, rate] of this.crateRate) {
       const c = g.byId.get(id);
       if (!c || !c.store.length) continue;
-      const to = Math.min(crateCap(), Math.floor(c.store.length + rate * dt + 1e-9));
+      const to = Math.min(crateCap(g), Math.floor(c.store.length + rate * dt + 1e-9));
       while (c.store.length < to) c.store.push(c.store[c.store.length - 1]);
     }
     for (const [item, rate] of this.chuteRate) {
@@ -644,7 +639,7 @@ export class OfflineRun {
     } else if (cause && 'crate' in cause) {
       // full: its line backs up behind it in the live minutes after (a jam row if a machine stops)
       const c = cause.crate;
-      while (c.store.length < crateCap()) c.store.push(c.store[c.store.length - 1]);
+      while (c.store.length < crateCap(g)) c.store.push(c.store[c.store.length - 1]);
     } else if (cause && 'chute' in cause) {
       (s.chute ??= {})[cause.chute] = chuteCap(g);
     } else if (cause && 'bay' in cause) {
@@ -730,11 +725,8 @@ export class OfflineRun {
       const amt = Num.of(n);
       addTo(s.delivered, item, amt);
       addTo(this.extra.hopper, item, amt);
-      if (ITEMS[item].parts) s.parts = s.parts.add(amt);
-      else {
-        creditResearch(g, item, amt);
-        runResearch(g);
-      }
+      creditResearch(g, item, amt);
+      runResearch(g);
     }
     for (const [item, r] of Object.entries(rates.bay) as [ItemId, number][]) {
       const n = whole('bay' + item, r * k);
@@ -999,7 +991,7 @@ export class OfflineRun {
       fix = 'a Slag Heap beside it';
     } else {
       cause = wn ? `its ${wn} had nowhere to go` : 'its output had nowhere to go';
-      const to = why && ITEMS[why]?.parts ? 'a Hopper' : why && ITEMS[why]?.refused ? 'a Crate' : 'the Dock';
+      const to = why && ITEMS[why]?.refused ? 'a Crate' : 'the Dock';
       fix = `a belt taking ${wn ?? 'it'} to ${to}`;
     }
     const t = heap ? Math.min(heap.t, root.t) : root.t;
@@ -1077,7 +1069,6 @@ export class OfflineRun {
       eff: this.eff,
       coin: s.earned.sub(this.earned0),
       hopper,
-      parts: s.parts.sub(this.parts0),
       sold,
       research: s.research.done.filter((r) => !this.research0.has(r)),
       orders: s.orders.done.filter((o) => !this.orders0.has(o)),

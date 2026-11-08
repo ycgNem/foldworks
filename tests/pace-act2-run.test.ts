@@ -117,7 +117,7 @@ describe('Act II pacing (bot2 after the planner)', () => {
   }
 
   // Not met yet, measured and reported: while the Bay fills (about 1.9 h) the goals the bot reaches
-  // are the orders, Tuning and Nested Folds' research, the annex and claims, and the Drill's three
+  // are the orders, Nested Folds' research (and Tuning's, until it was cut), the annex and claims, and the Drill's three
   // parts and its stage (the playability pass: tests/pace-act2-helpers.ts counts the parts), 17 min
   // apart at the longest (was 39-42) (DESIGN.md §16, §18); §16 rule 1 wants one within 3 min.
   it.todo('rule 1: the next goal always within 3 min of reach while the Bay fills');

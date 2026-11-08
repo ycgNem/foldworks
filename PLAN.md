@@ -46,7 +46,7 @@ function, which also makes offline progress cheap to compute.
 
 | Currency | Kind | Comes from | Spent on |
 |---|---|---|---|
-| Coin | stock | items delivered to the **Dock** (standing and special orders) | machines, belts, land, stamps (with parts, from Milestone 4) |
+| Coin | stock | items delivered to the **Dock** (standing and special orders) | machines, belts, land, stamps (coin only: Machine Kits were cut in the playability pass) |
 | Items | typed stocks and flows | your lines | delivered to the Dock (coin), the **Hopper** (research) or fed to other machines |
 | Reputation | one track per customer | filling that customer's orders | that customer's unique rewards (recipes, machines, skins, lore) |
 | Patents | reset currency (layer 1) | **Reorganize** | the Patent tree: head starts, rules, automation |
@@ -94,9 +94,9 @@ builds whose progress **survives every reset**. Each one completed changes a rul
 
 ## Machines
 
-- **Modes**: Efficient (less fuel or power, slower), Overclocked (faster, more power),
-  Precision (better yield, slower). From Act III: Recycling (less waste) and Byproduct (more
-  waste, for when waste is an input).
+- **Modes**: cut in the playability pass (2026-11-08, DECISIONS.md "cuts, Machine Kits and
+  machine modes"): a per-machine knob on a line that folds away anyway, and Factorio's modules
+  by another name. A machine runs at its kind's speed and draws its kind's power.
 - **Tiers**: Mk1 to Mk3. Higher tiers are bigger, faster and hungrier, a trade-off rather
   than a strict upgrade.
 - **Adjacency**: a smelter beside a heat exchanger runs on free heat. This rewards tight

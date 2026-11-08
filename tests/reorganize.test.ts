@@ -751,7 +751,7 @@ describe('the returning run (DESIGN.md §19 "What a Reorganize keeps", the playa
   it('knows Acts I-II from the first tick (keyed off each node\'s act), nothing of Act III', () => {
     const { g } = returned();
     const want = RESEARCH_IDS.filter((r) => (RESEARCH[r].act ?? 1) <= 2 && !RESEARCH[r].world);
-    expect(want.length).toBe(26);
+    expect(want.length).toBe(24); // 26 until Machine Kits and Tuning were cut (the playability pass)
     expect(g.s.research.done).toEqual(want);
     expect(g.s.research.done).not.toContain('zoning');
   });
