@@ -90,6 +90,7 @@ import { openFinale, finaleState } from './finalestate';
 import { setPhoto, snap } from './photo';
 import { pickNextRun, afterAutoReorganize } from './reorganize';
 import { claimSaves, ownsSaves, savesLost, watchOwner } from './othertab';
+import { queueWhatsNew, whatsNewFrame, markWhatsNewSeen } from './whatsnew';
 import { openSkinList } from './tags';
 import type { SkinSlot } from '../data/cosmetics';
 import type { ChallengeId } from '../data/challenges';
@@ -311,6 +312,7 @@ export class App {
 
   newGame(seed = (Math.random() * 1e9) | 0) {
     this.adopt(new Game(seed));
+    markWhatsNewSeen(); // a first game has nothing to compare against
     this.hud.firstMiner = false;
   }
 
@@ -332,6 +334,8 @@ export class App {
     // offline progress (DESIGN.md §12): the clock is read here, in the app, never in the sim
     const away = (Date.now() - (d.saved ?? Date.now())) / 1000;
     if (away >= 60) this.startOffline(away);
+    // the update's notes, once, after the offline letter (src/app/whatsnew.ts)
+    queueWhatsNew();
   }
 
   /** Switch the floor on screen (the Factory opens with the first fold). */
@@ -527,6 +531,7 @@ export class App {
     const ctx = this.ctx;
     const g = this.game;
     this.events();
+    whatsNewFrame(this);
     // a phone held upright: a card asking for a bigger screen, drawn big enough to read (the
     // playability pass: the HUD came out 4-5 CSS px tall there); the game carries on behind it
     if (tooSmall(window.innerWidth, window.innerHeight)) {

@@ -78,7 +78,9 @@ export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options
   // the playability pass: the core ending, the Floating City lifting off (src/app/finale.ts)
   | 'finale'
   // the playability review: another tab took the save over (src/app/othertab.ts)
-  | 'otherTab';
+  | 'otherTab'
+  // the playability update's patch notes in the game (src/app/whatsnew.ts)
+  | 'whatsnew';
 
 /** Screens added from other files (Milestones 5 and 6): drawn in the overlay rect like the rest. */
 // (a `var` without an initializer: hoisted, so a page may register while this module is still loading,

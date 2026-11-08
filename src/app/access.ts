@@ -5,6 +5,7 @@ import { drawRich } from '../ui/rich';
 import { button, rule, T } from './chrome';
 import { lessonsOn, saveLessonsOn, saveUiScale, uiScaleSetting, maxUiScale, uiScaleFor } from './settings';
 import { setPhoto } from './photo';
+import { PATCH_NAME } from './whatsnew';
 import type { App } from './app';
 
 /** The scale picks a w x h canvas offers: 0 (Auto), then 1x up to the largest that fits. */
@@ -51,6 +52,9 @@ export function accessRows(app: App, x: number, y: number, w: number): number {
   // screen's corner); H still takes one from anywhere
   row('{u:play} Photo mode  {k:H}', (bx, by) => {
     if (button(ui, 'photoMode', bx, by, 70, 17, 'Take one', { tip: [{ text: '{big:Photo mode}' }, { text: 'hide the HUD · snap the whole floor to a PNG' }, { text: '{k:H}  {k:Esc} back' }] })) { app.panel = null; setPhoto(app, true); }
+  }, 70);
+  row("{u:codex} What's new", (bx, by) => {
+    if (button(ui, 'opt:whatsNew', bx, by, 70, 17, 'Read it', { tip: [{ text: `{big:${PATCH_NAME}}` }, { text: 'what this update changed' }] })) app.panel = 'whatsnew';
   }, 70);
   const on = lessonsOn();
   row('{u:codex} Lesson cards', (bx, by) => {

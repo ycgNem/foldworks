@@ -29,6 +29,8 @@ interface Settings {
   lessons?: boolean;
   /** the lessons each save has had, by the save's seed (the last few saves) */
   lessonsSeen?: Record<string, string[]>;
+  /** the last update whose "What's new" card this browser has seen (src/app/whatsnew.ts) */
+  patchSeen?: string;
 }
 
 // ---------------------------------------------------------------- Milestone 13: keys, UI scale, lessons
@@ -144,6 +146,16 @@ export function calmSetting(): boolean {
 
 export function saveCalm(on: boolean) {
   write({ ...read(), calm: on });
+}
+
+/** The update whose "What's new" card was last seen here, or null. */
+export function patchSeen(): string | null {
+  const v = read().patchSeen;
+  return typeof v === 'string' ? v : null;
+}
+
+export function savePatchSeen(id: string) {
+  write({ ...read(), patchSeen: id });
 }
 
 function read(): Settings {
