@@ -418,8 +418,8 @@ describe('Challenges 6-15 (DESIGN.md §24)', () => {
     const g = take('shortHaul', (q) => { q.s.counters.districtPlaced = 1; });
     const d = design(g, { depth: 2, outs: { steel: 1 } });
     const DK = HIGH.district.dock;
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 0, y: DK.y });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: DK.x - 1, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 0, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: DK.x - 1, y: DK.y });
     expect(routeRefusal(g, 'district', 0, DK.y, DK.x, DK.y, 'steel')).toMatch(/5 tiles at most/);
     expect(routeRefusal(g, 'district', DK.x - 1, DK.y, DK.x, DK.y, 'steel')).toBeNull();
     const cap0 = maxSkiffs(g, 'district');

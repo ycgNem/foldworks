@@ -131,7 +131,8 @@ export type Cmd =
   // Act III (DESIGN.md §21): the Factory Chute; the high floors (the District, the World): modules,
   // skiff routes, lots, Overdrive and Inspiration clicks, and their folds
   | { k: 'fchute'; x: number; y: number }
-  | { k: 'hplace'; floor: HighFloorId; design: number; x: number; y: number }
+  // auto: fly its routes on its own (DESIGN.md §21 "Auto-routing"); the default, false to place it bare
+  | { k: 'hplace'; floor: HighFloorId; design: number; x: number; y: number; auto?: boolean }
   | { k: 'hremove'; floor: HighFloorId; x: number; y: number }
   | { k: 'route'; floor: HighFloorId; fx: number; fy: number; tx: number; ty: number; item: ItemId }
   | { k: 'skiff'; floor: HighFloorId; id: number; n: 1 | -1 }
@@ -500,7 +501,7 @@ export class Game {
       case 'autoStamp': return autoStamp(this, c.id);
       case 'annex': return buyAnnex(this);
       case 'fchute': return fplace(this, 'chute', c.x, c.y, 0);
-      case 'hplace': return hplace(this, c.floor, c.design, c.x, c.y);
+      case 'hplace': return hplace(this, c.floor, c.design, c.x, c.y, c.auto !== false);
       case 'hremove': return hremove(this, c.floor, c.x, c.y);
       case 'route': return addRoute(this, c.floor, c.fx, c.fy, c.tx, c.ty, c.item);
       case 'skiff': return setSkiffs(this, c.floor, c.id, c.n);

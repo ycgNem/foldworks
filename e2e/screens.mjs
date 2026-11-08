@@ -481,7 +481,7 @@ export async function districtSetup(state) {
   a.step(2); // Zoning done: the District opens; the Floating City's research brings the Bay
   a.step(20);
   const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
-  const put = (d, x, y) => act({ k: 'hplace', floor: 'district', design: d.id, x, y });
+  const put = (d, x, y) => act({ k: 'hplace', auto: false, floor: 'district', design: d.id, x, y });
   const fly = (fx, fy, tx, ty, item, skiffs = 1) => {
     act({ k: 'route', floor: 'district', fx, fy, tx, ty, item });
     const st = g.s.district;
@@ -660,7 +660,7 @@ export async function worldSetup(state) {
   a.step(2); // Charting done: the World opens, the Lighthouse's research brings its Bay
   a.step(20);
   const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
-  const put = (d, x, y) => act({ k: 'hplace', floor: 'world', design: d.id, x, y });
+  const put = (d, x, y) => act({ k: 'hplace', auto: false, floor: 'world', design: d.id, x, y });
   const fly = (fx, fy, tx, ty, item, barges = 1) => {
     act({ k: 'route', floor: 'world', fx, fy, tx, ty, item });
     const st = g.s.world;
@@ -1171,7 +1171,7 @@ export async function act5Setup(state) {
   g.s.nextDesign = nid;
   a.step(2);
   a.step(20);
-  const put = (f, d, x, y) => act({ k: 'hplace', floor: f, design: d.id, x, y });
+  const put = (f, d, x, y) => act({ k: 'hplace', auto: false, floor: f, design: d.id, x, y });
   const fly = (f, fx, fy, tx, ty, item, n = 1) => {
     act({ k: 'route', floor: f, fx, fy, tx, ty, item });
     const st = g.s[f];

@@ -3028,3 +3028,36 @@ stock, the Factory floor and the corner's machine states. **No other data or sim
   Coils line's rubber starvation in the measured runs (the Chute held 80 rubber) is not read yet.
 - **For the owner (no number changed)**: with the gate, the first Relocate's 40-45 h target is no
   longer early by construction; it now waits on the bot finishing the two projects.
+
+## Playability pass (2026-11-08): the high floors (District, World, Beyond)
+- **Auto-routing is how the floors work, not research.** Placing a group flies its routes (products
+  to the nearest module short of them, else Bay, Hopper for research, Dock, Hopper; inputs from the
+  nearest feeders with a quarter of the need to spare, two at most; skiffs to carry each rate).
+  *Why:* 137 of 165 routes at 15 h were hand-drawn (the critic's finding 7, radical option 5);
+  gating it behind research would keep the chore through the act's first hours. Idempotent (no
+  route flown twice, none lifted), so bot3/bot4 keep working: pace-act3 7/7 passed with it.
+- **The `hplace` command flies routes by default** (`auto: false` places bare); the Town Plan places
+  bare. Old logged placements are migrated to `auto: false` (**SAVE_VERSION 13**) so saves replay
+  exactly. *Why:* the bots and the player share one command; a replay must not change.
+- **A skiff's price climbs linearly with the paid fleet** (District 40,000 + 2,000 a skiff; World and
+  Beyond at half the slope); refunds at the last one's price. **New cost curve** (CLAUDE.md asks for
+  an entry): linear, not geometric, and counted on paid skiffs only so free Pocket Skiffs can't be
+  used to sell a cheap skiff dear. *Why:* coin was decorative (46M on hand, a skiff 4 s of income).
+  A 3-5 min skiff (the critic's figure) cannot hold for every skiff: a 230-skiff fleet would cost
+  5+ hours of income; it holds per far route instead.
+- **District lots 4M x n** (was 1M x n). *Why:* lots are bought when routes run out (14.5-16 h,
+  550-750K/min); at 1M they were 2-3 min of income. Measured: coin at 15 h 13.8M (was 33-46M).
+  World and Beyond lots unchanged (not measured in this pass).
+- **Only problem pips**, **roofs tinted by product tier** (palette ramps only, no new colours),
+  **icons on a lit pane**, **quiet routes** past 24 on a floor. *Why:* §17 failed at a glance at
+  15 h (QA findings 6 and 9). Pass-through pips for Overdrive's surplus and feeders at 80%+ hidden.
+- **Per minute everywhere on the high floors** (reports, cards, the strip's tags, goals' chips,
+  "Stuck?"). *Why:* the only floors that read /s (QA finding 6).
+- **The strip shows the floor's real limits** (routes, tiles, the next skiff's price) with a slip
+  saying what to do when one binds. *Why:* the real limits were hidden (the critic's finding 4).
+- Not changed: pace-act4 (World barges, Beyond couriers) was not re-run for the new barge and
+  courier slopes; they are set at half the District's slope and flagged in their derivations.
+
+Flagged as derivative: auto-routing on placement resembles the auto-connect of logistics
+games in general (Builderment's auto-belt suggestions are the nearest), but here it only proposes
+routes the player edits, priced in skiffs, inside Foldworks' own skiff model; noted, not dropped.

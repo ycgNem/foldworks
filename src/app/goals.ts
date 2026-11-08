@@ -63,7 +63,8 @@ import { DX, DY } from '../sim/world';
 // Act III (DESIGN.md §21): the District's goals
 import { HIGH } from '../data/floors';
 import { MEGAS } from '../data/megaprojects';
-import { hent, megaStageOf, routeCap, routeWant, maxRoutes, lotPrice } from '../sim/systems/high';
+import { hent, megaStageOf, routeCap, routeWant, maxRoutes, lotPrice, skiffPrice } from '../sim/systems/high';
+import { perMin } from '../engine/fmt';
 import { relocateRefusal } from '../sim/relocate';
 import { WORLD_IDS } from '../data/worlds';
 import { worldOf } from '../sim/systems/islands';
@@ -313,7 +314,7 @@ function worldGoal(g: Game): Goal | null {
   const s = g.s;
   const st = s.world!;
   const f = HIGH.world;
-  const barge = `a barge {coin:${big(f.skiffCost)}}`;
+  const barge = `a barge {coin:${big(skiffPrice(g, 'world'))}}`;
   const mods = st.ents.filter((e) => e.kind === 'module');
   if (!mods.length) {
     if (!s.designs.some((d) => d.depth === 3 && d.spare > 0)) return say('inspector', 'Only District folds go up here. Fold a group of groups. {k:F}', { chips: ['{u:fold} depth 3 → the World'], ui: 'district' });
@@ -329,7 +330,7 @@ function worldGoal(g: Game): Goal | null {
   const short = st.routes.find((r) => { const w = routeWant(g, 'world', r); return w > 1e-9 && routeCap(g, 'world', r) < w * 0.9; });
   if (short) {
     const w = routeWant(g, 'world', short), c = routeCap(g, 'world', short);
-    return say('bramble', 'A route is short of barges! Click its orange line, then + barge.', { bar: frac(c, w), chips: [`{i:${short.item}} ${c.toFixed(2)}/s of ${w.toFixed(2)}/s`, barge], ui: 'world' });
+    return say('bramble', 'A route is short of barges! Click its orange line, then + barge.', { bar: frac(c, w), chips: [`{i:${short.item}} ${perMin(c)}/min of ${perMin(w)}/min`, barge], ui: 'world' });
   }
   // the Lighthouse and the Sky Anchor: the stage of this island, at the World Bay
   for (const mid of ['lighthouse', 'anchor'] as const) {
@@ -365,7 +366,7 @@ function beyondGoal(g: Game): Goal | null {
   const s = g.s;
   const st = s.beyond!;
   const f = HIGH.beyond;
-  const courier = `a courier {coin:${big(f.skiffCost)}}`;
+  const courier = `a courier {coin:${big(skiffPrice(g, 'beyond'))}}`;
   const mods = st.ents.filter((e) => e.kind === 'module');
   if (!mods.length) {
     if (!s.designs.some((d) => d.depth === 4 && d.spare > 0)) return say('inspector', 'Only World folds go up here. Fold a group on the World. {k:F}', { chips: ['{u:fold} depth 4 → Beyond'], ui: 'world' });
@@ -381,7 +382,7 @@ function beyondGoal(g: Game): Goal | null {
   const short = st.routes.find((r) => { const w = routeWant(g, 'beyond', r); return w > 1e-9 && routeCap(g, 'beyond', r) < w * 0.9; });
   if (short) {
     const w = routeWant(g, 'beyond', short), c = routeCap(g, 'beyond', short);
-    return say('bramble', 'A route is short of couriers! Click its orange line, then + courier.', { bar: frac(c, w), chips: [`{i:${short.item}} ${c.toFixed(2)}/s of ${w.toFixed(2)}/s`, courier], ui: 'beyond' });
+    return say('bramble', 'A route is short of couriers! Click its orange line, then + courier.', { bar: frac(c, w), chips: [`{i:${short.item}} ${perMin(c)}/min of ${perMin(w)}/min`, courier], ui: 'beyond' });
   }
   return ordersGoal(g) ?? researchToward(g, 'cartography') ?? researchToward(g, 'starForging') ?? researchToward(g, 'weatherBottling') ?? researchToward(g, 'relicEngines');
 }
@@ -405,7 +406,7 @@ function act3Goal(g: Game): Goal | null {
   if (s.mega.stage < 3) return null;
   const st = s.district;
   if (!st) return researchToward(g, 'zoning');
-  const skiff = `a skiff {coin:${big(HIGH.district.skiffCost)}}`;
+  const skiff = `a skiff {coin:${big(skiffPrice(g, 'district'))}}`;
   const mods = st.ents.filter((e) => e.kind === 'module');
   if (!mods.length) {
     if (!s.designs.some((d) => d.depth === 2 && d.spare > 0)) return say('inspector', 'Only nested groups go up there. Fold one on the Factory. {k:F}', { chips: ['{u:fold} depth 2 → the District'], ui: 'factory' });
@@ -418,7 +419,7 @@ function act3Goal(g: Game): Goal | null {
   const short = st.routes.find((r) => { const w = routeWant(g, 'district', r); return w > 1e-9 && routeCap(g, 'district', r) < w * 0.9; });
   if (short) {
     const w = routeWant(g, 'district', short), c = routeCap(g, 'district', short);
-    return say('bramble', 'A route is short of skiffs! Click its orange line, then + skiff.', { bar: frac(c, w), chips: [`{i:${short.item}} ${c.toFixed(1)}/s of ${w.toFixed(1)}/s`, skiff], ui: 'district' });
+    return say('bramble', 'A route is short of skiffs! Click its orange line, then + skiff.', { bar: frac(c, w), chips: [`{i:${short.item}} ${perMin(c)}/min of ${perMin(w)}/min`, skiff], ui: 'district' });
   }
   // the Floating City at the District Bay
   const city = g.done('floatingCity') ? megaStageOf(g, 'city') : null;

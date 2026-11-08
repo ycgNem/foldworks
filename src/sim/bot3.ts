@@ -28,7 +28,7 @@ import { HIGH, type HighFloorId } from '../data/floors';
 import { TICK_RATE } from '../engine/time';
 import { available, megaComplete } from './systems/research';
 import { BYPRODUCTS, mainItem, stampCost, stampRefusal } from './systems/modules';
-import { hent, hentAt, hfloor, hfoldRefusal, HIGH_IDS, highW, routeCap, routeWant, bayWants, lotPrice, hplaceRefusal, maxRoutes, routeRefusal } from './systems/high';
+import { hent, hentAt, hfloor, hfoldRefusal, HIGH_IDS, highW, routeCap, routeWant, bayWants, lotPrice, hplaceRefusal, maxRoutes, routeRefusal, skiffPrice } from './systems/high';
 import { claimLoad, claimPrice, claimsHeld, placedClaims } from './systems/claims';
 import { ffoldRefusal } from './systems/nested';
 import { ORDER } from '../data/orders';
@@ -1936,7 +1936,7 @@ export class Act3Bot {
         const share = routeCap(g, id, r) / w;
         if (share < 0.9 && (!best || share < best.share)) best = { id: r.id, share };
       }
-      if (best && !g.s.coin.lt(HIGH[id].skiffCost * 3)) {
+      if (best && !g.s.coin.lt(skiffPrice(g, id) * 3)) {
         this.act({ k: 'skiff', floor: id, id: best.id, n: 1 }, 'skiff');
         this.skiffAt[id] = g.s.tick + TICK_RATE;
         return true;

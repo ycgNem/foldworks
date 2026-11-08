@@ -1378,8 +1378,8 @@ asks where each group stands and how its goods get to the next one. The plan and
   modules only** (groups folded on the Factory, §18 Nested folds); a depth-3 module (folded here)
   goes up to the World (§22). Every module is one tile, as on the Factory.
 - **12x10 to start** (120 tiles, 1.25x the Factory's 96, each tile a group of two to six modules),
-  with **three lots of 2x10** east of it bought at 1M x n (linear, the annex pattern, §19; 45-55
-  min of the 18-21K a minute the floor makes when the District opens), and a fourth kept for good
+  with **three lots of 2x10** east of it bought at **4M x n** (linear, the annex pattern, §19; was
+  1M x n until the playability pass: see "Skiffs and coin" below), and a fourth kept for good
   by the Floating City's second stage (20x10 at most). The Dock and the Hopper
   stand on the east edge like the Factory's; the Bay at the south-west corner once a Megaproject
   of this floor is researched.
@@ -1396,11 +1396,9 @@ asks where each group stands and how its goods get to the next one. The plan and
   it must stand beside what it feeds, while a Servo group (0.1-0.2 a second, 3,600 coin each) flies
   across the floor on two. Where a group stands is the act's decision (rule 5), and the price of a
   skiff is what a bad layout costs every run. (The second gate: at 4 a trip one skiff carried every
-  depth-2 flow even across the floor, 120 routes held 120 skiffs, and distance never bound.) A skiff
-  is **40,000 coin, flat** (no price per skiff owned): about 2 min of the floor's income when the
-  District opens, 27 s at 15 h and 12 s at 30 h (89K and 195K a minute, measured), so a bad layout
-  costs at the act's start and a dozen skiffs is a choice later; refunded when taken off; a route
-  holds up to 12.
+  depth-2 flow even across the floor, 120 routes held 120 skiffs, and distance never bound.) The
+  first skiff is **40,000 coin**, each one more paid for on the floor **2,000 dearer** (below,
+  "Skiffs and coin"); refunded at the last one's price when taken off; a route holds up to 12.
   Routes from one output share it in turn. At most **120 routes** a floor and **20 more a lot**
   bought (the second gate: at 120 flat the cap was the real wall at 30 h with half the tiles used,
   and the lots were worth nothing), shown on the tool strip (`routes 96/140`), so the floor stays
@@ -1419,7 +1417,75 @@ asks where each group stands and how its goods get to the next one. The plan and
   up); Overdrive on a module runs every module joined to it by routes; a click on the Hopper is
   Inspiration; claims and Machine Kits are held by the groups inside (§18), on every floor.
 - **The readout** on every route: its skiffs, what it carries now, what its source makes of the
-  item (the "wanted"), and its length.
+  item (the "wanted"), and its length. Every rate up here reads **items a minute**, as on the
+  floors below (§1; the high floors read /s until the playability pass).
+
+### Auto-routing (the playability pass, 2026-11-08)
+Placing a group on a high floor flies its routes on its own (`autoRoute`, src/sim/systems/high.ts);
+the player edits them (re-target, a skiff more or less, remove) rather than drawing each one. It is
+how the floors work, not research: the critic measured 137 of 165 routes at 15 h drawn by hand, the
+act's chore, and pillar 2 says a chore becomes the floor's.
+- **Each product** (not its waste: that goes down the chute) flies to the nearest module short of
+  it (what its routes bring under what it takes), else the Bay when a project there wants it, the
+  Hopper when the research picked does, the Dock when it sells, the Hopper (banked) last. A product
+  over twice what that module takes also flies on to be sold (routes from one output share it in
+  turn, half each, so the module still gets all it takes); under twice, a second route would starve
+  it, so the feeder runs a little slower instead.
+- **Each input** is flown from the nearest modules making it: first one whose product has no route
+  (it backs up), then one with some left after the modules it feeds, then one that only sells it
+  (its sale route stays and shares half). At most **two** feeders an input, each with at least a
+  **quarter** of the need to spare (a route is a twentieth of a lot's cap: not for crumbs). The
+  first measure flew seven routes for one Servos group at 15 h.
+- **Each route** gets the skiffs that carry its rate: ceil(want / one skiff's rate), 1 to 12.
+- **Idempotent**: a route that stands is never flown twice and none is lifted, so a bot (or the
+  player) that routes by hand keeps working. It stops at the route cap and buys only with the coin
+  on hand; the slip under the strip says what it did (`+2 routes · 3 skiffs 180K`) or what stopped
+  it (the cap, the coin), and the placed tile pops `+2 ROUTES`.
+- The command is `hplace` with `auto` (the default); the Town Plan places bare (it flies its own
+  plan); a placement logged before v13 replays bare (the save migration), so a save stays exact.
+- *Measured* (pace-act3, seed 1000, the bots placing with it): the District 9:53, the City's stage
+  1 11:01, 148 groups at most, rule 5's routes between modules 37 (35 before), 1.42 skiffs a route,
+  no route short; Act III's worst rule 1 gap 37.4 min (41.0 before) and rule 2 18.7 min (15.5
+  before; run 4's hand-over, OPEN as before). Pace-act3 7 of 7 passed.
+
+### Skiffs and coin (the playability pass)
+The review: at 15 h the bot held 46M, earned 574K a minute, and a skiff (40,000 flat) was 4 s of
+income, a lot (1M x n) 2-3.5 min: coin decided nothing, the route cap and the tiles did, out of
+sight. Now:
+- **A skiff's price climbs with the fleet**: the n-th skiff paid for on a floor costs base x (1 +
+  (n - 1) / step), linear (CLAUDE.md: no geometric curves): the District 40,000 and step 20 (+2,000
+  a skiff), the World's barges 250,000 and step 40, Beyond's couriers 2.5M and step 40. Only paid
+  skiffs count: the Committee's Pocket Skiffs (a route's first skiff free, rep 6, which the bot holds
+  from the District's opening) and the Skiff Guild's are free and leave the price alone, so free
+  routes can't raise the refund of a skiff bought cheap. A skiff taken off refunds the last one's
+  price, so buying and lifting is even. *Derivation:* a step of 20 prices the whole fleet of a 15 h
+  floor without Pocket Skiffs (about 230) at about 65M, half of what the District earns by then,
+  so it stays buildable; with them, the extras (70-90 at 15-16 h) climb to 180-210K each, a route
+  across the floor (four to six skiffs) minutes of income, and a feeder placed beside what it feeds
+  saves real coin. Step 10 priced the fleet at all of it.
+- **Lots are 4M x n** (4M, 8M, 12M): they are bought when the routes run out, at 14.5-16 h on
+  550-750K a minute, so a lot is 7-20 min of income and the three take 24M. *Measured* (the coin
+  curve, seed 1000): coin on hand at 15 h **13.8M** (was 33-46M), down to 3.6M at 16.25 h as the
+  third lot is bought; the next skiff 178K at 15 h (was 40K).
+- **The floor's limit, where the player looks**: the strip reads `routes 137/155 · tiles 105/128 ·
+  skiff 102K`, each over a thin meter, the one that binds in warn ink (routes within 5% of the cap,
+  or two tiles free); a slip under it says what to do (`routes 152/155 · a lot +20 routes 8.00M ·
+  fold a group into one tile`). "Stuck?" names the route cap when it keeps a group unrouted, skips
+  Overdrive's surplus draining into the Dock, and drops any cause under 1% of the income a minute.
+
+### Reading a full floor at 1x (the playability pass, §17)
+- **Only problems wear a pip**: starved, idle, or blocked under 80% of full speed with something
+  to fix. Not while overdriven (3x its takes and makes: it starves or backs up by design), nor a
+  feeder at 80% or better, nor one backing up only into the Dock, the Hopper or the Bay on routes
+  not short (Overdrive's surplus draining). A working module shows its lit window and its motion.
+- **Roofs by tier**: the main product's crafting steps colour the roof from the palette: bulk
+  (steps 0-2) slate, parts (3: gears, circuits, concrete) blue, assemblies (4: gizmos, motors,
+  gearboxes) the art's own copper, machines (5: servos, rotors, coils) green, the finest (6+)
+  violet. The product's icon sits on a lit bone pane (slate while stopped), not the dark window.
+- **Routes quiet unless looked at**: past 24 routes on a floor, every route no one looks at is a
+  faint still hatching (28% alpha, no arrow); the routes of the module under the mouse or pinned,
+  the route under the mouse or open, fly over the buildings in full; a route short of skiffs is
+  always drawn bold in orange. Carriers on quiet routes are small bone motes.
 
 ### District folds (research *District Folds*)
 A box up to 8x8 of at least two depth-2 modules, every one joined to the others by a route inside

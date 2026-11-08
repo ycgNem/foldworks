@@ -81,7 +81,7 @@ function worldAtWork(g: Game) {
   return WORLD_ITEMS.map((item, i) => {
     const d = design(g, { outs: { [item]: 0.05 } });
     const [x, y] = WORLD_AT[i];
-    must(g, { k: 'hplace', floor: 'world', design: d.id, x, y });
+    must(g, { k: 'hplace', auto: false, floor: 'world', design: d.id, x, y });
     must(g, { k: 'route', floor: 'world', fx: x, fy: y, tx: dk.x, ty: dk.y, item });
     return d;
   });
@@ -113,7 +113,7 @@ function placeAtWork(g: Game, d: ModuleDesign, n: number): FEnt[] {
   for (let y = 0; y < H && out.length < n; y++)
     for (let x = 0; x < W && out.length < n; x++) {
       if (hentAt(g, 'world', x, y)) continue;
-      if (!g.act({ k: 'hplace', floor: 'world', design: d.id, x, y }).ok) continue;
+      if (!g.act({ k: 'hplace', auto: false, floor: 'world', design: d.id, x, y }).ok) continue;
       out.push(hentAt(g, 'world', x, y)!);
     }
   for (const e of out) e.ok = RULES.legacyRunSeconds.value + 1;
