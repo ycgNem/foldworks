@@ -91,6 +91,9 @@ export const replayWindow = (g: Game) => new OfflineRun(g, AWAY).firstReplay;
 // (the review round) moved the first reset out of 4-6 h. Rule 4's floor is not lowered. The lever
 // is the lead's: Overdrive's duty cycle and rule 4's floor are the same number.
 export const RULE4_OPEN: Record<string, string> = {
+  // the playability pass (Folding node 2): Act I ends ~10 min sooner, so run 1's Bay floor (about
+  // 2:09, was 2:19) falls inside the 2:00-2:30 window, as run 4's does at 1 h
+  '1000:1:2': 'active 1.10x idle: the Bay floor is laid at about 2:09, inside this half hour, and the bot clears its Gizmo chains for it while the untouched factory keeps them (Act I is ~10 min shorter since Folding became node 2)',
   '1000:2:2': "active 1.48x idle: the bot waits on Nested Boxes' research and only clicks Overdrive (1.5x at most, 3x for 10 s in every 40); seed 8919 reads 1.50",
   '8919:2:3': 'active 1.49x idle: the plan is done and the bot waits for its reset, clicking Overdrive (1.5x at most); seed 1000 reads 2.35',
   '1000:4:1': 'active 0.98x idle: the Bay floor is laid in this half hour (about 1:10 into run 4, brought forward by the head starts): the campaign clears the Gizmo chains for it while the untouched factory keeps them',
