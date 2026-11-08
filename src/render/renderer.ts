@@ -9,6 +9,7 @@ import { DX, DY, opposite, type Dir, type Ent, type Floor } from '../sim/world';
 import { faceArrow } from './arrow';
 import { drawFactory, type FactoryOverlay } from './factory';
 import { auditTicks } from '../sim/systems/audits';
+import { mainItem } from '../sim/systems/modules';
 import { poleReach } from '../sim/systems/power';
 import { CHUNKS } from '../data/land';
 import { BUILD, isMachine, isPower, type BuildKind } from '../data/machines';
@@ -429,7 +430,11 @@ export class Renderer {
             if (q.x + q.w / 2 === e.x && q.y + q.h / 2 === e.y && q.w * q.h === (e.d ?? q.w * q.h)) { snap = q; this.foldSnaps.delete(key); break; }
           const side = Math.max(1, Math.round(Math.sqrt(e.d ?? 4)));
           const box = snap ?? { x: Math.round((e.x ?? 0) - side / 2), y: Math.round((e.y ?? 0) - side / 2), w: side, h: side, img: null };
-          fx.folds.push({ x: box.x * TILE, y: box.y * TILE, w: box.w * TILE, h: box.h * TILE, img: snap?.img ?? null, t: 0, letter: e.id ?? '' });
+          // the module's product and rate pop with it (the playability review: a faint "S module!"
+          // was all the climax said)
+          const dsg = g.design(e.value ?? -1);
+          const main = dsg ? mainItem(dsg) : null;
+          fx.folds.push({ x: box.x * TILE, y: box.y * TILE, w: box.w * TILE, h: box.h * TILE, img: snap?.img ?? null, t: 0, letter: e.id ?? '', item: main ?? undefined, rate: main && dsg ? Math.round((dsg.outs[main] ?? 0) * 60) : undefined });
           // its sound is the app's (Audio.foldSound: the crease, the corners and the snap, timed to this)
           break;
         }
@@ -1342,7 +1347,8 @@ export class Renderer {
         this.fx.burst(cx, cy, top ? 70 : 30, top ? [C.gold, C.hot, C.bone, C.gold] : [C.gold, C.brass1, C.hot, C.bone], top ? 110 : 70, 40, top ? 2 : 1, top ? 1.3 : 0.9);
         this.fx.ring(cx, cy, C.gold, top ? 44 : 26, top ? 0.9 : 0.6, 4);
         if (top) { this.fx.ring(cx, cy, C.hot, 60, 1.1, 10); this.fx.text(cx, cy - 18, 'S+ MODULE!', C.gold, 2, true); }
-        else if (f.letter) this.fx.text(cx, cy - 14, `${f.letter} module!`, C.gold, 1.4, true);
+        else if (f.letter) this.fx.text(cx, cy - 18, `${f.letter} module!`, C.gold, 2.4, true);
+        if (f.item && f.rate) this.fx.text(cx, cy + 14, `${f.rate}/min`, C.bone, 2.4, true, f.item);
         this.fx.kick(top ? 7 : 3);
         this.sfx('stampLand', 0.8);
       }

@@ -9,7 +9,7 @@
 // the first time the town stands on it: its rule in two lines.
 import { C } from '../data/palette';
 import type { GameEvent } from '../engine/events';
-import { bigWidth, BIG_LINE_H } from '../ui/font';
+import { bigWidth, BIG_LINE_H, textWidth } from '../ui/font';
 import { layoutRich, drawLayout } from '../ui/rich';
 import { T } from '../ui/theme';
 import { sheet, hasArt, frameAt } from '../render/sprites';
@@ -17,6 +17,7 @@ import { drawPipShape, PIP_MEANING, type PipShape } from '../render/pips';
 import { routeCap, routeWant } from '../sim/systems/high';
 import { FACTORY } from '../data/land';
 import type { Game } from '../sim/Game';
+import { dockSides, fplaceRefusal, mainItem, stampFree } from '../sim/systems/modules';
 import { worldOf } from '../sim/systems/islands';
 import { button, tag, tagPad, tagSize, uiIcon, type UIconName } from './chrome';
 import { zones } from './tags';
@@ -32,6 +33,10 @@ export type LessonId = 'starved' | 'slag' | 'fold' | 'factory' | 'trunk' | 'brow
 
 interface LessonDef {
   title: string;
+  /** the card read from the game when it shows (the first fold: its product, rate and grade) */
+  live?: (app: App) => { title: string; lines: string[] } | null;
+  /** one call to action beside OK (the first fold: stamp the free copy); true when it is done */
+  action?: { label: string; tip: string; show: (app: App) => boolean; go: (app: App) => boolean };
   /** two or three short lines, rich text */
   lines: string[];
   /** the picture: a sprite sheet (drawn at 2x), or a UI icon */
@@ -52,9 +57,33 @@ export const LESSONS: Record<LessonId, LessonDef> = {
     title: 'A slag jam', art: 'heap', pip: 'blocked',
     lines: ['{i:slag} leaves a smelter by a side', 'nowhere to go: it stops {pip:blocked}', 'a Slag Heap beside it · {k:LMB} shovel'],
   },
+  // the first fold (DESIGN.md §10 The first fold): the one card of the moment; the toasts that said
+  // the same thing are gone (the playability review: four texts for one event)
   fold: {
     title: 'Folded!', art: 'module',
     lines: ['the line is a design: one tile', 'its rates × its grade', 'place copies on the Factory {k:Tab}'],
+    live: (app) => {
+      const g = app.game;
+      const d = g.s.designs[0];
+      if (!d) return null;
+      const item = mainItem(d);
+      const rate = item ? Math.round((d.outs[item] ?? 0) * 60) : 0;
+      const placed = g.s.factory.ents.some((e) => e.kind === 'module' && e.design === d.id);
+      return {
+        title: `Folded! ${d.grade.letter}`,
+        lines: [
+          item ? `{i:${item}} ${rate}/min in one tile · ×${d.grade.mult.toFixed(2)}` : `one tile · ×${d.grade.mult.toFixed(2)}`,
+          placed ? '{good:at work} beside the Factory Dock' : 'place it on the Factory floor {k:Tab}',
+          stampFree(g) ? 'a copy is a stamp: this one is free' : 'copies: {k:I} Modules · Stamp',
+        ],
+      };
+    },
+    action: {
+      label: 'Stamp a copy · free',
+      tip: 'a second copy, beside the first: twice the plates',
+      show: (app) => stampFree(app.game) && app.game.s.designs.length > 0,
+      go: (app) => stampFirstCopy(app),
+    },
   },
   factory: {
     title: 'The Factory floor', art: 'module', pip: 'work',
@@ -136,7 +165,7 @@ const S = {
   shown: null as LessonId | null,
   shownAt: 0,
   /** the UI time the last card was put away (the next waits a moment) */
-  closedAt: -10,
+  closedAt: -1e9,
   pollAt: 0,
   /** e2e: lessons held off (the HUD audit's states), unless a state asks for one */
   held: false,
@@ -233,6 +262,8 @@ export function lessonZones(): Rect[] {
 }
 
 const CARD_W = 220;
+/** seconds between one card put away and the next shown */
+const GAP = 25;
 const ART = 34;
 
 /** Each frame in play (src/app/hud.ts): watch for firsts, and show the card at the head of the
@@ -244,7 +275,8 @@ export function lessonFrame(app: App, L: Layout) {
   if (ui.time >= S.pollAt) { S.pollAt = ui.time + 0.5; poll(app); }
   if (!lessonsOn() || S.held) return;
   if (!S.shown) {
-    if (!S.queue.length || ui.time - S.closedAt < 1.5 || !clear(app)) return;
+    // spaced (the playability review: cards came back to back): a card waits GAP s after the last
+    if (!S.queue.length || ui.time - S.closedAt < GAP || !clear(app)) return;
     S.shown = S.queue.shift()!;
     S.shownAt = S.instant ? ui.time - 1 : ui.time;
     S.instant = false;
@@ -259,8 +291,11 @@ export function lessonFrame(app: App, L: Layout) {
 
 function drawCard(app: App, L: Layout, id: LessonId) {
   const ui = app.ui;
-  const d = LESSONS[id];
-  const w = Math.min(CARD_W, ui.w - 2 * (L.purse.x + L.purse.w) - 8);
+  const base = LESSONS[id];
+  const live = base.live?.(app) ?? null;
+  const d = live ? { ...base, ...live } : base;
+  const act = base.action && base.action.show(app) ? base.action : null;
+  const w = Math.min(CARD_W + (act ? 30 : 0), ui.w - 2 * (L.purse.x + L.purse.w) - 8);
   const [pl, , pr] = tagPad('left');
   const inner = w - pl - pr;
   const cw = inner - ART - 6;
@@ -300,7 +335,29 @@ function drawCard(app: App, L: Layout, id: LessonId) {
     S.shown = null;
     S.closedAt = ui.time;
   }
+  // the one call to action (the first fold's free stamp), gold, left of OK
+  if (act) {
+    const aw = Math.min(r.w - bw - 4 - (ART + 6), textWidth(act.label) + 14);
+    if (button(ui, 'lessonAct', r.x + r.w - bw - 4 - aw, r.y + r.h - 15, aw, 15, act.label, { gold: true, pulse: true, tip: [{ text: act.tip }] }) && act.go(app)) {
+      S.shown = null;
+      S.closedAt = ui.time;
+    }
+  }
   void C;
+}
+
+/** The first fold's free stamp: the copy goes beside the first, at the next free side of the
+ * Factory Dock, and the Factory floor comes up to show the two (DESIGN.md §10 The first fold). */
+function stampFirstCopy(app: App): boolean {
+  const g = app.game;
+  const d = g.s.designs[0];
+  if (!d || !app.act({ k: 'stamp', id: d.id }).ok) return false;
+  for (const t of dockSides()) {
+    if (fplaceRefusal(g, 'module', t.x, t.y, d.id)) continue;
+    if (app.act({ k: 'fplace', design: d.id, x: t.x, y: t.y, rot: t.rot }).ok) break;
+  }
+  app.setFloor('factory');
+  return true;
 }
 
 // ------------------------------------------------------------------ e2e and the debug handle

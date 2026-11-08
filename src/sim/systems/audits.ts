@@ -38,14 +38,26 @@ export function isAudited(g: Game, id: number): boolean {
   return g.s.audits.some((a) => !a.result && a.ids.includes(id));
 }
 
+/** The biggest box a Workshop fold may draw now (DESIGN.md §10 Box sizes): the box grows with Act
+ * I's research, 3x3 at Folding, 5x5 at Gearcutting, the full box (8x8, or a Patent's or Kernel's
+ * wider one) at Gizmo Theory. A Challenge's or Scenario's smaller box still caps it (prules). */
+export function foldBox(g: Game): number {
+  const full = prules(g).foldMax;
+  if (g.done('gizmoTheory')) return full;
+  return Math.min(full, g.done('gearcutting') ? RULES.foldBoxGears.value : RULES.foldBoxFirst.value);
+}
+
 /** Why this box can't be folded, or null. */
 export function foldRefusal(g: Game, b: Box): string | null {
   if (!g.done('folding')) return 'Research Folding first';
   const max = prules(g).maxAudits;
   if (g.s.audits.length >= max) return `${max} audits are running: fold or cancel one first`;
   if (g.s.audits.some((a) => overlaps(a.box, b))) return 'This box overlaps a line being audited';
-  const fmax = prules(g).foldMax;
-  if (b.w > fmax || b.h > fmax) return `Too big: a fold is at most ${fmax}x${fmax}`;
+  const fmax = foldBox(g);
+  if (b.w > fmax || b.h > fmax) {
+    const next = !g.done('gearcutting') ? 'Gearcutting' : !g.done('gizmoTheory') ? 'Gizmo Theory' : null;
+    return `Too big: a fold is at most ${fmax}x${fmax}${next ? ` until ${next}` : ''}`;
+  }
   if (b.w < 1 || b.h < 1) return 'Drag a box over a line';
   const ents = entsIn(g, b);
   for (const e of ents) {

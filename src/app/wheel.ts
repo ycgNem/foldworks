@@ -561,7 +561,7 @@ function moduleItems(app: App): Item[] {
       }
     };
     const chips: Item['chips'] = [
-      { text: `stamp ${cost.format()}`, o: { role: g.s.coin.gte(cost) ? 'coin' : 'bad', icon: 'coin' } },
+      { text: cost.isZero() ? 'stamp free' : `stamp ${cost.format()}`, o: { role: g.s.coin.gte(cost) ? 'coin' : 'bad', icon: 'coin' } },
     ];
     if (kits > 0) chips.push({ text: `${kits}`, o: { role: g.s.parts.gte(kits) ? 'ink' : 'bad', icon: 'kit' } });
     for (const [ore, n] of Object.entries(claimLoad(g, d)) as [ItemId, number][]) {
@@ -582,9 +582,11 @@ function moduleItems(app: App): Item[] {
         ins ? `${ins} → ${outs} /min` : `a source → ${outs} /min`,
         ...(why ? [`{bad:${why.replace(/[{}]/g, '')}}`] : []),
       ],
-      verbs: d.spare ? '{k:LMB} place  {k:SHIFT}{k:LMB} stamp' : '{k:SHIFT}{k:LMB} stamp',
+      verbs: d.spare ? '{k:LMB} place  {k:SHIFT}{k:LMB} stamp' : '{k:SHIFT}{k:LMB} stamp a copy',
       pick: (shift) => {
-        if (shift || d.spare < 1) { app.act({ k: 'stamp', id: d.id }); return false; }
+        // a plain click never spends (the playability review: it stamped at once with no spare)
+        if (shift) { app.act({ k: 'stamp', id: d.id }); return false; }
+        if (d.spare < 1) { app.refuse(`no spare copy · {k:SHIFT}{k:LMB} stamps one {coin:${stampCost(g, d).format()}}`); return false; }
         app.pickModule(d.id);
         return true;
       },

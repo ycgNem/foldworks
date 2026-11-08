@@ -374,13 +374,16 @@ export function pluralName(name: string): string {
 export function bonusText(b: TrophyBonus): string {
   switch (b.k) {
     case 'speed': return `{i:${b.item}} crafts {good:+${Math.round(b.add * 100)}%}`;
-    case 'free': return b.n > 1 ? `the first {good:${b.n}} ${pluralName(BUILD[b.kind].name)} free` : `the first ${BUILD[b.kind].name} free`;
+    // (the playability review: "the first Miner free" showed after the first Miner was paid for; the
+    // bonus is the next one built, and one standing at a time stays free)
+    case 'free': return b.n > 1 ? `{good:${b.n}} ${pluralName(BUILD[b.kind].name)} free: the next you build` : `a ${BUILD[b.kind].name} free: the next you build`;
     case 'skiffs': return `{u:district} {good:+${b.add}} skiff a route`;
     case 'routes': return `{u:district} {good:+${b.add}} routes a floor`;
     case 'drawer': return `{u:blueprint} Drawer {good:+${b.add}}`;
     case 'sparkLife': return `Sparks stay {good:+${b.add} s}`;
     case 'heap': return `Slag Heaps hold {good:+${b.add}}`;
-    case 'startCoin': return `{coin:${b.add.toLocaleString('en-US')}} at each run's start`;
+    // (said before any reset exists: "at each run's start" meant nothing yet)
+    case 'startCoin': return `{coin:${b.add.toLocaleString('en-US')}} to start with, after a reset`;
     case 'cool': return `{u:overdrive} cools {good:${b.sub} s} sooner`;
     case 'repair': return `ruins repair {good:${Math.round(b.off * 100)}%} cheaper`;
     case 'chute': return `{u:chute} holds {good:+${b.add}} of each`;

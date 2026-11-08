@@ -797,10 +797,12 @@ export class App {
             this.toast('Folded at S+!', '×1.35 its rates · one tile · a Gazette special', C.gold, 'star');
           } else if (e.floor === 'district') this.toast('Folded!', 'a module of groups · depth 3 · {k:I} Modules', C.gold, 'module');
           else if (e.floor === 'world') this.toast('Folded!', 'a module of World groups · depth 4 · for Beyond', C.gold, 'module');
-          else this.toast('Folded!', 'one tile, its rates · {k:Tab} the Factory floor · {k:I} Modules', C.gold, 'module');
+          // the first fold ever is one staged moment (DESIGN.md §10 The first fold): the crease, the
+          // module's pop with its rate, and the lesson card with its one button; no toasts on top
+          else if ((this.game.s.counters.folds ?? 0) > 1) this.toast('Folded!', 'one tile, its rates · {k:Tab} the Factory floor · {k:I} Modules', C.gold, 'module');
           break;
         case 'firstFold':
-          if (this.game.s.meta.runs === 0) this.toast('The Factory floor is open', `{k:Tab} go · modules run as rates · trunks ${FACTORY.trunkSpeed * 60}/min`, C.gold, 'factory');
+          if (this.game.s.meta.runs === 0 && (this.game.s.counters.folds ?? 0) > 1) this.toast('The Factory floor is open', `{k:Tab} go · modules run as rates · trunks ${FACTORY.trunkSpeed * 60}/min`, C.gold, 'factory');
           break;
         case 'stamp': a.sfx('stamp'); break;
         case 'unfold': a.sfx('place'); break;

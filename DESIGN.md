@@ -147,18 +147,35 @@ banked by type for the next node.
 
 | # | Node | Cost (delivered) | Unlocks | Derivation |
 |---|---|---|---|---|
-| 1 | Pressing | 30 iron ingots | Press, iron plate | §16: first research ≈ 5 min |
-| 2 | Survey East | 40 iron plates | buy land chunk B (copper) | |
-| 3 | Copper Smelting | 80 copper ore | copper ingot recipe | ×2 (below) |
-| 4 | Wire Drawing | 120 copper ingots | copper wire on the Press | ×2 |
-| 5 | Gearcutting | 160 iron plates | Assembler, gear | ×2 |
-| 6 | Splitters & Mergers | 100 gears | Splitter, Merger | ×2 |
-| 7 | Buffers | 200 plates + 40 gears | Buffer Crate | ×2 |
-| 8 | Gizmo Theory | 120 gears + 300 wire | Gizmo recipe, Bramble's Gizmo Festival, land chunk C | ×2 |
-| 9 | Slag Bricks | 200 slag | slag brick on the Press | §4: waste becomes an input; ×2 |
-| 10 | **Folding** | 50 Gizmos + 500 gears | the Fold tool, land chunk D | §16: first fold ≤ 40 min; ×2, then 500 gears (round 3, below) |
+| 1 | Pressing | 30 iron ingots | Press, iron plate | §16: first research ≈ 5 min; **the Hopper pays its items at the Dock price** (below) |
+| 2 | **Folding** | 40 iron plates | the Fold tool (boxes 3×3), the Factory floor | §16: the first fold in the first minutes (playability pass, below) |
+| 3 | Survey East | 40 iron plates | buy land chunk B (copper) | |
+| 4 | Copper Smelting | 80 copper ore | copper ingot recipe | ×2 (below) |
+| 5 | Wire Drawing | 120 copper ingots | copper wire on the Press | ×2 |
+| 6 | Gearcutting | 160 iron plates | Assembler, gear, fold boxes 5×5 | ×2 |
+| 7 | Splitters & Mergers | 100 gears | Splitter, Merger | ×2 |
+| 8 | Buffers | 200 plates + 40 gears | Buffer Crate | ×2 |
+| 9 | Gizmo Theory | 120 gears + 300 wire | Gizmo recipe, fold boxes 8×8, Bramble's Gizmo Festival, land chunks C and D | ×2 |
+| 10 | Slag Bricks | 200 slag | slag brick on the Press | §4: waste becomes an input; ×2 |
 
-**Why nodes 3–10 are ×2 the first draft** (2026-10-20, pace tests). At the first-draft costs the
+**The playability pass (2026-11-08): Folding is node 2.** A first-time player folded at minute 73
+and the planner at 21:45: Folding was node 10 (50 Gizmos + 500 gears), so the game's hook hid behind
+nine nodes and a ~33 min gear grind. Folding now needs only Pressing and costs **40 plates**: about
+80 s of the one press line a player has after Pressing (30 plates/min), and that line is the one they
+then fold. Survey East and Gearcutting hang off Folding, so the order is fixed: press, fold, then
+copper and gears. The fold box grows with research (§10 Box sizes), so each later node unlocks a new
+line worth folding: plates at Folding, wire at Wire Drawing, gears at Gearcutting, Gizmos at Gizmo
+Theory. Gizmo Theory now opens what Folding opened (the Festival, chunk D, and Act II's Coal Seams).
+Measured (50 seeds, planner): Folding **3:48** (3:02-3:56), the first fold **5:17** (4:40-5:27),
+Gizmo Theory **13:27**; a first-timer about half the planner's pace at research folds at ~8-12 min.
+
+**The first node pays like the Dock.** Until Pressing is researched the Hopper pays for what it
+takes at the Dock price (`RULES.firstNodePay`, 1). A new player has one line; the guide turns its
+last belt into the Hopper, and income sat at 0 for the length of Pressing (the playtest: 22 coin,
+nothing affordable, until the belt was turned back). The Hopper-or-Dock choice (below, §13 check 11)
+starts at node 2, where a player has two lines.
+
+**Why nodes 3–10 are ×2 the first draft** (2026-10-20, pace tests; history: the node numbers below are the old order, Folding last). At the first-draft costs the
 planner bot researched Folding at **19:01** (mean of 50 seeds) and the Dock-only bot only **3.5 min**
 later: once chunks A and B are built (~16 min) the lines make research items far faster than the
 nodes ask for them (Folding's 200 gears were 4.4 min of the planner's 45 gears/min into the Hopper),
@@ -277,6 +294,35 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
 7. **Modules with miners inside** hold deposit claims, one per ore per copy (§18 Land and
    deposits); a stamp beyond your claims is refused with the reason.
 
+**Box sizes** (the playability pass). The box grows with Act I's research: **3×3 at Folding**
+(node 2: a Miner, a Smelter and a Press in a row, the first line a player builds), **5×5 at
+Gearcutting** (a gear line, miner to assembler, with its second press beside it), **8×8 at Gizmo
+Theory** (a whole Gizmo line with both its feeds). A Patent's or Kernel's wider box applies from
+Gizmo Theory; a Challenge's or Scenario's smaller box still caps it (`foldBox`, systems/audits.ts).
+So the box is Act I's progression: each node opens a bigger line to fold, not a bigger number.
+
+**The first fold** (the playability pass). The first fold ever (counted over the save's lifetime):
+- its module goes to work at once on the first free tile beside the Factory Dock, facing it (no
+  income gap while a player learns to place it; the playtest's income fell 180 → 66/min);
+- **the first stamp ever is free** (`RULES.firstStampFree`). Payback arithmetic: the planner's
+  first module is L2 folded at S, 37.5 plates/min = 187 coin/min (225 with Bramble's rep 1), bill
+  250. A free copy is 250 coin, about 1.3 min of a minute-6 economy (~200/min before the fold): one
+  line's worth, a visible doubling of what the fold gave, not an explosion. The copy counts as a
+  copy, so the next costs 250 × 1.5 = 375, then +125 each (linear, said as "+125 a copy", never as
+  a factor: the playtest read 250 → 375 as a geometric curve). Paybacks at 187/min: copy 2 in 2.0
+  min, copy 5 (750) in 4.0 min.
+- **Why stamps of a minute-6 module do not trivialise Act I**: they are capped by claims, not coin.
+  Iron claims are 3 + 2 for chunk A's deposit = 5 copies of anything digging iron (7 with chunk C):
+  at most 5 × 37.5 = 187 plates/min more, about 940 coin/min, ~12% of the slice-end factory's
+  ~8,000/min (§13 round 4). And every copy spent on plates is a claim the Festival's ingot modules
+  cannot use, so stamping is a choice. Research is paid in items, and the nodes after Folding want
+  copper, wire and gears, which a plate module does not make; Gizmo Theory still lands at 13:27
+  (planner), the slice end at ~22 min.
+- The moment is staged once: the box creases, the module pops with its rate ("S module!", "38/min"
+  with the item's icon), and one card says what happened with one button, **Stamp a copy · free**,
+  which stamps and places the copy beside the first and shows the Factory floor. The "Folded!" and
+  "The Factory floor is open" toasts are not shown for it.
+
 ## 11. The Factory floor (slice portion)
 
 - 12×8 tiles. Modules are 1×1 here, with one input side (accepts any of the module's input
@@ -380,23 +426,31 @@ part of the slice) and asserts the mean, with the spread logged.
 3. **First research** (Pressing) by **6:00**.
 4. **Land**: chunk B bought by **12:00**.
 5. **First Gizmo** by **20:00**.
-6. **Folding researched** at **22–30 min** (planner mean; none later than 35:00), and the first
-   fold done by **40:00**.
+6. **Folding researched** by **6:00** (planner mean; none later than 8:00; the Dock-only player by
+   8:00), and the first fold done by **8:00** (planner mean), so a first-time player, about half the
+   planner's pace at research, folds within 8-16 min. *Revised in the playability pass (Folding is
+   node 2): it was 22-30 min and 40:00, and a first-timer folded at minute 73.*
 7. **Balance beats buying**: the balanced plate line folds at **A or better**, and the
    unbalanced line with the same machines folds at **C or worse**.
 8. **Slag lesson**: a smelter line with no slag route stalls within **3 min**.
 9. **Slice end**: Bramble's Gizmo Festival filled (400 Gizmos at the Factory Dock, §7, §11), by
-   **45 min** (planner mean), and no sooner than **6 min** after Folding is researched (three
-   audits at once, then the floor built and 400 Gizmos made). The greedy and Dock-only bots reach
-   it too, by 60 min. *Revised in round 3 from 60–90 min, and in round 4 to the Festival; see below.*
+   **45 min** (planner mean), and no sooner than **6 min** after Gizmo Theory (which offers the
+   Festival: its folds, then the floor built and 400 Gizmos made). The greedy and Dock-only bots
+   reach it too, by 60 min. *Revised in round 3 from 60–90 min, in round 4 to the Festival, and in
+   the playability pass from "after Folding" (now node 2) to "after Gizmo Theory".*
 10. **No dead air**: in the first 35 min (or until the slice ends, if sooner), the greedy bot's
     longest stretch with nothing bought, researched, filled or folded is **3 min** or less on a
     typical seed (the mean over seeds of each seed's longest stretch) and **5 min** or less on 9
     seeds in 10 (the p90). *Reworded in the Milestone 5-6 review round:* it read "no stretch longer
     than 3 min" while the test asserted the mean, and the worst seeds wait about 4 min; both
     bounds are now asserted.
-11. **Hopper versus Dock**: a player who sends everything to the Dock still reaches Folding by
-    **60 min** (the Hopper is a choice, not a trap), but at least **5 min** behind the planner.
+11. **Hopper versus Dock**: a player who sends everything to the Dock still reaches Gizmo Theory by
+    **60 min** (the Hopper is a choice, not a trap), but behind the planner by at least **a quarter
+    of the planner's time** to it. *Revised in the playability pass:* it was Folding and 5 min (18%
+    of the planner's ~27 min); Folding is node 2 now (both reach it within a minute), so it is read
+    at Gizmo Theory, the last node the slice needs, and Act I's research is half as long, so the
+    gap is a share (a quarter: ~3.4 min of 13:27) rather than 5 min, which only a Gizmo Theory 2
+    min slower would buy (240 gears: 5.1 min behind, the planner at 15:18).
 12. **Offline** (rewritten in round 3: §12's ×0.5 and the old "less than 2 h of active" contradicted
     each other, since 8 h at ×0.5 is already 4 h; restated for any efficiency e in the Milestone
     5–6 review round): 8 h offline, at e = 0.5 and at the 0.75 ceiling, (a) pays no more than
@@ -410,6 +464,20 @@ part of the slice) and asserts the mean, with the spread logged.
     in later hours than in the first (60K in the first hour at run 1's 3 h stage, 67K an hour
     after), so it fails by up to 13% while offline pays exactly what the model says. Checked at the
     slice end (`tests/pace-offline.test.ts`) and at every stage of §20's table.
+
+**Measured, the playability pass** (2026-11-08, Folding node 2, 50 seeds unless noted, mean (range)):
+Bellows 0:21; first Miner 0:47; Pressing 1:47 (Dock-only 2:45); **Folding 3:48** (3:02-3:56; Dock-only
+4:14); **first fold 5:17** (4:40-5:27): "Iron plates" (L2) at S (0.95), at work beside the Factory Dock
+at once, its free copy stamped and placed beside it; chunk B 7:16 (6:38-7:28); first Gizmo 13:40; Gizmo
+Theory 13:27 (12:30-13:50; Dock-only 17:33, 4.1 min behind, check 11 wants 3.4); **slice end 21:35**
+(20:42-22:19), 8:07 after Gizmo Theory (7:15-8:42), with Iron plates S, Copper wire S, Iron ingots S
+(1.00) and Gizmo works A (0.86) on seed 1000; greedy slice end 21:38 and Dock-only 27:41 (10 seeds
+each); check 10: greedy's longest stretch 162 s (134-211, p90 200); checks 7 and 8 unchanged. Act II
+(seeds 1000 and 8919): the planner hands over at 0:20 (was ~0:30), then steel 0:37-0:39, power
+0:45-0:48, circuits 1:09-1:10, Concrete fold 1:18-1:19, the Drill works 2:00-2:09, stage 1 3:55-4:03;
+Patents at 4 h 15-16. Income: the planner's ~200 coin/min at 5 min becomes ~675 at 7 min (two plate
+modules, 375/min, and L2 built again) and ~825 at 10 min, against ~300-450 before; the coin it cannot
+spend at 9-13 min waits on research items (copper, gears), which the plate modules do not make.
 
 **Measured** (round 4, 2026-10-20, `tests/pace-*.test.ts`, 50 seeds unless noted, mean (range)):
 Bellows 0:21; first Miner 0:47; Pressing 1:47 (Dock-only 3:13); chunk B 9:20 (7:38–10:28); first
@@ -511,8 +579,8 @@ If any answer is no, change the model here before building more.
 
 | By | Reached |
 |---|---|
-| 40 min | first fold (measured: 24:35, planner bot, §13 round 4) |
-| 90 min | slice end: the Gizmo Festival filled at the Factory Dock (measured: 31:43; §13 check 9 is revised to ≤ 45 min) |
+| 12 min | first fold (measured: 5:17, planner bot, the playability pass; it was 24:35 at round 4 and a first-timer's minute 73) |
+| 45 min | slice end: the Gizmo Festival filled at the Factory Dock (measured: 21:35, planner; §13 check 9 ≤ 45 min) |
 | 3 h | Act II: power, steel, glass, circuits |
 | 5 h | first Reorganize (12–20 Patents) |
 | 11 h | District floor (Act III; measured 10:01, the second gate moved it from 15 h: the Great Drill stands at about 9.5 h) |

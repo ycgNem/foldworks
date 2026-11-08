@@ -30,7 +30,14 @@ export const RULES = {
   /** Inspector: pays this many seconds of the line\'s measured output value x the grade multiplier */
   inspectorSeconds: r(60, '§6 Inspector: 60 s of that line\'s measured output value'),
   /** fold box limit, warm-up and window (seconds) */
-  foldMax: r(8, '§10 the Fold box is at most 8x8 in the slice'),
+  foldMax: r(8, '§10 Box sizes: the Fold box is at most 8x8 in the slice, from Gizmo Theory (a whole Gizmo line with both its feeds)'),
+  /** the box grows with Act I's research (§10 Box sizes): 3x3 at Folding, 5x5 at Gearcutting */
+  foldBoxFirst: r(3, '§10 Box sizes: 3x3 at Folding (node 2): a Miner, a Smelter and a Press in a row, the first line a player builds, and nothing bigger'),
+  foldBoxGears: r(5, '§10 Box sizes: 5x5 at Gearcutting: a gear line (miner, smelter, press, assembler in a row) with its second press beside it'),
+  /** the first fold's gifts (§10 The first fold): placed beside the Factory Dock, its first copy free */
+  firstStampFree: r(1, '§10 The first fold: the first stamp ever costs nothing (one copy of a bill of about 250, 1-2 min of minute-8 income), so folding is a gain at once and stamping is learnt on the spot; later copies keep bill x (1 + 0.5 n)'),
+  /** the first research node (Pressing): the Hopper pays its items at this share of the Dock price */
+  firstNodePay: r(1, '§8 The first node: the Hopper pays for the 30 ingots of Pressing at the Dock price, so a player whose one line feeds it never sees income at 0 (the playability review); the Hopper-or-Dock choice starts at node 2'),
   auditWarmup: r(10, '§10 Audit: 10 s warm-up'),
   auditWindow: r(60, '§10 Audit: a 60 s window'),
   /** a kept design unfolded unchanged refolds after this check instead of a full audit */

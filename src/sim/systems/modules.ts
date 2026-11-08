@@ -108,8 +108,37 @@ export function foldAudited(g: Game, name: string | null, id?: number): ActResul
   g.bump('grade:' + res.grade.letter);
   g.first('factoryOpen');
   g.emit({ type: 'fold', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, id: d.grade.letter, value: d.id, d: a.box.w * a.box.h });
-  if (g.first('firstFold')) g.emit({ type: 'firstFold', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, value: d.id });
+  // the first fold ever (DESIGN.md §10 The first fold): the module goes to work at once beside the
+  // Factory Dock, so the line's income never stops while a player learns to place it
+  const placed = (g.s.counters.folds ?? 0) === 1 ? placeFirst(g, d) : null;
+  if (g.first('firstFold')) g.emit({ type: 'firstFold', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, value: d.id, ...(placed ? { x2: placed.x, y2: placed.y } : {}) });
   return OK;
+}
+
+/** Tiles beside the Factory Dock (2x2 at FACTORY.dock), each facing it: the first module's place. */
+export function dockSides(): { x: number; y: number; rot: Dir }[] {
+  const { x, y } = FACTORY.dock;
+  return [
+    { x: x + 1, y: y - 1, rot: 1 }, { x, y: y - 1, rot: 1 },
+    { x: x - 1, y, rot: 0 }, { x: x - 1, y: y + 1, rot: 0 },
+    { x, y: y + 2, rot: 3 }, { x: x + 1, y: y + 2, rot: 3 },
+  ];
+}
+
+/** Put a new design's copy on the first free tile beside the Factory Dock, facing it; the tile, or
+ * null if every side is taken (it stays in the inventory then). */
+function placeFirst(g: Game, d: ModuleDesign): { x: number; y: number } | null {
+  for (const t of dockSides()) {
+    if (fplaceRefusal(g, 'module', t.x, t.y, d.id)) continue;
+    if (fplace(g, 'module', t.x, t.y, t.rot as Dir, d.id).ok) return { x: t.x, y: t.y };
+  }
+  return null;
+}
+
+/** Is the next stamp the free one (DESIGN.md §10 The first fold: the first stamp ever, once a line
+ * is folded)? Counted over the save's lifetime (the counters outlive a Reorganize). */
+export function stampFree(g: Game): boolean {
+  return RULES.firstStampFree.value > 0 && (g.s.counters.folds ?? 0) >= 1 && (g.s.counters.stamps ?? 0) === 0;
 }
 
 /** Copies so far of everything making the same main product: stamps of every such design, plus
@@ -133,7 +162,13 @@ export function productCopies(g: Game, d: ModuleDesign): number {
 /** What the next copy of a design costs: bill x (1 + 0.5 n), linear (DESIGN.md §10 Stamp), n
  * counted over every design of the same product. */
 export function stampCost(g: Game, d: ModuleDesign): Num {
+  if (stampFree(g)) return Num.ZERO;
   return Num.of(Math.round(d.bill * (1 + RULES.stampGrowth.value * productCopies(g, d))));
+}
+
+/** What each further copy of this product adds to the stamp price: half the bill (linear, §10). */
+export function stampStep(d: ModuleDesign): Num {
+  return Num.of(Math.round(d.bill * RULES.stampGrowth.value));
 }
 
 /** Does the design hold an Act II building (directly, or in a module it was folded from)? */

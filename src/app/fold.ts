@@ -21,7 +21,7 @@ import { mainOutput } from '../render/factory';
 import { auditTicks, projectAudit, entsIn, gradedAudit } from '../sim/systems/audits';
 import { BUILD } from '../data/machines';
 import { gradeFAudit } from '../sim/systems/nested';
-import { inBill, defaultName, stampCost, stampRefusal, unfoldRefusal, fname, feedsDock, productCopies, kitsFor, mainItem, sliceEndParts } from '../sim/systems/modules';
+import { inBill, defaultName, stampCost, stampRefusal, unfoldRefusal, fname, feedsDock, productCopies, kitsFor, mainItem, sliceEndParts, stampFree, stampStep } from '../sim/systems/modules';
 import { claimsHeld, claimsUsed, oresOf, copiesOf } from '../sim/systems/claims';
 import type { AuditResult, AuditState, Box, FAuditState, ModuleDesign } from '../sim/world';
 import { frame, button, uiIcon, portrait, coinIcon, clipboard, chip, chipWidth, meter, tag, tagSize, bubble, ribbon, rule, twine, RIBBON_H, CHIP_H, T, type Role } from './chrome';
@@ -520,7 +520,7 @@ export function gradeCard(app: App, L: Layout) {
     foldRows: [
       `{u:fold} ${parts.length} machines · ${res.boxTiles} tiles → 1 tile`,
       'belts refunded · the box empties',
-      `copies {coin:${fmt(bill)}} ×1 · ×1.5 · ×2 · …`,
+      copiesRow(app, bill),
     ],
     bill,
     cancelLabel: 'Keep the line',
@@ -561,12 +561,19 @@ export function fgradeCard(app: App, L: Layout) {
       `{u:fold} ${mods.length} modules · ${res.boxTiles} tiles → 1 tile`,
       `the group's rates ×${res.grade.mult.toFixed(2)} · S inside, S fold = ×1.56`,
       'trunks refunded · depth 2 folds no further',
-      `copies {coin:${fmt(bill)}} ×1 · ×1.5 · ×2 · …`,
+      copiesRow(app, bill),
     ],
     bill,
     cancelLabel: 'Keep the group',
     cancelTip: '{big:Keep the group}  audit off · the modules keep running',
   });
+}
+
+/** What copies cost, read as what it is: the bill, then half a bill more a copy (linear, DESIGN.md
+ * §10; the playability review read "250 → 375" as a geometric curve), the first ever free. */
+function copiesRow(app: App, bill: number): string {
+  const step = Math.round(bill * RULES.stampGrowth.value);
+  return stampFree(app.game) ? `copies: the first {good:free}, then {coin:${fmt(bill + step)}}, +${fmt(step)} each` : `copies {coin:${fmt(bill)}}, then +${fmt(step)} each (half the bill)`;
 }
 
 /** The coin price of the machines in a Workshop audit's box (its stamp bill once folded). */
@@ -669,7 +676,8 @@ export function drawGrade(app: App, L: Layout, sp: GradeSpec) {
   const gr = res.grade;
   const top = gr.letter === 'S+';
   const O = L.overlay;
-  ui.fill(O.x, O.y, O.w, O.h, C.ink, 0.55);
+  // the dim covers the whole canvas (the playability review: it stopped 38 px short at the right)
+  ui.fill(0, 0, ui.w, ui.h, C.ink, 0.55);
   // the Inspector stands left of his clipboard when there is room for him
   const w = Math.min(430, O.w - 12), maxH = Math.min(320, O.h - 6);
   const standing = O.w - w >= 56;
@@ -677,7 +685,8 @@ export function drawGrade(app: App, L: Layout, sp: GradeSpec) {
   // advice rows, the verdict, the name. The stamp goes 2x and the causes show while they fit.
   const advice = res.advice.slice(0, 3).map(adviceRow);
   const need = (s: number, cause: boolean) => {
-    const advH = top ? 18 : advice.length ? 11 + advice.length * (cause && advice.some((a) => a.cause) ? 24 : 13) : 0;
+    // a row is two lines when its action wraps (the board is ~110 px wider than the action's room)
+    const advH = top ? 18 : advice.length ? 11 + advice.reduce((n, a) => n + (richWidth(a.act) > w - 110 || (cause && a.cause) ? 24 : 13), 0) : 0;
     return 19 + Math.max(48 * s + 33, 106) + 2 + 3 + advH + 3 + 26 + 16 + 32;
   };
   const fit = ([[2, true], [2, false], [1, true], [1, false]] as [number, boolean][]).find(([s, c]) => (s === 1 || w - 26 >= 380) && need(s, c) <= maxH) ?? [1, false];
@@ -841,20 +850,27 @@ export function drawGrade(app: App, L: Layout, sp: GradeSpec) {
     yy += 8;
     const withCause = fit[1] && advice.length * 24 <= vy - 3 - yy;
     for (const a of advice) {
-      const rowH = withCause && a.cause ? 24 : 13;
-      if (yy + 13 > vy - 3) break;
+      // the action wraps to a second line rather than losing its end (the playability review: the
+      // most important line read "...or the feeder moved.." with room below it)
+      let wx0 = R.x + R.w - 2;
+      if (a.to) wx0 -= bigWidth(a.to) + 3 + textWidth('→') + 3;
+      if (a.worth) wx0 -= chipWidth(a.worth) + 4;
+      const aw0 = wx0 - (R.x + 12);
+      const actH = richWidth(a.act) <= aw0 ? 13 : layoutRich(a.act, aw0).h + 3;
+      const rowH = actH + (withCause && a.cause ? 11 : 0);
+      if (yy + actH > vy - 3) break;
       // the worth: a chip, then the letter it reaches
       let wx = R.x + R.w - 2;
       if (a.to) { wx -= ui.big(a.to, wx, yy + 1, GRADE_INK[a.to] ?? T.ink, { align: 'right' }) + 3; wx -= ui.text('→', wx, yy + 2, T.inkSoft, { align: 'right' }) + 3; }
       if (a.worth) { const cw = chipWidth(a.worth); chip(ui, wx - cw, yy, a.worth, { role: 'good' }); wx -= cw + 4; }
       const aw = wx - (R.x + 12);
       ui.text(ICON.right, R.x + 2, yy + 2, T.ink);
-      ui.clip(R.x + 12, yy, aw, 13);
-      drawRich(ui, richWidth(a.act) <= aw ? a.act : ellipsize(a.act.replace(/\{[a-z]+:([^}]*)\}/g, '$1'), aw), R.x + 12, yy + 2);
+      ui.clip(R.x + 12, yy, aw, actH);
+      drawRich(ui, a.act, R.x + 12, yy + 2, aw);
       ui.unclip();
-      if (withCause && a.cause) {
-        ui.clip(R.x + 12, yy + 13, R.w - 14, 11);
-        drawRich(ui, a.cause, R.x + 12, yy + 13, Infinity, T.inkSoft);
+      if (withCause && a.cause && yy + rowH <= vy - 3) {
+        ui.clip(R.x + 12, yy + actH, R.w - 14, 11);
+        drawRich(ui, a.cause, R.x + 12, yy + actH, Infinity, T.inkSoft);
         ui.unclip();
       }
       ui.hint(R.x, yy, R.w, rowH, [{ text: a.act }, ...(a.cause ? [{ text: a.cause, color: T.inkSoft }] : []), ...(a.worth ? [{ text: `{good:${a.worth}}${a.to ? ` → {big:${a.to}}` : ''}` }] : [])], 240);
@@ -1108,8 +1124,9 @@ function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, 
   const pw1 = textWidth(pl) + 14, b3w = textWidth('Unfold') + 14;
   const pw2 = w - 12 - 6 - pw1 - b3w;
   if (button(ui, 'place:' + d.id, x + 6, by, pw1, 15, pl, { gold: d.spare > 0, disabled: d.spare < 1 || !g.flag('factoryOpen'), tip: [{ text: '{big:Place}' }, { text: 'a spare copy onto the {u:factory} Factory floor' }] })) app.pickModule(d.id);
-  const label = richWidth(`Stamp {coin:${cost.format()}}`) <= pw2 - 6 ? `Stamp {coin:${cost.format()}}` : `{coin:${cost.format()}}`;
-  if (button(ui, 'stamp:' + d.id, x + 9 + pw1, by, pw2, 15, label, { disabled: !!whyNot, tip: [{ text: `{big:Stamp a copy}  {coin:${cost.format()}}${kits ? ` + {u:kit} ${kits}` : ''}` }, { text: whyNot ? `{bad:${whyNot}}` : `copies so far ${copies} · next {coin:${next.format()}}` }] })) app.act({ k: 'stamp', id: d.id });
+  const free = cost.isZero();
+  const label = free ? 'Stamp · free' : richWidth(`Stamp {coin:${cost.format()}}`) <= pw2 - 6 ? `Stamp {coin:${cost.format()}}` : `{coin:${cost.format()}}`;
+  if (button(ui, 'stamp:' + d.id, x + 9 + pw1, by, pw2, 15, label, { disabled: !!whyNot, tip: [{ text: `{big:Stamp a copy}  {coin:${cost.format()}}${kits ? ` + {u:kit} ${kits}` : ''}` }, { text: whyNot ? `{bad:${whyNot}}` : `copies so far ${copies} · next {coin:${next.format()}} · +${stampStep(d).format()} each (linear)` }] })) app.act({ k: 'stamp', id: d.id });
   const uwhy = unfoldRefusal(g, d);
   if (button(ui, 'unfold:' + d.id, x + w - 6 - b3w, by, b3w, 15, 'Unfold', { disabled: !!uwhy, tip: [{ text: '{big:Unfold}' }, { text: uwhy ? `{bad:${uwhy}}` : `back onto the ${deep ? '{u:factory} Factory floor' : '{u:workshop} Workshop'} at ${d.box.x},${d.box.y}` }, ...(uwhy ? [] : [{ text: `${deep ? 'trunks' : 'belts'} bought again` }])] })) {
     if (app.act({ k: 'unfold', id: d.id }).ok) {

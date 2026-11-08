@@ -3187,3 +3187,60 @@ critic's finding 10). The 180's look and voice stay; this organises it.
 
 **Flagged as derivative:** none new. Drag-to-pan, zoom-to-cursor and a facing arrow on a ghost are
 genre conventions of every builder; a labelled floor switcher is the old lift with words.
+
+## Playability pass (2026-11-08): the first fold, early
+
+The playtest folded for the first time at minute 73 (the planner at 21:45); the critic put 30-min
+retention at ~35% because the hook hid behind nine research nodes and a gear grind. Decisions:
+
+- **Folding is node 2** (40 iron plates, after Pressing; DESIGN.md §8). Survey East and Gearcutting
+  now need Folding, so the order is press, fold, then copper and gears. Measured: planner Folding
+  3:48, first fold 5:17 (was 23:19 / 24:35). The critic's proposal (node 2 at ~4-6 min) over the
+  playtester's (a guided fold of the Boardwalk line): the node-2 fold *is* the Boardwalk line (a
+  miner, a smelter, a press), and the guide (the Inspector's "Folding is ready", the 3×3 chip "a
+  Miner, a Smelter, a Press in a row") guides it without a scripted tutorial.
+- **The box is Act I's progression**: 3×3 at Folding, 5×5 at Gearcutting, 8×8 at Gizmo Theory
+  (`RULES.foldBoxFirst`, `foldBoxGears`, `foldBox()`). Each node opens a bigger line to fold rather
+  than a bigger number (§10 Box sizes). Pillar served: folding is the engine (pillar 1).
+- **Gizmo Theory opens what Folding opened**: the Gizmo Festival, chunk D and Act II's Coal Seams
+  (orders.ts, land.ts, research.ts: one `requires` each). Without it the Festival (which needs
+  Gizmos) and a 12,000-coin chunk would have been offered at minute 4.
+- **The first fold is a gain by itself**: the first fold ever places its module beside the Factory
+  Dock (no income gap: the playtest's income fell 180 → 66/min until the module was found and
+  placed), and the first stamp ever is free (`RULES.firstStampFree`). Chosen over "the folded
+  machines' price back": a refund on every fold would make fold-rebuild-fold a free stamp, and a
+  refund on the first fold only teaches nothing; the free stamp teaches stamping at the moment it
+  matters. Payback and the cap are in §10 The first fold: claims, not coin, bound it (5 iron copies
+  in chunk A, ~12% of the slice-end income at most).
+- **One staged moment**: the crease, the module's pop with its rate, one card with one button
+  ("Stamp a copy · free", which stamps, places the copy beside the first and shows the Factory
+  floor). The "Folded!" and "The Factory floor is open" toasts are skipped for the first fold.
+- **Stamp prices read linear**: "copies 250, then +125 each (half the bill)"; the free first one
+  shown as free. The rule (bill × (1 + 0.5 n)) is unchanged: it is linear; only the way it was
+  written ("×1 · ×1.5 · ×2") read as a curve. A plain click on a module icon with no spare copy no
+  longer stamps (`src/app/wheel.ts`, one line: the HUD agent's file); Shift+click does.
+- **The first research never zeroes income**: until Pressing is researched the Hopper pays like the
+  Dock (`RULES.firstNodePay`). Chosen over a starting splitter (it halved the first minute's income
+  and moved the Bellows past check 1's 40 s) and over "a second line first" (100 coin at minute 2).
+- **The Hopper is honest**: the frog says "Wrong snack! {node} wants plates, not ingots" when the
+  Hopper banks what the selected node does not take, and "{node} is hungry!" when its bar has not
+  moved for 10 s; the research page names the item going to the bank (`src/app/hopperwatch.ts`).
+- **The research page**: a click on a node always does the same (shows it and, if it can be
+  researched, selects it; it never un-selects: the page's button does); the page opens on the node
+  the frog's line names (the chip bug: it opened the first node in the tree); the ★ is gone ("items
+  owed" heads the list instead).
+- **Lesson cards wait 25 s apart**, one at a time. Trophy wording: "a Miner free: the next you build"
+  (the bonus applies to the next one; "the first Miner free" read as a refund that never came) and
+  "{coin} to start with, after a reset" (it said "at each run's start" before runs exist).
+- **Pace targets re-derived** (DESIGN.md §13): check 6 is Folding by 6:00 and the first fold by 8:00
+  (planner mean); check 9's floor phase is counted from Gizmo Theory; check 11 is measured at Gizmo
+  Theory and wants the Dock-only player a quarter of the planner's time behind (it was 5 min of a
+  27-min Folding; Act I's research is half as long now). The bots fold "Iron plates" (L2) after
+  Folding and "Copper wire" (C4, which feeds Gizmo Theory's wire into the Factory Hopper) before
+  Gizmo Theory; a source line graded under A is audited again.
+- **Open (logged, not hidden)**: Act I is ~10 min shorter, so Act II's Bay floor moved into rule 4's
+  2:00-2:30 window for seed 1000 (1.10x, logged as open with the reason, as seed 8919's was), and
+  seed 8919's longest wait before the Bay floor is 16.1 min (bound 15) on the Great Drill's research.
+  The lever is Act II's (the Drill's concrete), not Act I's.
+- **Flagged as derivative**: none new. The free first copy is a tutorial gift, not a recurring
+  "free item" mechanic.

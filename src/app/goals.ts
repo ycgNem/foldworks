@@ -54,8 +54,9 @@ import { ITEMS, type ItemId } from '../data/items';
 import { megaStage } from '../data/megaprojects';
 import { availableNodes, researchFrac, available } from '../sim/systems/research';
 import { offeredOrders } from '../sim/systems/orders';
-import { auditTicks, gradedAudit } from '../sim/systems/audits';
-import { feedsDock, stampCost, mainItem } from '../sim/systems/modules';
+import { auditTicks, foldBox, gradedAudit } from '../sim/systems/audits';
+import { feedsDock, stampCost, mainItem, stampFree, stampStep } from '../sim/systems/modules';
+import { hopperBanking, hopperFilling } from './hopperwatch';
 import { ORDER, type CustomerId, type OrderDef } from '../data/orders';
 import type { FEnt } from '../sim/world';
 import { claimRefusal, claimLoad, claimsHeld, claimsUsed } from '../sim/systems/claims';
@@ -87,6 +88,9 @@ export interface Goal {
   tile?: { x: number; y: number };
   /** a HUD element to point at: 'bellows', 'research', 'orders', 'build:<kind>', 'land' */
   ui?: string;
+  /** the research node the line is about: the research page opens on it (the playability review:
+   * the frog's chips opened whatever node came first in the tree) */
+  node?: ResearchId;
 }
 
 const fmt = (n: number) => Math.floor(n).toLocaleString('en-US');
@@ -179,8 +183,18 @@ function researchLine(g: Game, id: ResearchId, target: ResearchId | null): Goal 
   const who = RESEARCH_WHO[id] ?? 'bramble';
   const n = `{research:${d.name}}`;
   const via = target ? `{research:${RESEARCH[target].name}}` : null;
-  if (g.s.research.selected === id) return say(who, FEEDING[who](n, via), { bar: researchFrac(g, id), chips: costChips(g, id, true) });
-  return say(who, PICK[who](n, via), { chips: [...costChips(g, id, false), `→ ${d.unlocks}`], ui: 'research' });
+  if (g.s.research.selected === id) {
+    const o = { bar: researchFrac(g, id), chips: costChips(g, id, true), node: id };
+    // honest about what arrives (the playability review): the Hopper banks what the node does not
+    // take, and the bar sits still while nothing it wants comes in
+    const prog = g.s.research.progress[id] ?? {};
+    const short = (Object.entries(d.cost) as [ItemId, number][]).filter(([k, c]) => (prog[k]?.toNumber() ?? 0) < c).map(([k]) => `{i:${k}}`).join(' ');
+    const wrong = hopperBanking(g);
+    if (wrong && short) return say(who, `Wrong snack! ${n} wants ${short}, not {i:${wrong.item}}.`, { ...o, chips: [...o.chips, `{i:${wrong.item}} → the bank`] });
+    if (!hopperFilling(g) && short) return say(who, `${n} is hungry! Belt ${short} into the Hopper.`, o);
+    return say(who, FEEDING[who](n, via), o);
+  }
+  return say(who, PICK[who](n, via), { chips: [...costChips(g, id, false), `→ ${d.unlocks}`], ui: 'research', node: id });
 }
 
 /** The Act II chain (DESIGN.md §18), or null when the act is done. */
@@ -436,7 +450,7 @@ function act3Goal(g: Game): Goal | null {
     });
     const fed = st.routes.some((r) => r.to === bay.id);
     const o = { bar: frac(have, need), chips, ui: 'district' };
-    if (city.stage > 1) return say('bramble', fed ? 'The Spires! Rotors, sandwiches, glass, up they go!' : 'Fly rotors, sandwiches and glass to the Bay for the Spires!', o);
+    if (city.stage > 1) return say('bramble', fed ? 'The Spires! Rotors, glass, steel, up they go!' : 'Fly rotors, glass and steel to the Bay for the Spires!', o);
     return say('bramble', fed ? `${MEGAS.city.name}! Keep the rotors flying in!` : 'Fly Lift Rotors and concrete to the District Bay! A whole city!', o);
   }
   return null;
@@ -494,6 +508,8 @@ function festivalGoal(g: Game, mods: FEnt[]): Goal | null {
   const id = 'gizmoFestival';
   const d = ORDER[id];
   if (!d || s.orders.done.includes(id)) return null;
+  // offered with Gizmo Theory (Folding is node 2 now): before it, the Festival is nobody's goal
+  if (s.orders.active !== id && !offeredOrders(g).some((q) => q.id === id)) return null;
   const want = d.wants.gizmo ?? 400;
   const have = Math.min(want, Math.floor(s.orders.progress[id]?.gizmo?.toNumber() ?? 0));
   const tally = `{i:gizmo} ${fmt(have)}/${fmt(want)}`;
@@ -579,8 +595,13 @@ export function nextGoal(g: Game, floor?: string): Goal | null {
         bar: frac(lead, auditTicks()), chips, tile: { x: a.box.x + Math.floor(a.box.w / 2), y: a.box.y },
       });
     }
-    const box = prules(g).foldMax;
-    if (!s.designs.length) return say('inspector', 'Folding is ready. Box a line that runs well. {k:F}', { chips: [`{u:fold} up to ${box}×${box}`], ui: 'fold' });
+    const box = foldBox(g);
+    if (!s.designs.length) return say('inspector', 'Folding is ready. Box a line that runs well. {k:F}', { chips: [`{u:fold} up to ${box}×${box}`, ...(box <= 3 ? ['a Miner, a Smelter, a Press in a row'] : [])], ui: 'fold' });
+    // the first fold's gift (DESIGN.md §10 The first fold): one copy free, then bill + half a bill a copy
+    if (stampFree(g)) {
+      const d0 = s.designs[0];
+      return say('inspector', 'A copy costs nothing, this once. Stamp it! {k:I}', { chips: [`{u:fold} ${d0.name} · Stamp · free`, `then {coin:${big(Math.round(d0.bill * (1 + RULES.stampGrowth.value)))}}, +${stampStep(d0).format()} a copy`] });
+    }
     const mods = s.factory.ents.filter((e) => e.kind === 'module');
     if (!mods.length && !s.district?.ents.some((e) => e.kind === 'module')) return say('bramble', 'Your first module! Put it on the Factory floor. {k:Tab}', { chips: ['gold front → a trunk to the Factory Dock'], ui: 'factory' });
     const alert = act2Alerts(g);
@@ -613,12 +634,19 @@ export function nextGoal(g: Game, floor?: string): Goal | null {
   if (!g.done('pressing')) {
     if (sel !== 'pressing') return say('bramble', "Let's learn {research:Pressing}! Ingots in the Hopper pay for it. {k:T}", { chips: costChips(g, 'pressing', false), ui: 'research' });
     const hopperFed = g.belts.some((b) => b.x === 6 && b.y === 3 && b.rot === 1);
-    if (!hopperFed && count('miner') < 2) return say('bramble', 'Turn the last belt down into the Hopper! {k:R}', { chips: ['or a second line for it'], tile: { x: 6, y: 3 } });
+    if (!hopperFed && count('miner') < 2) return say('bramble', 'Turn the last belt down into the Hopper! It still pays. {k:R}', { chips: ['{coin} Pressing is on the town'], tile: { x: 6, y: 3 }, node: 'pressing' });
     return say('bramble', '{research:Pressing} is cooking! More miners and smelters, faster.', { bar: researchFrac(g, 'pressing'), chips: costChips(g, 'pressing', true) });
+  }
+  // after Pressing (DESIGN.md §8, §10): a Press on her line, then Folding, node 2
+  if (!g.done('folding')) {
+    if (count('press') === 0) return say('bramble', 'Pressing done! A Press after her: plates sell for more.', { chips: [`{coin:${BUILD.press.cost}}`, '{i:ironIngot} → {i:ironPlate}'], ui: 'build:press', tile: { x: 4, y: 3 } });
+    const f = researchToward(g, 'folding');
+    if (f) return f;
   }
   if (!sel) {
     const avail = availableNodes(g);
-    if (avail.length) return say('bramble', 'What next? So many ideas! {k:T}', { chips: avail.slice(0, 3).map((r) => `{research:${r.name}}`), ui: 'research' });
+    // one node named (the page opens on it), the others as chips
+    if (avail.length) return say('bramble', `What next? Ooh, {research:${avail[0].name}}! {k:T}`, { chips: avail.slice(1, 3).map((r) => `or {research:${r.name}}`), ui: 'research', node: avail[0].id });
   }
   const offered = offeredOrders(g);
   if (!s.orders.active && offered.length && !s.flags.includes('ordersSeen'))
@@ -627,6 +655,6 @@ export function nextGoal(g: Game, floor?: string): Goal | null {
   if (buyable && s.coin.gte(buyable.cost))
     return say('bramble', `${buyable.name} is for sale! Click it on the map.`, { chips: [`{coin:${big(buyable.cost)}}`], tile: { x: buyable.x + 3, y: buyable.y + 3 }, ui: 'land' });
   if (sel) return researchLine(g, sel, null);
-  if (g.done('folding')) return say('inspector', 'Folding is ready. Box a line that runs well. {k:F}', { chips: [`{u:fold} up to ${prules(g).foldMax}×${prules(g).foldMax}`] });
+  if (g.done('folding')) return say('inspector', 'Folding is ready. Box a line that runs well. {k:F}', { chips: [`{u:fold} up to ${foldBox(g)}×${foldBox(g)}`] });
   return null;
 }
