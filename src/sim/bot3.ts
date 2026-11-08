@@ -784,14 +784,9 @@ export const PLAN3: Step3[] = [
   { k: 'need', r: 'sandwiches' },
   { k: 'line', line: 'sandwich' },
   { k: 'lineDone', line: 'sandwich' },
-  // the fifth pass: sandwiches for the Spires (300): the Sandwiches line laid to fold (CORNER.sandwichF),
-  // nested at once (the servos feed lifted meanwhile: its trunks wall the bench off from the Dock)
-  { k: 'line', line: 'sandwichF' },
-  { k: 'lineDone', line: 'sandwichF' },
-  { k: 'unfeed', feed: 'servos2' },
-  { k: 'group', group: 'sandwichesII' },
-  { k: 'district', design: 'Sandwiches II', n: 3 },
-  { k: 'feed', feed: 'servos3' },
+  // (the fifth pass laid a Sandwich works and Sandwiches II here for the Spires' 300 sandwiches; the
+  // playability pass took the sandwiches out of the Spires (DESIGN.md §21 The core ending), so the
+  // servos feed stands on from Glass II to the coils group: CORNER.sandwichF is kept, unused)
   // processors down the Chute from a Processors II feeder (the coils line's, then the Engineer's)
   { k: 'feeder', design: 'Processors II', free: true },
   // the Scrap Transmuter (40 processors, 100 batteries: the battery vat again, standing, feeding the
@@ -809,7 +804,7 @@ export const PLAN3: Step3[] = [
   // the feeds on the bench lifted for the coils group, the servos feed laid again after
   { k: 'unfeed', feed: 'oil2' },
   { k: 'unfeed', feed: 'oil3' },
-  { k: 'unfeed', feed: 'servos3' },
+  { k: 'unfeed', feed: 'servos2' },
   { k: 'group', group: 'coilsII' },
   { k: 'district', design: 'Coils II', n: 3 },
   { k: 'district', design: 'Processors II', n: 6 },
@@ -831,7 +826,7 @@ export const PLAN3: Step3[] = [
 /** After the plan, the District grows a copy at a time while the coin is there (a copy a few
  * minutes: what the floor's income buys), in this order round and round: each copy is placed
  * beside what it feeds and routed by the same rules. */
-export const GROW: string[] = ['Servos II', 'Motors II', 'Sensors II', 'Gearboxes II', 'Processors II', 'Concrete II', 'Arms II', 'Rotors II', 'Circuits II', 'Rubber II', 'Gizmo works II', 'Gears II', 'Glass II', 'Sandwiches II', 'Coils II'];
+export const GROW: string[] = ['Servos II', 'Motors II', 'Sensors II', 'Gearboxes II', 'Processors II', 'Concrete II', 'Arms II', 'Rotors II', 'Circuits II', 'Rubber II', 'Gizmo works II', 'Gears II', 'Glass II', 'Coils II'];
 
 const HOOK = 'act3:';
 
@@ -905,7 +900,9 @@ export class Act3Bot {
     // (but Act III's Megaprojects are the act's end: while their steps are still ahead and the two
     // projects not built, a full District is not a reason to reset (the fifth pass: run 3 reset at
     // 18:47, its Transmuter research half paid); the stuck rule and the run's cap still bound it)
-    const megas = megaComplete(this.g, 'city') && megaComplete(this.g, 'transmuter');
+    // (the playability pass: the City alone is the act's end, the core ending; the Transmuter is
+    // optional, built after it while the plan runs, not a reason to hold the reset)
+    const megas = megaComplete(this.g, 'city');
     const planDone = this.step >= this.plan.length || (chain >= 0 && this.step > chain && megas) || stuck;
     return planDone && this.b.step >= this.b.plan.length && !this.group && this.slots.every((q) => q === null || !!LINES[q]?.stand);
   }

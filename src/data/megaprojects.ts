@@ -21,7 +21,33 @@ export interface MegaStage {
   /** the island the stage is built on (Megaprojects #4 and #5, DESIGN.md §22): it wants that
    * island's product, so only there can it be built */
   world?: WorldId;
+  /** the stage's visible sub-goals (the Great Drill's stage 1, the playability pass): each stands
+   * when every item is in to its share `at` of the stage's want; it shows on the Bay's picture, puts
+   * a Town piece up and prints in the Gazette (DESIGN.md §18 Megaproject #1) */
+  parts?: MegaPart[];
   derivation: string;
+}
+
+export interface MegaPart {
+  name: string;
+  /** the share of every item the stage wants that stands it (0..1) */
+  at: number;
+  /** the Town piece it puts up, as its hover label says it */
+  piece: string;
+  /** the Gazette's line */
+  news: string;
+  derivation: string;
+}
+
+/** How many of a stage's parts stand, given what the Bay has counted for it. */
+export function partsReached(st: MegaStage | null, progress: Partial<Record<ItemId, { toNumber(): number }>>): number {
+  if (!st?.parts) return 0;
+  let n = 0;
+  for (const p of st.parts) {
+    if ((Object.entries(st.wants) as [ItemId, number][]).every(([k, w]) => (progress[k]?.toNumber() ?? 0) >= Math.ceil(w * p.at))) n++;
+    else break;
+  }
+  return n;
 }
 
 export const MEGA: MegaStage[] = [
@@ -31,6 +57,11 @@ export const MEGA: MegaStage[] = [
     wants: { drillBit: 650, steel: 2800 },
     reward: 'every Miner and every module with miners inside {good:+50%} · for good',
     patents: 5,
+    parts: [
+      { name: 'the Scaffold', at: 0.15, piece: "the drill crew's bunkhouse", news: 'DRILL: the Scaffold stands over the Bay. A bunkhouse goes up on the rim for the crew.', derivation: "§18 Megaproject #1, its parts (the playability pass): 15% of each want (98 bits, 420 steel), about 17 min of the Bay floor (the fill is near linear, 113 min for the whole stage, measured on seed 1000): front-loaded so the fill opens with a win, and the bot's waits while the Bay fills fall from 41 to 17 min (§16 rule 1, §18 Pacing); the picture's second phase" },
+      { name: 'the Engine House', at: 0.35, piece: "the crew's canteen", news: 'DRILL: the Engine House is bolted on. The crew opens a canteen. The soup is mostly steel.', derivation: "§18 Megaproject #1, its parts: 35% of each want (228 bits, 980 steel), about 23 min after the Scaffold, between the Tuning research and Nested Folds (the 42-minute hole of the measured run); the picture's third phase" },
+      { name: 'the Cab', at: 0.5, piece: "the foreman's tower", news: 'DRILL: the Cab is up. The foreman has a tower now, and a whistle. Mostly the whistle.', derivation: "§18 Megaproject #1, its parts: half of each want (325 bits, 1,400 steel), about 16 min after the Engine House; the second half has Act II's own goals (Nested Folds, the annex blocks and claims, the Calibration order), so no part there; the picture's fourth phase" },
+    ],
     derivation: '§18 Megaproject #1: from the slag the Act II bot Bay floor turns into bits (a bit is 2 concrete, 8 slag; about 35 slag/min, 5-6 bits/min while the Bay Steel runs, 2.5 after): 650 bits and 2,800 steel (4.3 a bit) take it about 1.9 h from the Bay floor (S+1:46-1:48), stage 1 at S+3:42-3:44, inside the S+4 h target, so the first Reorganize comes after 4 h (the final round: the bot draining its slag reached the Bay 20 min sooner, and 450 bits and 2,000 steel put the first reset at 3:37-3:41, under the 4-6 h of §19); concrete is in the bits; §19 worth 5 Patents, a third of the first reset',
   },
   {
@@ -92,9 +123,9 @@ export const MEGAS: Record<MegaId, MegaProjectDef> = {
         derivation: '§21 Megaprojects (the second gate): 120 lift rotors and 1,500 concrete, about an hour of one Lift Rotor group and two Concrete groups (0.3-0.4 a second each; 4,000 was 2.6-3.7 h of one) at the District Bay; the Factory\'s ninth row (FACTORY_MAX_H) for good; worth 6 Patents',
       },
       {
-        stage: 2, name: 'The Floating City, stage 2: the Spires', wants: { liftRotor: 150, sandwich: 300, glass: 2500 },
-        reward: 'the District gains a fourth lot · for good', patents: 8,
-        derivation: '§21 Megaprojects (the second gate): 150 rotors, 300 sandwiches (the citizens), 2,500 glass, about 1.5 h of the Bay floor in a later run (6,000 glass and 1,000 sandwiches were 4-9 h); a fourth District lot (20x10 at most) for good; worth 8 Patents',
+        stage: 2, name: 'The Floating City, stage 2: the Spires', wants: { liftRotor: 150, glass: 2500, steel: 2000 },
+        reward: 'the District gains a fourth lot · the City lifts off · for good', patents: 8,
+        derivation: "§21 Megaprojects (the playability pass: the core ending): 150 rotors, 2,500 glass and 2,000 steel, the main chains of Act III (the Rotors II copies, three Glass II copies took 2,500 glass in about 40 min, the Concrete II copies' steel 3,000 in minutes, measured in the fifth bot pass); the 300 sandwiches it wanted were a corner chain, a nest and a District group past the act's spine that no bot laid by 40 h (§16, §21 Pacing), so the citizens moved to Sandwich Engineering; a fourth District lot (20x10 at most) for good, and the City complete is the core ending (§21 The core ending); worth 8 Patents",
       },
     ],
     derivation: '§21 Megaproject #2 (PLAN.md): the Floating City, +1 Factory floor row (§15)',

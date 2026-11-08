@@ -21,6 +21,7 @@ import { speaker, caption, ledgerRow, titleChip } from './screens';
 import { specimen } from './act2screens';
 import { indexRow } from './shelf';
 import { openEnding } from './endingstate';
+import { openFinale } from './finalestate';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
 
@@ -240,13 +241,14 @@ function loreSide(app: App, dp: Rect) {
     return;
   }
   // Unit 7's lines, a gap between them; the ending keeps a key for its moment at the foot
-  const foot = p.id === 'ending' ? 22 : 0;
+  const foot = p.id === 'ending' || p.id === 'city' ? 22 : 0;
   for (const line of p.lines) {
     const h = richHeight(line, w);
     if (y + h > end - foot) { ui.small('...', x, y, T.inkSoft); break; }
     ui.para(line, x, y, w, T.ink);
     y += h + 4;
   }
+  if (p.id === 'city' && button(ui, 'readFinale', x, end - 18, w, 17, 'The City, again', { gold: true, icon: 'star', tip: [{ text: '{big:The Floating City}' }, { text: 'the lift-off, the Gazette, the credits' }] })) openFinale(app, true);
   if (p.id === 'ending' && button(ui, 'readEnding', x, end - 18, w, 17, 'The ending, again', { gold: true, icon: 'star', tip: [{ text: "{big:Unit 7's ending}" }, { text: 'its moment, on the night sky' }] })) openEnding(app, true);
   void C;
 }

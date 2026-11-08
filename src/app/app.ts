@@ -74,17 +74,19 @@ import './kernels';
 import './endless';
 import { openChallenges } from './challenges';
 import { endingWatch } from './ending';
+import { finaleWatch } from './finale';
 import { tailHooks } from './tailframe';
 import { photoKeys } from './photo';
 import { retireOldBests } from './scenarios';
 import { lastFoldPlaying } from './lastfold';
 // Milestone 11's frame hooks (src/app/tailframe.ts): photo mode's keys, the older Scenario store
 // retired into the town's boards, Unit 7's ending queued once the Last Fold's moment is over
-tailHooks.push(photoKeys, retireOldBests, (app) => endingWatch(app, lastFoldPlaying(app)));
+tailHooks.push(photoKeys, retireOldBests, (app) => endingWatch(app, lastFoldPlaying(app)), finaleWatch);
 import { shelfTab, type ShelfTab } from './shelf';
 import { codexTab, type CodexTab } from './codexbook';
 import { scenarioPick } from './scenarios';
 import { openEnding, endingState } from './endingstate';
+import { openFinale, finaleState } from './finalestate';
 import { setPhoto, snap } from './photo';
 import { pickNextRun, afterAutoReorganize } from './reorganize';
 import { claimSaves, ownsSaves, savesLost, watchOwner } from './othertab';
@@ -707,6 +709,14 @@ export class App {
           else this.toast('The Megaproject Bay', 'trunk {i:drillBit} {i:concrete} {i:steel} in → the Great Drill', C.gold, 'mega');
           break;
         case 'megaGive': break;
+        case 'megaPart': {
+          // a part of the Great Drill's stage 1 stands (its sub-goals, DESIGN.md §18)
+          const pt = MEGA[0].parts?.[(e.value ?? 1) - 1];
+          a.sfx('milestone', 0.7);
+          this.renderer.fx.kick(3);
+          if (pt) this.toast(`The Great Drill: ${pt.name}!`, `part ${e.value} of 4 · {u:build} ${pt.piece} · ${Math.round(pt.at * 100)}%`, C.gold, 'mega');
+          break;
+        }
         case 'megaDone': {
           a.sfx('megaStage');
           this.renderer.fx.kick(6);
@@ -1449,6 +1459,7 @@ export class App {
       challenges: (id: ChallengeId | null) => openChallenges(this, id, 'reorganize'),
       scenario: (id: ScenarioId | null) => { scenarioPick(id); this.panel = 'scenarios'; },
       ending: (t = 99) => { openEnding(this); endingState.at = this.ui.time - t; },
+      finale: (t = 0) => { openFinale(this); finaleState.at = this.ui.time - t; },
       photo: (on: boolean) => setPhoto(this, on),
       snap: (k: 1 | 2) => snap(this, k),
       pickNext: (id: ChallengeId | null) => pickNextRun(id),
