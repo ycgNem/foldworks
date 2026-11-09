@@ -24,16 +24,19 @@ sim is a deterministic 20 Hz model kept apart from the renderer, and saves stay 
 
 **Three resets**, always your choice and always previewed first:
 
-1. **Reorganize** (from about 4-6 h): clear the floors for **Patents**, spent on head starts,
-   rules and automation. Your designs go into the Patent Drawer and come back.
+1. **Reorganize** (from about 4 h): clear the floors for **Patents**, spent on land, claims, dies and
+   a bigger Drawer. Acts I-II research stays known, and your designs come back from the Patent Drawer
+   already built.
 2. **Relocate** (from about 35-45 h): fly the town to another island for **Legacy**, which
    automates the first layer.
 3. **The Last Fold** (from about 80 h): fold the whole World into one tile, the **Seed** of the
    next universe, for **Kernels**, which change the base rules.
 
 Along the way: four customers (Mayor Bramble, Unit 7, Dame Voltaire and the Committee), research
-paid in items delivered to the Hopper, Megaprojects that survive every reset, a Codex, trophies,
-Challenges and honest offline progress (a report of what was made and where a line jammed).
+paid in items delivered to the Hopper, Megaprojects that survive every reset, an ending at the
+Floating City (then the post-game: the World, Challenges and Scenarios), a Codex, trophies, and
+honest offline progress (a report of what was made and where a line jammed). What changed in the
+latest update: [docs/patch-notes.md](docs/patch-notes.md).
 
 ## How to play
 
