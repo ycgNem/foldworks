@@ -243,7 +243,7 @@ export function tickCostMs(g: Game): number {
 const COUNTED = ['ingot', 'plate', 'gear', 'gizmo', 'circuit', 'motor', 'bit', 'brick'];
 const plural = (name: string) => (COUNTED.includes(name.split(' ').pop()!) ? name + 's' : name);
 
-type Cause = { heap: Ent } | { crate: Ent } | { chute: ItemId } | { bay: ItemId } | { hbay: HighFloorId; item: ItemId } | { order: string } | { research: ResearchId };
+type Cause = { heap: Ent } | { heapEmpty: Ent } | { crate: Ent } | { chute: ItemId } | { bay: ItemId } | { hbay: HighFloorId; item: ItemId } | { order: string } | { research: ResearchId };
 
 interface LineAcc {
   key: string;
@@ -282,6 +282,9 @@ export class OfflineRun {
   private mark: Tally | null = null;
   private heaps0 = new Map<number, number>();
   private heapRate = new Map<number, number>();
+  /** heaps going down over the measuring window (the Committee's Night Crew takes a slag every 10 s
+   * while away, DESIGN.md §19): slag a second, and a heap emptying is a segment like one filling */
+  private heapDrain = new Map<number, number>();
   /** each heap's room when the player left (for a full line's fill rate and its fix) */
   private heapRoom0 = new Map<number, number>();
   private get replayed() { return this.liveTicks / TICK_RATE; }
@@ -490,11 +493,13 @@ export class OfflineRun {
     this.g.events.drain();
     // heap fill rates over the measuring window
     this.heapRate.clear();
+    this.heapDrain.clear();
     if (this.measureSecs > 0)
       for (const h of this.g.logistics) {
         if (h.kind !== 'heap' || !this.heaps0.has(h.id)) continue;
         const rate = (h.count - this.heaps0.get(h.id)!) / this.measureSecs;
         if (rate > 1e-6) this.heapRate.set(h.id, rate);
+        else if (rate < -1e-6 && h.count > 0) this.heapDrain.set(h.id, -rate);
       }
     // a crate or the Chute's stock rising fills like a heap (with a shorter replay, one filling
     // after it would otherwise be paid on as if it never did)
@@ -555,6 +560,19 @@ export class OfflineRun {
       if (!h || h.count >= heapCap(g)) continue;
       const tf = (heapCap(g) - h.count) / rate;
       if (tf < dt) { dt = tf; cause = { heap: h }; }
+    }
+    // a heap the Night Crew empties: what its smelters do next changes (a heap at 0 takes the next
+    // slag a machine beside it makes; measured on seed 8919 at 3 h, the live hour after one emptied
+    // earned 5% more than the rates before it, and the extrapolation paid 0.95 of open idle at e = 1)
+    // (only a heap that also empties out of its front into a press or a belt: one the Night Crew
+    // alone drains, at a slag every 10 s, stops nothing when it reaches 0, and a segment for each
+    // such heap paid 31 re-measured windows in full on a 12 h factory, check 12 at 0.57)
+    const crew = prules(g).nightCrew ? 1 / RULES.nightCrewSeconds.value : 0;
+    for (const [id, rate] of this.heapDrain) {
+      const h = g.byId.get(id);
+      if (!h || h.count <= 0 || rate <= crew * 1.2) continue;
+      const tf = h.count / rate;
+      if (tf < dt) { dt = tf; cause = { heapEmpty: h }; }
     }
     for (const [id, rate] of this.crateRate) {
       const c = g.byId.get(id);
@@ -621,6 +639,11 @@ export class OfflineRun {
       if (!h) continue;
       h.count = Math.min(heapCap(g), Math.floor(h.count + rate * dt + 1e-9));
     }
+    for (const [id, rate] of this.heapDrain) {
+      const h = g.byId.get(id);
+      if (!h) continue;
+      h.count = Math.max(0, Math.ceil(h.count - rate * dt - 1e-9));
+    }
     // crates and the Chute's stock as well (whole items: a crate holds the last thing it took)
     for (const [id, rate] of this.crateRate) {
       const c = g.byId.get(id);
@@ -636,6 +659,15 @@ export class OfflineRun {
     if (cause && 'heap' in cause) {
       cause.heap.count = heapCap(g);
       this.heapFull(cause.heap, this.t, true);
+    } else if (cause && 'heapEmpty' in cause) {
+      // empty: the live minutes after measure what its line does now (not news: no row). Heaps
+      // fed alike drain alike: every other heap within one measuring window of empty goes with it,
+      // so a row of them is one segment, not one each
+      cause.heapEmpty.count = 0;
+      for (const [id, rate] of this.heapDrain) {
+        const h = g.byId.get(id);
+        if (h && h.count > 0 && h.count / rate <= IDLE.measureSeconds.value) h.count = 0;
+      }
     } else if (cause && 'crate' in cause) {
       // full: its line backs up behind it in the live minutes after (a jam row if a machine stops)
       const c = cause.crate;

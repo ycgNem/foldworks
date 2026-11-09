@@ -196,8 +196,9 @@ export function campaignStages(seed: number, run: number): CampaignStages {
   let seen = 0;
   const logs = playCampaign(new Game(seed), {
     runs: run,
-    // run 4 (the final round: stages past 12 h) plays 5 h, so its 4 h stage has its half hour after it
-    cap: (r) => (r === 1 ? 6 * H : r >= 4 ? 5 * H : 4 * H),
+    // run 4 (the final round: stages past 12 h) plays 5.5 h, so its 5 h stage has its half hour after
+    // it (the balance pass: 5 h, when its 4 h stage was the last)
+    cap: (r) => (r === 1 ? 6 * H : r >= 4 ? 5.5 * H : 4 * H),
     minPatents: (r) => (r === 1 ? 12 : 4),
     onSecond: (g, rn, bot) => {
       if (rn !== run) return;

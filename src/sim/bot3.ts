@@ -717,6 +717,18 @@ export const PLAN3: Step3[] = [
   { k: 'group', group: 'rubberII' },
   { k: 'feed', feed: 'rubber' },
   { k: 'district', design: 'Rubber II', n: 3 },
+  // the fifth pass: glass for the Floating City's Spires (2,500 at the District Bay): the corner's
+  // Kiln on its own plant, folded, nested with a Plastic copy for its boiler's oil (CORNER.glassF),
+  // while the bench is still free. *Moved here in the balance pass* (2026-11-08), right after
+  // Rubber (its group nests a Rubber copy), before Processors and Sensors: it stood after Robotics,
+  // District Folds and their lines, so a run whose Sensors line never folded (the merged playability
+  // build, run 3) ended its plan an hour on with no glass, and the City, its steel and rotors in by
+  // 10:03, waited for the next run (18:05). The City wants glass, rotors and steel: Sensors and
+  // Robotics are not on its way.
+  { k: 'line', line: 'glassF' },
+  { k: 'lineDone', line: 'glassF' },
+  { k: 'group', group: 'glassII' },
+  { k: 'district', design: 'Glass II', n: 3 },
   { k: 'need', r: 'processors' },
   { k: 'line', line: 'processors' },
   { k: 'lineDone', line: 'processors' },
@@ -739,14 +751,8 @@ export const PLAN3: Step3[] = [
   { k: 'district', design: 'Sensors II', n: 5 },
   { k: 'need', r: 'districtFolds' },
   { k: 'dfold', n: 2 },
-  // the fifth pass: glass for the Floating City's Spires (2,500 at the District Bay): the corner's
-  // Kiln on its own plant, folded, nested with a Plastic copy for its boiler's oil (CORNER.glassF), while
-  // the bench is still free (the feeds after it may use it: feedStep)
-  { k: 'line', line: 'glassF' },
-  { k: 'lineDone', line: 'glassF' },
+  // (the Floating City's glass moved before the chemistry chain: the balance pass, below)
   { k: 'unfeed', feed: 'servos' },
-  { k: 'group', group: 'glassII' },
-  { k: 'district', design: 'Glass II', n: 3 },
   { k: 'feed', feed: 'servos2' },
   // Relocation's chain (the third pass): batteries (the Lighthouse wants 200, the Engineer one each)
   // and Hydroponics' sludge. Copper ingots fold on chunk D's second copper patch and feed the Chute;
