@@ -52,12 +52,14 @@ tutorial. The story never ended. The long game had turned into bookkeeping. This
   special, the customers have their say, and the credits roll with your own numbers. Then "The story
   isn't over": the World floor and Acts IV-V are the post-game.
 - The ending can be replayed from a new Codex page. The trophy for it is now called "Lift-off".
-- **The Spires want rotors, glass and steel** (no more sandwiches, the chain no bot could finish).
-  Charting needs the City alone; the Transmuter is optional.
+- **The Spires want rotors, glass and steel**: 1,800 rotors, 30,000 glass and 24,000 steel (no more
+  sandwiches, the chain no bot could finish). Charting needs the City alone; the Transmuter is
+  optional.
 - **The Great Drill's first stage comes in three parts**: the Scaffold, the Engine House and the Cab.
   Each one changes the Bay's picture, puts a crew house in the Town and makes the Gazette. The longest
   Act II wait went from ~40 to ~17 minutes.
-- The bot now reaches the City at about 12.5 h. Before, it never got there in 40 h.
+- The bot now finishes the City at about 13 h of its own play, in its third run. That is about
+  19-21 h for a person playing for the first time. Before, it never got there in 40 h.
 
 ### The District routes itself
 - **Placing a group flies its routes on its own**: products to whoever needs them, inputs from the nearest
@@ -127,6 +129,21 @@ A second first-time player tried the merged build. What they hit, fixed:
   - Zooming out stops where the island fits.
   - The wheel shows module names in full.
   - The fold report and the bell suggest the same fix.
+
+### The balance pass
+After every change was in, the pacing tests (a bot plays the game for up to 40 h on two seeds) were
+run on the whole build, and each one that failed was fixed:
+- **Time away pays what it should.** A heap that emptied while you were away wasn't counted, so
+  8 h away paid a little under half of what the factory makes while you watch. Now it pays just
+  over half, and just over three quarters with the Patent tree's offline upgrades.
+- **The City's Spires want more** (above). With every cut in, the City came at about 15 h for a
+  person, too early for the 18-25 h aim. It now comes at about 19-21 h.
+- The bot plays a returning run better: it nests its kept designs before laying the Bay floor. Its
+  second run gets back to its first run's best income in 21 minutes, and a long run still earns more
+  Patents an hour than resetting early and often (3.59 against at most 2.39). No Patent formula
+  changed.
+- The bot now reaches Act IV in a measured run (Charting at 13.5 h, the first Relocate at about
+  15 h).
 
 ### Fixes
 - Two open tabs no longer overwrite each other's save. The other tab says so and offers "Play here

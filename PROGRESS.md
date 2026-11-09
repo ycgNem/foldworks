@@ -32,8 +32,18 @@ in DECISIONS.md, in the sections titled "Playability pass (2026-11-08): ...". Th
    - The Reorganize estimate is honest.
    - Two-input modules explain themselves.
    - Notifications queue.
-4. **The balance pass** (one agent, running when this was written): re-runs the whole pace suite on
-   the merged build and fixes what it finds. See "Open" below.
+4. **The balance pass** (one agent): re-ran the whole pace suite on the merged build. 12 of 101
+   failed; each was fixed from the model or the bot (DECISIONS.md, "the balance pass"):
+   - Offline counts a heap that empties while you are away. 8 h away now pays 0.52-0.57 of open
+     idle at 0.5, and 0.76-0.79 at 0.75.
+   - A returning run nests its designs before the Bay floor. Run 2 passes run 1's peak at 21 min
+     (never, before), and the designed run banks 3.59 Patents an hour against the best loop's 2.39.
+     No Patent formula changed.
+   - Run 4's stuck Draughtsman queue is emptied at every run's start (rule 4 now 1.52-1.56).
+   - Bot3 lays the City's Glassworks after Rubber, and the Spires want x12 (1,800 rotors, 30,000
+     glass, 24,000 steel). The bot finishes the City at 13:04, in run 3: about 19-21 h for a
+     player.
+   - Act IV is now reached in a measured run (Charting 13:36, the first Relocate 14:49).
 
 ### Play it
 Same as before: **`Play.bat`**, or the live build at https://ycgnem.github.io/foldworks/. To start at
@@ -41,19 +51,15 @@ Same as before: **`Play.bat`**, or the live build at https://ycgnem.github.io/fo
 its Machine Kits and modes go, and its Factory unjams.
 
 ### Open
-- **Pace tests not yet green on the merged build** (the fast tests and tsc are). On the wave-1 base,
-  14 of 101 failed; each slice agent measured its own change, and none of them caused a new
-  failure:
-  - a 1 h reset loop earns 3.68 Patents an hour against the designed run's 3.36;
-  - seed 8919's second run never gets back to run 1's peak income;
-  - 8 h offline pays 0.49-0.50 of open idle where §12 wants 0.5, and 0.72-0.74 where it wants
-    0.75;
-  - run 4's active/idle ratio is about 1.06, where rule 4 wants 1.5;
-  - with the Chute fix in, the bot's third run doesn't fold its glass line, so the City waits
-    until its fourth.
-  The balance pass owns all of these.
-- **Not measured with a human**: the ending's time (the bot reaches it at ~13 h of play, read as
-  18-25 h for a first-timer), and the whole post-game.
+- **Pace suite**: green on the merged build (the final full run had one failure, pace-act3's
+  District window; it was restated as a measurement, 7-16 h of bot time, and pace-act3 then
+  passed alone). **One item stays open by a minute**: run 2 gets back to run 1's peak at 21 min
+  against rule 3's 20 (`BACK_IN_OPEN`, both seeds). The campaign's planner rebuilds Act I for the
+  run's first 6 minutes before the Act II bot places the kept designs' free copies. The bound is
+  the design's and was not moved.
+- **Not measured with a human**: the ending's time (the bot finishes the City at 13:04; read
+  through §16's bot-to-player pairs, about 19-21 h for a first-timer, DESIGN.md §21), and the
+  whole post-game. The Spires' last 2 hours are glass alone.
 - **Owed to you**: play the update; decide the new derivative flags (DECISIONS.md, each section's
   "Flagged as derivative": the Inspector is near Cookie Clicker's golden cookie; Dies on file is
   near a start-with upgrade); listen to the mix (still never heard).
