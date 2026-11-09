@@ -3702,3 +3702,22 @@ left open by a minute. Numbers and derivations: DESIGN.md §12, §16, §19, §20
 
 **Flagged as derivative:** nothing new is added (two bot plan orders, one offline segment rule, one
 want scaled).
+
+## Playability pass (2026-11-08): the last screens audit
+
+The full audit (`npm run screens`, 507 shots at three window sizes) on the merged build found four
+shots with overlaps. Two came from this update's labelled floor buttons, which are wider than the
+old dial:
+- **The high floors' tool strip has a level 4** (`src/app/district.ts` stripLevel). At 1024x640 the
+  World in Act V has four labelled tools (Route, Remove, Fold, Last Fold). Level 3 (bare limits, no
+  price) no longer fitted, and the counters ran under the Workshop and Factory buttons. Level 4
+  takes the routes and tiles counts off the strip and puts them in the Route key's tag; a limit that
+  binds still shows its slip under the strip. The tools keep their labels (the owner's rule: core
+  actions get a labelled button). Level 4 is chosen only when level 3 cannot show one group and the
+  page key, since the groups page anyway; so every other floor and size looks as before.
+  Considered: two rows. Rejected: slips under a taller strip ran into the Reorganize card at 1024.
+- **A slip under the strip keeps left of the floor column's Tab key** (`slipsOf`). The District's
+  long "in hand" slip covered it at 1024x640.
+- Left as it was: at 1920x1080, a pinned courier-route card on Beyond sits over the bottom edge of
+  the lot's price (`placeWide` trades a little overlap for nearness). It predates this update; the
+  price's top half still shows, and closing the card (Esc) shows all of it.

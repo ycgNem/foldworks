@@ -57,6 +57,9 @@ its Machine Kits and modes go, and its Factory unjams.
   against rule 3's 20 (`BACK_IN_OPEN`, both seeds). The campaign's planner rebuilds Act I for the
   run's first 6 minutes before the Act II bot places the kept designs' free copies. The bound is
   the design's and was not moved.
+- **Screens audit**: 506 of 507 shots clean. At 1024x640 the World's tool strip and the District's
+  slips ran under the new floor buttons; both fixed (DECISIONS.md, "the last screens audit"). Left:
+  at 1920x1080 a pinned courier-route card on Beyond covers the bottom half of the lot's price.
 - **Not measured with a human**: the ending's time (the bot finishes the City at 13:04; read
   through §16's bot-to-player pairs, about 19-21 h for a first-timer, DESIGN.md §21), and the
   whole post-game. The Spires' last 2 hours are glass alone.
