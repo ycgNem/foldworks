@@ -38,7 +38,13 @@ export const BACK_IN = 20 * 60;
 
 /** Misses measured and left open, with the reason (keys seed:run). */
 export const BACK_IN_OPEN: Record<string, string> = {
-  '1000:2': "run 2 is at 14.6K a minute at 15 min (96% of run 1's 15.2K peak), then lays the Bay floor (its goods go to the Great Drill, not the Dock) and resets at stage 2 before it rebuilds the three annex Gizmo chains that made run 1's peak at 4 h: the bot's reset rule, not the returning run. Keeping the slice's wire and ingot designs (so they come back) left their lines unfolded on tiles the Act II lab needs and stalled the bot (DECISIONS.md)",
+  // the balance pass: run 2 is the same run on both seeds (Sparks are the only random part, and the
+  // returning run's first 20 minutes have none that matter). It never passed run 1's peak before the
+  // returning plan (PLAN2_RETURN: the Bay floor waits for the annex nest), and now passes at 21 min
+  // (14.4K a minute at 20 against 14.6-14.8K): the planner rebuilds Act I for its first 6 minutes
+  // before the Act II bot places the kept designs' copies, which a player does from minute one
+  '1000:2': "21 min: 14.4K a minute at 20 min against run 1's 14.6K peak; the campaign's planner rebuilds Act I for the run's first 6 minutes before the Act II bot places the kept designs' free copies (a player places them from minute one): the bot's hand-over, not the returning run (DESIGN.md §19)",
+  '8919:2': "21 min: 14.4K a minute at 20 min against run 1's 14.8K peak; the same run 2 as seed 1000's (DESIGN.md §19)",
 };
 
 /** The burn loop's spending (the final round): every coin into the dearest building that stands on
