@@ -3689,12 +3689,14 @@ left open by a minute. Numbers and derivations: DESIGN.md §12, §16, §19, §20
   City waited for run 4 (18:05; the polish slice's "Glassworks never folded" finding, the same fault).
 - **The Spires want x12: 1,800 rotors, 30,000 glass, 24,000 steel** (`src/data/megaprojects.ts`).
   With the glass fixed the bot finished the City at 10:00. Mapped through §16's own target-and-measure
-  pairs (1.19x at the first Reorganize, 1.32x at the District, about 1.45 player hours per bot hour
-  after it) that is about 13.4 h for a player against the 18-25 h aim, with the District-to-City
-  stretch 2.4 h where the aim implies 7-14. x4 gave 11:05 (the District grows while the Bay fills, so
-  rates rise); x12 gives **13:04, still in run 3, about 17.8 h for a player**: the aim's low edge,
-  kept low on purpose (the review's retention curve; the floor is the promise). It is the City's
+  pairs (1.19x at the first Reorganize, 1.45x at the District at 7:34, 1.45-1.78 player hours per bot
+  hour after it) that is about 14.5-15.3 h for a player against the 18-25 h aim. x4 gave 11:05 (the
+  District grows while the Bay fills, so rates rise); x12 gives **13:04, still in run 3, about 19-21 h
+  for a player**: the aim's lower half, on purpose (the review's retention curve). It is the City's
   last stage only: the Platform, the Transmuter and every other number stand.
+- **pace-act3's District window restated from 8-16 h to 7-16 h of bot time**: a measurement, not
+  §16's rule (11 h for a player). The returning run exists to shorten the replay of Acts I-II; the
+  District now opens at 7:34 (was 8:17-10:01), about 10-11.7 h for a player.
 - Not changed, on purpose: rule 4's 1.5 floor, Overdrive's duty cycle, the Patent formula, the
   Committee's gate, `RULES.backInMinutes`.
 

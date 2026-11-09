@@ -631,9 +631,9 @@ If any answer is no, change the model here before building more.
 | 45 min | slice end: the Gizmo Festival filled at the Factory Dock (measured: 20:36, planner; §13 check 9 ≤ 45 min) |
 | 3 h | Act II: power, steel, glass, circuits |
 | 5 h | first Reorganize (12–20 Patents) |
-| 11 h | District floor (Act III; measured 10:01, the second gate moved it from 15 h: the Great Drill stands at about 9.5 h) |
+| 11 h | District floor (Act III; measured 10:01, the second gate moved it from 15 h: the Great Drill stands at about 9.5 h; 7:34 in the balance pass, the returning runs replaying Acts I-II fast, about 10-11.7 h for a player, §21) |
 | 25 h | the first Act III megaproject stage (the Floating City's Platform; measured 11:05) |
-| 18-25 h | **the core ending**: the Floating City complete (§21; the campaign bot 13:04, in the first run that builds a District, with the Spires x12 in the balance pass: it was 10:00, about 13.4 h for a player) |
+| 18-25 h | **the core ending**: the Floating City complete (§21; the campaign bot 13:04, about 19-21 h for a player, in the first run that builds a District, with the Spires x12 in the balance pass: it was 10:00, about 14.5-15.3 h) |
 | 40 h | first Relocate (the post-game from here on; the bot 17:40, §22 Pacing) |
 | 60 h | four biome worlds visited |
 | 80 h | the Last Fold available |
@@ -2196,25 +2196,31 @@ City stood at **10:00**, 1.1 h after its Platform (8:52).
 
 *How the bot's clock maps to a player's.* §16's targets are a competent player's; where a target and
 a bot measure both exist past the slice, the bot is ahead by 1.19x at the first Reorganize (5 h
-against 4:12) and 1.32x at the District (11 h against 8:21). Each bot hour after the District is
-about 1.45 player hours (6 player hours between those two targets, 4.15 bot hours). The first hour
-is no guide (the bot builds 2-2.4x a player's speed there: the first fold at 5:02 against 12 min),
-and it is a small part of a 20 h clock. So the City at 10:00 read as **11 + 1.45 x 1.65, about 13.4
-h for a player**: early against the 18-25 h aim, and the District-to-City stretch, 7-14 h for a
-player by the aim, was 2.4.
+against 4:12) and 1.45x at the District (11 h against 7:34 on this build: the returning runs replay
+Acts I-II fast, as they are meant to). Between those two targets a bot hour is about 1.78 player
+hours (6 against 3.37); after the District this pass reads it as 1.45-1.78. The first hour is no
+guide (the bot builds 2-2.4x a player's speed there: the first fold at 5:02 against 12 min), and it
+is a small part of a 20 h clock. So the City at 10:00 read as **11 + (1.45 to 1.78) x 2.43, about
+14.5-15.3 h for a player**: early against the 18-25 h aim, and the District-to-City stretch, 7-14 h
+for a player by the aim, was 3.5-4.3.
 
 *The fix, from the model.* The Spires are the act's main chains at the District Bay (rotors, glass,
 steel); a player's last stage should be a few hours of the floor the act built, not one. **The
 Spires want x12: 1,800 rotors, 30,000 glass, 24,000 steel** (were 150, 2,500, 2,000). x4 was tried
-first: the City at 11:05 (about 15 h for a player), because the District keeps growing while the
+first: the City at 11:05 (about 16-17 h for a player), because the District keeps growing while the
 Bay fills (41 modules at 9 h, 87 at 11 h), so the rates rise and a want does not scale the time in
 proportion. At x12 (seed 1000, the Act III campaign): the Platform 8:52, the steel in by 11:00, the
 rotors by 10:30, the glass (three Glass II copies and the District's growth: 2,500 an hour at 9:30,
-12,000 at 13:00) by **13:04**, still in run 3 (5:51-13:29), the first Act III run. That reads as
-about **17.8 h for a player**, at the aim's low edge, which this pass keeps on purpose: the review's
-retention curve says earlier is better, and the aim's floor is the ending's promise. The glass is
+12,000 at 13:00) by **13:04**, still in run 3 (5:51-13:29), the first Act III run (pace-act3, the
+full suite: the District 7:34, the Platform 8:51, the City 13:04). That reads as about **19-21 h for
+a player**, in the aim's lower half, which this pass keeps on purpose: the review's retention curve
+says earlier is better. The District's window in pace-act3 is a bot measurement, restated from
+8-16 h to 7-16 h (7:34 is about 10-11.7 h for a player, §16's 11 h). The glass is
 the last 2 h alone, a goal on the screen ("the Spires: glass") with the District growing beside it.
 Not measured with a human.
+The Act IV campaign (pace-act4, the same build): the City 13:36, Charting and the World 13:36, the
+first Relocate (Home to Rime) at 14:49; on the merged build before this pass the City never stood
+there and Charting never came. Act IV is now reached in a measured run (§22's targets, post-game).
 
 Lessons:
 - **The waste chute and 1 a trip halve the routes and make distance cost.** With waste going to
