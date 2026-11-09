@@ -2,6 +2,62 @@
 
 What exists, what is stubbed, what is next. Updated at the end of every session.
 
+## Start here (2026-11-08): the Playability Update, on `main`
+
+You asked for a full playability review and then changes, with full permission for radical ones.
+The review (a design critic, a first-time player, a bug hunt, visual QA at nine window sizes) is in
+`docs/playability-review.md`. The player-facing list of changes is **`docs/patch-notes.md`**; the
+game shows a short version once, as "What's new" (also in Options). Every decision and its reason is
+in DECISIONS.md, in the sections titled "Playability pass (2026-11-08): ...". The saves are
+`SAVE_VERSION` 16 (migrations 12-15 convert older saves; each has a test).
+
+### What changed, in four steps
+1. **Wave 1** (six agents):
+   - Folding is the second research, and the bot's first fold went from 24:35 to about 5 min.
+   - A Reorganize keeps Acts I-II research and the Drawer's designs (the returning run), and the
+     Patent tree was re-cut.
+   - Finishing the Floating City is the ending, with credits.
+   - The District routes itself.
+   - The HUD and camera were reworked (floor buttons, the trouble bell, drag to pan).
+   - Twelve bugs were fixed (two-tab saves, the offline report, imports and more).
+2. **The cuts** (two agents), to bring the count of things to track down toward PLAN.md's cap:
+   - Machine Kits, machine modes, the Tuning and Recycling research, Inspiration and the Lucky Vein
+     are gone. Research is numbered 1..59.
+   - The Inspector is the one Spark.
+   - Challenges and Scenarios open after the ending.
+3. **The second playtest's fixes** (one agent):
+   - Income no longer drops to 0 at 10-15 min: the Hopper pays like the Dock until the first fold.
+   - Goals point at what is on screen.
+   - The Factory Chute spills to the Dock, so the 15 h Factory no longer jams.
+   - The Reorganize estimate is honest.
+   - Two-input modules explain themselves.
+   - Notifications queue.
+4. **The balance pass** (one agent, running when this was written): re-runs the whole pace suite on
+   the merged build and fixes what it finds. See "Open" below.
+
+### Play it
+Same as before: **`Play.bat`**, or the live build at https://ycgnem.github.io/foldworks/. To start at
+15 h, Options -> **Import save** and paste `docs/checkpoint-15h.txt`. It migrates to v16 on load:
+its Machine Kits and modes go, and its Factory unjams.
+
+### Open
+- **Pace tests not yet green on the merged build** (the fast tests and tsc are). On the wave-1 base,
+  14 of 101 failed; each slice agent measured its own change, and none of them caused a new
+  failure:
+  - a 1 h reset loop earns 3.68 Patents an hour against the designed run's 3.36;
+  - seed 8919's second run never gets back to run 1's peak income;
+  - 8 h offline pays 0.49-0.50 of open idle where §12 wants 0.5, and 0.72-0.74 where it wants
+    0.75;
+  - run 4's active/idle ratio is about 1.06, where rule 4 wants 1.5;
+  - with the Chute fix in, the bot's third run doesn't fold its glass line, so the City waits
+    until its fourth.
+  The balance pass owns all of these.
+- **Not measured with a human**: the ending's time (the bot reaches it at ~13 h of play, read as
+  18-25 h for a first-timer), and the whole post-game.
+- **Owed to you**: play the update; decide the new derivative flags (DECISIONS.md, each section's
+  "Flagged as derivative": the Inspector is near Cookie Clicker's golden cookie; Dies on file is
+  near a start-with upgrade); listen to the mix (still never heard).
+
 ## Start here (2026-10-22): every milestone built, on `main`
 
 Milestones 0-14 are built and merged into `main` (pushed 2026-10-22). Acts I-V, all three reset

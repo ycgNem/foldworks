@@ -1,4 +1,5 @@
-// Challenges (DESIGN.md §21 Challenges, §24): a run under one restriction, taken at a Reorganize.
+// Challenges (DESIGN.md §21 Challenges, §24): a run under one restriction, taken at a Reorganize
+// once the core ending stands (the post-game, with the Scenarios: the playability pass).
 // The rule holds until the goal is met; the reward is kept for good in meta.challenges. Readers ask
 // `ruled` (is this restriction on now?) and `won` (is this reward kept?); the goal is checked
 // once a second, at the end of the tick (after orders and research have counted). The helpers at
@@ -8,10 +9,16 @@ import type { Game, ActResult } from '../Game';
 import { OK, no } from '../Game';
 import { Num } from '../../engine/num';
 import { TICK_RATE } from '../../engine/time';
-import { CHALLENGES, CHALLENGE_AFTER_RUNS, CHALLENGE_IDS, type ChallengeGoal, type ChallengeId } from '../../data/challenges';
+import { CHALLENGES, CHALLENGE_IDS, type ChallengeGoal, type ChallengeId } from '../../data/challenges';
 import { BUILD, isMachine, type BuildKind } from '../../data/machines';
 import { GRADES, RULES } from '../../data/rules';
 import { scenarioOf, scenarioPower } from '../scenario';
+import { megaComplete } from './research';
+
+/** The post-game is open: the core ending, the Floating City complete (DESIGN.md §21 The core
+ * ending). Challenges and the Scenario boards wait for it (the playability pass: ~60 concepts by
+ * 5 h was too many); Megaprojects survive every reset, so once open it stays open. */
+export const postGame = (g: Game) => megaComplete(g, 'city');
 
 /** Is this Challenge's restriction on now? */
 export const ruled = (g: Game, id: ChallengeId) => g.s.challenge === id;
@@ -22,7 +29,7 @@ export const won = (g: Game, id: ChallengeId) => !!g.s.meta.challenges?.includes
 /** Why the next run can't be this Challenge, or null. */
 export function challengeRefusal(g: Game, id: ChallengeId): string | null {
   if (!CHALLENGES[id]) return 'No such Challenge';
-  if (g.s.meta.runs < CHALLENGE_AFTER_RUNS) return 'Challenges open after your first Reorganize';
+  if (!postGame(g)) return 'Challenges open after the story: finish the Floating City';
   if (won(g, id)) return `${CHALLENGES[id].name} is won already: its reward is yours`;
   const need = CHALLENGES[id].needs;
   if (need && (g.s.counters[need.counter] ?? 0) < 1) return need.text;
@@ -165,8 +172,8 @@ export const splusShare = (g: Game) => (won(g, 'strictInspector') ? CHALLENGES.s
 /** Hand-Made: no stamping while it holds. */
 export const stampRule = (g: Game): string | null => (ruled(g, 'handMade') ? 'No stamping this run (the Challenge): fold the line again' : null);
 
-/** Hand-Made won: a design's first stamp takes no Machine Kits. */
-export const firstStampKitFree = (g: Game, stamped: number) => stamped === 0 && won(g, 'handMade');
+/** Hand-Made won: a design's first stamp is free. */
+export const handMadeFree = (g: Game, stamped: number) => stamped === 0 && won(g, 'handMade');
 
 /** A high floor's skiff numbers under the Challenges (Headwinds, Rough Seas, Light Fleet). */
 export function skiffRules(g: Game, id: 'district' | 'world' | 'beyond', k: { load: number; speed: number; dwell: number }): { load: number; speed: number; dwell: number } {

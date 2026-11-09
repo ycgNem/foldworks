@@ -4,6 +4,8 @@
 import { drawRich } from '../ui/rich';
 import { button, rule, T } from './chrome';
 import { lessonsOn, saveLessonsOn, saveUiScale, uiScaleSetting, maxUiScale, uiScaleFor } from './settings';
+import { setPhoto } from './photo';
+import { PATCH_NAME } from './patch';
 import type { App } from './app';
 
 /** The scale picks a w x h canvas offers: 0 (Auto), then 1x up to the largest that fits. */
@@ -40,11 +42,19 @@ export function accessRows(app: App, x: number, y: number, w: number): number {
   };
   const cw = app.canvas.width, ch = app.canvas.height;
   const pick = uiScaleSetting();
-  const now = uiScaleFor(cw, ch);
+  const now = uiScaleFor(cw, ch, undefined, window.devicePixelRatio || 1);
   const max = maxUiScale(cw, ch);
   const text = pick ? `${Math.min(pick, max)}x` : `Auto {soft:${now}x}`;
   row('{u:stats} UI scale', (bx, by) => {
     if (button(ui, 'opt:uiScale', bx, by, 70, 17, text, { tip: [{ text: '{big:UI scale}' }, { text: `the HUD and pages, apart from the floor's zoom · up to ${max}x here` }, { text: '{k:LMB} next' }] })) cycleUiScale(app);
+  }, 70);
+  // Milestone 11's photo mode: its button lives here now (the playability pass took it off the
+  // screen's corner); H still takes one from anywhere
+  row('{u:play} Photo mode  {k:H}', (bx, by) => {
+    if (button(ui, 'photoMode', bx, by, 70, 17, 'Take one', { tip: [{ text: '{big:Photo mode}' }, { text: 'hide the HUD · snap the whole floor to a PNG' }, { text: '{k:H}  {k:Esc} back' }] })) { app.panel = null; setPhoto(app, true); }
+  }, 70);
+  row("{u:codex} What's new", (bx, by) => {
+    if (button(ui, 'opt:whatsNew', bx, by, 70, 17, 'Read it', { tip: [{ text: `{big:${PATCH_NAME}}` }, { text: 'what this update changed' }] })) app.panel = 'whatsnew';
   }, 70);
   const on = lessonsOn();
   row('{u:codex} Lesson cards', (bx, by) => {

@@ -1,18 +1,17 @@
-// Milestone 6, idle and offline (DESIGN.md §12, §15, §20): stopping a line (the 'pause' command),
-// Inspiration clicking, the Night Shift and offline efficiency, and the offline model's timeline:
+// Milestone 6, idle and offline (DESIGN.md §12, §20): stopping a line (the 'pause' command), the
+// Hopper taking no clicks, the Night Shift and offline efficiency, and the offline model's timeline:
 // jams with their time and machine, heaps filling in an extrapolated segment, the 7-day cap,
 // Sparks paused, and the forecast being the same computation on a copy of the game.
 import { describe, expect, it } from 'vitest';
 import { Game, type Cmd } from '../src/sim/Game';
 import { N, Num } from '../src/engine/num';
-import { RESEARCH, RESEARCH_IDS } from '../src/data/research';
+import { RESEARCH_IDS } from '../src/data/research';
 import { CHUNKS } from '../src/data/land';
 import { RULES } from '../src/data/rules';
 import { IDLE, IDLE_UPGRADES } from '../src/data/idle';
 import { TICK_RATE } from '../src/engine/time';
 import { fingerprint, restore } from '../src/sim/snapshot';
 import { runOffline, forecast, offlineEfficiency, copyGame, OfflineRun } from '../src/sim/offline';
-import { inspiredFrac } from '../src/sim/systems/inspire';
 import { researchFrac } from '../src/sim/systems/research';
 import { idleUpgradeGain } from '../src/sim/systems/pause';
 import type { ModuleDesign } from '../src/sim/world';
@@ -132,95 +131,19 @@ describe('stopping a line (DESIGN.md §20)', () => {
   });
 });
 
-describe('Inspiration (DESIGN.md §15)', () => {
-  /** a fresh game past the slice end, Pressing (30 iron ingots) selected */
-  function inspired() {
-    const g = new Game(2, { keepHistory: true });
-    g.first('sliceEnd');
-    must(g, { k: 'research', id: 'pressing' });
-    return g;
-  }
-
-  it('is off before Act II: a Hopper click does nothing (and opens research, as before)', () => {
-    const g = new Game(2);
-    must(g, { k: 'research', id: 'pressing' });
-    const r = g.act({ k: 'click', x: 6, y: 4 });
-    expect(r.ok).toBe(false);
-    expect(r.why).toBe('nothing to click');
-  });
-
-  it('1 click = 0.1% of what the node still needs, counted as items delivered', () => {
-    const g = inspired();
-    must(g, { k: 'click', x: 6, y: 4 });
-    expect(g.s.research.progress.pressing!.ironIngot!.toNumber()).toBeCloseTo(30 * 0.001, 9);
-    must(g, { k: 'click', x: 7, y: 5 });
-    expect(g.s.research.progress.pressing!.ironIngot!.toNumber()).toBeCloseTo(0.03 + (30 - 0.03) * 0.001, 9);
-    expect(researchFrac(g, 'pressing')).toBeGreaterThan(0);
-  });
-
-  it('respects the 12 clicks/s cap', () => {
-    const g = inspired();
-    let ok = 0;
-    for (let i = 0; i < 20; i++) if (g.act({ k: 'click', x: 6, y: 4 }).ok) ok++;
-    expect(ok).toBe(RULES.clickCap.value);
-  });
-
-  it('stops at 30% of each node: the line delivers the rest', () => {
-    const g = inspired();
-    for (let s = 0; s < 120; s++) {
-      for (let i = 0; i < 12; i++) g.act({ k: 'click', x: 6, y: 4 });
-      g.step(TICK_RATE);
+describe('the Hopper takes no clicks (Inspiration cut, the playability pass)', () => {
+  it('a click on a Hopper, Workshop or Factory, credits nothing, before the slice end or after', () => {
+    for (const late of [false, true]) {
+      const g = new Game(2);
+      if (late) { g.first('sliceEnd'); g.first('factoryOpen'); }
+      must(g, { k: 'research', id: 'pressing' });
+      for (let i = 0; i < 12; i++) {
+        expect(g.act({ k: 'click', x: 6, y: 4 }).why).toBe('nothing to click');
+        expect(g.act({ k: 'fclick', x: 10, y: 5 }).ok).toBe(false);
+      }
+      expect(g.s.research.progress.pressing?.ironIngot?.toNumber() ?? 0).toBe(0);
+      expect(researchFrac(g, 'pressing')).toBe(0);
     }
-    const p = g.s.research.progress.pressing!.ironIngot!.toNumber();
-    expect(p).toBeCloseTo(30 * IDLE.inspireCap.value, 6);
-    expect(inspiredFrac(g, 'pressing')).toBeCloseTo(IDLE.inspireCap.value, 6);
-    expect(g.done('pressing')).toBe(false);
-    // a capped click is quiet: ok, nothing more given
-    g.step(TICK_RATE);
-    expect(g.act({ k: 'click', x: 6, y: 4 }).ok).toBe(true);
-    expect(g.s.research.progress.pressing!.ironIngot!.toNumber()).toBeCloseTo(9, 6);
-  });
-
-  it('needs a node selected, says so', () => {
-    const g = new Game(2);
-    g.first('sliceEnd');
-    const r = g.act({ k: 'click', x: 6, y: 4 });
-    expect(r.ok).toBe(false);
-    expect(r.why).toMatch(/Select a research node/);
-  });
-
-  it('the Factory Hopper takes Inspiration clicks too (fclick), under the same cap', () => {
-    const g = inspired();
-    g.first('factoryOpen');
-    let ok = 0;
-    for (let i = 0; i < 15; i++) if (g.act({ k: 'fclick', x: 10, y: 5 }).ok) ok++;
-    expect(ok).toBe(12);
-    expect(g.s.research.progress.pressing!.ironIngot!.toNumber()).toBeGreaterThan(0.3);
-  });
-
-  it('replays exactly (a sim command) and survives a save', () => {
-    const g = inspired();
-    for (let i = 0; i < 30; i++) { g.act({ k: 'click', x: 6, y: 4 }); g.step(3); }
-    const h = new Game(2, { keepHistory: true });
-    h.first('sliceEnd');
-    for (const l of g.history!) {
-      while (h.s.tick < l.t) h.tick();
-      h.act(l.c);
-    }
-    while (h.s.tick < g.s.tick) h.tick();
-    expect(h.s.research.progress.pressing!.ironIngot!.toString()).toBe(g.s.research.progress.pressing!.ironIngot!.toString());
-    const c = copyGame(g);
-    expect(c.s.inspire.pressing!.ironIngot!.toString()).toBe(g.s.inspire.pressing!.ironIngot!.toString());
-  });
-
-  it('fills every node of a two-item cost item by item', () => {
-    const g = new Game(2);
-    g.first('sliceEnd');
-    g.s.research.done = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters'];
-    must(g, { k: 'research', id: 'buffers' });
-    must(g, { k: 'click', x: 6, y: 4 });
-    const cost = RESEARCH.buffers.cost as Record<string, number>;
-    for (const [item, n] of Object.entries(cost)) expect(g.s.research.progress.buffers![item as 'gear']!.toNumber()).toBeCloseTo(n * 0.001, 9);
   });
 });
 

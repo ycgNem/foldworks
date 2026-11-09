@@ -229,7 +229,10 @@ export function relocateRefusal(g: Game, world: WorldId): string | null {
 
 /** Megaprojects #4 and #5 build each island's stage there: the progress of the stage left behind
  * waits in `held`, and the new island's comes back. */
-function switchMegas(g: Game, from: WorldId, to: WorldId) {
+/** Park the any-order Megaprojects' progress on the island being left and take up the one arrived
+ * at (Relocate, and the Last Fold, which always comes home: the playability review found it set the
+ * world without this, so an island's progress counted toward Home's stage). */
+export function switchMegas(g: Game, from: WorldId, to: WorldId) {
   for (const mid of MEGA_IDS) {
     const def = MEGAS[mid];
     if (!def.anyOrder) continue;

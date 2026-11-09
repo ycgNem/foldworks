@@ -110,17 +110,29 @@ The player switches floors with Tab or the floor tabs. Both floors run all the t
   takes **≈20 s**. That matches §16's first purchase target.
 - **After the Bellows**, the furnace runs itself at 2.0 s per ingot and needs 1 ore click per 2 s
   (1.5 coin/s). The first Miner (40 coin) takes **≈27 s** and ends the clicking.
-- **Sparks** (slice set). One every 3–6 min (uniform), visible for 20 s, on the Workshop floor:
-  - **Lucky Vein**: an ore patch tile glitters. Click it and that patch's miners **and every
-    machine of the line they feed** run at 3× for 60 s. It only appears on a patch that has a
-    working miner. *(Milestone 3 gate audit: boosting only the miners did nothing in a balanced
-    1:1 line; the extra ore just backed up.)*
-  - **Inspector**: walks up to a line (the busiest connected group of machines). Click and they
-    grade it with §10's audit formula and hand **60 s of that line's measured output × the
-    grade multiplier to research, as items** (the selected node first, then the bank). This
-    rewards a good line, not a lucky click. *Paid in kind, not coin (Milestone 1–2 review): a
-    coin windfall sized by current output is the shape of Cookie Clicker's golden cookie.*
-  - Missing a Spark costs nothing. Sparks pause while the tab is hidden (no offline Sparks).
+- **Sparks**: the **Inspector**, the one kind. One every 3–6 min (uniform), visible for 20 s, on
+  the Workshop floor. They walk up to a line (the busiest connected group of machines, two at
+  least at work; on a free owned tile beside it). Click and they grade it with §10's audit
+  formula and hand **30 s of that line's measured output × the grade multiplier to research, as
+  items** (the selected node first, then the bank; it was 60 s while half the Sparks were veins). This rewards a good line, not a lucky click,
+  and it teaches the grade the fold will give. *Paid in kind, not coin (Milestone 1–2 review): a
+  coin windfall sized by current output is the shape of Cookie Clicker's golden cookie.*
+  - Missing one costs nothing. Sparks pause while the tab is hidden (no offline Sparks). While no
+    line has two machines at work, none appears (the timer runs on).
+  - **The Lucky Vein is cut** (the playability pass, 2026-11-08): a random glitter on a patch,
+    clicked for ×3 for 60 s, was Cookie Clicker's golden cookie into Frenzy (the critic's
+    derivative list). *The rate stays 3–6 min*: it was set for Sparks of either kind, and every
+    Spark is now one that grades a real line. Measured on the planner bot (seeds 1000, 8919, 16838,
+    24757, its first 3 h): 38–41 spawns before, 17–22 of them veins, and 39–41 after, all
+    Inspectors (12–15 an hour either way); its coin at 3 h 1.46M against 1.49–1.64M with the vein
+    (2–11% less: the vein's ×3 minutes).
+  - *The gift is halved to 30 s* because the Inspector now comes twice as often: research an hour
+    of catching every one stays where it was (about a ninth of one line's output, 30 s × grade in
+    4.5 min). At 60 s the Dock-only player, who feeds the Hopper only when stuck, reached Gizmo
+    Theory 2.7 min behind the planner (16:19 against 13:40; §13 check 11 wants a quarter of the
+    planner's time, 3.4 min; it was 4.1 before the cut): free research made the Hopper less of a
+    choice. At 30 s it is 4.7 min behind (18:21 against 13:40). The trophies that count Sparks (1,
+    10 and 100) keep their counts; the first, "Lucky!", is renamed **Spot Check**.
 
 ## 7. The Dock, orders and Mayor Bramble
 
@@ -147,18 +159,45 @@ banked by type for the next node.
 
 | # | Node | Cost (delivered) | Unlocks | Derivation |
 |---|---|---|---|---|
-| 1 | Pressing | 30 iron ingots | Press, iron plate | §16: first research ≈ 5 min |
-| 2 | Survey East | 40 iron plates | buy land chunk B (copper) | |
-| 3 | Copper Smelting | 80 copper ore | copper ingot recipe | ×2 (below) |
-| 4 | Wire Drawing | 120 copper ingots | copper wire on the Press | ×2 |
-| 5 | Gearcutting | 160 iron plates | Assembler, gear | ×2 |
-| 6 | Splitters & Mergers | 100 gears | Splitter, Merger | ×2 |
-| 7 | Buffers | 200 plates + 40 gears | Buffer Crate | ×2 |
-| 8 | Gizmo Theory | 120 gears + 300 wire | Gizmo recipe, Bramble's Gizmo Festival, land chunk C | ×2 |
-| 9 | Slag Bricks | 200 slag | slag brick on the Press | §4: waste becomes an input; ×2 |
-| 10 | **Folding** | 50 Gizmos + 500 gears | the Fold tool, land chunk D | §16: first fold ≤ 40 min; ×2, then 500 gears (round 3, below) |
+| 1 | Pressing | 30 iron ingots | Press, iron plate | §16: first research ≈ 5 min; **the Hopper pays its items at the Dock price** (below) |
+| 2 | **Folding** | 40 iron plates | the Fold tool (boxes 3×3), the Factory floor | §16: the first fold in the first minutes (playability pass, below) |
+| 3 | Survey East | 40 iron plates | buy land chunk B (copper) | |
+| 4 | Copper Smelting | 80 copper ore | copper ingot recipe | ×2 (below) |
+| 5 | Wire Drawing | 120 copper ingots | copper wire on the Press | ×2 |
+| 6 | Gearcutting | 160 iron plates | Assembler, gear, fold boxes 5×5 | ×2 |
+| 7 | Splitters & Mergers | 100 gears | Splitter, Merger | ×2 |
+| 8 | Buffers | 200 plates + 40 gears | Buffer Crate | ×2 |
+| 9 | Gizmo Theory | 120 gears + 300 wire | Gizmo recipe, fold boxes 8×8, Bramble's Gizmo Festival, land chunks C and D | ×2 |
+| 10 | Slag Bricks | 200 slag | slag brick on the Press | §4: waste becomes an input; ×2 |
 
-**Why nodes 3–10 are ×2 the first draft** (2026-10-20, pace tests). At the first-draft costs the
+**The playability pass (2026-11-08): Folding is node 2.** A first-time player folded at minute 73
+and the planner at 21:45: Folding was node 10 (50 Gizmos + 500 gears), so the game's hook hid behind
+nine nodes and a ~33 min gear grind. Folding now needs only Pressing and costs **40 plates**: about
+80 s of the one press line a player has after Pressing (30 plates/min), and that line is the one they
+then fold. Survey East and Gearcutting hang off Folding, so the order is fixed: press, fold, then
+copper and gears. The fold box grows with research (§10 Box sizes), so each later node unlocks a new
+line worth folding: plates at Folding, wire at Wire Drawing, gears at Gearcutting, Gizmos at Gizmo
+Theory. Gizmo Theory now opens what Folding opened (the Festival, chunk D, and Act II's Coal Seams).
+Measured (50 seeds, planner): Folding **3:48** (3:02-3:56), the first fold **5:17** (4:40-5:27),
+Gizmo Theory **13:27**; a first-timer about half the planner's pace at research folds at ~8-12 min.
+
+**The first nodes pay like the Dock.** Until the first fold the Hopper pays for what it takes at
+the Dock price (`RULES.firstNodePay`, 1), what it banks included. A new player has one line; the
+guide turns its last belt into the Hopper, and income sat at 0 for the length of Pressing (the
+playtest: 22 coin, nothing affordable, until the belt was turned back). *The second playtest
+(2026-11-08)*: with the rule ending at Pressing, picking Folding (plates) sent the hand line's
+ingots into the Hopper as the wrong item, banked for nothing, while the new Smelter jammed on slag:
+income sat at 0 from minute 10 to 15 and nothing said so. The rule now holds until the first fold
+(Pressing and Folding are on the town; Gizmo Theory was the other option, and would have made all of
+Act I's research free and check 11 meaningless). The Hopper-or-Dock choice (below, §13 check 11)
+starts after the first fold. When income has been 0 for 15 s while lines feed the Hopper, the frog
+says so, with the fix (a split, or a line to the Dock); the Hopper's floor tag marks what it banks
+("→ bank") so a wrong item never reads as progress. Measured (50 seeds, planner; before → after):
+first fold 5:17 → **5:02**, Gizmo Theory 13:27 → **12:22**, the Dock-only player 4.1 → **5.1 min**
+behind it (check 11 wants a quarter of the planner's time, 3.1), slice end 21:35 → **20:36**;
+Pressing, Folding and the first purchase unchanged; dead air (greedy, longest stretch) 161 s mean.
+
+**Why nodes 3–10 are ×2 the first draft** (2026-10-20, pace tests; history: the node numbers below are the old order, Folding last). At the first-draft costs the
 planner bot researched Folding at **19:01** (mean of 50 seeds) and the Dock-only bot only **3.5 min**
 later: once chunks A and B are built (~16 min) the lines make research items far faster than the
 nodes ask for them (Folding's 200 gears were 4.4 min of the planner's 45 gears/min into the Hopper),
@@ -223,7 +262,7 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
    miner in a 1×1 box graded S; an all-assembler line such as circuits into motors is a line)
    and no Dock, Hopper or Hand Furnace, and every building in it wholly. Belts crossing the box
    edge become the module's **ports** (in or out, by belt direction). Power never crosses the
-   box (§18). While a box is audited, Lucky Veins and Overdrive don't touch it, so a boost is
+   box (§18). While a box is audited, Overdrive doesn't touch it, so a boost is
    never folded in for good. *The final round:* that includes an Overdrive clicked before the
    audit began. Its 3× stops at the audit's first tick for every machine, Miner and module in the
    box, and its timer and cooldown run on. This holds for the Workshop, for nested boxes, and with
@@ -237,7 +276,7 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
    and the rest of what drains (more than 3 of an item: belts settling) is an **input** the module
    will need. *Derivation (Milestone 3 gate, Milestone 4 review): a crate of Gizmos draining out
    graded as a Gizmo factory, and a crate of steel feeding a kit assembler folded into kits made
-   from nothing.* The Great Drill's boost never reaches a machine being audited (it would be
+   from nothing (Machine Kits were cut in the playability pass; the rule stands).* The Great Drill's boost never reaches a machine being audited (it would be
    counted twice once the module runs boosted).
 3. **Grade.** `score = 0.6·U + 0.2·W + 0.2·C`
    - **U** = mean busy fraction of the machines in the box.
@@ -277,6 +316,35 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
 7. **Modules with miners inside** hold deposit claims, one per ore per copy (§18 Land and
    deposits); a stamp beyond your claims is refused with the reason.
 
+**Box sizes** (the playability pass). The box grows with Act I's research: **3×3 at Folding**
+(node 2: a Miner, a Smelter and a Press in a row, the first line a player builds), **5×5 at
+Gearcutting** (a gear line, miner to assembler, with its second press beside it), **8×8 at Gizmo
+Theory** (a whole Gizmo line with both its feeds). A Patent's or Kernel's wider box applies from
+Gizmo Theory; a Challenge's or Scenario's smaller box still caps it (`foldBox`, systems/audits.ts).
+So the box is Act I's progression: each node opens a bigger line to fold, not a bigger number.
+
+**The first fold** (the playability pass). The first fold ever (counted over the save's lifetime):
+- its module goes to work at once on the first free tile beside the Factory Dock, facing it (no
+  income gap while a player learns to place it; the playtest's income fell 180 → 66/min);
+- **the first stamp ever is free** (`RULES.firstStampFree`). Payback arithmetic: the planner's
+  first module is L2 folded at S, 37.5 plates/min = 187 coin/min (225 with Bramble's rep 1), bill
+  250. A free copy is 250 coin, about 1.3 min of a minute-6 economy (~200/min before the fold): one
+  line's worth, a visible doubling of what the fold gave, not an explosion. The copy counts as a
+  copy, so the next costs 250 × 1.5 = 375, then +125 each (linear, said as "+125 a copy", never as
+  a factor: the playtest read 250 → 375 as a geometric curve). Paybacks at 187/min: copy 2 in 2.0
+  min, copy 5 (750) in 4.0 min.
+- **Why stamps of a minute-6 module do not trivialise Act I**: they are capped by claims, not coin.
+  Iron claims are 3 + 2 for chunk A's deposit = 5 copies of anything digging iron (7 with chunk C):
+  at most 5 × 37.5 = 187 plates/min more, about 940 coin/min, ~12% of the slice-end factory's
+  ~8,000/min (§13 round 4). And every copy spent on plates is a claim the Festival's ingot modules
+  cannot use, so stamping is a choice. Research is paid in items, and the nodes after Folding want
+  copper, wire and gears, which a plate module does not make; Gizmo Theory still lands at 13:27
+  (planner), the slice end at ~22 min.
+- The moment is staged once: the box creases, the module pops with its rate ("S module!", "38/min"
+  with the item's icon), and one card says what happened with one button, **Stamp a copy · free**,
+  which stamps and places the copy beside the first and shows the Factory floor. The "Folded!" and
+  "The Factory floor is open" toasts are not shown for it.
+
 ## 11. The Factory floor (slice portion)
 
 - 12×8 tiles. Modules are 1×1 here, with one input side (accepts any of the module's input
@@ -288,6 +356,17 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
   the only module that could feed another was one hiding its slag in a heap.*
 - **Trunk belts**: 8 items/s (480/min), 2 coin per tile. A **Factory Dock** and a **Factory
   Hopper** at the floor's edge, which work like the Workshop's.
+- **Every input comes in at the back, along the one trunk that ends there; a trunk may run into
+  another's side, so two feeds join without a part.** A two-input module (a Gizmo works: ingots or
+  gears, and wire) is fed by trunking both feeders into the trunk behind it. *The second playtest
+  (2026-11-08)* gave up on the Festival: the screen said "one trunk feeds one module" and "takes 0.6
+  of 1/min" (a rate a second labelled a minute). The rule was fair (no part is needed); the words were
+  not. Now the module's report and its card say what it needs at its back and how ("needs 24 + 48
+  /min at its back", "one trunk into its back: run each feed into that trunk"), a starved module names
+  the placed module whose front should run into it (or the design to place, or the line to fold), a
+  module held back by a consumer that uses less than it makes reads **PACED** ("uses 34 of these 60 a
+  minute"), not BLOCKED, and a byproduct its taker refuses says where it can go ("a trunk out of its
+  side to the Factory Dock carries slag off").
 - Modules run as rate functions, not crafts: each tick a module consumes its inputs at rate
   if they're available (fractional amounts banked), produces at rate, and is **starved** or
   **blocked** in proportion. The same status pips apply. A byproduct with nowhere to go blocks
@@ -326,7 +405,7 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
      times in one live stretch), so a line that stopped while being measured is not paid on. Lines run at the same physical speed as live, so heaps fill and
      lines jam at the same times whether the game was open or closed; what they deliver while
      extrapolated counts at the **offline efficiency**, paid through the same functions as live
-     (orders first, then sales; research credit; Machine Kits to the parts bank; the Bay's stage),
+     (orders first, then sales; research credit; the Bay's stage),
      in 15-minute slices so an order or a node lands on the timeline near its time.
   3. **Efficiency**: `offlineEfficiency(g)` (`src/sim/offline.ts`): **0.5**, plus the Night Shift
      bought with coin (+0.05 twice, §20), plus Milestone 5's Patent nodes, never past **0.75**. The
@@ -352,7 +431,7 @@ slice Workshop is 16×16. Placing on land you don't own is refused with "Buy thi
   away**: its number reached is a row, "The Committee would have reorganized at 28 Patents", and
   it fires at its next check once you are back. A `~` marks a time
   worked out from the rates rather than replayed. Then the totals: coin, items into the Hopper,
-  Machine Kits banked, what the Bay was given, what sold most. Its footer says how the number was
+  what the Bay was given, what sold most. Its footer says how the number was
   made ("Paid: the first 1h 04m at 100% (as if open), the other 6h 56m at 50%"; on a big factory
   "the first 6m 35s at 100%, the other 7h 53m at 55%"), so it is a number the player can check
   (pillar 4).
@@ -380,23 +459,31 @@ part of the slice) and asserts the mean, with the spread logged.
 3. **First research** (Pressing) by **6:00**.
 4. **Land**: chunk B bought by **12:00**.
 5. **First Gizmo** by **20:00**.
-6. **Folding researched** at **22–30 min** (planner mean; none later than 35:00), and the first
-   fold done by **40:00**.
+6. **Folding researched** by **6:00** (planner mean; none later than 8:00; the Dock-only player by
+   8:00), and the first fold done by **8:00** (planner mean), so a first-time player, about half the
+   planner's pace at research, folds within 8-16 min. *Revised in the playability pass (Folding is
+   node 2): it was 22-30 min and 40:00, and a first-timer folded at minute 73.*
 7. **Balance beats buying**: the balanced plate line folds at **A or better**, and the
    unbalanced line with the same machines folds at **C or worse**.
 8. **Slag lesson**: a smelter line with no slag route stalls within **3 min**.
 9. **Slice end**: Bramble's Gizmo Festival filled (400 Gizmos at the Factory Dock, §7, §11), by
-   **45 min** (planner mean), and no sooner than **6 min** after Folding is researched (three
-   audits at once, then the floor built and 400 Gizmos made). The greedy and Dock-only bots reach
-   it too, by 60 min. *Revised in round 3 from 60–90 min, and in round 4 to the Festival; see below.*
+   **45 min** (planner mean), and no sooner than **6 min** after Gizmo Theory (which offers the
+   Festival: its folds, then the floor built and 400 Gizmos made). The greedy and Dock-only bots
+   reach it too, by 60 min. *Revised in round 3 from 60–90 min, in round 4 to the Festival, and in
+   the playability pass from "after Folding" (now node 2) to "after Gizmo Theory".*
 10. **No dead air**: in the first 35 min (or until the slice ends, if sooner), the greedy bot's
     longest stretch with nothing bought, researched, filled or folded is **3 min** or less on a
     typical seed (the mean over seeds of each seed's longest stretch) and **5 min** or less on 9
     seeds in 10 (the p90). *Reworded in the Milestone 5-6 review round:* it read "no stretch longer
     than 3 min" while the test asserted the mean, and the worst seeds wait about 4 min; both
     bounds are now asserted.
-11. **Hopper versus Dock**: a player who sends everything to the Dock still reaches Folding by
-    **60 min** (the Hopper is a choice, not a trap), but at least **5 min** behind the planner.
+11. **Hopper versus Dock**: a player who sends everything to the Dock still reaches Gizmo Theory by
+    **60 min** (the Hopper is a choice, not a trap), but behind the planner by at least **a quarter
+    of the planner's time** to it. *Revised in the playability pass:* it was Folding and 5 min (18%
+    of the planner's ~27 min); Folding is node 2 now (both reach it within a minute), so it is read
+    at Gizmo Theory, the last node the slice needs, and Act I's research is half as long, so the
+    gap is a share (a quarter: ~3.4 min of 13:27) rather than 5 min, which only a Gizmo Theory 2
+    min slower would buy (240 gears: 5.1 min behind, the planner at 15:18).
 12. **Offline** (rewritten in round 3: §12's ×0.5 and the old "less than 2 h of active" contradicted
     each other, since 8 h at ×0.5 is already 4 h; restated for any efficiency e in the Milestone
     5–6 review round): 8 h offline, at e = 0.5 and at the 0.75 ceiling, (a) pays no more than
@@ -410,6 +497,36 @@ part of the slice) and asserts the mean, with the spread logged.
     in later hours than in the first (60K in the first hour at run 1's 3 h stage, 67K an hour
     after), so it fails by up to 13% while offline pays exactly what the model says. Checked at the
     slice end (`tests/pace-offline.test.ts`) and at every stage of §20's table.
+
+**Measured, the playability pass** (2026-11-08, Folding node 2, 50 seeds unless noted, mean (range)):
+Bellows 0:21; first Miner 0:47; Pressing 1:47 (Dock-only 2:45); **Folding 3:48** (3:02-3:56; Dock-only
+4:14); **first fold 5:17** (4:40-5:27): "Iron plates" (L2) at S (0.95), at work beside the Factory Dock
+at once, its free copy stamped and placed beside it; chunk B 7:16 (6:38-7:28); first Gizmo 13:40; Gizmo
+Theory 13:27 (12:30-13:50; Dock-only 17:33, 4.1 min behind, check 11 wants 3.4); **slice end 21:35**
+(20:42-22:19), 8:07 after Gizmo Theory (7:15-8:42), with Iron plates S, Copper wire S, Iron ingots S
+(1.00) and Gizmo works A (0.86) on seed 1000; greedy slice end 21:38 and Dock-only 27:41 (10 seeds
+each); check 10: greedy's longest stretch 162 s (134-211, p90 200); checks 7 and 8 unchanged.
+*Re-measured after the second playtest* (the Hopper pays until the first fold, §8): first fold
+**5:02** (4:27-5:48); chunk B 6:10; first Gizmo 12:35; Gizmo Theory **12:22** (11:23-12:52; Dock-only
+17:30, **5.1 min** behind, check 11 wants 3.1); slice end **20:36** (19:48-21:21), 8:14 after Gizmo
+Theory; greedy 21:22, Dock-only 27:40; check 10: greedy's longest stretch 161 s (125-202). Act II
+(seeds 1000 and 8919): the planner hands over at 0:20 (was ~0:30), then steel 0:37-0:39, power
+0:45-0:48, circuits 1:09-1:10, Concrete fold 1:18-1:19, the Drill works 2:00-2:09, stage 1 3:55-4:03;
+Patents at 4 h 15-16. Income: the planner's ~200 coin/min at 5 min becomes ~675 at 7 min (two plate
+modules, 375/min, and L2 built again) and ~825 at 10 min, against ~300-450 before; the coin it cannot
+spend at 9-13 min waits on research items (copper, gears), which the plate modules do not make.
+
+**Re-measured after the cuts** (the playability pass, wave 2: the Lucky Vein and Inspiration gone,
+the Inspector the one Spark at 30 s; the full pace suite against the commit before, same seeds):
+first fold 5:27 (was 5:17; every seed now 5:27), Folding 3:46 (3:48), Gizmo Theory 13:40 (13:27),
+**slice end 22:10** (21:35), greedy 22:09 (21:38), Dock-only 28:14 (27:41): the vein's ×3 minutes
+were a little early coin. Check 11: Dock-only Gizmo Theory 18:21, **4.7 min behind** (was 4.1; 2.7
+with the Inspector at 60 s, which is why it is 30 s, §6). Act II: the first Reorganize 4:18 and
+4:15 with 15 Patents (4:10 and 4:06, 15 and 16); stage 1 4:04-4:07 (3:55-4:03); rule 1 before the
+Bay floor 11.5 and 11.4 min (11.0 and 16.3: seed 8919's open 16.1-min wait is gone). Rule 4 (§20)
+moved by at most 0.07 at every stage but two that were already outside the band's floor or are its
+open readings. The failures the commit before already had stand (§20's run 4 and late-run offline
+readings, rule 3's seed 8919); none is new.
 
 **Measured** (round 4, 2026-10-20, `tests/pace-*.test.ts`, 50 seeds unless noted, mean (range)):
 Bellows 0:21; first Miner 0:47; Pressing 1:47 (Dock-only 3:13); chunk B 9:20 (7:38–10:28); first
@@ -475,13 +592,13 @@ If any answer is no, change the model here before building more.
 ## 15. Later systems (model sketches, not slice)
 
 - **Power (Act II)**: coal → steam → electric. Machines draw kW; a brownout slows the whole
-  grid proportionally, never randomly. Overclocked mode = 1.5× speed at 2.2× power.
-- **Machine modes**: Efficient 0.75× speed, 0.5× power. Precision 0.8× speed with +25%
-  yield on the main output. Recycling (Act III) halves byproducts. Byproduct mode doubles them.
+  grid proportionally, never randomly.
+- **Machine modes**: built in Act II (Efficient, Overclocked, Precision) and Act III (Recycling,
+  Byproduct), then cut in the playability pass (§18 Machines: Mk2).
 - **Byproducts as inputs (Act II)**: slag → gravel → concrete; smoke → carbon via scrubbers.
   Zero-waste lines get W = 1, which pushes grades to S.
-- **Parts costs (Milestone 4)**: from the Factory floor on, stamps also cost machine parts
-  (Machine Kits made by your own lines), so production feeds expansion.
+- **Parts costs (Milestone 4)**: stamps of Act II designs cost Machine Kits made by your own
+  lines; built, then cut in the playability pass (§18 Stamps in coin).
 - **Deposit claims (open)**: either stamping a source module uses a claim bought on a survey
   map, or source modules deplete. Decide in Milestone 4, with a `DECISIONS.md` entry.
 - **Reorganize (layer 1)**: `patents = floor((run lifetime coin / 1e9) ^ 0.4)`. Target: 12–20
@@ -500,10 +617,9 @@ If any answer is no, change the model here before building more.
 - **Trophies (slice preview)**: a short shelf of cosmetic trophies (first sale, first Gizmo,
   1,000 coin, a Spark caught...) shows progress from the first minute; Milestone 11 gives each a
   small, specific bonus tied to what earned it.
-- **Overdrive / Inspiration / Sparks II**: Overdrive 3× for 10 s with a 30 s cooldown per
-  machine. Inspiration: 1 click = 0.1% of the selected node's remaining cost, capped at 30% of
-  each node (clicking helps but never replaces the line). Built in Milestone 6: a click on a
-  Hopper from Act II on (§20).
+- **Overdrive / Sparks II**: Overdrive 3× for 10 s with a 30 s cooldown per machine. (Inspiration,
+  clicks on a Hopper crediting research, was built in Milestone 6 and cut in the playability
+  pass: §20.)
 
 ## 16. The 100-hour pacing model
 
@@ -511,13 +627,14 @@ If any answer is no, change the model here before building more.
 
 | By | Reached |
 |---|---|
-| 40 min | first fold (measured: 24:35, planner bot, §13 round 4) |
-| 90 min | slice end: the Gizmo Festival filled at the Factory Dock (measured: 31:43; §13 check 9 is revised to ≤ 45 min) |
+| 12 min | first fold (measured: 5:02, planner bot, the second playtest's pass; 5:17 at the playability pass; it was 24:35 at round 4 and a first-timer's minute 73) |
+| 45 min | slice end: the Gizmo Festival filled at the Factory Dock (measured: 20:36, planner; §13 check 9 ≤ 45 min) |
 | 3 h | Act II: power, steel, glass, circuits |
 | 5 h | first Reorganize (12–20 Patents) |
 | 11 h | District floor (Act III; measured 10:01, the second gate moved it from 15 h: the Great Drill stands at about 9.5 h) |
-| 25 h | the first Act III megaproject stage (the Floating City's Platform; measured 15:48) |
-| 40 h | first Relocate |
+| 25 h | the first Act III megaproject stage (the Floating City's Platform; measured 11:05) |
+| 18-25 h | **the core ending**: the Floating City complete (§21; the planner bot 12:19-12:40, in the first run that builds a District) |
+| 40 h | first Relocate (the post-game from here on; the bot 17:40, §22 Pacing) |
 | 60 h | four biome worlds visited |
 | 80 h | the Last Fold available |
 | 100 h | first Kernel spend; infinite orders, challenges and the codex continue |
@@ -562,14 +679,42 @@ If any answer is no, change the model here before building more.
   claims count from the final round; the test's goal list had left them out.)
   - From the slice end to the Bay floor that wait is 12.5 min in run 1 and 10-12 min in runs 2
     and 3.
-  - While the Bay fills it is 39.5-41.4 min in run 1. That covers Shiny Things, then Nested Boxes'
-    research, then the nested Gizmo works II and its two annex blocks.
+  - While the Bay fills it was 39.5-41.4 min in run 1 (Shiny Things, then Nested Boxes' research,
+    then the nested Gizmo works II and its two annex blocks). With the Drill's three parts (§18, the
+    playability pass) it is **17.0-17.1 min** (seeds 1000 and 8919: 2:56-3:13 and 3:12-3:29). Rule 2
+    there is unchanged (49.7-50.9 min without a decision: a part is a goal reached, not a choice).
+    Re-measured in the playability pass (2026-11-08) at 20.4 min (seed 1000, ending 3:33) and 22.8
+    (seed 8919, 2:19) before Machine Kits and modes were cut, and 22.8 in both after (seed 1000's now
+    ends 2:27): Tuning's research was one of the goals reached while the Bay fills, and nothing
+    replaces it (DECISIONS.md, the playability pass). Still logged, not tested.
   - In later runs the bot now buys its annex blocks and claims before the Bay floor, as soon as
     they are affordable (§19). After the Bay floor their waits run 27-35 min (run 2) and 84-93 min
     (run 3, the last, which plays to its cap with its plan done).
   - Run 1's wait while the Bay fills is research and the Drill's own parts. Nothing on the floor
     is left to buy: the bot buys every claim and block its plan can use.
 - **Rule 4** at every stage measured: §20.
+
+**Rule 1 and the goal on screen (the second playtest, 2026-11-08).** A goal must point at something
+the player can act on now. From minute 29 to 44 the bubble said "Learn Surveying first", and
+Surveying sat on the Act II page, which opens with Gizmo Theory (minute 44), behind Coal Seams. Now:
+- A claim short (a stamp refused for want of claims) names the nearest step that can be seen: the
+  Survey Office, a chunk for sale with a deposit of that ore (chunk C's iron after Gizmo Theory),
+  Surveying when it can be picked, else the node on the way ("Gizmo Theory first, then Surveying").
+  When that step cannot be taken at once it rides under the goal as its note instead of holding the
+  bubble (before the slice end the claim alert beat every other goal). The same rule writes the
+  refusal ("Needs an iron claim (5/5 used): buy Chunk C for 2 more").
+- A research fill longer than 10 minutes at the rate the Hopper is taking it says its time and the
+  step that shortens it: a copy of a module making what it wants ("Coal Seams is a long one. Stamp a
+  gear copy, trunk it to the Hopper!", with the stamp's price), a purchase in reach (one stamp is
+  250-750 coin, 1-2 min of the income then), or saving for it with a bar.
+- **The Coal Seams wall, measured**: the planner then the Act II bot research Coal Seams (600 gears)
+  **11.0 and 12.5 min** after Gizmo Theory (seeds 1000 and 8919), with the Festival's folds and
+  modules as goals in between; a first-timer at 15 gears a minute (the playtest) waits about 40 min.
+  The long-fill goal turns that wait into a decision: each gear copy trunked to the Hopper takes ~15
+  gears a minute off it (two copies bring 40 min to about 13). Coal Seams' cost is research.ts's
+  (another agent's file in this pass) and is left as it is.
+- When income has been 0 for 15 s while lines feed the Hopper (after the first fold, when the Hopper
+  stops paying), the frog says so with the fix (§8).
 
 ## 17. Readability at 1×
 
@@ -618,7 +763,6 @@ what they run on.
 | Plastic | 24 | Refinery | 2 coal, 1 oil per 2 | 4.0 s |
 | Oil | 3 | (Refinery byproduct) | | |
 | Circuit | 180 | Assembler | 3 wire + plastic + glass | 5.0 s |
-| Machine Kit | parts | Assembler | 2 steel + 2 gears | 4.0 s |
 | Motor | 640 | Assembler | steel + 4 copper wire + circuit | 8.0 s |
 | Drill Bit | megaproject | Assembler | 4 steel + motor + 2 concrete | 12 s |
 
@@ -652,16 +796,21 @@ are possible and earn W = 1.*
   whose machines are on a grid with a producer or pole outside it is refused, with the reason.
   The folded module then simply takes coal (or oil) in through a port.
 
-### Machines: Mk2 and modes
+### Machines: Mk2
 - **Mk2** smelter, press and assembler are 2×2, powered, and craft their Mk1 family's recipes at
   **4× speed** (6,000, 9,000 and 20,000 coin). *Derivation: 4× fills exactly one Mk1 belt (a Mk2
   smelter's 120 ingots/min); four tiles for four machines' work, paid back by fewer belts and
-  ports and by modes. Priced at half a minute to 1.7 minutes of Act II income; the earlier 230,
+  ports. Priced at half a minute to 1.7 minutes of Act II income; the earlier 230,
   580 and 1,950 were set against Mk1 prices and were a rounding error of the coin piling up (the
   Milestone 4 review). Kiln 3,000, Mixer 4,000, Refinery 9,000 likewise.*
-- **Modes** (research *Tuning*, powered machines only): **Efficient** 0.75× speed at 0.5×
-  power; **Overclocked** 1.5× speed at 2.2× power; **Precision** 0.8× speed, +25% of the main
-  output (§15).
+- **No modes** (the playability pass, 2026-11-08). Efficient, Overclocked and Precision (research
+  *Tuning*) and Act III's Recycling and Byproduct (research *Recycling*) were cut: a knob on each
+  machine of a line that is folded away within the hour, and Factorio's modules by another name
+  (flagged, DECISIONS.md). A machine runs at its kind's speed and draws its kind's kW, and a
+  recipe's byproduct comes every `every` crafts. Nothing in Act II's pacing leaned on them: the
+  Act II bot never set one, the Act III bot ran one solvent vat in Byproduct for its sludge (§21),
+  and the pace tests were re-run (Stamps in coin, below). The levers left are the ones a fold
+  keeps: which machines, how many, and the power plant that runs them.
 - **Overdrive** (research *Overdrive*): click a machine to run it 3× for 10 s, then it cools
   for 30 s (§15). Any machine, Mk1 included. *Derivation: each machine can be overdriven 10 s in
   every 40, so a line clicked in step runs at most (10 × 3 + 30) ÷ 40 = 1.5×: +50% while
@@ -675,7 +824,9 @@ are possible and earn W = 1.*
   of steel, glass, concrete, plastic, 10 circuits and 5 motors → 14,500). Reputation: 1 opens **the Codex** (every item with its
   story; a first delivery of each pays 30 × its value once; 100× was a 71K one-off burst, a single motor
   paying 42K); 2 teaches **Recycled Glass**
-  (Kiln: 3 gravel → glass, 2.5 s); 3 adds +10% to Precision's yield.
+  (Kiln: 3 gravel → glass, 2.5 s); 3, **Sorting Crates**: a Buffer Crate holds 100, was 50 (50 is
+  25 s of a Mk2 smelter's 120 ingots a minute, 100 is 50 s: one crate rides out a module's
+  round-robin or an order's wait; it replaced Precision's +10% when modes were cut).
 - **Dame Voltaire** (met with *Steam Power*): the swamp's electricity baroness. Orders:
   *Streetlamps* (150 circuits + 300 glass → 64,000), *Concrete Promenade* (800 concrete →
   56,000), *The Grand Turbine* (40 motors + 600 steel → 85,000). Reputation: 1 lets boilers
@@ -683,11 +834,21 @@ are possible and earn W = 1.*
 - *Derivation: each order pays about 1.5–2.5× its items' Dock value (§7's rule), and every
   reputation reward is a rule a player plans around, not a flat multiplier.*
 
-### Machine Kits (parts costs for stamps)
-- Stamping a design that holds any Act II machine (powered, Mk2 or a power building) also costs
-  **Machine Kits**: 1 + floor(bill ÷ 500). Kits delivered to a Hopper go to the parts bank,
-  not to research; the Dock refuses them. *Derivation: production feeds expansion (§15);
-  slice-era designs stay coin-only so Act I never stalls on parts.*
+### Stamps in coin (the playability pass, 2026-11-08)
+Stamps cost coin only, in every act: `bill × (1 + 0.5·n)` (§10 Stamp). **Machine Kits** (2 steel +
+2 gears in an Assembler, banked by a Hopper; 1 + floor(bill ÷ 5,000) a stamp of a design with an
+Act II building) were cut, with their research and the item. *Why:* they were a second currency
+for a decision coin already makes. The critic counted 3,955 banked unused at 15 h, and a kit's
+material (2 steel + 2 gears, 72 coin at the Dock) was 1-2% of the stamp it went with (a Glass line
+of two Kilns, a Generator and a Pole, bill 8,750, took 2 kits, 144 coin of goods, against an
+8,750-17,500 stamp; a slice-era line, Mk1 machines only, took none). So the coin
+price was always the binding one, and §10's pacing (the 5th copy at 3× the 1st, a better design
+beating another copy) is unchanged without kits. No coin re-derivation is needed: the kit cost
+was never what held a stamp back. What a stamp is limited by in Act II is claims (§18 Land) and
+room (§19, the annex), not parts.
+
+The rewards that named kits now name a rule of their own: Hand-Made's (§24) is a design's first
+stamp free; the Committee's rep 4 (§19) is Pocketed Claims, a Survey Office block of 5 claims.
 
 ### Nested folds (depth 2)
 - Research *Nested Folds*: the Fold tool works on the Factory floor. A box up to 6×6 of modules
@@ -714,6 +875,20 @@ are possible and earn W = 1.*
   Bay 20 minutes sooner. At 450 and 2,000 the first Reorganize then came at 3:37-3:41, under §19's
   4-6 h. At 650 and 2,800 it comes at 4:21-4:24 with 14 Patents. Steel
   is 4.3 a bit, still over stages 2 and 3's 4, so the steel is in before the bits.
+- **Its parts** (the playability pass, 2026-11-08: the 40-minute fill with no goal was the 2 h quit
+  point, the review's finding 9). Stage 1 has three visible sub-goals, each standing when **every**
+  item is in to its share of the stage's want: **the Scaffold** at 15% (98 bits, 420 steel), **the
+  Engine House** at 35% (228 bits, 980 steel), **the Cab** at 50% (325 bits, 1,400 steel); the stage
+  itself is the fourth goal. Each one moves the Bay's picture a phase (the art's four phases), puts
+  a drill-crew house up in the Town's far row (a bunkhouse, a canteen, the foreman's tower), prints
+  in the Gazette and toasts. They pay nothing more (the Patents are the stage's, as delivered) and
+  change no number: the stage lands at the same 4:09-4:10. The Bay page shows the parts as chips,
+  the next one's share and its Town piece, and, while it fills, the Survey Office's cheapest claim
+  block with a key to the Office (claims as the fill's side goal). *Derivation:* the fill is near
+  linear (113 min, measured on seed 1000), so a part's share is a time; the parts are front-loaded
+  (2:33, 2:56, 3:13 against the Bay floor at 2:16) because the second half of the fill already has
+  Act II's own goals (Nested Folds at 3:28, the annex blocks and claims at 3:44, the Calibration
+  order at 4:01). Rule 1 while the Bay fills: **17 min** at worst (was 39.5-41.4).
 
 ### Rules settled while building it (Milestone 4)
 - A Boiler or Generator holds 4 fuel (`RULES.fuelCap`) and takes it from any side but a boiler's
@@ -724,8 +899,7 @@ are possible and earn W = 1.*
   side tile.
 - Claims are held by **every design with miners inside**, one per ore per copy (not only by
   designs with no inputs, or one token input would dodge the rule). Folding is never refused
-  for claims; stamping is. A depth-2 design holds its modules' claims and needs Machine Kits if
-  any module inside does.
+  for claims; stamping is. A depth-2 design holds its modules' claims.
 - The Codex pays for each item's first Dock delivery after Unit 7's rep 1.
 - The Megaproject Bay appears once its 2×2 at the Factory floor's bottom-left corner is clear,
   and takes only what its stage still wants.
@@ -845,17 +1019,105 @@ stage, and fill Committee orders to open the next one (the bills goal, "run N mo
 buildings", was dropped in the final round: it told the player to farm). The Reorganize card
 shows it all, with the runs so far.
 
+### What a Reorganize keeps (the playability pass, 2026-11-08)
+
+*Rewritten in the playability pass (DECISIONS.md): a reset is a slingshot, not the tutorial again.*
+The review measured the 15 h checkpoint's Reorganize at 573K/min before and 90/min after, Bramble
+asking for the Boardwalk again, and every run 2.3-2.5 h back to Act III.
+
+- **Research of Acts I-II** (every node with `act` undefined, 1 or 2: `RULES.keptActs`, 26 nodes) is
+  known from the first tick of every run after the first reset of the save, keyed off each node's
+  `act` field. Research past Act II is lost as before.
+- **The Factory floor is open** from the first tick (`factoryOpen` kept); the first fold and the
+  slice's end are celebrated once (`firstFold`, `sliceEnd` kept).
+- **The Drawer's designs come back built.** Each kept design with its audit card is a module design
+  again at the run's start: its kept grade, rates, box and name, and **one free copy**
+  (`RULES.returnCopies`; Spare Dies adds one, Dies on file up to four). Derivation: its machines
+  were bought once, in the run that folded it; a 25% bill would make the first minute's ~600 coin the
+  gate for no decision, and the decision the Drawer asks is which designs to keep. Later copies are
+  stamped at bill x (1 + 0.5 n). It files nothing new (it is on file). A design imported from a
+  string, or a Group Drawer layout, has no card: it unfolds and is audited as before. A Challenge run
+  gets none back (built from scratch under its rule).
+- **Orders filled once are never offered again** (`meta.ordersFilled`); their Town pieces stay
+  standing (the Town draws every order ever filled). The Committee's orders repeat: their reputation
+  is the Great Drill's gate (two a run, below). A Challenge whose goal is an order offers it again.
+- The Workshop and Factory floors still start empty: a new run is a new layout.
+
+**The card** says how fast the next run is: "back to X/min in ~N min", X the run's Act II floor
+(`meta.factoryPeak`, the best 5-minute income before Zoning) and N the minutes the last returning run
+took to pass it (`meta.caughtUp`), or `RULES.backInMinutes` (15, the campaign's measure, rounded up)
+before one has. *The second playtest (2026-11-08)*: the 15 h checkpoint's card read "back to your Act
+II floor in ~455 min" for +28 Patents, a 7.5 h penalty to the eye. Its run was measured against a
+record from before the returning run existed (no Act II floor peak on file, so its overall peak, the
+District's, was the bar), and caught up only when its own District passed it. Now a catch-up counts
+only when the run before it was recorded under the returning run's rules (its record has
+`factoryPeak`); else the card says the model's 15. A measured number past `RULES.backInCap` (30,
+twice the model) is not shown at all ("back to your Act II floor", the designs line under it): a
+slow last run is the player's pace, and a number like it reads as a penalty for resetting. When the tree is bought out and every die is on file (`spendable(g).full`), the card
+says "the tree is full. nothing to buy. keep building." and its button is "Sign anyway", not gold.
+
 ### What is kept, what is lost
 
 Kept (`meta`, plus the fields that already lived in the run's state): Patents and the tree, the
-record on file, the Patent Drawer and its queue, Great Drill progress (`mega`), reputation, the
-Codex, the coin Night Shift (§20), trophies and lifetime statistics (coin earned, items delivered,
-folds), the run history. Lost: both floors, coin and items, land (back to chunk A), the Factory
-annex, deposit claims, research, module designs, orders filled this run. The tick and the seeded
-RNG run on: the command log stays one ordered history and replays across resets (a test checks
-it); `meta.runStart` marks a run's first tick.
+record on file, the Patent Drawer (built, above) and its queue and dies, Acts I-II's research, the
+open Factory, the orders ever filled, Great Drill progress (`mega`), reputation, the Codex, the coin
+Night Shift (§20), trophies and lifetime statistics (coin earned, items delivered, folds), the run
+history. Lost: both floors, coin and items, land (back to chunk A; the deeds keep some), the Factory
+annex, deposit claims (Claims on File keeps the blocks), research past Act II, designs not kept. The
+tick and the seeded RNG run on: the command log stays one ordered history and replays across resets
+(a test checks it); `meta.runStart` marks a run's first tick.
 
-### The Patent tree (`src/data/patents.ts`, 29 nodes, 40 Patents in all)
+### The returning run's Patents (the playability pass)
+
+The old head starts (Bellows, a Miner, Old Notebooks, Gear Patterns, the Gizmo Patent, Folding
+Remembered, the Grant, Overdrive by Habit, Glass and Gravel Notes, the Circuit Patent: 15 Patents)
+bought Act I-II progress a returning run now has anyway. A save from before is refunded them (v13).
+What a Patent buys now is what a returning run still rebuilds by hand:
+- **Copper Deeds** 1 (start owning B and C: their deposits are 2 claims each), **Coal Rights** 1 (D
+  and E, 72,000 coin), **Steel Charter** 2 (F, 120,000), **Claims on File** 2 (the Survey Office's
+  blocks kept: the most of each ore so far), **Spare Dies** 3 (a second free copy of every kept
+  design).
+- **The Filing Cabinet** 2 (Drawer 12 -> 16) and **The Floor Plan** 3 (the Factory floor at a
+  Reorganize laid again, a tile every 2 s, trunks paid, module tiles from spare copies, never a stamp).
+- **Dies on file**, the sink that scales: in the Drawer, 1 Patent buys one more copy of one kept
+  design at every run's start, at most 4 a design (`dieCopyPrice`, `dieCopiesMax`: the Act II
+  floor's peak holds 4-6 copies of its busiest product). 8-20 slots make it a 32-80 Patent sink;
+  forgetting a design gives its dies back.
+- The tree is now **33 nodes, 65 Patents**; the Town Archive (Legacy) knows Zoning and Chutes
+  instead of Act I.
+
+### Measured pace, the returning run (rule 3, `tests/pace-reorganize.test.ts`)
+
+Rule 3 is now "a returning run is back to the run before's peak income (its 5-minute coin per minute)
+in **20 minutes or less** of play" (`BACK_IN`); it was "in a third of the run before" (1:27 and 1:00),
+and run 3 missed it on both seeds at 1:22.
+
+| | seed 1000 | seed 8919 |
+|---|---|---|
+| Before (the playability branch): run 2 passes run 1's peak at | 0:37 | 0:16 |
+| Before: run 3 passes run 2's at | 1:14-1:22 (open) | 1:22 (open) |
+| Now: run 2 passes run 1's peak at | open: 96% at 15 min | **0:12** |
+| Now: run 3 passes run 2's at | **0:12** | **0:10** |
+| Now: income at 5, 10, 15, 20 min of run 2 | 743, 11.8K, 14.6K, 12.3K | 743, 11.9K, 14.9K, 12.2K |
+| Now: Patents a run (Drill stage after) | 14, 6, 0 (1, 2, 3) | 14, 6, 0 (1, 2, 3) |
+
+- Seed 1000's run 2 is open (`BACK_IN_OPEN`): at 15 min it is at 96% of run 1's 15.2K peak, then lays
+  the Bay floor (goods to the Drill, not the Dock) and resets at stage 2 before rebuilding the three
+  annex Gizmo chains that made run 1's peak at 4 h. The bot's reset rule, not the returning run.
+- **The 15 h checkpoint** (`docs/checkpoint-15h.txt`; the critic measured 90/min, still 90 after 30
+  idle minutes): its Reorganize brings back 7 designs, 26 research nodes and 41 Patents to spend (the
+  old head starts refunded by the v13 migration). The campaign's player then makes 627, 2.1K, 13.0K
+  and 15.9K a minute at 1, 5, 9 and 13 min (its Act II floor); the District comes after.
+- The reset loops stay under the designed runs (rule: never beat it): a loop at the slice end 1.63 an
+  hour, at 1 h 1.79, at 2 h 3.10, burning its coin at 35 min 0.82, against the designed 3.26 (14 + 6
+  Patents in 6:08). Before the bills term was filed like the designs (below) the burn loop out-filed
+  the designed run (3.59 against 3.42).
+- **The bills term is filed** (`meta.billsFiled`): only a rise over the best on file pays, as for a
+  product's design; a Relocate or a Last Fold starts it again.
+- Rule 6 (never resetting) and the idle tests of runs 2 and 3 (`pace-idle-run2-1000`,
+  `pace-idle-run3-8919`) still pass.
+
+### The Patent tree before the playability pass (`src/data/patents.ts`, 29 nodes, 40 Patents in all; history)
 
 Flat prices with prerequisites, never a growing price; no "+X% everything" node. A price is about
 a Patent per 10-15 min of a run the node saves. Four branches:
@@ -907,7 +1169,6 @@ slots for the nine products the Act II bot folds: which lines to keep is a choic
 after a **10 s check** at its kept grade, not a full 70 s audit (40 s with Quick Audits). When an
 audit starts, the box must match a kept card exactly (`keptMatch`):
 - the same box, parts, turns and recipes;
-- every machine in normal mode;
 - nothing paused.
 During the check, every machine must run at no less than its kept busy fraction less 0.1
 (`refoldSlack`), and the kept product must leave the box. If the check passes, the fold uses the
@@ -917,7 +1178,7 @@ keeps the design. If anything differs, or the check fails, the full audit just g
 It can't be gamed:
 - The card is the grade the same layout earned in a full audit, and the check only confirms the
   layout runs, so a refold never grades better than the audit did.
-- A layout changed in any part (a belt turned, a machine overclocked, a miner paused) gets a full
+- A layout changed in any part (a belt turned, a recipe changed, a miner paused) gets a full
   audit.
 - A design imported from a share string has no card, so it gets a full audit.
 - 10 s is the full audit's own warm-up. A check that fails has lost nothing.
@@ -983,7 +1244,9 @@ order wants it. Sized so 1-2 are fillable a run from the floor a run builds anyw
 Its reputation rewards are rules: **Coat Pockets** (rep 1: module buffers hold 6 s of each rate,
 was 2), **The Night Crew** (rep 2: while you are away, every Slag Heap loses a slag every 10 s;
 offline only, so it never ends Act I's slag puzzle in the open game), **the Great Drill's stage
-2** (rep 3), **Pocketed Kits** (rep 4: a stamp needs 1 Machine Kit fewer), **stage 3** (rep 5).
+2** (rep 3), **Pocketed Claims** (rep 4: a Survey Office block is 5 claims, was 4, every block
+bought before or after; it was Pocketed Kits, a stamp needing a Machine Kit fewer, until kits were
+cut: claims are what binds stamping by Act III, 106 of 107 held at 15 h), **stage 3** (rep 5).
 Two orders a run put stage 2 in the second run and stage 3 in the third. Raccoon Bearings, the
 first draft's currency, are gone (DECISIONS.md, the review round).
 
@@ -1140,7 +1403,7 @@ derivation here.
   first machine to block and why, how many machines the line lost, and a fix to build: for a heap,
   how many more Slag Heaps keep it running the whole time away (its slag rate × the time, less the
   room it had, over 400), or a gravel Press once Crushing is in; for an output with nowhere to go,
-  a belt to the Dock (a Crate for what the Dock refuses, a Hopper for Machine Kits); for the Dock
+  a belt to the Dock (a Crate for what the Dock refuses); for the Dock
   refusing an item after its order filled, a Crate or a machine that uses it.
 - **Credit slices of 15 min**: an order filled or a node finished while extrapolated lands on the
   timeline within 15 min of when it would have (`~` marks such a time).
@@ -1235,16 +1498,24 @@ and on every machine, and a forecast is still the morning's report.
   for any other reason keeps nothing by stopping, so its row offers the fix instead. A stop or a
   start re-runs the forecast at once.
 
-### Inspiration (§15)
-- From the slice end (Act II), a click on a Hopper (either floor) credits the selected node with
-  **0.1% of what it still needs**, item by item, as items delivered, up to **30% of each item's
-  cost** per node. A capped click is quiet (no refusal, no research screen opening under a fast
-  clicker). It counts against the 12 clicks/s cap.
-- *Derivation*: of the remaining cost, so each click gives less: 30% takes
-  ln(0.7) / ln(0.999) = 357 clicks, 89 s at the sustained 4 clicks/s (§1), 30 s at the cap. Active
-  play helps research a little and can never replace the line (pillar 1).
-- The Hopper was the target because it is where research is paid, and a click there needs no new
-  building. Before Act II a Hopper click still opens research.
+### Inspiration, cut (the playability pass, 2026-11-08)
+- Built in Milestone 6: from the slice end a click on a Hopper credited the selected node 0.1% of
+  what it still needed, up to 30% of each item's cost. **Cut**: one more currency-like thing to
+  track (the critic counted eleven at 15 h against PLAN.md's six), a chore for the 30% (357 clicks
+  a node, 89 s at 4 clicks/s), and a button press that bypassed the line instead of rewarding it.
+  A click on a Hopper on any floor now opens the research page, as it always did before Act II.
+- **Rule 4 (active over idle) is unchanged by it**: no bot ever clicked a Hopper, so every reading
+  in the table below was already without Inspiration, and coin was never what it paid. Active
+  play keeps building, Overdrive and the Inspector (§6). Re-measured after the Lucky Vein's cut as
+  well (both seeds, every stage): every reading within 0.07 of the commit before (seed 1000's run
+  2 at 3 h 1.51 to 1.50, run 1 at 2 h 1.10 to 1.17, run 3 at 1 h 1.52 to 2.06, its idle lower),
+  the band's floor readings (1.50-1.51, Overdrive's own duty cycle) where they were. Run 4's
+  stages read 1.00 on both seeds, as they did at the commit before (1.00-1.13): a failure the cut
+  did not make (the returning run's run 4, the playability pass's first wave).
+- Its trophies (Inspired: Overdrive cools 2 s sooner; They Know, hidden: the Tinfoil Hopper skin)
+  go with it, the skin and its art too: nothing else needed either (the other four cooling
+  trophies still reach its 10 s cap, §24; the skin was the joke about the clicking). Save v16
+  drops what Inspiration recorded; what it delivered stays.
 
 ### Notation and readability
 - `Num.format` writes four notations, chosen in Options and kept in localStorage (a player
@@ -1297,6 +1568,12 @@ and on every machine, and a forecast is still the morning's report.
   migration (DECISIONS.md "Milestone 14").
 - **Saves v5**: the state gains `inspire` (Inspiration given per node); `paused` on machines and
   modules and the Night Shift in `upgrades` need no migration (absent means none).
+- **Saves v16** (the playability pass's cuts, after v15's Machine Kits and modes): `inspire`, its click counter, the Lucky Vein (a vein
+  Spark, `veins`, every machine's `boost`), the two Inspiration trophies and the Tinfoil skin
+  (owned and worn) are dropped; an Inspector on the map keeps its place without a `kind`; a
+  Challenge under way stays under way (`challenge` untouched). A click logged on a dropped vein
+  leaves the log; a log replayed past a Spark's spawn is near, not exact (the spawn draws less
+  from the random state). `tests/post-game.test.ts` loads a v14 save holding all of it.
 
 ### Measured (pace tests, `tests/pace-idle-*.test.ts` and `tests/pace-offline.test.ts`)
 Each stage is a saved state of a bot's factory:
@@ -1378,8 +1655,8 @@ asks where each group stands and how its goods get to the next one. The plan and
   modules only** (groups folded on the Factory, §18 Nested folds); a depth-3 module (folded here)
   goes up to the World (§22). Every module is one tile, as on the Factory.
 - **12x10 to start** (120 tiles, 1.25x the Factory's 96, each tile a group of two to six modules),
-  with **three lots of 2x10** east of it bought at 1M x n (linear, the annex pattern, §19; 45-55
-  min of the 18-21K a minute the floor makes when the District opens), and a fourth kept for good
+  with **three lots of 2x10** east of it bought at **4M x n** (linear, the annex pattern, §19; was
+  1M x n until the playability pass: see "Skiffs and coin" below), and a fourth kept for good
   by the Floating City's second stage (20x10 at most). The Dock and the Hopper
   stand on the east edge like the Factory's; the Bay at the south-west corner once a Megaproject
   of this floor is researched.
@@ -1396,11 +1673,9 @@ asks where each group stands and how its goods get to the next one. The plan and
   it must stand beside what it feeds, while a Servo group (0.1-0.2 a second, 3,600 coin each) flies
   across the floor on two. Where a group stands is the act's decision (rule 5), and the price of a
   skiff is what a bad layout costs every run. (The second gate: at 4 a trip one skiff carried every
-  depth-2 flow even across the floor, 120 routes held 120 skiffs, and distance never bound.) A skiff
-  is **40,000 coin, flat** (no price per skiff owned): about 2 min of the floor's income when the
-  District opens, 27 s at 15 h and 12 s at 30 h (89K and 195K a minute, measured), so a bad layout
-  costs at the act's start and a dozen skiffs is a choice later; refunded when taken off; a route
-  holds up to 12.
+  depth-2 flow even across the floor, 120 routes held 120 skiffs, and distance never bound.) The
+  first skiff is **40,000 coin**, each one more paid for on the floor **2,000 dearer** (below,
+  "Skiffs and coin"); refunded at the last one's price when taken off; a route holds up to 12.
   Routes from one output share it in turn. At most **120 routes** a floor and **20 more a lot**
   bought (the second gate: at 120 flat the cap was the real wall at 30 h with half the tiles used,
   and the lots were worth nothing), shown on the tool strip (`routes 96/140`), so the floor stays
@@ -1416,10 +1691,78 @@ asks where each group stands and how its goods get to the next one. The plan and
   answer to a crowded floor (pillar 1: designing beats buying). The World takes depth 3 (§22).
 - **Everything else is the Factory's**: modules run as rate functions (`stepModule`), starved or
   blocked in proportion; a byproduct with no route blocks its module (the slag lesson, one floor
-  up); Overdrive on a module runs every module joined to it by routes; a click on the Hopper is
-  Inspiration; claims and Machine Kits are held by the groups inside (§18), on every floor.
+  up); Overdrive on a module runs every module joined to it by routes; a click on the Hopper opens
+  research; claims are held by the groups inside (§18), on every floor.
 - **The readout** on every route: its skiffs, what it carries now, what its source makes of the
-  item (the "wanted"), and its length.
+  item (the "wanted"), and its length. Every rate up here reads **items a minute**, as on the
+  floors below (§1; the high floors read /s until the playability pass).
+
+### Auto-routing (the playability pass, 2026-11-08)
+Placing a group on a high floor flies its routes on its own (`autoRoute`, src/sim/systems/high.ts);
+the player edits them (re-target, a skiff more or less, remove) rather than drawing each one. It is
+how the floors work, not research: the critic measured 137 of 165 routes at 15 h drawn by hand, the
+act's chore, and pillar 2 says a chore becomes the floor's.
+- **Each product** (not its waste: that goes down the chute) flies to the nearest module short of
+  it (what its routes bring under what it takes), else the Bay when a project there wants it, the
+  Hopper when the research picked does, the Dock when it sells, the Hopper (banked) last. A product
+  over twice what that module takes also flies on to be sold (routes from one output share it in
+  turn, half each, so the module still gets all it takes); under twice, a second route would starve
+  it, so the feeder runs a little slower instead.
+- **Each input** is flown from the nearest modules making it: first one whose product has no route
+  (it backs up), then one with some left after the modules it feeds, then one that only sells it
+  (its sale route stays and shares half). At most **two** feeders an input, each with at least a
+  **quarter** of the need to spare (a route is a twentieth of a lot's cap: not for crumbs). The
+  first measure flew seven routes for one Servos group at 15 h.
+- **Each route** gets the skiffs that carry its rate: ceil(want / one skiff's rate), 1 to 12.
+- **Idempotent**: a route that stands is never flown twice and none is lifted, so a bot (or the
+  player) that routes by hand keeps working. It stops at the route cap and buys only with the coin
+  on hand; the slip under the strip says what it did (`+2 routes · 3 skiffs 180K`) or what stopped
+  it (the cap, the coin), and the placed tile pops `+2 ROUTES`.
+- The command is `hplace` with `auto` (the default); the Town Plan places bare (it flies its own
+  plan); a placement logged before v13 replays bare (the save migration), so a save stays exact.
+- *Measured* (pace-act3, seed 1000, the bots placing with it): the District 9:53, the City's stage
+  1 11:01, 148 groups at most, rule 5's routes between modules 37 (35 before), 1.42 skiffs a route,
+  no route short; Act III's worst rule 1 gap 37.4 min (41.0 before) and rule 2 18.7 min (15.5
+  before; run 4's hand-over, OPEN as before). Pace-act3 7 of 7 passed.
+
+### Skiffs and coin (the playability pass)
+The review: at 15 h the bot held 46M, earned 574K a minute, and a skiff (40,000 flat) was 4 s of
+income, a lot (1M x n) 2-3.5 min: coin decided nothing, the route cap and the tiles did, out of
+sight. Now:
+- **A skiff's price climbs with the fleet**: the n-th skiff paid for on a floor costs base x (1 +
+  (n - 1) / step), linear (CLAUDE.md: no geometric curves): the District 40,000 and step 20 (+2,000
+  a skiff), the World's barges 250,000 and step 40, Beyond's couriers 2.5M and step 40. Only paid
+  skiffs count: the Committee's Pocket Skiffs (a route's first skiff free, rep 6, which the bot holds
+  from the District's opening) and the Skiff Guild's are free and leave the price alone, so free
+  routes can't raise the refund of a skiff bought cheap. A skiff taken off refunds the last one's
+  price, so buying and lifting is even. *Derivation:* a step of 20 prices the whole fleet of a 15 h
+  floor without Pocket Skiffs (about 230) at about 65M, half of what the District earns by then,
+  so it stays buildable; with them, the extras (70-90 at 15-16 h) climb to 180-210K each, a route
+  across the floor (four to six skiffs) minutes of income, and a feeder placed beside what it feeds
+  saves real coin. Step 10 priced the fleet at all of it.
+- **Lots are 4M x n** (4M, 8M, 12M): they are bought when the routes run out, at 14.5-16 h on
+  550-750K a minute, so a lot is 7-20 min of income and the three take 24M. *Measured* (the coin
+  curve, seed 1000): coin on hand at 15 h **13.8M** (was 33-46M), down to 3.6M at 16.25 h as the
+  third lot is bought; the next skiff 178K at 15 h (was 40K).
+- **The floor's limit, where the player looks**: the strip reads `routes 137/155 · tiles 105/128 ·
+  skiff 102K`, each over a thin meter, the one that binds in warn ink (routes within 5% of the cap,
+  or two tiles free); a slip under it says what to do (`routes 152/155 · a lot +20 routes 8.00M ·
+  fold a group into one tile`). "Stuck?" names the route cap when it keeps a group unrouted, skips
+  Overdrive's surplus draining into the Dock, and drops any cause under 1% of the income a minute.
+
+### Reading a full floor at 1x (the playability pass, §17)
+- **Only problems wear a pip**: starved, idle, or blocked under 80% of full speed with something
+  to fix. Not while overdriven (3x its takes and makes: it starves or backs up by design), nor a
+  feeder at 80% or better, nor one backing up only into the Dock, the Hopper or the Bay on routes
+  not short (Overdrive's surplus draining). A working module shows its lit window and its motion.
+- **Roofs by tier**: the main product's crafting steps colour the roof from the palette: bulk
+  (steps 0-2) slate, parts (3: gears, circuits, concrete) blue, assemblies (4: gizmos, motors,
+  gearboxes) the art's own copper, machines (5: servos, rotors, coils) green, the finest (6+)
+  violet. The product's icon sits on a lit bone pane (slate while stopped), not the dark window.
+- **Routes quiet unless looked at**: past 24 routes on a floor, every route no one looks at is a
+  faint still hatching (28% alpha, no arrow); the routes of the module under the mouse or pinned,
+  the route under the mouse or open, fly over the buildings in full; a route short of skiffs is
+  always drawn bold in orange. Carriers on quiet routes are small bone motes.
 
 ### District folds (research *District Folds*)
 A box up to 8x8 of at least two depth-2 modules, every one joined to the others by a route inside
@@ -1436,8 +1779,17 @@ but their inputs are tier 2 goods the Workshop has no room to make. The **Factor
 the Factory floor, 5,000 coin, refunded when lifted) takes whatever trunks bring it and drops it to
 the Workshop; a **Chute Mouth** (Workshop, 400 coin) set to an item pushes that item out of its
 front, one at a time as fast as the belt takes it (120/min). The stock between them holds **20 of
-each item** (10 s of a full belt: enough to ride out a module's round robin; full, it backs the
-trunk up at once and the pip says so). **A fold box may not hold a Chute Mouth** (it would make
+each item** (10 s of a full belt: enough to ride out a module's round robin). *The second playtest
+(2026-11-08)*: full, it backed the trunk up at once, and the 15 h checkpoint's Factory stood with 9
+of 9 modules BLOCKED (the campaign bot trunked them all into the Chute; four items had a Chute Mouth,
+six did not). Loaded under main's code (1d0e84c) it does the same: not a wave-1 change. Now **the
+Chute never jams the floor**: what its stock has no room for goes on to the Factory Dock, which
+sells it (slag is scrapped there for nothing), as the Bay's does (§18); only what no Dock buys
+(megaproject parts such as Drill Bits) still backs up, and the bell names a full Chute as one cause with its
+fix. Measured on the checkpoint: 7 of 9 modules working after 2 minutes (the two others blocked on
+slag their side trunks take nowhere, which their report names), and nothing of the drop from 574K to
+449K/min in the two minutes after loading is the Factory's: the District earns all of it, and its
+fall is the bot's Overdrive wearing off (34 machines overdriven at the save: rule 4's active play). **A fold box may not hold a Chute Mouth** (it would make
 items from nothing as far as the box can see), so a tier 3 line is audited with its Chute Mouths
 outside the box feeding it through ports, and folds into a module with those inputs. On the
 Factory the same feeder modules then feed the new module, and the group nests (§18) for the
@@ -1480,14 +1832,14 @@ faces for four inputs and a buffer for twenty sandwiches, so it is a Mk2 recipe 
 - **Greenhouse** (2x2, 150 kW, 25,000, *Hydroponics*): a Mk2 smelter's draw, about an Assembler
   Mk2's price.
 
-### Modes (research *Recycling*)
-**Recycling**: a byproduct every twice as many crafts (half the waste) at 0.9x speed. **Byproduct**:
-every half as many (twice the waste, never more than one a craft) at 1.1x speed, for a line whose
-waste is another's input (gravel from slag, fertilizer from sludge). Powered machines only, like
-§18's modes; a kept design refolds after the short check only in normal mode (§19).
+### No modes (the playability pass)
+Recycling (half the byproduct at 0.9x speed) and Byproduct (twice it at 1.1x), and their research
+node *Recycling*, were cut with §18's modes. A line whose waste is another's input is sized by its
+machines: the Act III bot's corner solvent vat, which ran in Byproduct for twice the sludge, now
+feeds Hydroponics and the Greenhouse at a craft's own cadence (one sludge every 2 solvents).
 
 ### Research, page 3
-Seventeen nodes (`src/data/research.ts`, `act: 3`), every one waiting for **the Great Drill's stage
+Sixteen nodes (`src/data/research.ts`, `act: 3`; seventeen until Recycling was cut), every one waiting for **the Great Drill's stage
 3** (`drill: 3`): Act III opens once Act II's spine is finished, about the third run (§19). Zoning
 is paid in what the Act II floor already makes (200 motors, 300 circuits, 300 concrete, measured below); Chutes
 (2,500 steel, 100 motors) next; then each tier 3 node in the goods of the node before it.
@@ -1500,7 +1852,7 @@ Bay never jams, §19). Each stage pays its Patents in proportion as it is delive
 | Project, stage | Wants | Reward, for good | Patents |
 |---|---|---|---|
 | The Floating City 1, the Platform | 120 lift rotors, 1,500 concrete | the Factory floor's ninth row | 6 |
-| The Floating City 2, the Spires | 150 lift rotors, 300 sandwiches, 2,500 glass | a fourth District lot | 8 |
+| The Floating City 2, the Spires | 150 lift rotors, 2,500 glass, 2,000 steel | a fourth District lot; **the core ending** | 8 |
 | The Scrap Transmuter 1 | 80 transmuter coils, 3,000 steel | every Dock buys slag, oil and sludge at 25% of what made them | 8 |
 | The Scrap Transmuter 2 | 150 coils, 120 processors | a byproduct with nowhere to go sells where it stands instead of blocking | 10 |
 
@@ -1513,6 +1865,35 @@ slag-bound, 4 slag each, and the whole run-3 floor makes about 2.8 slag a second
 stage standing keeps its Bay open in every later run without its research (its progress is kept;
 the second gate found every run re-paying the research before the Bay counted anything). The
 Transmuter's second stage ends the byproduct lesson for good, at the end of the act that finishes it.
+
+*The Spires, re-derived (the playability pass, 2026-11-08):* they wanted 300 sandwiches, the
+deepest chain of the act (a Greenhouse on sludge, a sandwich corner line, a nest and a District
+group), and no bot delivered one by 40 h in five passes, so neither the City nor Act IV was ever
+reached. The citizens moved to Sandwich Engineering (150, at the Hopper) and the Spires want what
+the act's spine already makes: the Rotors II copies' rotors, the Glassworks' glass (three Glass II
+copies took 2,500 in about 40 min) and the Concrete II copies' steel (3,000 in minutes for the
+Transmuter, measured in the fifth pass). The Transmuter stays as it was and is **optional**: it is
+no longer on the way to the World.
+
+### The core ending (the Floating City complete)
+A game people finish beats a 100 h game nobody finishes (the playability review: under 1% of
+players would see Acts IV-V). **The Floating City complete is the story's ending** a normal player
+reaches, aimed at **18-25 h** of competent play (the planner bot is faster: measured below).
+- The first time the City's last stage stands in a universe (the first universe only; a transition
+  seen in the session, so a save loaded with the City standing does not replay it), the finale opens
+  3 s after the stage's ribbon (`src/app/finale.ts`): the key art, the City (one PixelLab
+  generation, palette forced to the key art's, cleaned in `pixel-art/finale/build.py`) lifting off
+  the town's island with its rotors spinning and puffing, the camera following it into the high sky;
+  then the Swamp Gazette's special ("TOWN TAKES FLIGHT") beside Bramble cheering and the four
+  customers' lines; then the credits, rolling the player's own numbers (hours played, folds made,
+  the best grade, items delivered, coin earned, the modules flying the City, Reorganizes,
+  trophies) and the town's cast; then the invitation, "The story isn't over": the World floor
+  (Charting), Relocate, the Lighthouse and the Sky Anchor, the Last Fold. Skip moves a scene on.
+- **The trophy** is the City's own (`cityComplete`, now "Lift-off"); its Codex page, *The Floating
+  City* (Unit 7's lines, in the ending group beside Unit 7's own), keeps **"The City, again"**.
+- **Acts IV and V are the post-game**: Charting opens with the City alone (`megas: ['city']`), so
+  the World is the invitation's next step. Their targets (§22, §23) stand as they were, now read as
+  hours after the ending.
 
 ### Orders and reputation (Act III, `src/data/orders.ts`)
 Ten orders, each about 2x what its goods fetch at the Dock (§7's rule; 1.96-2.2x as priced):
@@ -1544,7 +1925,7 @@ Ten nodes, priced as Act II's (§19): about a Patent for every 10-15 minutes of 
 | District Deeds | head start | 3 | the District opens with its first lot (1M coin, 45-55 min) |
 | Chemistry Notes | head start | 3 | Chemistry, Vulcanizing, Batteries |
 | The Bearing Patent | head start | 2 | Bearings, Servos |
-| Sense and Logic | head start | 3 | Sensors, Processors, Recycling, Hydroponics |
+| Sense and Logic | head start | 3 | Sensors, Processors, Hydroponics (Recycling until it was cut) |
 | The Robotics Patent | head start | 3 | Robotics, Sandwiches |
 | Long Skiffs | rule | 2 | skiffs fly 3 tiles/s, was 2 |
 | The Bigger Nest | rule | 2 | the nested fold box 10x10 |
@@ -1559,9 +1940,19 @@ costs under 5% of the coin on hand (20 skiffs' worth), so it never spends a save
 act's chore, placing skiffs, becomes a machine's.
 
 ### Challenges (`src/data/challenges.ts`, `src/sim/systems/challenges.ts`)
-A Challenge is taken at a Reorganize, from the second one on: the next run holds its rule until
-its goal is met, and its reward is kept for good (`meta.challenges`). Patents are filed as for any
-run; giving a Challenge up costs nothing but the reward. A won Challenge isn't taken again.
+A Challenge is the post-game's (the playability pass): it opens once the story has ended, the
+Floating City complete (`postGame`, §21 The core ending; Megaprojects survive every reset, so it
+stays open), never at a Reorganize count. It is chosen on its own page (Options, a key and a tab
+at the back of the book), "Take it next run", and begins at the next Reorganize: the next run
+holds its rule until its goal is met, and its reward is kept for good (`meta.challenges`). The
+Reorganize card offers none; with one taken it says so under the contract (its rule, goal and
+reward, a key back to the page, "Ordinary run" to drop it). Patents are filed as for any run;
+giving a Challenge up costs nothing but the reward. A won Challenge isn't taken again. A save
+already in a Challenge from before this rule keeps it running (save v16).
+*Why after the ending:* the critic counted about 60 concepts by 5 h (PLAN.md wants far fewer);
+fifteen Challenges offered at the first reset were among the ones a player meets before the
+story has taught its own; and picking a Challenge on the reset card was Antimatter Dimensions'
+challenge entry at prestige (flagged, DECISIONS.md). No bot or pace test takes a Challenge.
 
 | Challenge | Rule | Goal | Reward, for good |
 |---|---|---|---|
@@ -1583,7 +1974,8 @@ Dimensions convention (flagged when PLAN.md listed them); here the goals are fac
 rewards rules, never a multiplier on everything.
 
 ### Scenarios (`src/data/scenarios.ts`, `src/sim/scenario.ts`)
-A Scenario is a separate game in its own save slot, open after the first Reorganize: a board fixes
+A Scenario is a separate game in its own save slot, open after the story's end (the Floating City
+complete; the playability pass, with the Challenges: Options, "after the story"): a board fixes
 the land (none for sale), the research (every node of Act I, or of Acts I and II but the Great
 Drill), the coin and one twist; there is no Reorganize. Its score is the best fold of one product
 this game: the design's grade-applied rate of it per minute, or per tile of the fold box. The app
@@ -1686,6 +2078,41 @@ coils line), 32.4 min from 25:45 (run 4), 10.4 in run 5; pace-act3 19.1, 13.7, 1
 10.9, 19.9, 19.9, 10.3). The District peaks at 157-160 groups (0.73-0.86 ms a tick). Pace-act3 7
 passed, pace-act4 5 passed.
 
+**Re-measured, the playability pass** (the core ending; DECISIONS.md "Playability pass
+(2026-11-08)"): the Spires want rotors, glass and steel, and Charting the City alone. Measured
+(seed 1000, 40 h; pace-act3 8 passed, pace-act4 5 passed): the District 9:53, the City's stage 1
+10:57-11:05, **the City complete (the core ending) 12:19 (pace-act3) and 12:40 (pace-act4)**, in run
+3, the first that builds a District. **The District-to-City stretch holds rules 1 and 2: 7.1 min at
+worst** (9:46-12:40; were 40.5 / 30.5 min in the fifth pass). The later Act III stretches: pace-act3
+10.3, 19.9 and 10.7 min (run 5's 19.9 from 27:58, half an hour after its hand-over, the same
+early-run wait as before, not looked into); pace-act4 19.9 min on Rime from 20:24. Runs (pace-act3):
+1 0:00-4:22 (14 Patents), 2 4:22-7:24 (7), 3 7:24-16:38 (52), 4 16:38-25:39 (7), 5 25:39-35:23 (6),
+6 35:23-40:00. The District peaks at 156 groups (0.45 ms a tick).
+
+**Re-measured after the cuts** (wave 2 of the playability pass: Machine Kits, machine modes and the
+Recycling node gone; seed 1000, 40 h; the same tests on the base commit beside them). Pace-act3: the
+District 8:17 (8:18), the City's stage 1 9:27 (9:30), **the City complete 13:10 in run 3, the first
+Act III run** (19:03 in run 4 on the base, which failed that test: run 3 reset at 14:36 a stage
+short); 8 of 8 passed (7 of 8). Act III before the City holds 19.2 min at worst (19.3), from its
+first minute; after the City the bot has no plan left and waits (OPEN in both). Pace-act4: not finished when this was written (unverified)
+(the base: the City 14:29, the first Relocate 35:25, 5 passed). Why the City came sooner was not
+traced; the likeliest causes are the Workshop's standing kit line, which ate ingots, plates, gears
+and steel the whole act, stamps of Act II designs no longer waiting on kits, and Recycling's 150
+rubber and 60 gearboxes left for Sensors and the Spires.
+
+*Re-measured after the second playtest's pass* (wave 1 merged, the Chute's overflow to the Factory
+Dock): runs 1 0:00-4:10 (15 Patents), 2 4:10-6:15 (6), 3 6:15-15:02 (36), 4 15:02-22:45 (3), 5
+22:45-40:00; the District 8:19, the City's stage 1 9:38, but **not complete in run 3**: its Spires
+get the steel and the rotors and no glass (the Glassworks corner line is never folded). The wave-1
+base (44e3b23) ends run 3 the same way; the same build without the Chute's overflow completes it by
+15 h. A bot-plan fragility, logged for bot3's owner (DECISIONS.md, the second playtest's fixes).
+153 District groups at 40 h, 0.61 ms a tick. (Both measured before the other's change: the merged build is re-measured by the balance pass.)
+
+- **The ending is early for the bot, on target for a player.** The planner knows the plan and
+  plays every minute; it reached the first fold at 24 min against §16's 40 and Folding's research in
+  about half a first-timer's time (the review), so 12:20-12:40 for the bot reads as about 18-25 h
+  for a competent first-timer, the aim. Not measured with a human.
+
 Lessons:
 - **The waste chute and 1 a trip halve the routes and make distance cost.** With waste going to
   the Dock on its own the bot flies one route a product (a second only for a second product), so
@@ -1732,7 +2159,7 @@ Lessons:
   taught (the City's stage 2, the Transmuter and Relocation need them).
 - **Act III orders beyond the Servo Ballet.** Spare Parts (600 bearings) needs a bearings source the
   bot can fold: a lone press may not fold, and the Gearboxes line's press feeds its own assembler.
-- **Rules 1 and 2 outside Act III**: Act II's Bay-floor wait (39.5 min at 2:48, §16) is unchanged.
+- **Rules 1 and 2 outside Act III**: Act II's Bay-floor wait (39.5 min at 2:48) is 17 min with the Drill's parts (§16, §18); rule 2 there is unchanged.
 
 ## 22. Act IV: Worlds and Relocate (Milestone 9, 40-80 h)
 
@@ -1829,11 +2256,12 @@ reset by every Reorganize and is offered only there).
 ### Research, page 4
 Fourteen nodes, `act: 4`, after the Great Drill's stage 3 like Act III's. **Charting** (30 robot
 arms, 150 sensors, 60 processors after District Folds: 20-30 min of the District that researched
-District Folds) opens the World floor, and is offered only once **Act III's Megaprojects stand**
-(both stages of the Floating City and of the Scrap Transmuter, `megas`, as the Last Fold waits for
-the Lighthouse and the Anchor): Act III ends when its projects are built, however fast, and Act IV
-begins there (decided after the fourth bot pass, which opened the World at 11:46 and Relocated at
-18:00 with neither project finished, against the 40-45 h below; a content gate, not a price). Each island has its chain, paid in its exotic (600 of it,
+District Folds) opens the World floor, and is offered only once **the Floating City stands** (both
+its stages, `megas`, as the Last Fold waits for the Lighthouse and the Anchor): Act III ends at the
+core ending (§21), however fast it is built, and Act IV, the post-game, begins there. (The fifth
+bot pass gated it on the Scrap Transmuter too, after the fourth opened the World at 11:46 with
+neither project finished; no bot then finished both by 40 h, so the playability pass made the
+Transmuter optional: a content gate, not a price.) Each island has its chain, paid in its exotic (600 of it,
 about 13 min of one Pebble Miner, 20 of a Home one): Skyglass Cutting and Horizon Optics on
 Pebble; Cinder Smelting, Sunset Dyes and Sunset Engineering on Cinder; Thermals (500 coal, 150
 steel, with Act II's first powered machines: the plant's warmth reaches 3 tiles, was 2),
@@ -2003,6 +2431,9 @@ record (`meta.cleared`). The determinism fingerprint covers the island, the rubb
 the cold machines and the Town Plan's layouts.
 
 ### Pacing targets (§16)
+- **Post-game from the core ending** (the playability pass): the World opens when the Floating City
+  stands (about 18-25 h for a player, §21), so the targets below are read from there; the 40-45 h
+  of the first Relocate was set when Act III ended at the World, and stays as the target.
 - **Relocate first at 40-45 h**, when the World floor stands and Relocation is researched.
 - **Four islands by 60 h** (Home and three more): each island's climb back to its World floor in
   **6-8 h**, faster than Home's 40 because Megaprojects, reputation, the Drawer and the Codex are
@@ -2015,6 +2446,16 @@ the cold machines and the Town Plan's layouts.
 - **Measured below** (the Act IV bot): with Charting behind Act III's Megaprojects (the fifth pass)
   the campaign does not reach the World by 40 h yet.
 ### Pacing (measured, the Act IV bot)
+**The playability pass** (Charting behind the City alone; the World as the post-game): seed 1000,
+40 h, pace-act4 5 passed. The City complete and Charting and the World **12:40**, Relocation 16:55,
+**the first Relocate 17:40** (Home to Rime, +22 Legacy; target 40-45 h, OPEN: early by construction
+now that Act III ends at the ending, as the fourth pass found before the fifth's gate), the second
+29:18 (Rime to the Old Works, +7); Rime's climb back to its World 5.0 h (target 6-8). Rules 1-2:
+Act III 7.1 min, Act IV 7.5 min, Act III on Rime 19.9 / 19.8 min from 20:24 (OPEN). The floor
+bests stay far under §22's 7-10 (2.5-4.4) and the Old Works never reaches its World by 40 h. These
+are post-game numbers; the decision to leave the 40-45 h target standing is DECISIONS.md's
+(playability pass).
+
 Measured by the campaign bot with the Act IV policy (`src/sim/bot4.ts` over `src/sim/bot3.ts`,
 `tests/pace-act4.test.ts`, seed 1000, `FOLD_ACT4_HOURS` = 40 h of play, about 25 min of wall time;
 60 h measured once, about 25 min). Fourth pass (DECISIONS.md "The fourth pass"): the Act III bot now
@@ -2364,7 +2805,8 @@ pages), `src/data/cosmetics.ts` (every skin), the Milestone 11 blocks of `src/da
 rule helpers at the foot of `src/sim/systems/challenges.ts`. Tests: `tests/longtail.test.ts`.
 
 ### The Trophy Shelf
-**205 trophies, 18 of them hidden** (shown as "???" until earned: `trophyFace`). They cover every act
+**203 trophies, 17 of them hidden** (shown as "???" until earned: `trophyFace`; the playability
+pass cut Inspiration's two, Inspired and the hidden They Know). They cover every act
 and layer: the slice's 29 and Acts II-III's 26 from before; then the long deliveries (every run
 counted: `meta.lifetime.delivered` plus this run, Act I's gears to Act IV's Sunset Generators), the
 firsts of Acts II-V, the Codex tier by tier, Reorganize and the Drawer, Relocate and the islands, the
@@ -2388,10 +2830,10 @@ full); the last column is every trophy's and Ledger rule's sum against the cap, 
 | `skiffs` | every route takes more skiffs | +1 | +4 (12 -> 16) | a route trophy's (§21: twelve skiffs carry a far feeder); Act III's five: 5 (1.25x) |
 | `routes` | every high floor holds more routes | +5 or +10 | +40 | a third of the 120 (§21); Act III's eight: 45 (1.13x) |
 | `drawer` | the Patent Drawer holds more designs | +1 | +6 (8 -> 14) | under A Deeper Drawer's 4 plus the Legacy's (§19, §22): which lines to keep stays a choice; eight trophies: 8 (1.33x) |
-| `sparkLife` | Sparks stay longer | +2 or +3 s | +10 s (20 -> 30) | §6's 20 s, for a player who catches them; six: 14 s (1.4x) |
+| `sparkLife` | the Inspector (§6's one kind of Spark) stays longer | +2 or +3 s | +10 s (20 -> 30) | §6's 20 s, for a player who catches them; six: 14 s (1.4x) |
 | `heap` | Slag Heaps hold more | +50 | +200 | 400 is about 53 min of one smelter (§4): +50 is 7 min; five: 250 (1.25x) |
 | `startCoin` | every run after a reset starts with more coin (a head start: `granted`) | 10-5,000 | 20,000 | each about the act's first purchase when it is earned (the Bellows' 15 ... the Patent tree's 5,000); the cap an Act II-III run's first heavy machines (a Mixer, a Refinery, a Smelter Mk2: 19,000, §18); 27 trophies, Acts I-III's only: 25,065 (1.25x; was 68,465 uncapped) |
-| `cool` | Overdrive cools sooner | 2-3 s | 10 s (30 -> 20) | still twice its 10 s run (§18); five: 12 s (1.2x) |
+| `cool` | Overdrive cools sooner | 2-3 s | 10 s (30 -> 20) | still twice its 10 s run (§18); four: 10 s (1x; five and 12 s before Inspired was cut) |
 | `repair` | the Old Works' ruins repair cheaper | 10% | 30% | off §22's quarter; four: 40% (1.33x) |
 | `chute` | the Chute holds more of each item | +5 or +10 | +40 (20 -> 60) | Specimen Jars' level (§21); seven: 40 (1x) |
 | `barge` | the World's barges fly faster | +0.25 tiles/s | +1 (3 -> 4) | the Lighthouse's Lens Room's step again (§22), so a World with both flies at 5; three trophies and two Ledger rules: 1.25 (1.25x) |
@@ -2472,7 +2914,7 @@ and IV's are offered only once that floor has stood in some run (`needs`).
 |---|---|---|---|---|
 | Clean Hands | II | no Slag Heaps built | 400 concrete delivered | gravel and concrete craft 10% faster |
 | Old Faithful | II | no Mk2 machines | 100 motors delivered | Mk2 machines 15% cheaper |
-| Hand-Made | II | no stamping | 8 modules standing on the Factory | a design's first stamp takes no Machine Kits |
+| Hand-Made | II | no stamping | 8 modules standing on the Factory | a design's first stamp is free (was: takes no Machine Kits) |
 | The Strict Inspector | II | every fold a letter lower | a fold graded A (an S before) | S+ needs 70% of byproducts used inside (was 80%) |
 | Belt Budget | II | 60 belt tiles on the Workshop | 1,000 steel delivered | C full at 0.55 machine tiles a box tile (was 0.6) |
 | Headwinds | III | District skiffs at half speed | 30 robot arms delivered | District skiffs +0.5 tiles/s |
@@ -2495,8 +2937,11 @@ worth, and none is a multiplier on income. Every Challenge won also pays a skin.
 | Thin Vein | A, B | Act I | 8,000 | Miners 0.5x | gears a minute per tile |
 
 *Derivation:* three are Challenges as boards (Small Boxes, Clean Hands, Old Faithful, §21): the same
-rule, scored as a number instead of won once. Night Market scores per kW drawn by the box's machines
-in Normal mode (`designKwOf`), so Efficient mode (0.75x speed at 0.5x power, §18) scores 1.5x. Thin
+rule, scored as a number instead of won once. Night Market scores per kW the box's machines draw at
+full speed (`designKwOf`): every refinery draws its 120 kW for 15 plastic a minute, so the score is
+the grade (refineries fed all the time, their oil used or carried off, a compact box: §10). (Its
+derivation named Efficient mode as the way to score, but the measure never counted a mode; modes
+were cut in the playability pass.) Thin
 Vein halves §4's 30 ore a minute, so the patch is the limit and the score is per tile. The coin is each
 board's lines twice over at §4 and §18 prices.
 

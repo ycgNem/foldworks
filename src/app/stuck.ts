@@ -16,20 +16,21 @@ import { ITEMS, itemName, type ItemId } from '../data/items';
 import { BUILD, isMachine } from '../data/machines';
 import { RECIPES } from '../data/recipes';
 import { FACTORY } from '../data/land';
-import { plain } from '../engine/fmt';
+import { plain, aWord } from '../engine/fmt';
 import { nominal, feeders, entName } from '../sim/analysis';
 import { shares } from '../sim/systems/stats';
 import { poleReach } from '../sim/systems/power';
 import { fname } from '../sim/systems/modules';
 import type { HighFloorId } from '../data/floors';
-import { routeCap, routeWant, hent, hname, skiffRateNow, routeDist } from '../sim/systems/high';
+import { routeCap, routeWant, hent, hname, skiffRateNow, routeDist, maxRoutes, lotPrice, skiffsPrice } from '../sim/systems/high';
+import { perMin } from '../engine/fmt';
+import { BYPRODUCTS } from '../sim/systems/modules';
+import { RULES } from '../data/rules';
 import { DX, DY, type Ent, type FEnt, type Floor, type SkiffRoute } from '../sim/world';
 import type { Game } from '../sim/Game';
 import { capacity, gridIndex, powered } from '../render/powerview';
 import { nextGoal } from './goals';
-import { button } from './chrome';
 import { DS } from './district';
-import type { Layout } from './layout';
 import type { App } from './app';
 
 export interface Stuck {
@@ -113,7 +114,7 @@ function workshopCause(g: Game, m: Ent, seen: Set<number>): Cause {
     if (f && !makers.length && !f.stores.length) {
       if (m.kind === 'furnace') return c(`${name}: no ore. {k:LMB} the ore beside it, or a Miner on it facing in.`, [`{pip:starved} ${ic(item)} none`]);
       const mk = item ? makerName(item) : null;
-      return c(`${name}: nothing brings it ${ic(item)} ${lc(item)}. Belt a ${mk ?? 'feeder'} into it.`, [`{pip:starved} ${ic(item)} none`]);
+      return c(`${name}: nothing brings it ${ic(item)} ${lc(item)}. Belt ${aWord(mk ?? 'feeder')} into it.`, [`{pip:starved} ${ic(item)} none`]);
     }
     const stopped = makers.find((s) => s.state !== 'work' && !s.paused && !seen.has(s.id));
     if (stopped) return workshopCause(g, stopped, seen);
@@ -145,17 +146,19 @@ function workshopCause(g: Game, m: Ent, seen: Set<number>): Cause {
   return c(`${name}: its ${ic(out?.item)} ${lc(out?.item)} backs up. A belt carries 120 a minute: a second belt, or fewer feeders.`, [`{pip:blocked} ${ic(out?.item)}`]);
 }
 
-function workshopCauses(g: Game): { cause: Cause; cost: number }[] {
-  const by = new Map<string, { cause: Cause; cost: number }>();
-  const add = (cause: Cause, cost: number) => {
+function workshopCauses(g: Game, goal: Set<string> = new Set()): Ranked[] {
+  const by = new Map<string, Ranked>();
+  const add = (cause: Cause, cost: number, toGoal = 0) => {
     const q = by.get(cause.key);
-    if (q) q.cost += cost;
-    else by.set(cause.key, { cause, cost });
+    if (q) { q.cost += cost; q.goal += toGoal; }
+    else by.set(cause.key, { cause, cost, goal: toGoal });
   };
   for (const m of [...g.miners, ...g.machines]) {
     if (m.paused || (m.state !== 'starved' && m.state !== 'blocked')) continue;
     if (m.state === 'starved' && !m.why && !m.recipe) continue; // idle, no recipe yet
-    add(workshopCause(g, m, new Set()), valuePerMin(m) * lostShare(m));
+    const cost = valuePerMin(m) * lostShare(m);
+    const out = nominal(m).outs[0]?.item;
+    add(workshopCause(g, m, new Set()), cost, out && goal.has(out) ? cost : 0);
   }
   // a brownout: every machine on the grid slowed (DESIGN.md §18 Power)
   g.grids.forEach((gr, i) => {
@@ -166,7 +169,8 @@ function workshopCauses(g: Game): { cause: Cause; cost: number }[] {
     const cap = capacity(g, gr);
     add({ key: 'grid' + i, floor: 'workshop', kind: 'ent', id: at.id, x: at.x + at.w / 2, y: at.y + at.h / 2, name: entName(g, at),
       say: `A brownout: ${Math.round(cap)} kW for ${Math.round(gr.demand)} kW wanted. Every machine on it runs at ${Math.round(gr.sat * 100)}%. An engine more, or more fuel.`,
-      chips: [`{pip:power} ${Math.round(gr.sat * 100)}%`] }, slowed);
+      chips: [`{pip:power} ${Math.round(gr.sat * 100)}%`] }, slowed,
+      gr.consumers.some((m) => m.state === 'work' && goal.has(nominal(m).outs[0]?.item ?? '')) ? slowed : 0);
   });
   void powered;
   return [...by.values()];
@@ -200,6 +204,9 @@ function factoryCause(g: Game, m: FEnt, seen: Set<number>): Cause {
   const r = g.routes.find((q) => q.from === m && !q.by);
   const to = r?.to ?? null;
   if (!to) return c(`${name}: its front leads nowhere. Trunk it to the Factory Dock or a module.`, ['{pip:blocked} front']);
+  // a byproduct its front's taker refuses: a side trunk to the Dock carries it off (the second playtest)
+  if (item && BYPRODUCTS.has(item) && !(to.kind === 'module' && (g.design(to.design)?.ins[item] ?? 0) > 0) && to.kind !== 'fdock')
+    return c(`${name}: its ${ic(item)} ${lc(item)} has nowhere to go. A trunk from its side to the Factory Dock.`, [`{pip:blocked} ${ic(item)}`]);
   if (to.kind === 'module') {
     if (to.state !== 'work' && !to.paused && !seen.has(to.id)) return factoryCause(g, to, seen);
     const takes = (g.design(to.design)?.ins[item as ItemId] ?? 0) * 60;
@@ -208,19 +215,22 @@ function factoryCause(g: Game, m: FEnt, seen: Set<number>): Cause {
     return c(`${name}: ${fname(g, to)} takes ${pm(takes)} of its ${pm(offered)} ${lc(item)} a minute. Another taker, or the rest to the Dock.`, [`{pip:blocked} ${ic(item)} ${pm(takes)}/${pm(offered)}`]);
   }
   if (to.kind === 'fbay') return c(`${name}: the Megaproject Bay takes no ${ic(item)} ${lc(item)} now. Trunk it to the Factory Dock.`, [`{pip:blocked} ${ic(item)} Bay`]);
-  if (to.kind === 'fchute') return c(`${name}: the Factory Chute is full of ${ic(item)} ${lc(item)}. A Chute Mouth set to it empties it.`, ['{pip:blocked} Chute']);
+  // every module stopped at the full Chute is one cause, with one fix (the second playtest: the 15 h
+  // checkpoint's nine modules were nine causes, each too small to name)
+  if (to.kind === 'fchute') return { ...c(`The Factory Chute is full of ${ic(item)} ${lc(item)}. A Chute Mouth set to it empties it.`, ['{pip:blocked} Chute']), key: 'fchute:' + item, name: 'Factory Chute' };
   return c(`${name}: its ${ic(item)} ${lc(item)} backs up. A trunk carries ${FACTORY.trunkSpeed * 60} a minute: give it its own.`, [`{pip:blocked} ${ic(item)}`]);
 }
 
-function factoryCauses(g: Game): { cause: Cause; cost: number }[] {
-  const by = new Map<string, { cause: Cause; cost: number }>();
+function factoryCauses(g: Game, goal: Set<string> = new Set()): Ranked[] {
+  const by = new Map<string, Ranked>();
   for (const m of g.s.factory.ents) {
     if (m.kind !== 'module' || m.paused || (m.state !== 'starved' && m.state !== 'blocked')) continue;
     const cause = factoryCause(g, m, new Set());
     const cost = moduleWorth(g, m) * Math.max(0.25, 1 - m.fAvg);
+    const toGoal = Object.keys(g.design(m.design)?.outs ?? {}).some((k) => goal.has(k)) ? cost : 0;
     const q = by.get(cause.key);
-    if (q) q.cost += cost;
-    else by.set(cause.key, { cause, cost });
+    if (q) { q.cost += cost; q.goal += toGoal; }
+    else by.set(cause.key, { cause, cost, goal: toGoal });
   }
   return [...by.values()];
 }
@@ -236,11 +246,14 @@ function routeCause(g: Game, r: SkiffRoute): Cause | null {
   const cap = routeCap(g, HF, r), want = routeWant(g, HF, r);
   const each = skiffRateNow(g, HF, routeDist(a, b));
   const more = Math.max(1, Math.ceil((want - cap) / Math.max(1e-6, each)));
+  const w = HF === 'beyond' ? 'courier' : HF === 'world' ? 'barge' : 'skiff';
+  // per minute, as every rate the player sees (the playability pass), and what the skiffs cost now
+  // (each one flying makes the next dearer: DESIGN.md §21 "Skiffs and coin")
   return {
     key: 'r' + r.id, floor: HF, kind: 'route', id: r.id, x: (a.x + a.w / 2 + b.x + b.w / 2) / 2, y: (a.y + a.h / 2 + b.y + b.h / 2) / 2,
     name: `${hname(g, a)} to ${hname(g, b)}`,
-    say: `The route from ${hname(g, a)} carries ${plain(cap, 2)} of ${plain(want, 2)} ${lc(r.item)} a second. ${more} ${HF === 'beyond' ? 'courier' : HF === 'world' ? 'barge' : 'skiff'}${more > 1 ? 's' : ''} more, or move them closer.`,
-    chips: [`{pip:starved} ${ic(r.item)} ${Math.round((cap / Math.max(1e-6, want)) * 100)}%`],
+    say: `The route from ${hname(g, a)} carries ${perMin(cap)} of ${perMin(want)} ${lc(r.item)} a minute. ${more} ${w}${more > 1 ? 's' : ''} more, or move them closer.`,
+    chips: [`{pip:starved} ${ic(r.item)} ${Math.round((cap / Math.max(1e-6, want)) * 100)}%`, `+${more} {coin:${pm(skiffsPrice(g, HF, more))}}`],
   };
 }
 
@@ -252,7 +265,7 @@ function districtCause(g: Game, m: FEnt, seen: Set<number>): Cause {
   const item = m.why as ItemId | null;
   if (m.state === 'starved') {
     const ins = st.routes.filter((r) => r.to === m.id && r.item === item);
-    if (!ins.length) return c(`${name}: no route brings it ${ic(item)} ${lc(item)}. The Route tool, from a group that makes it.`, [`{pip:starved} ${ic(item)} none`]);
+    if (!ins.length) return limitCause(g) ?? c(`${name}: no route brings it ${ic(item)} ${lc(item)}. Place a group that makes it (its routes fly on their own), or the Route tool.`, [`{pip:starved} ${ic(item)} none`]);
     const short = ins.find((r) => routeCap(g, HF, r) < 0.9 * routeWant(g, HF, r));
     if (short) return routeCause(g, short) ?? c('', []);
     const src = ins.map((r) => hent(g, HF, r.from)).find((f): f is FEnt => !!f && f.kind === 'module' && f.state !== 'work' && !seen.has(f.id));
@@ -260,12 +273,29 @@ function districtCause(g: Game, m: FEnt, seen: Set<number>): Cause {
     return c(`${name}: starved of ${ic(item)} ${lc(item)}. Its sources make less than it wants: another group making it.`, [`{pip:starved} ${ic(item)}`]);
   }
   const outs = st.routes.filter((r) => r.from === m.id && (!item || r.item === item));
-  if (!outs.length) return c(`${name}: nothing takes its ${ic(item)} ${lc(item)}. A route to the Dock or a group.`, [`{pip:blocked} ${ic(item)}`]);
+  if (!outs.length) return limitCause(g) ?? c(`${name}: nothing takes its ${ic(item)} ${lc(item)}. A route to the Dock or a group.`, [`{pip:blocked} ${ic(item)}`]);
   const short = outs.find((r) => routeCap(g, HF, r) < 0.9 * routeWant(g, HF, r));
   if (short) return routeCause(g, short) ?? c('', []);
   const dst = outs.map((r) => hent(g, HF, r.to)).find((f): f is FEnt => !!f && f.kind === 'module' && f.state !== 'work' && !seen.has(f.id));
   if (dst) return districtCause(g, dst, seen);
+  // into the Dock, the Hopper or the Bay (they take all), not short: Overdrive's surplus draining
+  // as it cools, nothing to fix (the review: "Stuck?" picked trivia)
+  if (outs.every((r) => hent(g, HF, r.to)?.kind !== 'module')) return c('', []);
   return c(`${name}: its ${ic(item)} ${lc(item)} backs up. Another route out, or a group that uses it.`, [`{pip:blocked} ${ic(item)}`]);
+}
+
+/** The floor's route cap, when it is what keeps a group unrouted (DESIGN.md §21 "The floor's
+ *  limit"): a lot adds 20, a fold packs a group's routes into one tile. */
+function limitCause(g: Game): Cause | null {
+  const st = g.s[HF]!;
+  const max = maxRoutes(g, HF);
+  if (st.routes.length < max) return null;
+  const lot = lotPrice(g, HF);
+  return {
+    key: 'cap', floor: HF, kind: 'goal', id: -1, x: NaN, y: NaN, name: 'the route cap',
+    say: `Every route this floor holds is flown (${st.routes.length}/${max}). ${lot ? `A lot adds ${RULES.routesPerLot.value} routes, ` : ''}${HF === 'beyond' ? 'or lift a group that sells least.' : 'or fold a group into one tile: its routes pack into its ports.'}`,
+    chips: [`{warn:routes ${st.routes.length}/${max}}`, ...(lot ? [`a lot {coin:${lot.format()}}`] : [])],
+  };
 }
 
 function districtCauses(g: Game, f: 'district' | 'world' | 'beyond'): { cause: Cause; cost: number }[] {
@@ -285,22 +315,66 @@ function districtCauses(g: Game, f: 'district' | 'world' | 'beyond'): { cause: C
   }
   for (const m of st.ents) {
     if (m.kind !== 'module' || m.paused || (m.state !== 'starved' && m.state !== 'blocked')) continue;
+    // a waste with nowhere to go blocks nothing up here (the chute takes it): never a cause
+    if (m.state === 'blocked' && m.why && BYPRODUCTS.has(m.why as ItemId)) continue;
     add(districtCause(g, m, new Set()), moduleWorth(g, m) * Math.max(0.25, 1 - m.fAvg));
   }
-  return [...by.values()];
+  // under 1% of the income a minute is trivia on a floor this big (the review: "Press 6 starved,
+  // 620/min lost" at 15 h, 0.1% of income)
+  const floor = g.incomePerMin() * 0.01;
+  return [...by.values()].filter((q) => q.cost >= floor);
 }
 
 // ------------------------------------------------------------------ the answer
 
-/** The bottleneck on a floor that costs the most output, or what the next goal needs. */
+/** A cause, the coin a minute it costs, and how much of that is output the current goal wants. */
+interface Ranked { cause: Cause; cost: number; goal: number }
+
+/** The items the current goal names (its line and its chips: a research node's, an order's or a
+ * Megaproject's wants), and the items one recipe before them. */
+export function goalItems(g: Game, floor: Floor): Set<string> {
+  const goal = nextGoal(g, floor);
+  const out = new Set<string>();
+  if (!goal) return out;
+  for (const m of [goal.text, ...(goal.chips ?? [])].join(' ').matchAll(/\{i:([A-Za-z0-9]+)\}/g)) if (m[1] in ITEMS) out.add(m[1]);
+  for (let depth = 0; depth < 1; depth++)
+    for (const it of [...out]) for (const r of RECIPES) if (r.outputs.some((o) => o.item === it)) for (const i of r.inputs) out.add(i.item);
+  return out;
+}
+
+/** Every bottleneck on a floor worth naming: the ones holding up the current goal first (by how
+ * much of the goal's output they stop), then by the coin a minute they cost (the playability pass:
+ * at 15 h the answer was "Press 6 starved, 620/min lost", 0.1% of income). On the Workshop and the
+ * Factory a cause under 1% of income is left out (with no income yet, none is). */
+export function rankStuck(g: Game, floor: Floor): Stuck[] {
+  const high = floor === 'district' || floor === 'world' || floor === 'beyond';
+  const want = high ? new Set<string>() : goalItems(g, floor);
+  const all: Ranked[] = floor === 'factory' ? factoryCauses(g, want) : high ? districtCauses(g, floor).map((q) => ({ ...q, goal: 0 })) : workshopCauses(g, want);
+  const cut = high ? 0 : 0.01 * g.incomePerMin();
+  const kept = all.filter((q) => q.cost > 0 && q.cost >= cut);
+  kept.sort((a, b) => b.goal - a.goal || b.cost - a.cost || a.cause.key.localeCompare(b.cause.key));
+  return kept.map((q) => {
+    const { key: _k, ...c } = q.cause;
+    return { ...c, cost: q.cost, chips: [...c.chips, `{coin:${pm(q.cost)}}/min lost`, ...(q.goal > 0 ? ['{warn:holds up the goal}'] : [])] };
+  });
+}
+
+/** rankStuck, asked at most once a game second (the trouble bell asks every frame). */
+export function stuckList(g: Game, floor: Floor): Stuck[] {
+  const at = `${Math.floor(g.s.tick / 20)}|${g.version}|${g.fversion}|${g.hversion}`;
+  const c = cache.get(floor);
+  if (c && c.g === g && c.at === at) return c.v;
+  const v = rankStuck(g, floor);
+  cache.set(floor, { g, at, v });
+  return v;
+}
+const cache = new Map<string, { g: Game; at: string; v: Stuck[] }>();
+
+/** The bottleneck on a floor that holds the goal up most (else costs the most output), or what
+ * the next goal needs. */
 export function findStuck(g: Game, floor: Floor): Stuck {
-  const all = floor === 'factory' ? factoryCauses(g) : floor === 'district' || floor === 'world' || floor === 'beyond' ? districtCauses(g, floor) : workshopCauses(g);
-  all.sort((a, b) => b.cost - a.cost || a.cause.key.localeCompare(b.cause.key));
-  const top = all[0];
-  if (top && top.cost > 0) {
-    const { key: _k, ...c } = top.cause;
-    return { ...c, cost: top.cost, chips: [...c.chips, `{coin:${pm(top.cost)}}/min lost`] };
-  }
+  const top = rankStuck(g, floor)[0];
+  if (top) return top;
   const goal = nextGoal(g);
   return {
     floor, kind: 'goal', id: -1, x: goal?.tile ? goal.tile.x + 0.5 : NaN, y: goal?.tile ? goal.tile.y + 0.5 : NaN, name: 'the next goal', cost: 0,
@@ -309,9 +383,11 @@ export function findStuck(g: Game, floor: Floor): Stuck {
   };
 }
 
-/** Ask, and answer on screen: pan to it, pin its report, the Inspector says what to do. */
-export function whereStuck(app: App) {
-  const s = findStuck(app.game, app.floor);
+/** Ask, and answer on screen: pan to it, pin its report, the Inspector says what to do. `n` picks
+ * the nth cause (the trouble bell steps through them, the one holding up the goal first). */
+export function whereStuck(app: App, n = 0) {
+  const list = stuckList(app.game, app.floor);
+  const s = list.length ? list[n % list.length] : findStuck(app.game, app.floor);
   app.audio.sfx('open');
   if (s.kind === 'ent') { app.selected = s.id; app.lookAt(s.x, s.y); }
   else if (s.kind === 'module' && s.floor === 'factory') { app.fselected = s.id; app.lookAt(s.x, s.y); }
@@ -329,18 +405,6 @@ export function whereStuck(app: App) {
 /** The last answer (e2e and the debug handle). */
 export let last: Stuck | null = null;
 
-/** The button: under the Purse, beside the trouble bell (or in its place), once there is a line to
- * be stuck on. Returns the y under it. */
-export function stuckButton(app: App, L: Layout, top: number, bellBottom: number): number {
-  const g = app.game;
-  const ui = app.ui;
-  const lines = g.has('bellows') && (g.miners.length > 0 || g.s.research.done.length > 0 || g.s.factory.ents.some((e) => e.kind === 'module'));
-  if (!lines || g.s.scenario) return bellBottom;
-  const bell = ui.ids.get('nextProblem');
-  const belled = bellBottom > top;
-  const x = belled && bell ? bell.x + bell.w + 6 : L.bell.x;
-  const y = top + 4;
-  const w = 50, h = 17;
-  if (button(ui, 'whereStuck', x, y + 1, w, h, 'Stuck?', { tip: [{ text: '{big:Where am I stuck?}' }, { text: 'the dearest bottleneck on this floor' }, { text: '{k:LMB} show it  {k:G}' }] })) whereStuck(app);
-  return Math.max(bellBottom, y + h + 1);
-}
+// The "Stuck?" button that stood beside the bell is gone (the playability pass): the trouble bell
+// is the one place for trouble (topbar.ts bell: a click steps through rankStuck's causes, G asks
+// for the first).

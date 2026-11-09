@@ -2,7 +2,7 @@
 // are the same tag: hovered, it hangs on a string from what it reports on and shows the few rows
 // that matter (the status chip and its cause, the recipe and its rate, Overdrive, the verbs);
 // clicked, it is pinned (a pushpin) and shows every row: who feeds it and how much, where its
-// byproduct goes, its front, power, mode and Overdrive, and the line around it. Rows are built
+// byproduct goes, its front, power and Overdrive, and the line around it. Rows are built
 // from game state here, never parsed from src/sim/analysis.ts's sentences (those stay for the
 // tests and the offline history). Pillar 3: every fact the pre-180 report gave is a row here.
 import { C } from '../data/palette';
@@ -25,17 +25,17 @@ import { itemIcon } from '../render/sprites';
 import { nominal, feeders, entName, endsAtSink, outLinks, lineOf } from '../sim/analysis';
 import { shares } from '../sim/systems/stats';
 import { powerFactor, poleReach, drawKw } from '../sim/systems/power';
-import { modeSpeed, baseSpeed, veinBoost, byEvery } from '../sim/systems/machines';
+import { baseSpeed } from '../sim/systems/machines';
 import { islandDef, islandMiners, isWarm, warmPlant, plantReach, isPlant, repairPrice, softened, workingNeighbours, coldFactor } from '../sim/systems/islands';
 import { SEED_ORES, seedSide } from '../sim/systems/seed';
 import { krules } from '../sim/kernels';
-import { fname, feedsDock, mainItem, chuteCap, BYPRODUCTS } from '../sim/systems/modules';
+import { fname, feedsDock, mainItem, chuteCap, BYPRODUCTS, dockTakes } from '../sim/systems/modules';
 import { megaFrac, mainOutput } from '../render/factory';
 import { ITEM_IDS } from '../data/items';
 import { mouthLook } from './mouths';
 import type { Game } from '../sim/Game';
 import { gridIndex, capacity, powered, burnerOf, fuelCount, engineOf, producerKw, kw } from '../render/powerview';
-import { DX, DY, MODES, opposite, type Ent, type FEnt, type Mode } from '../sim/world';
+import { DX, DY, opposite, type Ent, type FEnt } from '../sim/world';
 import { tag, tagSize, rule, meter, button, uiIcon, type UIconName } from './chrome';
 import type { Rect, TipPlace } from '../ui/ui';
 import type { Layout } from './layout';
@@ -62,10 +62,6 @@ export interface Report {
   more?: Row[];
   /** the keycap verbs along the foot */
   verbs?: string;
-  /** a powered Workshop machine with Tuning (or Recycling): its mode buttons under the rows (pinned) */
-  modes?: Ent;
-  /** the modes it offers now (Tuning's, Recycling's), in MODES order */
-  modeList?: Mode[];
   /** a Chute Mouth: the items it can be set to, as buttons under the rows (pinned) */
   picker?: { e: Ent; items: ItemId[] };
   /** a ruin of the Old Works: its Repair button under the rows (pinned; Act IV, DESIGN.md §22) */
@@ -84,11 +80,13 @@ const RULE: Row = { t: 'rule' };
 
 /** per minute, the one number helper */
 const pm = (n: number) => plain(n, n < 10 ? 1 : 0);
+
+/** A facing as an arrow and a word: "→ east" (rot 0 east, 1 south, 2 west, 3 north). */
+export function facing(rot: number): string {
+  return [`${ICON.right} east`, `${ICON.down} south`, `${ICON.left} west`, `${ICON.up} north`][rot & 3];
+}
 const lc = (id: string | null | undefined) => (id ? itemName(id).toLowerCase() : 'input');
 const icon = (id: string | null | undefined) => (id && id in ITEMS ? `{i:${id}}` : '');
-
-export const MODE_NAME: Record<Mode, string> = { normal: 'Normal', efficient: 'Efficient', overclock: 'Overclocked', precision: 'Precision', recycling: 'Recycling', byproduct: 'Byproduct' };
-const MODE_SHORT: Record<Mode, string> = { normal: 'Norm', efficient: 'Eff', overclock: 'Over', precision: 'Prec', recycling: 'Recy', byproduct: 'Byp' };
 
 // ------------------------------------------------------------------ the Workshop's machines
 
@@ -96,7 +94,7 @@ const MODE_SHORT: Record<Mode, string> = { normal: 'Norm', efficient: 'Eff', ove
  * output): the crafts its buffer allows at its speed now. The same arithmetic as the report's. */
 function runLeft(app: App, m: Ent, r: RecipeDef, inputs: boolean, output: boolean): { sec: number; why: 'in' | 'out'; item: ItemId } | null {
   const g = app.game;
-  const sp = baseSpeed(g, m) * veinBoost(g, m) * Math.min(1, powerFactor(g, m));
+  const sp = baseSpeed(g, m) * Math.min(1, powerFactor(g, m));
   if (sp <= 0) return null;
   const craft = (r.time * TICK_RATE) / sp;
   let inN = Infinity, inItem: ItemId | null = null;
@@ -275,9 +273,8 @@ function machineReport(app: App, e: Ent): Report {
   else if (odOn && cool > 0) rows.push(rich(`{chip:soft:COOLING ${Math.ceil(cool / TICK_RATE)}s}`));
   // ---- the recipe, the rate now, a bar against its rate when busy
   if (nom.outs.length) {
-    // Milestone 13: at its recipe and its mode (Tuning's speeds), and what it makes now
-    // Pebble Isle's Miners dig 1.5x (Act IV)
-    const busy = nom.outs[0].perMin * (powered(e.kind) ? modeSpeed(e) : 1) * (e.kind === 'miner' ? islandMiners(g) : 1);
+    // Milestone 13: at its recipe, and what it makes now; Pebble Isle's Miners dig 1.5x (Act IV)
+    const busy = nom.outs[0].perMin * (e.kind === 'miner' ? islandMiners(g) : 1);
     const now = busy * sh.work * pf;
     const ins = nom.ins.map((i) => icon(i.item)).join(' ');
     const outs = nom.outs.map((o) => icon(o.item)).join(' ');
@@ -305,7 +302,7 @@ function machineReport(app: App, e: Ent): Report {
   if (r.byproduct) {
     const full = e.by >= RULES.outputCap.value;
     const to = byproductTo(app, e);
-    const route = `side ${icon(r.byproduct.item)} 1 per ${byEveryNow(e, r)} → ${full ? '{bad:nowhere}' : to ? to : '{warn:nowhere yet}'}`;
+    const route = `side ${icon(r.byproduct.item)} 1 per ${r.byproduct.every} → ${full ? '{bad:nowhere}' : to ? to : '{warn:nowhere yet}'}`;
     if (full || (e.state === 'blocked' && e.why === e.byItem)) rows.push(rich(route));
     else more.push(rich(route));
   }
@@ -316,18 +313,10 @@ function machineReport(app: App, e: Ent): Report {
     if (e.state === 'blocked' && !(e.why && e.why === e.byItem)) rows.push(rich(s));
     else more.push(rich(s));
   } else if (e.kind !== 'miner' && endsAtSink(g, e)) more.push(rich('front → {good:Dock or Hopper}'));
-  // ---- power and mode
+  // ---- power
   if (pw.rows.length) {
     if (pw.none) rows.push(...pw.rows);
     else more.push(...pw.rows);
-    const list = modesFor(g, e, r);
-    if (list.length > 1) {
-      const m = e.mode ?? 'normal';
-      const by = r.byproduct ? byEveryNow(e, r) : 0;
-      more.push(rich(`mode ${m === 'normal' ? '{soft:Normal}' : MODE_NAME[m]} · ${modeSpeed(e)}x speed${by && (m === 'recycling' || m === 'byproduct') ? ` · ${icon(r.byproduct!.item)} 1 per ${by}` : ''}`));
-      rep.modes = e;
-      rep.modeList = list;
-    }
   }
   // ---- the line around it (the first rows to go when the tag is too tall)
   more.push(...lineRows(app, e));
@@ -364,6 +353,14 @@ function lineRows(app: App, m: Ent): Row[] {
     const ratio = have / want;
     if (!worst || Math.abs(Math.log(ratio)) > Math.abs(Math.log(worst.ratio))) worst = { item, ratio };
   }
+  // a shortage is fixed from the source down: of the items short, the first whose makers are fed
+  // in full (the second playtest: Press 2's report said "+1 Press" for plates while the press itself
+  // starved for ingots, and the bell said "Add 1 Smelter"; the Smelter comes first)
+  const shortOf = (item: ItemId) => (made.get(item) ?? 0) > 0 && (made.get(item) ?? 0) / (used.get(item) ?? Infinity) < 0.88;
+  if (worst && worst.ratio < 1) {
+    const first = [...used.keys()].find((item) => shortOf(item) && !(makers.get(item) ?? []).some((mk) => nominal(mk, g).ins.some((i) => shortOf(i.item))));
+    if (first && first !== worst.item) worst = { item: first, ratio: made.get(first)! / used.get(first)! };
+  }
   if (worst && Math.abs(worst.ratio - 1) > 0.12) {
     const have = made.get(worst.item)!, want = used.get(worst.item)!;
     if (worst.ratio < 1) {
@@ -383,19 +380,6 @@ function lineRows(app: App, m: Ent): Row[] {
   const jams = ms.filter((e) => e.state === 'blocked' && e.why && e.why === e.byItem);
   if (jams.length) out.push(rich(`{bad:slag stuck} at ${jams.map((e) => entName(g, e)).join(', ')}`, true));
   return out;
-}
-
-/** Crafts per byproduct in the machine's mode now (Recycling halves the waste, Byproduct doubles it). */
-const byEveryNow = (e: Ent, r: RecipeDef) => byEvery(e, r) || r.byproduct?.every || 0;
-
-/** The modes a powered machine offers now: Normal, Tuning's three once researched, Recycling's
- * two once researched and only for a recipe with a byproduct (DESIGN.md §18, §21 Modes), and
- * whatever it runs in now. */
-export function modesFor(g: Game, e: Ent, r: RecipeDef | null): Mode[] {
-  const cur = e.mode ?? 'normal';
-  return MODES.filter((m) => m === 'normal' || m === cur
-    || ((m === 'efficient' || m === 'overclock' || m === 'precision') && g.done('tuning'))
-    || ((m === 'recycling' || m === 'byproduct') && g.done('recycling') && !!r?.byproduct));
 }
 
 // ------------------------------------------------------------------ the Chute (DESIGN.md §21)
@@ -544,8 +528,18 @@ function blockedRows(app: App, e: FEnt, item: ItemId): Row[] {
   const d = g.design(e.design)!;
   const r = g.routes.find((q) => q.from === e && !q.by);
   const to = r?.to ?? null;
-  if (!to) return [rich('front → {bad:nowhere} · trunk it to the Factory Dock')];
+  if (!to) {
+    // a module on the floor that wants it is the better place than the Dock
+    const user = g.s.factory.ents.find((q) => q.kind === 'module' && q !== e && (g.design(q.design)?.ins[item] ?? 0) > 0);
+    return [rich(user ? `front → {bad:nowhere} · trunk it into ${fname(g, user)}'s back` : 'front → {bad:nowhere} · trunk it to the Factory Dock')];
+  }
   const offered = d.outs[item] ?? 0;
+  // a byproduct (slag, oil) with nowhere to go: where it may go, and what clears it (the second
+  // playtest: the iron module's slag blocked the Gizmo trunk and nothing said where slag goes)
+  if (BYPRODUCTS.has(item) && !(to.kind === 'module' && (g.design(to.design)?.ins[item] ?? 0) > 0)) {
+    const into = to.kind === 'module' ? fname(g, to) : to.kind === 'fdock' ? 'the Factory Dock' : to.kind === 'fhopper' ? 'the Hopper' : fname(g, to);
+    return [rich(`→ ${into} {bad:takes no} ${icon(item)}`), rich(`a trunk out of its side to the {good:Factory Dock} carries ${icon(item)} off (scrapped)`)];
+  }
   if (to.kind === 'module') {
     const td = g.design(to.design);
     const name = fname(g, to);
@@ -554,13 +548,33 @@ function blockedRows(app: App, e: FEnt, item: ItemId): Row[] {
       const wants = td ? (Object.keys(td.ins) as ItemId[]).map((k) => icon(k)).join(' ') : '';
       return [rich(`→ ${name} {bad:takes no} ${icon(item)}`), rich(wants ? `it wants ${wants} · turn this trunk` : 'a source · takes nothing')];
     }
-    if (to.state === 'blocked') return [rich(`→ ${name} takes ${pm(takes)}/min · {bad:blocked itself}`)];
-    if (takes < offered * 0.98) return [rich(`→ ${name} takes ${pm(takes)} of ${pm(offered)}/min`), rich(`{soft:one trunk feeds one module}`)];
-    return [rich(`→ ${name} takes ${pm(takes)}/min · {warn:its store is full}`)];
+    // design rates are a second: the report speaks a minute (the second playtest read "takes 0.6 of 1/min")
+    if (to.state === 'blocked') return [rich(`→ ${name} uses ${pm(takes * 60)}/min · {bad:it is stuck itself}`)];
+    if (takes < offered * 0.98) return [rich(`→ ${name} uses ${pm(takes * 60)} of these ${pm(offered * 60)} a minute`), rich('{soft:it runs at that pace · the rest: a second consumer}')];
+    return [rich(`→ ${name} uses ${pm(takes * 60)}/min · {warn:its store is full}`)];
   }
   if (to.kind === 'fbay') return [rich('→ the Bay takes only {i:steel} {i:drillBit}')];
-  if (to.kind === 'fchute') return [rich(`→ the Factory Chute {bad:full} · ${chuteCap(g)} ${icon(item)} wait below`), rich('{soft:a Chute Mouth set to it empties it}')];
+  if (to.kind === 'fchute') return [rich(`→ the Factory Chute {bad:full} · ${chuteCap(g)} ${icon(item)} wait below`), rich('{soft:a Chute Mouth set to it empties it · no Dock buys it}')];
   return [rich(`trunk {bad:full} · ${FACTORY.trunkSpeed * 60}/min at most`), rich('{soft:give the module its own trunk}')];
+}
+
+/** A starved module: which input, and where it comes from: the placed module that makes it (trunk
+ * its front into this back), a design to place, or a line to fold (the second playtest). */
+function starvedRows(app: App, e: FEnt, item: ItemId, p: number): Row[] {
+  const g = app.game;
+  const rows: Row[] = [rich(`{chip:warn:STARVED} ${icon(item)} at its back · ${p}%`)];
+  if (!item || !(item in ITEMS)) return rows;
+  const fed = g.routes.filter((q) => q.to === e && !q.by).map((q) => g.design(q.from.design)).filter((q) => !!q);
+  const makes = (q: { outs: Partial<Record<ItemId, number>> }) => (q.outs[item] ?? 0) > 0;
+  if (fed.some((q) => makes(q!))) rows.push(rich(`its ${icon(item)} feed is short · {soft:a second copy, joined in}`));
+  else {
+    const placed = g.s.factory.ents.find((q) => q.kind === 'module' && q !== e && makes(g.design(q.design) ?? { outs: {} }));
+    const design = g.s.designs.find((q) => makes(q));
+    if (placed) rows.push(rich(`trunk ${fname(g, placed)}'s front into this back`));
+    else if (design) rows.push(rich(`place a ${icon(item)} module · trunk its front into this back`));
+    else rows.push(rich(`fold a ${icon(item)} line · {soft:its module feeds this one}`));
+  }
+  return rows;
 }
 
 function factoryReport(app: App, e: FEnt): Report {
@@ -572,7 +586,8 @@ function factoryReport(app: App, e: FEnt): Report {
     const r = g.routes.find((q) => q.tiles.includes(e));
     const cap = FACTORY.trunkSpeed * 60;
     const fl = Math.round(e.flow * 60);
-    rows.push(rich(`carrying ${fl}/min`));
+    rows.push(rich(`${facing(e.rot)} · carrying ${fl}/min`));
+    rows.push(rich('{k:R} turns it'));
     rows.push({ t: 'bar', frac: fl / cap, role: e.flow > FACTORY.trunkSpeed * 0.97 ? 'warn' : 'good', note: `of ${cap}/min` });
     if (r?.by) rows.push(rich('{reset:side route} · byproducts {i:slag} {i:oil}'));
     rep.verbs = '{k:R} turn  {k:X} remove';
@@ -587,8 +602,8 @@ function factoryReport(app: App, e: FEnt): Report {
   if (e.kind === 'fhopper') {
     rep.uicon = 'research';
     const sel = g.s.research.selected;
-    rows.push(rich(sel ? `{u:research} counts toward ${RESEARCH[sel].name}` : '{u:research} counts toward research'), rich('{i:machineKit} → the kits bank'));
-    rep.verbs = '{k:LMB} inspire';
+    rows.push(rich(sel ? `{u:research} counts toward ${RESEARCH[sel].name}` : '{u:research} counts toward research'));
+    rep.verbs = '{k:LMB} research';
     return rep;
   }
   if (e.kind === 'fbay') {
@@ -611,9 +626,17 @@ function factoryReport(app: App, e: FEnt): Report {
   rep.title = `${fname(g, e)}`;
   rows.push(rich(`{chip:${gradeRole(d.grade.letter)}:${d.grade.letter}} rates ×${d.grade.mult.toFixed(2)}${d.depth === 2 ? ` · {research:depth 2}` : ''}`));
   const p = Math.round(e.fAvg * 100);
+  // held back by a consumer that uses less than it makes: a ratio, not a fault (the second
+  // playtest read BLOCKED on a wire module whose Gizmo used 34 of its 60 a minute)
+  const route = g.routes.find((q) => q.from === e && !q.by);
+  const paced = e.state === 'blocked' && !!e.why && !BYPRODUCTS.has(e.why) && route?.to?.kind === 'module'
+    && (g.design(route.to.design)?.ins[e.why as ItemId] ?? 0) > 0 && route.to.state !== 'blocked';
   if (e.state === 'work') rows.push(rich(`{chip:good:WORKING} ${p}% of full speed`));
-  else if (e.state === 'starved') rows.push(rich(`{chip:warn:STARVED} ${icon(e.why)} feed its back · ${p}%`));
-  else if (e.state === 'blocked') {
+  else if (e.state === 'starved') rows.push(...starvedRows(app, e, e.why as ItemId, p));
+  else if (paced) {
+    rows.push(rich(`{chip:warn:PACED} ${icon(e.why)} at ${p}% · as fast as it is used`));
+    rows.push(...blockedRows(app, e, e.why as ItemId));
+  } else if (e.state === 'blocked') {
     rows.push(rich(`{chip:bad:BLOCKED} ${icon(e.why)} backs up`));
     rows.push(...blockedRows(app, e, e.why as ItemId));
   } else rows.push(rich('{chip:soft:IDLE}'));
@@ -625,8 +648,16 @@ function factoryReport(app: App, e: FEnt): Report {
   const outs = Object.entries(d.outs) as [ItemId, number][];
   rows.push(rich(`out ${outs.map(([k, v]) => `${icon(k)} ${pm((v ?? 0) * 60)}/min`).join('  ')}`));
   const ins = Object.entries(d.ins) as [ItemId, number][];
-  if (ins.length) more.push(rich(`in ${ins.map(([k, v]) => `${icon(k)} ${pm((v ?? 0) * 60)}/min`).join('  ')} {soft:at its back}`));
+  // what it needs, and how: every input comes in at its back, along the one trunk that ends there;
+  // two feeds join that trunk (a trunk may run into another's side), no part needed (the second
+  // playtest gave up on a two-input Gizmo module)
+  if (ins.length) {
+    rows.push(rich(`needs ${ins.map(([k, v]) => `${icon(k)} ${pm((v ?? 0) * 60)}`).join(' + ')} /min {soft:at its back}`));
+    if (ins.length > 1) (e.state === 'starved' ? rows : more).push(rich('{soft:one trunk into its back · run each feed into that trunk}'));
+  }
+  const byOut = (Object.keys(d.outs) as ItemId[]).filter((k) => BYPRODUCTS.has(k));
   if (g.routes.some((q) => q.from === e && q.by && q.to)) more.push(rich('{reset:byproducts} → its side trunk'));
+  else if (byOut.length) more.push(rich(`${byOut.map(icon).join(' ')} leaves by its front · {soft:or a side trunk to the Dock}`));
   more.push(rich(feedsDock(g, e) ? 'reaches the {good:Factory Dock}' : '{warn:does not reach the Factory Dock}'));
   if (d.depth === 2) more.push(rich(`{research:depth 2} · folded from ${(d.fparts ?? []).filter((q) => q.kind === 'module').length} modules`));
   const odReady = odOn && !od && !cool;
@@ -650,9 +681,14 @@ function factoryChuteReport(app: App, e: FEnt, rep: Report): Report {
   const feeds = chuteFeeds(g);
   const full = chuteFull(g);
   const taking = feeds.filter((f) => f.flow > 0.01);
-  if (full.length) rows.push(rich(`{chip:bad:FULL} ${full.map((k) => icon(k)).join(' ')} ${cap}/${cap} · its trunk backs up`));
-  else if (taking.length) rows.push(rich('{chip:good:TAKING} drops it to the Workshop'));
-  else rows.push(rich(feeds.length ? '{chip:warn:WAITING} nothing on its trunks' : '{chip:soft:IDLE} trunk goods into it'));
+  // past its stock's room it sells on at the Factory Dock (the second playtest: a full Chute
+  // stopped every module trunked into it); only what no Dock buys still backs up
+  const stuck = full.filter((k) => !dockTakes(k));
+  const onward = full.filter((k) => dockTakes(k));
+  if (stuck.length) rows.push(rich(`{chip:bad:FULL} ${stuck.map((k) => icon(k)).join(' ')} ${cap}/${cap} · its trunk backs up`));
+  if (onward.length) rows.push(rich(`{chip:warn:FULL} ${onward.slice(0, 4).map((k) => icon(k)).join(' ')} · the rest goes on to the {good:Factory Dock}`));
+  if (!full.length && taking.length) rows.push(rich('{chip:good:TAKING} drops it to the Workshop'));
+  else if (!full.length) rows.push(rich(feeds.length ? '{chip:warn:WAITING} nothing on its trunks' : '{chip:soft:IDLE} trunk goods into it'));
   for (const f of feeds.slice(0, 3)) rows.push(rich(`← ${icon(f.item)} ${pm(f.flow * 60)}/min`));
   const held = (Object.entries(g.s.chute ?? {}) as [ItemId, number][]).filter(([, v]) => v >= 1);
   if (held.length) rows.push(rich(`stock ${held.slice(0, 5).map(([k, v]) => `${icon(k)} ${Math.floor(v)}/${cap}`).join('  ')}`));
@@ -669,17 +705,11 @@ function factoryChuteReport(app: App, e: FEnt, rep: Report): Report {
 
 // ------------------------------------------------------------------ laying out and drawing
 
-interface Laid { rep: Report; rows: { row: Row; h: number }[]; cw: number; w: number; h: number; verbsH: number; modesH: number; /** the Chute Mouth's item picker */ pickH: number; /** rows left out to fit (optional ones count half) */ cut: number; /** the brief hover: the name in Reed */ brief: boolean }
+interface Laid { rep: Report; rows: { row: Row; h: number }[]; cw: number; w: number; h: number; verbsH: number; /** the Chute Mouth's item picker */ pickH: number; /** rows left out to fit (optional ones count half) */ cut: number; /** the brief hover: the name in Reed */ brief: boolean }
 
 const ROW_GAP = 1;
 const BAR_H = 9;
-const MODES_H = 15;
 const REPAIR_H = 17;
-/** After a Repair the report's mode keys stand where the Repair button was: they ignore clicks this
- * long (a double click on Repair would otherwise switch the mode). */
-const REPAIR_GUARD = 0.4;
-/** when the last Repair went through (UI time) */
-let repairedAt = -10;
 const MIN_CW = 116;
 /** the brief hover's narrowest content and most rows */
 const BRIEF_CW = 64;
@@ -696,7 +726,7 @@ function briefOf(rep: Report): Report {
   let room = BRIEF_ROWS - all.filter(cause).length;
   const rows = all.length <= BRIEF_ROWS ? all : all.filter((r) => cause(r) || room-- > 0);
   const lmb = rep.verbs?.split('  ').find((v) => v.startsWith('{k:LMB}'));
-  return { ...rep, rows, more: [], modes: undefined, verbs: lmb ? lmb.replace(/^\{k:LMB\} pin$/, '{k:LMB} more') : undefined };
+  return { ...rep, rows, more: [], verbs: lmb ? lmb.replace(/^\{k:LMB\} pin$/, '{k:LMB} more') : undefined };
 }
 
 function rowH(r: Row, cw: number): number {
@@ -714,12 +744,11 @@ function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: 
   const titleW = (brief ? textWidth(rep.title) : bigWidth(bigSafe(rep.title))) + (rep.item || rep.uicon ? 12 : 0) + (closeBtn ? 16 : 0);
   const natural = Math.max(...rows.map((r) => (r.t === 'rich' ? richWidth(r.s) : r.t === 'bar' ? 150 : 0)), rep.verbs ? richWidth(rep.verbs) : 0);
   const cw = Math.min(maxCw, Math.max(brief ? BRIEF_CW : MIN_CW, titleW, natural));
-  const modesH = full && rep.modes ? modeGrid(rep.modeList?.length ?? 4).rows * MODES_H + ROW_GAP : 0;
   const pickH = (full && rep.picker ? pickGrid(rep.picker.items.length, cw).h + ROW_GAP : 0) + (full && (rep.repair || rep.turn) ? REPAIR_H + ROW_GAP : 0) + (full && rep.skin ? skinKeysH(rep.skin) : 0);
   const verbsH = rep.verbs ? layoutRich(rep.verbs, cw).h + 4 : 0;
   const measure = (rs: Row[]) => {
     const hs = rs.map((row) => ({ row, h: rowH(row, cw) }));
-    const ch = titleH + 3 + hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + modesH + pickH + verbsH;
+    const ch = titleH + 3 + hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + pickH + verbsH;
     return { hs, outer: tagSize(cw, ch, 'left').h };
   };
   let m = measure(rows);
@@ -733,8 +762,8 @@ function lay(rep: Report, full: boolean, maxCw: number, maxH: number, closeBtn: 
     rows = [...rows.slice(0, keep), rich(`{soft:+${more} more ${more > 1 ? 'rows' : 'row'}}`)];
     m = measure(rows);
   }
-  const sz = tagSize(cw, titleH + 3 + m.hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + modesH + pickH + verbsH, 'left');
-  return { rep, rows: m.hs, cw, w: sz.w, h: sz.h, verbsH, modesH, pickH, cut, brief };
+  const sz = tagSize(cw, titleH + 3 + m.hs.reduce((s, r) => s + r.h + ROW_GAP, 0) + pickH + verbsH, 'left');
+  return { rep, rows: m.hs, cw, w: sz.w, h: sz.h, verbsH, pickH, cut, brief };
 }
 
 /** Draw a laid-out report as a tag at (x, y): on a string to `anchor`, or pinned. */
@@ -763,19 +792,6 @@ function drawLaid(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: nu
     } else rule(ui, r.x, yy + 2, L.cw);
     yy += h + ROW_GAP;
   }
-  if (L.modesH && rep.modes) {
-    const e = rep.modes;
-    const list = rep.modeList ?? MODES.slice(0, 4);
-    const grid = modeGrid(list.length);
-    const bw = Math.floor((L.cw - 3 * (grid.per - 1)) / grid.per);
-    const r0 = e.recipe ? RECIPE[e.recipe] : null;
-    list.forEach((m, i) => {
-      const cur = (e.mode ?? 'normal') === m;
-      const bx = r.x + (i % grid.per) * (bw + 3), by = yy + Math.floor(i / grid.per) * MODES_H;
-      if (button(ui, 'mode_' + m, bx, by, bw, MODES_H - 1, richWidth(MODE_NAME[m]) + 8 <= bw ? MODE_NAME[m] : MODE_SHORT[m], { active: cur, tip: modeTip(m, BUILD[e.kind].kw ?? 0, cur, r0) }) && !cur && ui.time - repairedAt > REPAIR_GUARD) app.act({ k: 'mode', x: e.x, y: e.y, mode: m });
-    });
-    yy += L.modesH;
-  }
   if (L.pickH && rep.picker) {
     drawPicker(app, rep.picker.e, rep.picker.items, r.x, yy, L.cw);
     yy += L.pickH;
@@ -787,7 +803,7 @@ function drawLaid(app: App, L: Laid, x: number, y: number, o: { anchor?: { x: nu
     const afford = app.game.s.coin.gte(p);
     const label = p ? `Repair · {coin:${p.toLocaleString('en-US')}}` : 'Repair · free';
     const tip = [{ text: `{big:Repair}` }, { text: `${p ? `{coin:${p.toLocaleString('en-US')}}` : 'free'} · a quarter of a new one` }, { text: afford ? '{k:LMB} it runs as it was set' : '{bad:not enough coin yet}' }];
-    if (button(ui, 'repairRuin', r.x, yy, L.cw, REPAIR_H - 1, label, { gold: afford, tip }) && app.act({ k: 'repair', x: e.x, y: e.y }).ok) repairedAt = ui.time;
+    if (button(ui, 'repairRuin', r.x, yy, L.cw, REPAIR_H - 1, label, { gold: afford, tip })) app.act({ k: 'repair', x: e.x, y: e.y });
     yy += REPAIR_H + ROW_GAP;
   }
   if (L.pickH && rep.turn) {
@@ -852,23 +868,6 @@ function skinKeys(app: App, slot: SkinSlot, x: number, y: number, cw: number): n
     h += SKIN_ROW;
   }
   return h;
-}
-
-function modeTip(m: Mode, base: number, cur: boolean, r: RecipeDef | null = null) {
-  const sp = m === 'efficient' ? RULES.modeEfficientSpeed.value : m === 'overclock' ? RULES.modeOverclockSpeed.value : m === 'precision' ? RULES.modePrecisionSpeed.value
-    : m === 'recycling' ? RULES.modeRecyclingSpeed.value : m === 'byproduct' ? RULES.modeByproductSpeed.value : 1;
-  const pw = m === 'efficient' ? RULES.modeEfficientPower.value : m === 'overclock' ? RULES.modeOverclockPower.value : 1;
-  let extra = m === 'precision' ? ` · +${Math.round(RULES.modePrecisionYield.value * 100)}% main output` : '';
-  // Recycling and Byproduct (DESIGN.md §21 Modes): the byproduct every 2x or 0.5x the crafts
-  const by = r?.byproduct;
-  if (r && by && (m === 'recycling' || m === 'byproduct' || m === 'normal')) extra += ` · ${icon(by.item)} 1 per ${byEvery({ mode: m }, r)}${m === 'recycling' ? ' · half the waste' : m === 'byproduct' ? ' · twice the waste' : ''}`;
-  return [{ text: `{big:${MODE_NAME[m]}}` }, { text: `${sp}x speed · ${pw}x power · {power:${Math.round(base * pw)} kW}${extra}` }, { text: cur ? '{soft:its mode now}' : '{k:LMB} switch' }];
-}
-
-/** The mode buttons' grid: up to four in a row, six in two rows of three. */
-function modeGrid(n: number): { per: number; rows: number } {
-  const per = n <= 4 ? Math.max(1, n) : Math.ceil(n / 2);
-  return { per, rows: Math.ceil(Math.max(1, n) / per) };
 }
 
 const PICK = 16;

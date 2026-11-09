@@ -19,6 +19,8 @@ import { krules } from './kernels';
 /** Wide Belts (DESIGN.md §23): a belt tile holds two items, at least half a tile apart. */
 export const BELT_GAP = 0.5;
 export const wideBelt = (g: Game) => krules(g).beltItems > 1;
+/** What a Buffer Crate holds: 50, or 100 with Unit 7's rep 3 (Sorting Crates, DESIGN.md §18 Customers). */
+export const crateCap = (g: Game) => (g.s.orders.rep.unit7 >= 3 ? RULES.unit7Crate.value : BUILD.crate.capacity ?? 50);
 
 /** Does the active special order still want this item at the Workshop Dock? */
 export function orderWants(g: Game, item: string): boolean {
@@ -66,7 +68,7 @@ export function accepts(g: Game, to: Ent, item: string, dir: Dir): boolean {
     case 'heap':
       return item === 'slag' && to.count < prules(g).heapCap;
     case 'crate':
-      return enterSide !== to.rot && to.store.length < (BUILD.crate.capacity ?? 50);
+      return enterSide !== to.rot && to.store.length < crateCap(g);
     case 'splitter':
       return enterSide === opposite(to.rot) && to.store.length === 0;
     case 'merger':

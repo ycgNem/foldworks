@@ -12,9 +12,57 @@
 import { deflateRaw, inflateRaw } from './deflate';
 import { Num } from './num';
 import { OLD_RUBBLE } from '../data/worlds';
+import { ORDERS } from '../data/orders';
+import { RESEARCH, type ResearchId } from '../data/research';
+
+/** The Patent nodes the playability pass took out or re-derived (DESIGN.md §19 "What a Reorganize
+ * keeps"), with what each cost before: a v12 save is refunded them (v13). */
+export const OLD_HEAD_STARTS: Record<string, number> = {
+  bellows: 1, starterLine: 1, notebooks: 1, copperDeeds: 1, gearPatterns: 1, gizmoPatent: 1, foldingPatent: 1,
+  grant: 1, overdriveHabit: 1, coalRights: 1, steelCharter: 1, glassNotes: 2, circuitPatent: 2,
+};
+
+/** An order of Acts I-II (every research it needs is Act I or II's). */
+const actOneTwo = (o: { requires: ResearchId[] }) => o.requires.every((r) => (RESEARCH[r]?.act ?? 1) <= 2);
+
+/** Research nodes the playability pass cut with Machine Kits and machine modes (v15). */
+export const CUT_NODES: ReadonlySet<string> = new Set(['machineKits', 'tuning', 'recycling']);
+const KIT = 'machineKit';
+const PACK = 'packKit';
+
+/** Is this object a building on a floor (an Ent or an FEnt)? Its fields are emptied, never the
+ * building dropped; any other record naming kits (a route, a plan's tile) is dropped (v15). */
+const isBuilding = (o: Record<string, unknown>) => 'kind' in o && 'id' in o && 'inBuf' in o;
+
+/** Take every Machine Kit out of a parsed state, in place (v15): keys named for the item go, a list
+ * loses the item and every record (not a building) naming it, a building or machine holding kits
+ * holds nothing, a packKit recipe (or a kit filter) becomes none and the machine's craft is lost. */
+function scrubKits(v: unknown): unknown {
+  if (Array.isArray(v)) {
+    return v
+      .filter((x) => x !== KIT && !(x && typeof x === 'object' && !Array.isArray(x) && (x as Record<string, unknown>).item === KIT && !isBuilding(x as Record<string, unknown>)))
+      .map(scrubKits);
+  }
+  if (!v || typeof v !== 'object') return v;
+  const o = v as Record<string, unknown>;
+  for (const k of Object.keys(o)) {
+    const x = o[k];
+    if (k === KIT) delete o[k];
+    else if (x === KIT || x === PACK) {
+      o[k] = null;
+      if (k === 'outItem') o.out = 0;
+      else if (k === 'byItem') o.by = 0;
+      else if (k === 'item') { if ('p' in o) o.p = 0; if ('count' in o) o.count = 0; }
+      else if (k === 'item2') o.p2 = 0;
+      else if (k === 'recipe' && 'inBuf' in o) { o.inBuf = {}; o.active = false; o.prog = 0; }
+    } else if (x && typeof x === 'object' && !Array.isArray(x) && (x as Record<string, unknown>).item === KIT && !isBuilding(x as Record<string, unknown>)) delete o[k];
+    else o[k] = scrubKits(x);
+  }
+  return o;
+}
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 12;
+export const SAVE_VERSION = 16;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -193,6 +241,131 @@ export const MIGRATIONS: Record<number, Migration> = {
     }
     const log = Array.isArray(d.log) ? d.log.filter((l: { c?: { k?: string; kind?: string } }) => !(l?.c?.k === 'place' && l.c.kind === 'heater')) : d.log;
     return { ...d, snap: JSON.stringify(st), log, v: 12 };
+  },
+  // v13 (the playability pass, DESIGN.md §21 "Auto-routing"): placing a group on a high floor flies
+  // its routes on its own. A placement logged before did not, so it replays bare (`auto: false`) and
+  // the save stays exact.
+  12: (d) => {
+    const log = Array.isArray(d.log) ? d.log.map((l: { c?: { k?: string } }) => (l?.c?.k === 'hplace' ? { ...l, c: { ...l.c, auto: false } } : l)) : d.log;
+    return { ...d, log, v: 13 };
+  },
+  // v14 (the playability pass, DESIGN.md §19 "What a Reorganize keeps"): a Reorganize keeps Acts
+  // I-II's research and the Drawer's designs built, so the Patent tree's Act I-II head starts were
+  // taken out or re-derived: each one owned is refunded at its old price and leaves the tree (and
+  // Old Habits), so its Patents are chosen again. Orders filled in an earlier run are never offered
+  // again (`meta.ordersFilled`); an old save never wrote them down, so for a save past its first
+  // reset each customer's reputation not earned this run stands for that many of its Acts I-II
+  // orders, first offered first (an order it may not have filled is offered again, never the
+  // other way round: reputation counts fills, and Acts I-II's orders were re-offered every run).
+  13: (d) => {
+    if (typeof d.snap !== 'string') return { ...d, v: 14 };
+    const st = JSON.parse(d.snap);
+    const m = (st.meta ??= {});
+    let refund = 0;
+    if (Array.isArray(m.nodes)) {
+      for (const n of m.nodes) refund += OLD_HEAD_STARTS[n] ?? 0;
+      m.nodes = m.nodes.filter((n: string) => !(n in OLD_HEAD_STARTS));
+    }
+    if (Array.isArray(m.habits)) m.habits = m.habits.filter((n: string) => !(n in OLD_HEAD_STARTS));
+    if (refund > 0) {
+      const had = typeof m.patents === 'string' && m.patents.startsWith('N:') ? Num.parse(m.patents.slice(2)) : Num.ZERO;
+      m.patents = had.add(refund).toJSON();
+    }
+    if ((m.runs ?? 0) >= 1 && !Array.isArray(m.ordersFilled)) {
+      const rep: Record<string, number> = st.orders?.rep ?? {};
+      const now: string[] = Array.isArray(st.orders?.done) ? st.orders.done : [];
+      const filled: string[] = [];
+      for (const [c, r] of Object.entries(rep)) {
+        let before = (r ?? 0) - now.filter((id) => ORDERS.find((o) => o.id === id)?.customer === c).length;
+        for (const o of ORDERS) {
+          if (before <= 0) break;
+          if (o.customer !== c || !actOneTwo(o)) continue;
+          filled.push(o.id);
+          before -= o.rep;
+        }
+      }
+      m.ordersFilled = filled;
+    }
+    return { ...d, snap: JSON.stringify(st), v: 14 };
+  },
+  // v15 (the playability pass, DESIGN.md §18 and DECISIONS.md "cuts, Machine Kits and machine
+  // modes"): Machine Kits and machine modes are gone, with their research (Machine Kits, Tuning,
+  // Recycling). The nodes leave research done, selected and progress (and the Inspiration credited
+  // to them) with no refund: research is paid in items, and the items delivered are spent. Every
+  // Machine Kit goes: the parts bank, the Hoppers' and the Docks' tallies, belts, crates, machine
+  // and module buffers, the Chute, designs' rates (a design that made only kits takes and makes
+  // nothing), filings and records; packKit recipes are cleared (the assembler goes idle); a route
+  // or a plan's tile carrying kits is dropped. Every machine loses its mode (and Precision's
+  // fraction); a design folded with every machine in Normal (`normal`) keeps its audit for a
+  // refold (`refolds`), one folded with a machine in a mode does not, since nothing runs at those
+  // rates now. Logged commands that set a mode, a packKit recipe or a kit filter, pick a cut node or
+  // fly kits leave the log. The replay is exact against these rules (the same save loads to the
+  // same state every time), not against v14's: no mode's speed and no kit's cost apply now, as with
+  // the v12 Heater.
+  14: (d) => {
+    const drop = (c: { k?: string; recipe?: unknown; id?: unknown; item?: unknown }) =>
+      c.k === 'mode' || (c.k === 'recipe' && (c.recipe === PACK || c.recipe === KIT)) || (c.k === 'research' && CUT_NODES.has(String(c.id))) || (c.k === 'route' && c.item === KIT);
+    const log = Array.isArray(d.log) ? d.log.filter((l: { c?: { k?: string } }) => !(l?.c && drop(l.c))) : d.log;
+    if (typeof d.snap !== 'string') return { ...d, log, v: 15 };
+    const st = JSON.parse(d.snap);
+    const r = st.research;
+    if (r) {
+      if (Array.isArray(r.done)) r.done = r.done.filter((id: string) => !CUT_NODES.has(id));
+      if (CUT_NODES.has(r.selected)) r.selected = null;
+      for (const id of CUT_NODES) if (r.progress) delete r.progress[id];
+    }
+    for (const id of CUT_NODES) if (st.inspire) delete st.inspire[id];
+    delete st.parts;
+    const kitOnly = new Set<number>((st.designs ?? []).filter((q: { outs?: Record<string, number> }) => q.outs && KIT in q.outs).map((q: { id: number }) => q.id));
+    scrubKits(st);
+    for (const q of st.designs ?? []) {
+      if (kitOnly.has(q.id) && !Object.keys(q.outs ?? {}).length) q.ins = {};
+      if (q.normal === true) q.refolds = true;
+      delete q.normal;
+    }
+    for (const e of st.ents ?? []) {
+      delete e.mode;
+      delete e.bonus;
+    }
+    return { ...d, snap: JSON.stringify(st), log, v: 15 };
+  },
+  // v16 (the playability pass, cuts: DESIGN.md §6, §20 "Inspiration, cut"): Inspiration and the
+  // Lucky Vein are gone. What Inspiration credited a node was counted as items delivered, so it
+  // stays (the node is as far along as it was); its per-node record (`inspire`) and click counter
+  // go. A Lucky Vein on the map, the patches' glow (`veins`) and every machine's vein boost
+  // (`boost`) go; an Inspector on the map stays, without the kind it no longer needs. The two
+  // Inspiration trophies and the Tinfoil skin go (their flags, the skin owned and worn). A
+  // Challenge under way stays under way, even before the core ending (`challenge` untouched: never
+  // strand a run). The log: a click logged on a dropped vein leaves it (it would hand-mine the ore
+  // under it now). It is exact for a save written by the app (its log is empty); a log replayed
+  // past a Spark's spawn or with a Hopper click in it is not (the spawn draws less from the
+  // random state now, and the click credits nothing), as the v12 Heater's refund was not.
+  15: (d) => {
+    if (typeof d.snap !== 'string') return { ...d, v: 16 };
+    const st = JSON.parse(d.snap);
+    delete st.inspire;
+    delete st.veins;
+    if (st.counters) delete st.counters.inspiration;
+    if (Array.isArray(st.ents)) for (const e of st.ents) delete e.boost;
+    const veins: { x: number; y: number }[] = [];
+    if (Array.isArray(st.sparks)) {
+      for (const p of st.sparks) if (p?.kind === 'vein') veins.push({ x: p.x, y: p.y });
+      st.sparks = st.sparks.filter((p: { kind?: string }) => p?.kind !== 'vein').map(({ kind: _, ...p }: { kind?: string }) => p);
+    }
+    if (Array.isArray(st.flags)) st.flags = st.flags.filter((f: string) => f !== 'trophy:inspired' && f !== 'trophy:theyKnow');
+    const m = (st.meta ??= {});
+    if (Array.isArray(m.cosmetics)) m.cosmetics = m.cosmetics.filter((c: string) => c !== 'tinfoil');
+    if (m.skins) for (const [slot, id] of Object.entries(m.skins)) if (id === 'tinfoil') delete m.skins[slot];
+    let log = d.log;
+    if (Array.isArray(log) && veins.length) {
+      log = log.filter((l: { c?: { k?: string; x?: number; y?: number } }) => {
+        const i = l?.c?.k === 'click' ? veins.findIndex((v) => v.x === l.c!.x && v.y === l.c!.y) : -1;
+        if (i < 0) return true;
+        veins.splice(i, 1);
+        return false;
+      });
+    }
+    return { ...d, snap: JSON.stringify(st), log, v: 16 };
   },
 };
 

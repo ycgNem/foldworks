@@ -1,6 +1,7 @@
 // Statistics (the last system of the tick): each machine's state per second over the last minute
 // (the hover report's "starved of iron ore 41% of the last minute", the Inspector's U), and coin
 // earned per second over the last minute (the HUD's coin/min and offline extrapolation).
+import { noteRunPace } from '../reorganize';
 import type { Game } from '../Game';
 import type { Ent } from '../world';
 import { RULES } from '../../data/rules';
@@ -58,6 +59,9 @@ export function runStats(g: Game) {
     if (m.perMinRing.length > 5) m.perMinRing.shift();
     const avg = m.perMinRing.reduce((a, b) => a + b, 0) / m.perMinRing.length;
     if (m.perMinRing.length >= 5 && avg > m.peakPerMin) m.peakPerMin = avg;
+    // the returning run's pace (the playability pass, DESIGN.md §19): the Act II floor's peak, and
+    // when this run passed the last one's
+    if (m.perMinRing.length >= 5) noteRunPace(g, avg);
   }
 }
 

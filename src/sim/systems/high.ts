@@ -27,7 +27,6 @@ import { BYPRODUCTS, defaultName, mainItem, moduleBoost, moduleSecond, stepModul
 import { placeClaimRefusal } from './claims';
 import { hopperWantsWaste } from '../transfer';
 import { inBox, splusGate } from './audits';
-import { inspire } from './inspire';
 import { prules } from '../patents';
 import { lrules } from '../legacy';
 import { hasKernel } from '../kernels';
@@ -209,6 +208,36 @@ export function routeWant(g: Game, id: HighFloorId, r: SkiffRoute): number {
   return Math.min(make, (db?.ins[r.item] ?? 0) * drill);
 }
 
+/** Skiffs on this floor's routes that were paid for (not the Committee's or the Skiff Guild's). */
+export function paidSkiffs(g: Game, id: HighFloorId): number {
+  let n = 0;
+  for (const r of g.s[id]?.routes ?? []) n += Math.max(0, r.skiffs - unpaid(r));
+  return n;
+}
+
+/** The price of the next skiff (barge, courier) on this floor, with `paid` skiffs already flying
+ * (DESIGN.md §21 "Skiffs and coin"): the first at the floor's base price, each one more a step
+ * dearer, linear: base x (1 + paid / step). Taken off, a skiff is refunded at the price the last one
+ * cost, so buying and lifting the same skiff is even. */
+export function skiffPrice(g: Game, id: HighFloorId, paid = paidSkiffs(g, id)): number {
+  const f = HIGH[id];
+  return Math.round(f.skiffCost * (1 + Math.max(0, paid) / f.skiffStep));
+}
+
+/** What `n` more skiffs cost from `paid` on (the sum of their prices). */
+export function skiffsPrice(g: Game, id: HighFloorId, n: number, paid = paidSkiffs(g, id)): number {
+  let s = 0;
+  for (let i = 0; i < n; i++) s += skiffPrice(g, id, paid + i);
+  return s;
+}
+
+/** The refund for `n` skiffs taken off a floor flying `paid` (the prices of the last n bought). */
+function skiffsRefund(g: Game, id: HighFloorId, n: number, paid = paidSkiffs(g, id)): number {
+  let s = 0;
+  for (let i = 1; i <= n; i++) s += skiffPrice(g, id, paid - i);
+  return s;
+}
+
 /** The Great Drill's stage 1 boost every module runs at (DESIGN.md §19). */
 export const drillFactor = (g: Game) => (g.s.mega.stage >= 1 ? 1 + RULES.drillBoost.value : 1);
 
@@ -268,19 +297,202 @@ export function hplaceRefusal(g: Game, id: HighFloorId, design: number, x: numbe
   return placeClaimRefusal(g, d);
 }
 
-export function hplace(g: Game, id: HighFloorId, design: number, x: number, y: number): ActResult {
+/** Place a module. `auto` (the player's and the bots' placement: the command's default) flies its
+ * routes on its own (autoRoute, DESIGN.md §21 "Auto-routing"); the Town Plan places without it (it
+ * flies its own plan's routes). */
+export function hplace(g: Game, id: HighFloorId, design: number, x: number, y: number, auto = false): ActResult {
   const why = hplaceRefusal(g, id, design, x, y);
   if (why) return no(why);
   const st = g.s[id]!;
   const d = g.design(design)!;
   d.spare--;
-  st.ents.push(newFEnt(st.nextId++, 'module', x, y, 0, d.id));
+  const m = newFEnt(st.nextId++, 'module', x, y, 0, d.id);
+  st.ents.push(m);
   touch(g, id);
   g.bump('modulesPlaced');
   g.bump(id + 'Placed');
   g.emit({ type: 'place', x, y, id: 'module', floor: id });
   if (g.first(id + ':first')) g.emit({ type: 'firstHigh', x, y, id, floor: id });
+  if (auto) {
+    const a = autoRoute(g, id, m);
+    if (a.routes || a.short) g.emit({ type: 'autoRoute', x, y, value: a.routes, d: a.skiffs, id: a.short ?? '', floor: id });
+  }
   return OK;
+}
+
+// ------------------------------------------------------------------ auto-routing
+
+/** What a placement's auto-routing did: routes flown, skiffs on them, coin spent, and what stopped
+ * it short ('cap': the floor's routes are all taken; 'coin': a skiff it wanted cost more than the
+ * coin on hand), if anything did. */
+export interface AutoRouted { routes: number; skiffs: number; spent: number; short: 'cap' | 'coin' | null }
+
+/** At most this many feeders are flown to one input of a new module (a bulk input two feeders
+ * can't fill is a layout to rethink, not a fan of routes). */
+const AUTO_FEEDERS = 2;
+/** A feeder is flown to an input only when it can spare at least this share of the input's need
+ * (or all that is still missing): a route is a twentieth of a lot's worth of cap, not for crumbs. */
+const AUTO_CRUMB = 0.25;
+
+/** Items a second of `item` that reach module `c` by its routes now (each route's carrying power,
+ * or what its source makes of it, whichever is less). */
+function supplied(g: Game, id: HighFloorId, c: FEnt, item: ItemId): number {
+  let n = 0;
+  for (const r of g.s[id]!.routes) if (r.to === c.id && r.item === item) n += Math.min(routeCap(g, id, r), routeWant(g, id, r));
+  return n;
+}
+
+/** Items a second of `item` module `f` makes that no route to a module takes yet: all of it when no
+ * route carries it at all (it backs up, or goes down the chute), what its routes to modules leave
+ * otherwise; nothing when a route sells it at the Dock, the Hopper or the Bay (those take all, and a
+ * route that stands is left alone). */
+function spareOf(g: Game, id: HighFloorId, f: FEnt, item: ItemId): number {
+  const make = (g.design(f.design)?.outs[item] ?? 0) * drillFactor(g);
+  let used = 0;
+  for (const r of g.s[id]!.routes) {
+    if (r.from !== f.id || r.item !== item) continue;
+    const to = hent(g, id, r.to);
+    if (!to || to.kind !== 'module') return 0;
+    used += routeWant(g, id, r);
+  }
+  return Math.max(0, make - used);
+}
+
+/** What a feeder that only sells `item` (every route of it to the Dock or the Hopper, none to a
+ * module or the Bay) would share with one more route: half (routes from one output share it in
+ * turn). Its sale route stays: a new consumer takes its half, the Dock the rest. */
+function sharedOf(g: Game, id: HighFloorId, f: FEnt, item: ItemId): number {
+  let n = 0;
+  for (const r of g.s[id]!.routes) {
+    if (r.from !== f.id || r.item !== item) continue;
+    const k = hent(g, id, r.to)?.kind;
+    if (k !== 'fdock' && k !== 'fhopper') return 0;
+    n++;
+  }
+  return n ? ((g.design(f.design)?.outs[item] ?? 0) * drillFactor(g)) / (n + 1) : 0;
+}
+
+/** Does the research picked now still want this item at the Hopper? */
+function researchWants(g: Game, item: ItemId): boolean {
+  const sel = g.s.research.selected;
+  if (!sel) return false;
+  const want = RESEARCH[sel].cost[item as keyof (typeof RESEARCH)[typeof sel]['cost']] as number | undefined;
+  return !!want && (g.s.research.progress[sel]?.[item]?.toNumber() ?? 0) < want;
+}
+
+/** The floor's Dock, Hopper or Bay. */
+const fixture = (g: Game, id: HighFloorId, kind: 'fdock' | 'fhopper' | 'fbay') => g.s[id]!.ents.find((e) => e.kind === kind) ?? null;
+
+/** Where a new module's `item` goes (DESIGN.md §21 "Auto-routing"): the nearest module short of it
+ * (what its routes bring under what it takes), else the Bay when a project there wants it, the
+ * Hopper when the research picked does, the Dock when it sells, the Hopper (banked) last. */
+export function autoDest(g: Game, id: HighFloorId, m: FEnt, item: ItemId): FEnt | null {
+  const drill = drillFactor(g);
+  let best: FEnt | null = null, bd = Infinity;
+  for (const c of g.s[id]!.ents) {
+    if (c.kind !== 'module' || c === m || c.paused) continue;
+    const need = (g.design(c.design)?.ins[item] ?? 0) * drill;
+    if (need <= 1e-9 || need - supplied(g, id, c, item) <= 0.02 * need) continue;
+    const dd = routeDist(m, c);
+    if (dd < bd - 1e-9 || (Math.abs(dd - bd) <= 1e-9 && best && c.id < best.id)) { best = c; bd = dd; }
+  }
+  if (best && !routeRule(g, id, bd)) return best;
+  return autoSink(g, id, item);
+}
+
+/** Where an item no group wants goes: the Bay when a project there wants it, the Hopper when the
+ * research picked does, the Dock when it sells, the Hopper (banked) last. */
+function autoSink(g: Game, id: HighFloorId, item: ItemId): FEnt | null {
+  const bay = fixture(g, id, 'fbay');
+  if (bay && bayWants(g, id).has(item)) return bay;
+  if (researchWants(g, item)) return fixture(g, id, 'fhopper');
+  if (ITEMS[item].value > 0 && !ITEMS[item].refused) return fixture(g, id, 'fdock');
+  return fixture(g, id, 'fhopper');
+}
+
+/** Skiffs a route of this length needs to carry `want` items a second (one at least, the most a
+ * route takes at most). */
+export function skiffsFor(g: Game, id: HighFloorId, dist: number, want: number): number {
+  const per = skiffRateNow(g, id, dist);
+  if (per <= 0 || want <= 1e-9) return 1;
+  return Math.max(1, Math.min(maxSkiffs(g, id), Math.ceil(want / per - 1e-9)));
+}
+
+/** Fly a new module's routes (DESIGN.md §21 "Auto-routing"): each product it makes (not its waste:
+ * that goes down the chute) to where it is wanted, nearest first; each thing it takes from the
+ * nearest modules making it with a quarter of its need to spare (a feeder whose product backs up
+ * first, then one with some left after the groups it feeds, then one that only sells it, sharing;
+ * up to two feeders while its need is not met); each route with the skiffs that carry its rate.
+ * Idempotent: a route that stands is left alone and none is lifted; it stops at the route cap, and
+ * buys a skiff only with the coin on hand. */
+export function autoRoute(g: Game, id: HighFloorId, m: FEnt): AutoRouted {
+  const st = g.s[id];
+  const out: AutoRouted = { routes: 0, skiffs: 0, spent: 0, short: null };
+  const d = st && m.kind === 'module' ? g.design(m.design) : undefined;
+  if (!st || !d) return out;
+  const drill = drillFactor(g);
+  const fly = (a: FEnt, b: FEnt, item: ItemId, want: number): boolean => {
+    if (st.routes.some((r) => r.from === a.id && r.to === b.id && r.item === item)) return false;
+    if (st.routes.length >= maxRoutes(g, id)) { out.short ??= 'cap'; return false; }
+    if (routeRefusal(g, id, a.x, a.y, b.x, b.y, item)) {
+      if (!pocketSkiff(g) && g.s.coin.lt(skiffPrice(g, id))) out.short ??= 'coin';
+      return false;
+    }
+    const c0 = g.s.coin;
+    if (!addRoute(g, id, a.x, a.y, b.x, b.y, item).ok) return false;
+    const r = st.routes[st.routes.length - 1];
+    const need = skiffsFor(g, id, routeDist(a, b), want);
+    while (r.skiffs < need) if (!setSkiffs(g, id, r.id, 1).ok) { out.short ??= 'coin'; break; }
+    out.routes++;
+    out.skiffs += r.skiffs;
+    out.spent += c0.sub(g.s.coin).toNumber();
+    return true;
+  };
+  // what it makes, to where it is wanted
+  for (const [item, rate] of Object.entries(d.outs) as [ItemId, number][]) {
+    if (BYPRODUCTS.has(item) || rate <= 0) continue;
+    if (st.routes.some((r) => r.from === m.id && r.item === item)) continue;
+    const to = autoDest(g, id, m, item);
+    if (!to) continue;
+    const make = rate * drill;
+    const take = to.kind === 'module' ? Math.min(make, (g.design(to.design)?.ins[item] ?? 0) * drill - supplied(g, id, to, item)) : make;
+    if (!fly(m, to, item, Math.max(0, take)) || to.kind !== 'module') continue;
+    // a product over twice what that group takes also goes on to be sold (routes from one output
+    // share it in turn, half and half, so the group still gets all it takes; under twice, the
+    // group would starve on its half, and the module runs a little slower instead)
+    if (take < make / 2) {
+      const sink = autoSink(g, id, item);
+      if (sink) fly(m, sink, item, make - take);
+    }
+  }
+  // what it takes, from the nearest feeders with some to spare
+  for (const [item, rate] of Object.entries(d.ins) as [ItemId, number][]) {
+    let left = rate * drill - supplied(g, id, m, item);
+    if (left <= 1e-9) continue;
+    // the feeders in order: those whose product has no route (it backs up), then those with some
+    // left after the groups they feed, then those that only sell it (their sale route stays and
+    // shares with the new one), nearest first in each
+    const feeders = st.ents
+      .filter((f) => f.kind === 'module' && f !== m && !f.paused && (g.design(f.design)?.outs[item] ?? 0) > 0)
+      .map((f) => {
+        const free = !st.routes.some((r) => r.from === f.id && r.item === item);
+        const spare = spareOf(g, id, f, item);
+        const shared = spare > 1e-6 ? 0 : sharedOf(g, id, f, item);
+        return { f, spare: spare || shared, rank: free ? 0 : spare > 1e-6 ? 1 : 2, dist: routeDist(f, m) };
+      })
+      // a feeder with crumbs to spare (under a quarter of the need) is not worth a route of the cap
+      .filter((q) => q.spare > Math.min(left, rate * drill * AUTO_CRUMB) - 1e-9 && q.spare > 1e-6 && !routeRule(g, id, q.dist))
+      .sort((p, q) => p.rank - q.rank || p.dist - q.dist || p.f.id - q.f.id);
+    let n = 0;
+    for (const q of feeders) {
+      if (left <= 1e-9 || n >= AUTO_FEEDERS) break;
+      const carry = Math.min(q.spare, left);
+      if (!fly(q.f, m, item, carry)) continue;
+      left -= carry;
+      n++;
+    }
+  }
+  return out;
 }
 
 export function hremove(g: Game, id: HighFloorId, x: number, y: number): ActResult {
@@ -303,10 +515,14 @@ export function hremove(g: Game, id: HighFloorId, x: number, y: number): ActResu
 
 function dropRoute(g: Game, id: HighFloorId, r: SkiffRoute) {
   const st = g.s[id]!;
-  // a skiff the Committee gave (Pocket Skiffs, rep 6) or the Skiff Guild's (§22) is not refunded
-  g.s.coin = g.s.coin.add(HIGH[id].skiffCost * Math.max(0, r.skiffs - unpaid(r)));
+  // a skiff the Committee gave (Pocket Skiffs, rep 6) or the Skiff Guild's (§22) is not refunded;
+  // the paid ones at the prices the last ones bought cost (skiffPrice)
+  g.s.coin = g.s.coin.add(skiffsRefund(g, id, Math.max(0, r.skiffs - unpaid(r))));
   st.routes = st.routes.filter((q) => q !== r);
 }
+
+/** What flies a floor's routes, in words (DESIGN.md §21-23). */
+const carrierWord = (id: HighFloorId) => (id === 'beyond' ? 'courier' : id === 'world' ? 'barge' : 'skiff');
 
 /** The skiffs on a route nobody paid for: the Committee's and the Skiff Guild's. */
 const unpaid = (r: SkiffRoute) => (r.free ? 1 : 0) + (r.guild ? 1 : 0);
@@ -337,7 +553,7 @@ export function routeRefusal(g: Game, id: HighFloorId, fx: number, fy: number, t
   if (st.routes.length >= maxRoutes(g, id)) return `${maxRoutes(g, id)} routes is the most this floor holds now: a lot adds 20, or fold a group into one tile`;
   const lock = hauditLock(g, id, fx, fy) ?? hauditLock(g, id, tx, ty);
   if (lock) return lock;
-  if (!pocketSkiff(g) && g.s.coin.lt(HIGH[id].skiffCost)) return `A skiff costs ${Num.of(HIGH[id].skiffCost).format()} coin`;
+  if (!pocketSkiff(g) && g.s.coin.lt(skiffPrice(g, id))) return `A ${carrierWord(id)} costs ${Num.of(skiffPrice(g, id)).format()} coin`;
   return null;
 }
 
@@ -350,7 +566,7 @@ export function addRoute(g: Game, id: HighFloorId, fx: number, fy: number, tx: n
   const st = g.s[id]!;
   const a = hentAt(g, id, fx, fy)!, b = hentAt(g, id, tx, ty)!;
   const free = pocketSkiff(g);
-  if (!free) g.s.coin = g.s.coin.sub(HIGH[id].skiffCost);
+  if (!free) g.s.coin = g.s.coin.sub(skiffPrice(g, id));
   // the Skiff Guild (a Legacy node, DESIGN.md §22): a second skiff, free, that stays with the route
   const guild = lrules(g).skiffGuild;
   st.routes.push({ id: st.nextRoute++, from: a.id, to: b.id, item, skiffs: guild ? 2 : 1, flow: 0, moved: 0, ...(free ? { free: true } : {}), ...(guild ? { guild: true } : {}) });
@@ -368,14 +584,15 @@ export function setSkiffs(g: Game, id: HighFloorId, rid: number, delta: number):
   const f = HIGH[id];
   if (delta > 0) {
     if (r.skiffs >= maxSkiffs(g, id)) return no(`${maxSkiffs(g, id)} skiffs is the most a route takes now`);
-    if (g.s.coin.lt(f.skiffCost)) return no(`A skiff costs ${Num.of(f.skiffCost).format()} coin`);
-    g.s.coin = g.s.coin.sub(f.skiffCost);
+    const p = skiffPrice(g, id);
+    if (g.s.coin.lt(p)) return no(`A ${carrierWord(id)} costs ${Num.of(p).format()} coin`);
+    g.s.coin = g.s.coin.sub(p);
     r.skiffs++;
     g.bump('skiffs');
   } else {
     if (r.skiffs <= 1) return no('A route keeps one skiff: take the route off to lift it');
     if (r.skiffs <= unpaid(r)) return no('The free skiffs stay with the route: take the route off to lift them');
-    g.s.coin = g.s.coin.add(f.skiffCost);
+    g.s.coin = g.s.coin.add(skiffsRefund(g, id, 1));
     r.skiffs--;
   }
   g.emit({ type: 'skiff', value: r.skiffs, floor: id });
@@ -419,12 +636,11 @@ export function buyLot(g: Game, id: HighFloorId): ActResult {
   return OK;
 }
 
-/** A click on a high floor: the Hopper takes Inspiration; a module, Overdrive for it and every
- * module joined to it by routes (DESIGN.md §18, as the Factory's trunk groups). */
+/** A click on a high floor's module: Overdrive for it and every module joined to it by routes
+ * (DESIGN.md §18, as the Factory's trunk groups). */
 export function hclick(g: Game, id: HighFloorId, x: number, y: number): ActResult {
   const e = hentAt(g, id, x, y);
   if (!e) return no('nothing here');
-  if (e.kind === 'fhopper') return g.countClick() ? inspire(g, e.x + 1, e.y + 1, id) : no('too fast');
   if (e.kind !== 'module') return no('Click a module to overdrive it');
   if (!g.done('overdrive')) return no('Research Overdrive first');
   if ((e.od ?? 0) > 0) return no('Overdriven already');
@@ -640,7 +856,8 @@ function runFloor(g: Game, id: HighFloorId, st: HighFloorState) {
  * carry the smallest share of what it is wanted, if that share is under 90% and a skiff is under
  * 5% of the coin on hand. Ties go to the oldest route, so it is deterministic. */
 function dispatch(g: Game, id: HighFloorId, st: HighFloorState, f: HighFloorDef) {
-  if (g.s.coin.lt(f.skiffCost * 20)) return;
+  const price = skiffPrice(g, id);
+  if (g.s.coin.lt(price * 20)) return;
   let best: SkiffRoute | null = null, bestShare = 0.9;
   for (const r of st.routes) {
     if (r.skiffs >= maxSkiffs(g, id)) continue;
@@ -650,7 +867,7 @@ function dispatch(g: Game, id: HighFloorId, st: HighFloorState, f: HighFloorDef)
     if (share < bestShare) { best = r; bestShare = share; }
   }
   if (!best) return;
-  g.s.coin = g.s.coin.sub(f.skiffCost);
+  g.s.coin = g.s.coin.sub(price);
   best.skiffs++;
   g.bump('skiffs');
   g.bump('dispatched');
@@ -911,7 +1128,8 @@ export function hunfoldRefusal(g: Game, d: ModuleDesign): string | null {
     if (hentAt(g, id, x, y)) return `The box at ${d.box.x},${d.box.y} is not empty`;
   }
   const skiffs = (d.hroutes ?? []).reduce((n, r) => n + r.skiffs, 0);
-  if (g.s.coin.lt(skiffs * HIGH[id].skiffCost)) return `Its skiffs cost ${Num.of(skiffs * HIGH[id].skiffCost).format()} coin`;
+  const bill = skiffsPrice(g, id, skiffs);
+  if (g.s.coin.lt(bill)) return `Its ${carrierWord(id)}s cost ${Num.of(bill).format()} coin`;
   return null;
 }
 
@@ -926,7 +1144,7 @@ export function hunfold(g: Game, d: ModuleDesign) {
     return e;
   });
   for (const r of d.hroutes ?? []) {
-    g.s.coin = g.s.coin.sub(r.skiffs * HIGH[id].skiffCost);
+    g.s.coin = g.s.coin.sub(skiffsPrice(g, id, r.skiffs));
     st.routes.push({ id: st.nextRoute++, from: ents[r.from].id, to: ents[r.to].id, item: r.item, skiffs: r.skiffs, flow: 0, moved: 0 });
   }
   touch(g, id);

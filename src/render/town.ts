@@ -13,7 +13,9 @@
 // writes it.
 import { C, rgba } from '../data/palette';
 import { ORDER, CUSTOMERS, type CustomerId } from '../data/orders';
+import { MEGA, megaStage, partsReached } from '../data/megaprojects';
 import type { Game } from '../sim/Game';
+import { ordersEverFilled } from '../sim/systems/orders';
 import { TILE } from './ground';
 import { sheet, hasArt, frameNamed, type SpriteSheet } from './sprites';
 
@@ -58,6 +60,9 @@ const HOUSE_SLOTS: { x: number; row: number }[] = [
   { x: -3, row: BACK }, { x: 24, row: BACK }, { x: 2, row: 99 }, { x: 6, row: 99 }, { x: 10, row: 99 },
 ];
 const LAMPS = [2, 7, 12, 15, 20, 23];
+/** the drill crew's houses (the Great Drill's parts), on the far row clear of the reputation houses */
+const DRILL_SLOTS: { x: number; frame: string }[] = [{ x: 1, frame: 'brick' }, { x: 22, frame: 'tall' }, { x: -2, frame: 'brick' }];
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 /** Where the town may ever stand around a floor fw x fh (tile rects, x0 y0 inclusive, x1 y1
  *  exclusive), sprites' height included: the island keeps its trees and bushes out of them (the
@@ -118,12 +123,17 @@ export class Town {
   /** Every piece the state calls for, around a floor fw x fh tiles. */
   pieces(g: Game, fw: number, fh: number): TownPiece[] {
     const o = g.s.orders;
-    // fill times survive a reload or an offline run in the save (orders.doneAt)
-    for (const [k, t] of Object.entries(o.doneAt ?? {})) this.times[k] ??= t;
-    const v = `${o.done.join(',')}|${Object.keys(this.times).length}`;
+    // fill times survive a reload or an offline run in the save (orders.doneAt), and a Reorganize
+    // (meta.ordersAt: the Town is the record of every order ever filled, the playability pass)
+    for (const [k, t] of Object.entries({ ...(g.s.meta.ordersAt ?? {}), ...(o.doneAt ?? {}) })) this.times[k] ??= t;
+    const filled = ordersEverFilled(g);
+    // the Great Drill's parts (its stage 1's sub-goals, DESIGN.md §18): a crew building each
+    const parts = MEGA[0].parts ?? [];
+    const dp = g.s.mega.stage >= 1 ? parts.length : partsReached(megaStage(g.s.mega.stage), g.s.mega.progress);
+    const v = `${filled.join(',')}|${Object.keys(this.times).length}|${dp}`;
     if (this.cache && this.cache.v === v && this.cache.fw === fw && this.cache.fh === fh) return this.cache.pieces;
     const out: TownPiece[] = [];
-    const done = (id: string) => o.done.includes(id);
+    const done = (id: string) => filled.includes(id);
     const add = (p: TownPiece) => {
       // only on the rim (or deck) round the floor: left of, right of, above or below it, never on it
       const r = p.row === 99 ? fh + 1 : p.row;
@@ -154,14 +164,19 @@ export class Town {
       for (let i = 0; i < 4; i++) add({ key: 'frog' + i, group: 'festival', sprite: 'town_frog', frame: 0, x: 0, row: WALK, w: 1, z: 6, label: `A townsfrog at the Festival (${lab})`, anim: true, walker: i });
     }
     // the customers' buildings arrive with their first filled order
-    const first = (c: CustomerId) => o.done.find((id) => ORDER[id]?.customer === c);
+    const first = (c: CustomerId) => filled.find((id) => ORDER[id]?.customer === c);
     const u7 = first('unit7');
     if (u7) add({ key: 'unit7', group: 'unit7', sprite: 'town_unit7', frame: 0, x: 13, row: BACK, w: 2, z: 2, label: `Unit 7's observatory (${this.label(u7, ORDER[u7].name)})`, anim: true });
     const vt = first('voltaire');
     if (vt) add({ key: 'voltaire', group: 'voltaire', sprite: 'town_voltaire', frame: 0, x: 16, row: BACK, w: 2, z: 2, label: `Dame Voltaire's turbine pavilion (${this.label(vt, ORDER[vt].name)})`, anim: true });
+    // the drill crew's houses on the far row, one for each part of the Great Drill's stage 1
+    for (let i = 0; i < dp; i++) {
+      const slot = DRILL_SLOTS[i];
+      if (slot) add({ key: 'drill' + i, group: 'drill' + i, sprite: 'town_house', frame: slot.frame, x: slot.x, row: FAR, w: 2, z: 1, label: `${cap(parts[i].piece)} (the Great Drill: ${parts[i].name})` });
+    }
     // a house for every reputation level, in the order the orders were filled
     const lvl: Partial<Record<CustomerId, number>> = {};
-    o.done.forEach((id, i) => {
+    filled.forEach((id, i) => {
       const d = ORDER[id];
       if (!d || i >= HOUSE_SLOTS.length) return;
       const n = (lvl[d.customer] = (lvl[d.customer] ?? 0) + d.rep);
@@ -187,7 +202,8 @@ export class Town {
     for (const [k, p] of groups) {
       if (this.known.has(k)) continue;
       this.known.add(k);
-      const text = NEWS[k] ?? (k.startsWith('rep:') ? `HOUSING: a family arrives by balloon, drawn by ${CUSTOMERS[ORDER[k.slice(4)]?.customer ?? 'bramble'].name}'s good word.` : null);
+      const dpart = k.startsWith('drill') ? MEGA[0].parts?.[Number(k.slice(5))] : undefined;
+      const text = dpart?.news ?? NEWS[k] ?? (k.startsWith('rep:') ? `HOUSING: a family arrives by balloon, drawn by ${CUSTOMERS[ORDER[k.slice(4)]?.customer ?? 'bramble'].name}'s good word.` : null);
       if (text) this.news.push({ text, x: (p.x + p.w / 2) * TILE, y: (p.row + 0.5) * TILE });
     }
   }
@@ -257,7 +273,7 @@ export class Town {
     // the deck under hover too (it was drawn first)
     for (const q of placed) if (q.p.sprite === 'town_boardwalk') this.drawn.unshift({ p: q.p, x: q.x, y: q.y, w: q.s.w, h: q.s.h });
     // bunting strung between the lamp posts once the Festival is on
-    if (g.s.orders.done.includes('gizmoFestival') && lampTops.length > 1) bunting(ctx, lampTops, time);
+    if (ordersEverFilled(g).includes('gizmoFestival') && lampTops.length > 1) bunting(ctx, lampTops, time);
   }
 
   /** The piece under a world pixel (frontmost first), if any. */

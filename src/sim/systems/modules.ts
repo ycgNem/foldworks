@@ -8,8 +8,8 @@
 // machine's buffer slots); what reaches the Dock or Hopper is paid out as whole items, as Nums.
 // Byproducts (slag, oil) leave a module by a side onto a trunk pointing away, like a Workshop
 // machine's (§4); with no such trunk they go out of the front with the rest.
-// Act II (§18): stamps of designs holding Act II buildings cost Machine Kits; copies of designs
-// with miners inside hold deposit claims; the Megaproject Bay takes its stage's items by trunk.
+// Act II (§18): copies of designs with miners inside hold deposit claims; the Megaproject Bay
+// takes its stage's items by trunk. A stamp costs coin only, in every act.
 import type { Game, ActResult } from '../Game';
 import { OK, no } from '../Game';
 import { Num } from '../../engine/num';
@@ -20,7 +20,7 @@ import { annexPrice } from './annex';
 import { RULES } from '../../data/rules';
 import { RECIPES } from '../../data/recipes';
 import { ITEMS, itemName, type ItemId } from '../../data/items';
-import { MEGA, megaStage, type MegaStage } from '../../data/megaprojects';
+import { MEGA, megaStage, partsReached, type MegaStage } from '../../data/megaprojects';
 import { DX, DY, ccw, cw, newFEnt, opposite, type Dir, type FEnt, type ModuleDesign } from '../world';
 import { entsIn, inBox, gradedAudit } from './audits';
 import { claimRefusal, oresOf, placeClaimRefusal } from './claims';
@@ -30,7 +30,7 @@ import { prules } from '../patents';
 import { hunfold, hunfoldRefusal } from './high';
 import { krules } from '../kernels';
 import { trules } from '../longtail';
-import { firstStampKitFree, stampRule } from './challenges';
+import { handMadeFree, stampRule } from './challenges';
 
 const DT = 1 / TICK_RATE;
 
@@ -92,9 +92,8 @@ export function foldAudited(g: Game, name: string | null, id?: number): ActResul
     bill,
     stamped: 0,
     spare: 1,
-    // a kept design refolds after a short check only if its machines ran in their normal modes
-    // (the parts list keeps no mode, so an overclocked line unfolds slower than it was graded)
-    normal: ents.every((e) => !isMachine(e.kind) || (e.mode ?? 'normal') === 'normal'),
+    // its audit can come back as a kept copy's card (the refold check, DESIGN.md §19)
+    refolds: true,
   };
   g.s.designs.push(d);
   // the machines go into the module; the belts and the rest are refunded; the box empties
@@ -108,8 +107,37 @@ export function foldAudited(g: Game, name: string | null, id?: number): ActResul
   g.bump('grade:' + res.grade.letter);
   g.first('factoryOpen');
   g.emit({ type: 'fold', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, id: d.grade.letter, value: d.id, d: a.box.w * a.box.h });
-  if (g.first('firstFold')) g.emit({ type: 'firstFold', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, value: d.id });
+  // the first fold ever (DESIGN.md §10 The first fold): the module goes to work at once beside the
+  // Factory Dock, so the line's income never stops while a player learns to place it
+  const placed = (g.s.counters.folds ?? 0) === 1 ? placeFirst(g, d) : null;
+  if (g.first('firstFold')) g.emit({ type: 'firstFold', x: a.box.x + a.box.w / 2, y: a.box.y + a.box.h / 2, value: d.id, ...(placed ? { x2: placed.x, y2: placed.y } : {}) });
   return OK;
+}
+
+/** Tiles beside the Factory Dock (2x2 at FACTORY.dock), each facing it: the first module's place. */
+export function dockSides(): { x: number; y: number; rot: Dir }[] {
+  const { x, y } = FACTORY.dock;
+  return [
+    { x: x + 1, y: y - 1, rot: 1 }, { x, y: y - 1, rot: 1 },
+    { x: x - 1, y, rot: 0 }, { x: x - 1, y: y + 1, rot: 0 },
+    { x, y: y + 2, rot: 3 }, { x: x + 1, y: y + 2, rot: 3 },
+  ];
+}
+
+/** Put a new design's copy on the first free tile beside the Factory Dock, facing it; the tile, or
+ * null if every side is taken (it stays in the inventory then). */
+function placeFirst(g: Game, d: ModuleDesign): { x: number; y: number } | null {
+  for (const t of dockSides()) {
+    if (fplaceRefusal(g, 'module', t.x, t.y, d.id)) continue;
+    if (fplace(g, 'module', t.x, t.y, t.rot as Dir, d.id).ok) return { x: t.x, y: t.y };
+  }
+  return null;
+}
+
+/** Is the next stamp the free one (DESIGN.md §10 The first fold: the first stamp ever, once a line
+ * is folded)? Counted over the save's lifetime (the counters outlive a Reorganize). */
+export function stampFree(g: Game): boolean {
+  return RULES.firstStampFree.value > 0 && (g.s.counters.folds ?? 0) >= 1 && (g.s.counters.stamps ?? 0) === 0;
 }
 
 /** Copies so far of everything making the same main product: stamps of every such design, plus
@@ -131,17 +159,16 @@ export function productCopies(g: Game, d: ModuleDesign): number {
 }
 
 /** What the next copy of a design costs: bill x (1 + 0.5 n), linear (DESIGN.md §10 Stamp), n
- * counted over every design of the same product. */
+ * counted over every design of the same product. Free: the first stamp ever (§10 The first fold),
+ * and each design's first once Hand-Made is won (a Challenge, §24). */
 export function stampCost(g: Game, d: ModuleDesign): Num {
+  if (stampFree(g) || handMadeFree(g, d.stamped)) return Num.ZERO;
   return Num.of(Math.round(d.bill * (1 + RULES.stampGrowth.value * productCopies(g, d))));
 }
 
-/** Does the design hold an Act II building (directly, or in a module it was folded from)? */
-export function holdsAct2(g: Game, d: ModuleDesign, depth = 0): boolean {
-  if (depth > 4) return false;
-  const sub = subDesigns(g, d);
-  if (sub) return sub.some((c) => holdsAct2(g, c, depth + 1));
-  return d.parts.some((p) => !!BUILD[p.kind].act2);
+/** What each further copy of this product adds to the stamp price: half the bill (linear, §10). */
+export function stampStep(d: ModuleDesign): Num {
+  return Num.of(Math.round(d.bill * RULES.stampGrowth.value));
 }
 
 /** The designs a folded group was made of (a depth-2 design's modules, a depth-3's groups), one
@@ -152,27 +179,12 @@ export function subDesigns(g: Game, d: ModuleDesign): ModuleDesign[] | null {
   return null;
 }
 
-/** Machine Kits a copy of this design takes (DESIGN.md §18): 1 + floor(bill / 1,500), or none for
- * a design of slice-era machines only. */
-export function kitsFor(g: Game, d: ModuleDesign): number {
-  // the Committee's Pocketed Kits (reputation 3, §19) takes one off, never below none; Hand-Made
-  // won (a Challenge, §24) makes a design's first stamp take none
-  if (firstStampKitFree(g, d.stamped)) return 0;
-  return holdsAct2(g, d) ? Math.max(0, 1 + Math.floor(d.bill / RULES.kitDivisor.value) - prules(g).kitsOff) : 0;
-}
-
 /** Why the next copy can't be stamped, or null. */
 export function stampRefusal(g: Game, d: ModuleDesign): string | null {
   const rule = stampRule(g);
   if (rule) return rule;
   const cost = stampCost(g, d);
   if (g.s.coin.lt(cost)) return `A copy costs ${cost.format()} coin`;
-  const kits = kitsFor(g, d);
-  if (kits > 0 && g.s.parts.lt(kits)) {
-    return g.done('machineKits')
-      ? `A copy takes ${kits} Machine Kit${kits > 1 ? 's' : ''}: you have ${g.s.parts.format()}`
-      : `A copy takes ${kits} Machine Kit${kits > 1 ? 's' : ''}: research Machine Kits`;
-  }
   return claimRefusal(g, d);
 }
 
@@ -183,8 +195,6 @@ export function stamp(g: Game, id: number): ActResult {
   if (why) return no(why);
   const cost = stampCost(g, d);
   g.s.coin = g.s.coin.sub(cost);
-  const kits = kitsFor(g, d);
-  if (kits > 0) g.s.parts = g.s.parts.sub(kits);
   d.stamped++;
   d.spare++;
   g.bump('stamps');
@@ -631,12 +641,23 @@ export function runModules(g: Game) {
   for (const e of f.ents) {
     if (e.kind === 'fchute') {
       // the Chute drops what it was given to the Workshop's stock (fractions too: the Chute Mouths
-      // push out whole items), DESIGN.md §21
+      // push out whole items), DESIGN.md §21. It never jams the floor (the second playtest: the 15 h
+      // checkpoint's Factory stood with 9 of 9 modules blocked on items no Chute Mouth took): what
+      // the stock has no room for goes on to the Factory Dock and sells, as the Bay's does
       const st = (g.s.chute ??= {});
+      const cap = chuteCap(g);
       for (const k of Object.keys(e.inBuf)) {
         if (e.inBuf[k] <= 0) continue;
-        st[k as ItemId] = (st[k as ItemId] ?? 0) + e.inBuf[k];
-        e.inBuf[k] = 0;
+        const have = st[k as ItemId] ?? 0;
+        const keep = Math.min(e.inBuf[k], Math.max(0, cap - have));
+        st[k as ItemId] = have + keep;
+        e.inBuf[k] -= keep;
+        const n = Math.floor(e.inBuf[k] + 1e-9);
+        if (n >= 1 && dockTakes(k)) {
+          e.inBuf[k] -= n;
+          const dock = f.ents.find((q) => q.kind === 'fdock');
+          g.intake.push({ to: 'dock', item: k as ItemId, x: (dock ?? e).x + 1, y: (dock ?? e).y + 1, n: Num.of(n), floor: 'factory' });
+        }
       }
       continue;
     }
@@ -702,7 +723,14 @@ export function megaGive(g: Game, bay: FEnt, item: ItemId, n: number): number {
   const have = p[item]?.toNumber() ?? 0;
   const counted = Math.max(0, Math.min(n, want - have));
   if (counted <= 0) return n;
+  const parts0 = partsReached(st, p);
   p[item] = (p[item] ?? Num.ZERO).add(counted);
+  // a part of the stage stands (its sub-goals, DESIGN.md §18): the Bay's picture, a Town piece, the
+  // Gazette; presentation only, it pays nothing more
+  const parts1 = partsReached(st, p);
+  if (parts1 > parts0) {
+    g.emit({ type: 'megaPart', x: bay.x + 1, y: bay.y + 1, value: parts1, floor: 'factory' });
+  }
   // offline progress measures the Bay's intake like the Docks' (DESIGN.md §12)
   if (g.tally) g.tally.bay[item] = (g.tally.bay[item] ?? Num.ZERO).add(counted);
   g.s.megaPatents += (st.patents * counted) / want / megaParts(st);
@@ -741,11 +769,17 @@ function megaCheck(g: Game, bay: FEnt) {
   }
 }
 
+/** Does the Factory Dock take it (it sells it, or scraps a waste for nothing)? Drill Bits
+ * it refuses. */
+export function dockTakes(item: string): boolean {
+  return !!ITEMS[item as ItemId]?.waste || !ITEMS[item as ItemId]?.refused;
+}
+
 /** How much more of `item` the destination can take this tick. */
 export function acceptRoom(g: Game, to: FEnt, item: string): number {
-  // the Factory Dock scraps slag for nothing and refuses what the Dock refuses (Machine Kits,
-  // Drill Bits); the Factory Hopper takes slag only while research wants it (DECISIONS.md)
-  if (to.kind === 'fdock') return !!ITEMS[item as ItemId]?.waste || !ITEMS[item as ItemId]?.refused ? Infinity : 0;
+  // the Factory Dock scraps slag for nothing and refuses what the Dock refuses (Drill Bits); the
+  // Factory Hopper takes slag only while research wants it (DECISIONS.md)
+  if (to.kind === 'fdock') return dockTakes(item) ? Infinity : 0;
   if (to.kind === 'fhopper') return (item !== 'slag' && item !== 'sludge') || hopperWantsWaste(g, item) ? Infinity : 0;
   if (to.kind === 'fbay') {
     // the Bay takes whatever some stage of the Drill is built from, always: what the stage now
@@ -754,7 +788,9 @@ export function acceptRoom(g: Game, to: FEnt, item: string): number {
     if (!MEGA_ITEMS.has(item)) return 0;
     return Infinity;
   }
-  if (to.kind === 'fchute') return Math.max(0, chuteCap(g) - (g.s.chute?.[item as ItemId] ?? 0) - (to.inBuf[item] ?? 0));
+  // the Chute takes everything: past its stock's room it sells on at the Factory Dock (above); what
+  // no Dock buys (Drill Bits) it takes only while the stock has room
+  if (to.kind === 'fchute') return dockTakes(item) ? Infinity : Math.max(0, chuteCap(g) - (g.s.chute?.[item as ItemId] ?? 0) - (to.inBuf[item] ?? 0));
   if (to.kind !== 'module' || to.paused) return 0;
   const d = g.design(to.design);
   const r = d?.ins[item as ItemId];

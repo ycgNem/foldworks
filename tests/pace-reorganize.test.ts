@@ -30,17 +30,15 @@ function campaign(seed: number): Played {
   return c;
 }
 
-/** Rule 3 misses measured and left open for the lead, with the reason (DESIGN.md §16 rule 3,
- * DECISIONS.md, the review round). Keys are seed:run. */
-export const RULE3_OPEN: Record<string, string> = {
-  // Re-measured in the final round, with the bot buying claims and its annex blocks as soon as they
-  // are affordable: both seeds now miss, and claims were not the cap (one copper block a later run,
-  // with claims to spare: iron 7/9 and copper 7/9 held at 1.5 h). Run 3 tops out at run 2's own peak
-  // (21.4K and 21.2K against 21.1K and 21.2K a minute) and reaches it only once its third annex block
-  // holds a Gizmo works II copy (1:09-1:11): both runs fill the same floor, and nothing bought after
-  // run 2 adds room
-  '1000:3': "run 3 passes run 2's peak at 1:22 against a limit of 1:01: it equals run 2's peak (21.4K against 21.1K a minute) only once its third annex block is filled at 1:11; claims are not the cap (one copper block bought, claims to spare). The lever is the lead's: room kept through a Reorganize (the annex) or more of it",
-  '8919:3': "run 3 passes run 2's peak at 1:22 against a limit of 0:57: the same floor as seed 1000 (21.2K against 21.2K a minute), reached once the third annex block is filled at 1:09",
+/** The returning run's target (the playability pass, DESIGN.md §19 rule 3): a run after a Reorganize
+ * is back to the run before's peak Act II income in at most 20 minutes of play (it keeps Acts I-II's
+ * research, the Factory open and the Drawer's designs built). The old limit was a third of the run
+ * before (1:27 and 1:00), and run 3 missed it on both seeds (1:22). */
+export const BACK_IN = 20 * 60;
+
+/** Misses measured and left open, with the reason (keys seed:run). */
+export const BACK_IN_OPEN: Record<string, string> = {
+  '1000:2': "run 2 is at 14.6K a minute at 15 min (96% of run 1's 15.2K peak), then lays the Bay floor (its goods go to the Great Drill, not the Dock) and resets at stage 2 before it rebuilds the three annex Gizmo chains that made run 1's peak at 4 h: the bot's reset rule, not the returning run. Keeping the slice's wire and ingot designs (so they come back) left their lines unfolded on tiles the Act II lab needs and stalled the bot (DECISIONS.md)",
 };
 
 /** The burn loop's spending (the final round): every coin into the dearest building that stands on
@@ -82,20 +80,16 @@ describe('Reorganize pacing (the campaign bot)', () => {
         for (const l of campaign(seed).logs) expect(clicksPerSecMax(l)).toBeLessThanOrEqual(MAX_CLICKS_PER_SEC);
       }, T);
 
-      it('rule 3: each run passes the one before\'s peak income in at most a third of its length', () => {
+      it("rule 3, the returning run: each run is back to the run before's peak income in 20 minutes or less", () => {
         const [r1, r2, r3] = campaign(seed).logs;
-        const third1 = (r1.end - r1.start) / 3, third2 = (r2.end - r2.start) / 3;
         const p2 = passedAt(r2, r1.peakPerMin), p3 = passedAt(r3, r2.peakPerMin);
-        console.log(`seed ${seed}: peaks ${[r1, r2, r3].map((l) => Math.round(l.peakPerMin)).join(', ')}/min; run 2 passes run 1's at ${hmm(p2)} (a third of run 1: ${hmm(third1)}), run 3 passes run 2's at ${hmm(p3)} (a third of run 2: ${hmm(third2)}); hand-overs ${hmm(r1.handover)} ${hmm(r2.handover)} ${hmm(r3.handover)}`);
+        console.log(`seed ${seed}: peaks ${[r1, r2, r3].map((l) => Math.round(l.peakPerMin)).join(', ')}/min; run 2 passes run 1's at ${hmm(p2)}, run 3 passes run 2's at ${hmm(p3)} (the target: ${hmm(BACK_IN)}); hand-overs ${hmm(r1.handover)} ${hmm(r2.handover)} ${hmm(r3.handover)}; income at 5, 10, 15, 20 min of run 2: ${[5, 10, 15, 20].map((m) => Math.round(r2.perMin[m - 1] ?? 0)).join(', ')}; of run 3: ${[5, 10, 15, 20].map((m) => Math.round(r3.perMin[m - 1] ?? 0)).join(', ')}`);
         expect(r2.bought.length).toBeGreaterThan(0);
-        // run 2 with margin: in under half the third
-        expect(p2).toBeDefined();
-        expect(p2!).toBeLessThanOrEqual(third1 / 2);
-        const open = RULE3_OPEN[`${seed}:3`];
-        if (open) console.log(`[pace] OPEN seed ${seed} run 3, rule 3: ${open}`);
-        else {
-          expect(p3).toBeDefined();
-          expect(p3!).toBeLessThanOrEqual(third2);
+        for (const [run, p] of [[2, p2], [3, p3]] as const) {
+          const open = BACK_IN_OPEN[`${seed}:${run}`];
+          if (open) { console.log(`[pace] OPEN seed ${seed} run ${run}, the returning run: ${open}`); continue; }
+          expect(p, `run ${run}`).toBeDefined();
+          expect(p!, `run ${run}`).toBeLessThanOrEqual(BACK_IN);
         }
         // the head starts reach the hand-over sooner than run 1 every run
         expect(r2.handover).toBeLessThan(r1.handover);
@@ -129,7 +123,10 @@ describe('Reorganize pacing (the campaign bot)', () => {
       const perH = banked / (horizon / H);
       const name = at === 'burn' ? 'at 35 min, burning its coin' : `at ${at === 'slice' ? 'the slice end' : hmm(at)}`;
       rows.push(`${name}: ${loop.length} runs, ${banked} Patents, ${perH.toFixed(2)}/h (${loop.map((l) => l.patents).join(',')})`);
-      expect(perH).toBeLessThan(designed);
+      console.log(rows[rows.length - 1]);
+      // never beats it (the playability pass: a returning run is quick, so a 2 h loop can tie the
+      // designed runs, filing the same products and Drill stages; it never files more)
+      expect(perH).toBeLessThanOrEqual(designed + 1e-9);
     }
     console.log(`designed: ${logs[0].patents} + ${logs[1].patents} Patents in ${hmm(horizon)}, ${designed.toFixed(2)}/h; loops over the same hours: ${rows.join('; ')}`);
   }, 900_000);

@@ -17,7 +17,6 @@ import { ITEMS, itemName, type ItemId } from '../../data/items';
 import { DX, DY, opposite, type AuditResult, type AuditState, type Box, type Dir, type Ent, type KeptDesign, type Port } from '../world';
 import { entName, feeders } from '../analysis';
 import { powerFactor } from './power';
-import { byEvery } from './machines';
 import { compactFull, splusShare, strictGrade } from './challenges';
 
 export const inBox = (b: Box, x: number, y: number) => x >= b.x && y >= b.y && x < b.x + b.w && y < b.y + b.h;
@@ -38,14 +37,26 @@ export function isAudited(g: Game, id: number): boolean {
   return g.s.audits.some((a) => !a.result && a.ids.includes(id));
 }
 
+/** The biggest box a Workshop fold may draw now (DESIGN.md §10 Box sizes): the box grows with Act
+ * I's research, 3x3 at Folding, 5x5 at Gearcutting, the full box (8x8, or a Patent's or Kernel's
+ * wider one) at Gizmo Theory. A Challenge's or Scenario's smaller box still caps it (prules). */
+export function foldBox(g: Game): number {
+  const full = prules(g).foldMax;
+  if (g.done('gizmoTheory')) return full;
+  return Math.min(full, g.done('gearcutting') ? RULES.foldBoxGears.value : RULES.foldBoxFirst.value);
+}
+
 /** Why this box can't be folded, or null. */
 export function foldRefusal(g: Game, b: Box): string | null {
   if (!g.done('folding')) return 'Research Folding first';
   const max = prules(g).maxAudits;
   if (g.s.audits.length >= max) return `${max} audits are running: fold or cancel one first`;
   if (g.s.audits.some((a) => overlaps(a.box, b))) return 'This box overlaps a line being audited';
-  const fmax = prules(g).foldMax;
-  if (b.w > fmax || b.h > fmax) return `Too big: a fold is at most ${fmax}x${fmax}`;
+  const fmax = foldBox(g);
+  if (b.w > fmax || b.h > fmax) {
+    const next = !g.done('gearcutting') ? 'Gearcutting' : !g.done('gizmoTheory') ? 'Gizmo Theory' : null;
+    return `Too big: a fold is at most ${fmax}x${fmax}${next ? ` until ${next}` : ''}`;
+  }
   if (b.w < 1 || b.h < 1) return 'Drag a box over a line';
   const ents = entsIn(g, b);
   for (const e of ents) {
@@ -144,9 +155,9 @@ export function findPorts(g: Game, b: Box): Port[] {
  * The kept design (the Patent Drawer, DESIGN.md §19) this box is an unchanged copy of, or null: the
  * box exactly where the design was folded (the land and the ore lie the same every run), holding
  * exactly its parts (every building, turned the same way, every crafting machine on the same
- * recipe, nothing else in the box), every machine in its normal mode and none stopped, and the
- * design kept with its audit (not imported, not folded out of its normal modes). Such a box refolds
- * at its kept grade after a short check instead of a full audit.
+ * recipe, nothing else in the box), no machine stopped, and the design kept with its audit (not
+ * imported, not folded before the final round). Such a box refolds at its kept grade after a short
+ * check instead of a full audit.
  */
 export function keptMatch(g: Game, b: Box): KeptDesign | null {
   const ents = entsIn(g, b);
@@ -155,7 +166,7 @@ export function keptMatch(g: Game, b: Box): KeptDesign | null {
     const same = k.parts.every((p) => {
       const e = g.entAt(b.x + p.dx, b.y + p.dy);
       if (!e || e.kind !== p.kind || e.x !== b.x + p.dx || e.y !== b.y + p.dy || e.rot !== p.rot) return false;
-      if (isMachine(e.kind) && ((e.mode ?? 'normal') !== 'normal' || e.paused)) return false;
+      if (isMachine(e.kind) && e.paused) return false;
       return !p.recipe || e.recipe === p.recipe;
     });
     if (same) return k;
@@ -299,8 +310,8 @@ const STOCK_NOISE = 3;
 /** The window's item counts net of stock already in the box (DESIGN.md §10 Audit; the Milestone 3
  * gate and Milestone 4 reviews): what was drawn down of an item that also left the box comes off
  * that output (a crate of Gizmos draining out is not a Gizmo factory), and the rest of what was
- * drawn down is an input the module will need (a crate of steel feeding a kit assembler inside
- * makes a module that takes steel, not one that makes kits from nothing, whatever kits are worth). */
+ * drawn down is an input the module will need (a crate of steel feeding a motor assembler inside
+ * makes a module that takes steel, not one that makes motors from nothing). */
 function netCounts(g: Game, a: AuditState): { ins: Record<string, number>; outs: Record<string, number> } {
   const outs: Record<string, number> = { ...a.outs };
   const ins: Record<string, number> = { ...a.ins };
@@ -343,9 +354,9 @@ export function gradeAudit(g: Game, a: AuditState): AuditResult {
     const crafts = m.crafts - (a.crafts0[m.id] ?? m.crafts);
     if (r.byproduct) {
       byItems.add(r.byproduct.item);
-      byMade += Math.floor(crafts / byEvery(m, r));
+      byMade += Math.floor(crafts / r.byproduct.every);
       const jammed = a.stall?.[m.id]?.[`blocked:${r.byproduct.item}`] ?? 0;
-      byMade += Math.floor(jammed / (r.time * TICK_RATE) / byEvery(m, r));
+      byMade += Math.floor(jammed / (r.time * TICK_RATE) / r.byproduct.every);
     }
   }
   for (const m of ms) {
@@ -371,12 +382,16 @@ export function gradeAudit(g: Game, a: AuditState): AuditResult {
     return o;
   };
   const ins = rate(net.ins), outs = rate(outCounts);
-  const advice = advise(g, ms, busy, { u, w, c }, score, byMade, byHandled, machineTiles, boxTiles, outs, a.stall ?? {});
+  // a Slag Heap inside the box keeps its slag in the box: a module holds no heap, so it counts as
+  // going nowhere, and the advice says why (the second playtest read "a heap caps it at S", then
+  // "7 of 7 went nowhere" for a box with its heap inside)
+  const heapIn = g.s.ents.some((e) => e.kind === 'heap' && e.x >= a.box.x && e.y >= a.box.y && e.x < a.box.x + a.box.w && e.y < a.box.y + a.box.h);
+  const advice = advise(g, ms, busy, { u, w, c }, score, byMade, byHandled, machineTiles, boxTiles, outs, a.stall ?? {}, heapIn);
   // S+ is a zero-waste line: its byproducts are used inside the box (bricks, gravel), or it makes
   // none. A line that only routes its slag out to a heap or a Dock tops out at S (the Milestone 4
   // review: a miner and a smelter graded S+)
   const gated = splusGate(gr, score, byMade, usedInside, splusShare(g));
-  if (gated !== gr) advice.unshift(`One step to S+: use the ${[...byItems].map((i) => itemName(i as ItemId).toLowerCase()).join(' and ')} inside the box (a press making bricks, a crusher making gravel); routed out to a heap, it caps the grade at S.`);
+  if (gated !== gr) advice.unshift(`One step to S+: use the ${[...byItems].map((i) => itemName(i as ItemId).toLowerCase()).join(' and ')} inside the box (a press making bricks, a crusher making gravel); belted out to a heap outside the box, it caps the grade at S.`);
   // the Strict Inspector (a Challenge, DESIGN.md §24): a letter lower while it holds
   const gr2 = strictGrade(g, gated);
   if (gr2 !== gated) advice.unshift(`The Strict Inspector marks it down a letter this run: ${gated.letter} becomes ${gr2.letter}.`);
@@ -409,7 +424,7 @@ function worth(score: number, lost: number): string {
 
 /** What would raise the grade, weakest part first, each line naming a machine or a number and
  * what it is worth. Every grade gets advice, S included (S+ is above it). */
-function advise(g: Game, ms: Ent[], busy: Record<string, number>, p: { u: number; w: number; c: number }, score: number, byMade: number, byHandled: number, mt: number, bt: number, outs: Partial<Record<ItemId, number>>, stall: Record<string, Record<string, number>>): string[] {
+function advise(g: Game, ms: Ent[], busy: Record<string, number>, p: { u: number; w: number; c: number }, score: number, byMade: number, byHandled: number, mt: number, bt: number, outs: Partial<Record<ItemId, number>>, stall: Record<string, Record<string, number>>, heapIn = false): string[] {
   const lines: { lost: number; text: string }[] = [];
   if (!Object.keys(outs).length) lines.push({ lost: 1, text: 'Nothing left the box: run a belt out of it to a Dock, a Hopper or the next line.' });
   // utilisation: find the slowest stage, not just the idlest machine
@@ -447,7 +462,9 @@ function advise(g: Game, ms: Ent[], busy: Record<string, number>, p: { u: number
   }
   if (byMade > 0 && byHandled < byMade) {
     const lost = SCORE_WEIGHTS.w * (1 - p.w);
-    lines.push({ lost, text: `${byMade - byHandled} of ${byMade} slag went nowhere useful. Belt it out through a port, or press it into bricks inside. (${worth(score, lost)})` });
+    lines.push({ lost, text: heapIn
+      ? `${byMade - byHandled} of ${byMade} slag piled in a heap inside the box. A module holds no heap: leave the heap outside, belt the slag out to it. (${worth(score, lost)})`
+      : `${byMade - byHandled} of ${byMade} slag went nowhere useful. Belt it out through a port, or press it into bricks inside. (${worth(score, lost)})` });
   }
   if (p.c < 1) {
     const lost = SCORE_WEIGHTS.c * (1 - p.c);

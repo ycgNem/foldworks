@@ -19,7 +19,14 @@ export interface TipLine { text: string; color?: string }
 
 /** A tooltip placed around things it must not cover: `avoid` (the hovered tile and its
  * neighbours, the tile the goal points at), staying inside `bounds` where it can. */
-export interface TipPlace { avoid: Rect[]; bounds?: Rect }
+export interface TipPlace { avoid: Rect[]; bounds?: Rect; /** above or below the first avoided rect first, then beside it (a hint over a row: never over the column beside it or the button under it) */ vertical?: boolean }
+
+/** A hint's tag waits this long on its rect (and comes quicker for a moment after another), then
+ * fades in: the second playtest's tags at the click point covered the column and button under the
+ * cursor. */
+const HINT_DELAY = 0.4;
+const HINT_WARM = 0.1;
+const HINT_FADE = 0.1;
 
 /** Panel styles. The 180's: tag, bubble, ribbon, sign, book. The old names draw paper now:
  * 'dark' and 'paper' a sheet of paper, 'raised' a lit sheet, 'inset' a pressed well. */
@@ -108,6 +115,8 @@ export class UI {
     this.tooltip = null;
     this.tipPlace = null;
     this.tipAlpha = 1;
+    if (!this.hintSeen) this.hintKey = '';
+    this.hintSeen = false;
     this.prevBlocks = this.blocks;
     this.ids = this.nextIds;
     this.nextIds = new Map();
@@ -278,10 +287,30 @@ export class UI {
     this.nextIds.set(id, { x, y, w, h });
   }
 
-  /** a tooltip shown while the mouse is over a rect (no click behaviour) */
+  /** a tooltip shown while the mouse is over a rect (no click behaviour): after a short rest on it,
+   * above or below the rect, clear of the cursor's row */
   hint(x: number, y: number, w: number, h: number, lines: TipLine[] | string, width = 180) {
-    if (this.hover(x, y, w, h)) this.tip(typeof lines === 'string' ? [{ text: lines }] : lines, width);
+    if (this.hover(x, y, w, h)) this.hintOn(x, y, w, h, lines, width);
   }
+
+  /** The hint for a rect the mouse is on (a button's tip too): it waits, then fades in above or
+   * below the rect (or where `place` says). */
+  hintOn(x: number, y: number, w: number, h: number, lines: TipLine[] | string, width = 180, place: TipPlace | null = null) {
+    const key = `${x},${y},${w},${h}`;
+    this.hintSeen = true;
+    if (key !== this.hintKey) { this.hintKey = key; this.hintSince = this.time; }
+    const age = this.time - this.hintSince - (this.time - this.hintShown < 0.35 ? HINT_WARM : HINT_DELAY);
+    if (age < 0) return;
+    this.hintShown = this.time;
+    this.tip(typeof lines === 'string' ? [{ text: lines }] : lines, width, place ?? { avoid: [{ x, y, w, h }], vertical: true });
+    this.tipAlpha = Math.min(1, age / HINT_FADE);
+  }
+  /** the rect a hint is waiting on, since when, whether one was hovered last frame, and when one
+   * last showed */
+  private hintKey = '';
+  private hintSince = 0;
+  private hintSeen = false;
+  private hintShown = -10;
 
   tip(lines: TipLine[], width = 180, place: TipPlace | null = null) {
     this.tooltip = lines;
@@ -346,7 +375,9 @@ export class UI {
     const near = A[0];
     const L = near.x - 4 - w, R = near.x + near.w + 4, U = near.y - 4 - h, D = near.y + near.h + 4;
     const cy = this.my - Math.floor(h / 2), cx = this.mx - Math.floor(w / 2);
-    const cand = [
+    const cand = p.vertical ? [
+      { x: cx, y: U }, { x: cx, y: D }, { x: R, y: cy }, { x: L, y: cy },
+    ] : [
       { x: R, y: cy }, { x: L, y: cy }, { x: cx, y: U }, { x: cx, y: D },
       { x: R, y: U + h - 8 }, { x: L, y: U + h - 8 }, { x: R, y: near.y + 8 }, { x: L, y: near.y + 8 },
     ];

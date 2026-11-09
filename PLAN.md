@@ -46,7 +46,7 @@ function, which also makes offline progress cheap to compute.
 
 | Currency | Kind | Comes from | Spent on |
 |---|---|---|---|
-| Coin | stock | items delivered to the **Dock** (standing and special orders) | machines, belts, land, stamps (with parts, from Milestone 4) |
+| Coin | stock | items delivered to the **Dock** (standing and special orders) | machines, belts, land, stamps (coin only: Machine Kits were cut in the playability pass) |
 | Items | typed stocks and flows | your lines | delivered to the Dock (coin), the **Hopper** (research) or fed to other machines |
 | Reputation | one track per customer | filling that customer's orders | that customer's unique rewards (recipes, machines, skins, lore) |
 | Patents | reset currency (layer 1) | **Reorganize** | the Patent tree: head starts, rules, automation |
@@ -55,8 +55,8 @@ function, which also makes offline progress cheap to compute.
 
 **Research isn't a currency.** Research nodes cost item deliveries to the Hopper
 (e.g. "Steel Smelting: 200 plates, 50 gears"), so research makes you build particular lines.
-Inspiration (Act II+) is a small trickle of Hopper credit earned by clicking, and it counts as
-items delivered.
+(Inspiration, Hopper credit earned by clicking, was built and then cut in the playability pass:
+DECISIONS.md. Only the lines pay for research.)
 
 ## The loop
 
@@ -76,8 +76,7 @@ items delivered.
 |---|---|
 | I | Hand-mine ore (1 per click) and hand-crank the furnace. The first purchase, the Bellows, ends the cranking. |
 | II | **Overdrive**: click a machine for 3× speed for 10 s (it then cools down). Clicking a jam clears it. |
-| III+ | Clicks build up **Inspiration** (Hopper credit). Active play is rewarded but never required. |
-| Always | **Sparks**: random events on the map (a Lucky Vein, a visiting Inspector, a Gremlin carrying off a gear). Click one for a bonus; miss it and nothing happens. |
+| Always | **Sparks**: the visiting Inspector, who grades a real line and pays research in kind. Click them for the grade; miss them and nothing happens. (The Lucky Vein and Inspiration were cut in the playability pass: DECISIONS.md.) Active play is rewarded but never required. |
 
 ## Customers (the cast)
 
@@ -94,9 +93,9 @@ builds whose progress **survives every reset**. Each one completed changes a rul
 
 ## Machines
 
-- **Modes**: Efficient (less fuel or power, slower), Overclocked (faster, more power),
-  Precision (better yield, slower). From Act III: Recycling (less waste) and Byproduct (more
-  waste, for when waste is an input).
+- **Modes**: cut in the playability pass (2026-11-08, DECISIONS.md "cuts, Machine Kits and
+  machine modes"): a per-machine knob on a line that folds away anyway, and Factorio's modules
+  by another name. A machine runs at its kind's speed and draws its kind's power.
 - **Tiers**: Mk1 to Mk3. Higher tiers are bigger, faster and hungrier, a trade-off rather
   than a strict upgrade.
 - **Adjacency**: a smelter beside a heat exchanger runs on free heat. This rewards tight

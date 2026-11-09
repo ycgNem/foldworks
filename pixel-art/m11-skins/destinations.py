@@ -15,12 +15,10 @@ Hopper geometry: the brass rim rows 2..9, the teal funnel rows 10..18, the box w
     specimen     skin_specimen_hopper   the funnel a glass jar with a screw lid, a label (CONTENTS:
                                         EVERYTHING, EVENTUALLY, as ink lines), specimens floating
     mortarboard  skin_mortarboard_hopper  a graduation cap on the rim, its tassel swinging
-    tinfoil      skin_tinfoil_hopper    the funnel and rim crinkled foil, a foil antenna with a red
-                                        tip that blinks
 """
 import json
 
-from draw import h, rm, shape
+from draw import rm, shape
 from m11 import SRC_ART, skin
 
 
@@ -116,28 +114,6 @@ def mortarboard(f):
     shape(f, tx - 1, 7, ["lLl", ".l."], {"l": "lamp1", "L": "lamp2"}, avoid_pip=False)
 
 
-def tinfoil(f):
-    """For a Hopper that has heard things: crinkled foil over the funnel and the rim, an antenna."""
-    foil = ["steel2", "steel3", "steel4", "cloud2"]
-
-    def crinkle(x, y, n):
-        if y <= 9 and n in ("brass3", "brass2", "brass1"):
-            base = {"brass3": 3, "brass2": 2, "brass1": 1}[n]
-        elif 10 <= y <= 18 and n in ("teal", "water4", "water3", "steel4"):
-            base = {"teal": 3, "water4": 2, "water3": 1, "steel4": 3}[n]
-        else:
-            return n
-        k = base + (h(x, y, 11) % 3) - 1
-        return foil[max(0, min(3, k))]
-    f.recolour(crinkle)
-    # the antenna on the rim, its tip blinking
-    for y in (0, 1):
-        f.put(15, y + 1, "steel4" if y else "steel3")
-    f.put(15, 0, "red" if f.i != 1 else "lamp3")
-    f.put(14, 2, "ink")
-    f.put(16, 2, "ink")
-
-
 def build():
     skin("mayoral", "dock_lily", mayoral, on_skid=False, pip=False)
     # it replaces the Dock, whichever dock sheet would be drawn: rename to the kind's name
@@ -158,4 +134,3 @@ def build():
     skin("sunburst", "dock", sunburst, on_skid=False, pip=False)
     skin("specimen", "hopper", specimen, on_skid=False, pip=False)
     skin("mortarboard", "hopper", mortarboard, on_skid=False, pip=False)
-    skin("tinfoil", "hopper", tinfoil, on_skid=False, pip=False)

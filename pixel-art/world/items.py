@@ -7,7 +7,7 @@ from fw import new, blit, export
 ITEMS1 = ["ironOre", "copperOre", "ironIngot", "copperIngot", "slag", "ironPlate", "copperWire",
           "gear", "slagBrick", "gizmo"]
 ITEMS2 = ["coal", "sand", "steel", "glass", "gravel", "concrete", "plastic", "circuit",
-          "machineKit", "motor", "oil", "drillBit"]
+          "motor", "oil", "drillBit"]
 
 ICONS = {
     # ---------------------------------------------------------------- Act I
@@ -191,16 +191,6 @@ ICONS = {
         "#vlvyyv#",
         "########",
         ".#.#.#..",
-    ],
-    "machineKit": [         # a little red toolbox with a handle and a latch
-        "..####..",
-        "..#..#..",
-        "########",
-        "#pooooo#",
-        "#oooyoo#",
-        "########",
-        "#rrrrrr#",
-        "########",
     ],
     "motor": [              # steel caps, copper windings, a shaft out the side
         "........",

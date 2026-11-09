@@ -35,7 +35,7 @@ import { newWorldRun, type FEnt, type ModuleDesign, type SeedCard } from './worl
 import { designValue, endRun, startRun } from './reorganize';
 import { krules } from './kernels';
 import { worldOf } from './systems/islands';
-import { stagesStanding } from './relocate';
+import { stagesStanding, switchMegas } from './relocate';
 import { LEGACY, type LegacyId } from '../data/legacy';
 import { highW } from './systems/high';
 import { mainItem } from './systems/modules';
@@ -263,6 +263,8 @@ export function lastFold(g: Game): ActResult {
   if (!m.legacyNodes.includes('standingCommittee')) m.standing = null;
   if (!m.legacyNodes.includes('townPlan')) m.plans = [];
   if (!kr.keptIslands) m.worldRecords = {};
+  const away = worldOf(g);
+  if (away !== 'home') switchMegas(g, away, 'home');
   m.world = 'home';
   m.visited = ['home'];
   m.here = newWorldRun(s.tick);

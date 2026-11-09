@@ -7,7 +7,6 @@ import { FACTORY } from '../data/land';
 import type { ResearchId } from '../data/research';
 import type { ItemId } from '../data/items';
 import type { CustomerId } from '../data/orders';
-import type { SparkKind } from '../data/sparks';
 import type { BuildKind } from '../data/machines';
 import type { PatentId } from '../data/patents';
 import { HIGH, type HighFloorId } from '../data/floors';
@@ -30,12 +29,6 @@ export type ModFloor = Exclude<Floor, 'workshop'>;
 /** What a machine is doing this tick (DESIGN.md §4 status pips). A powered machine with no power
  * is 'starved' with why = 'power' (the blue pip, §18). */
 export type MState = 'work' | 'starved' | 'blocked' | 'idle';
-
-/** A powered machine's mode (DESIGN.md §18 Modes, research Tuning). */
-export type Mode = 'normal' | 'efficient' | 'overclock' | 'precision'
-  // Act III (DESIGN.md §21 Modes, research Recycling): half the byproduct, or twice it
-  | 'recycling' | 'byproduct';
-export const MODES: Mode[] = ['normal', 'efficient', 'overclock', 'precision', 'recycling', 'byproduct'];
 
 /** The tiles just outside a footprint's face in direction d: one for a 1x1, two for a 2x2. */
 export function faceTiles(e: { x: number; y: number; w: number; h: number }, d: Dir): [number, number][] {
@@ -95,15 +88,9 @@ export interface Ent {
   /** ticks in each state this second: work, starved, blocked on output, blocked on byproduct */
   sec: [number, number, number, number];
   // ---- Act II (DESIGN.md §18); absent on older saves, read with ?? defaults
-  /** a powered machine's mode */
-  mode?: Mode;
   /** Overdrive: ticks left at 3x, then ticks left cooling */
   od?: number;
   cool?: number;
-  /** Precision's extra output, a fraction of an item carried between crafts */
-  bonus?: number;
-  /** a Lucky Vein's boost on every machine of its line: ticks left (DESIGN.md §6) */
-  boost?: number;
   // ---- Milestone 6 (DESIGN.md §20); absent on older saves
   /** stopped by the player (the 'pause' command): takes nothing, makes nothing, draws no power;
    * splitters route around it as around any full machine */
@@ -232,9 +219,14 @@ export interface ModuleDesign {
   spare: number;
   /** the Stamp Press keeps one spare copy of it (DESIGN.md §19, a Patent node) */
   auto?: boolean;
-  /** every machine in the box ran in its normal mode when it was folded (a kept design refolds
-   * after a short check only then: the final round); absent on designs from before */
-  normal?: boolean;
+  /** its audit can come back as a kept copy's card (a kept design refolds after a short check only
+   * then: DESIGN.md §19, the final round): set on every fold since; absent on a design folded
+   * before the final round, and on one a v14 save folded with a machine in a mode (machine modes
+   * were cut in the playability pass: no machine runs at those rates now) */
+  refolds?: boolean;
+  /** it came back at a run's start from this kept design in the Patent Drawer (DESIGN.md §19, the
+   * playability pass: a Reorganize keeps what you learned); absent on a design folded this run */
+  kept?: number;
 }
 
 /** What stands on a floor of modules. The Factory has trunks and its Chute (DESIGN.md §21); the
@@ -330,15 +322,15 @@ export interface HAuditState extends FAuditState {
   last?: boolean;
 }
 
+/** The Inspector (DESIGN.md §6), the one kind of Spark. */
 export interface Spark {
-  kind: SparkKind;
   /** tile it sits on */
   x: number;
   y: number;
   /** ticks left visible */
   life: number;
-  /** the line (entity ids) an Inspector is looking at */
-  line?: number[];
+  /** the line (entity ids) they are looking at */
+  line: number[];
 }
 
 export interface ResearchState {
@@ -389,13 +381,17 @@ export interface KeptDesign {
   /** the audit it was folded with, before the grade multiplier (rates through its ports, and the
    * grade card): an unchanged layout refolds at it after a short check (DESIGN.md §19, the final
    * round). Absent for an imported string, a design kept before the final round, or one folded
-   * with a machine out of its normal mode: those refold after a full audit */
+   * with a machine in a mode (before modes were cut): those refold after a full audit */
   card?: { grade: GradeCard; ins: Partial<Record<ItemId, number>>; outs: Partial<Record<ItemId, number>> };
   /** a nested Factory design kept by the Group Drawer (a Legacy node, DESIGN.md §22): its box is on
    * the Factory floor, and each module tile is named by its product (filled from this run's spare
    * copies of a depth-1 design making it); `parts` is empty */
   nested?: { kind: 'module' | 'trunk'; item: ItemId | null; dx: number; dy: number; rot: Dir }[];
 }
+
+/** One tile of the Floor Plan (a Patent, DESIGN.md §19): a trunk, or a module tile named by its
+ * product (filled with a spare copy of a depth-1 design making it). */
+export interface FloorPlanTile { kind: 'trunk' | 'module'; x: number; y: number; rot: Dir; item?: ItemId }
 
 /** A District layout kept by the Town Plan (a Legacy node, DESIGN.md §22): each tile named by the
  * product of the group that stood there, and the routes between the tiles (by position). */
@@ -452,6 +448,11 @@ export interface RunRecord {
   earned: Num;
   /** its best coin per minute over 5 minutes (a rate) */
   peakPerMin: number;
+  /** the playability pass (DESIGN.md §19): its best 5-minute coin per minute before the District
+   * opened (its Act II floor), and the seconds it took to pass the run before's (absent: never, or a
+   * record from before) */
+  factoryPeak?: number;
+  caughtUp?: number;
   /** it ended with a Relocate to this island, banking this much Legacy (DESIGN.md §22) */
   relocate?: WorldId;
   legacy?: number;
@@ -506,6 +507,24 @@ export interface MetaState {
   /** this run's best 5-minute coin per minute so far, and the minutes it is averaged over (rates) */
   peakPerMin: number;
   perMinRing: number[];
+  /** the playability pass (DESIGN.md §19 "What a Reorganize keeps"), all absent on older saves:
+   * this run's best 5-minute coin per minute before the District opened, and the seconds into the
+   * run its 5-minute coin per minute first passed the last run's (the Reorganize card's "back in") */
+  factoryPeak?: number;
+  caughtUp?: number;
+  /** customer orders filled in a run before this one (never offered again; the Town stands on
+   * them with this run's), and the tick each was filled on */
+  ordersFilled?: string[];
+  ordersAt?: Record<string, number>;
+  /** the bills term on file (the playability pass, DESIGN.md §19): only a rise pays; `world` and
+   * `universe` are the Relocates and Last Folds when it was filed (another starts it again) */
+  billsFiled?: { value: number; world: number; universe: number };
+  /** Dies on file: copies of a kept design bought to come back at every run's start, by its id */
+  dies?: Record<number, number>;
+  /** Claims on File (a Patent): the most claims blocks bought of each ore, kept through a Reorganize */
+  keptClaims?: Partial<Record<ItemId, number>>;
+  /** the Floor Plan (a Patent): the Factory floor as it stood at the last Reorganize */
+  floorPlan?: FloorPlanTile[];
   /** Challenges completed, for good (DESIGN.md §21); absent on older saves */
   challenges?: string[];
   // ---- Relocate, layer 2 (DESIGN.md §22); absent on older saves (Home, nothing banked)
@@ -612,8 +631,6 @@ export interface State {
   nextSpark: number;
   /** Sparks are paused while the tab is hidden (DESIGN.md §6) */
   visible: boolean;
-  /** Lucky Veins: patch index -> ticks left */
-  veins: Record<string, number>;
   /** free Buffer Crates waiting (Bramble rep 2) and ticks to the next */
   freeCrates: number;
   freeCrateIn: number;
@@ -637,8 +654,6 @@ export interface State {
   nextDesign: number;
   factory: FactoryState;
   // ---- Act II (DESIGN.md §18)
-  /** Machine Kits in the parts bank (a Hopper takes them there) */
-  parts: Num;
   /** deposit claim blocks bought at the Survey Office, by ore */
   claimBlocks: Partial<Record<ItemId, number>>;
   /** items whose first delivery the Codex has paid for */
@@ -649,8 +664,6 @@ export interface State {
   /** the Factory-floor fold audit (nested folds), like `audit` on the Workshop */
   faudit: FAuditState | null;
   // ---- Milestone 6 (DESIGN.md §20)
-  /** Inspiration credited to each research node, by item (capped at 30% of each item's cost) */
-  inspire: Partial<Record<ResearchId, Partial<Record<ItemId, Num>>>>;
   // ---- Reorganize (DESIGN.md §19)
   /** what survives a Reorganize */
   meta: MetaState;
@@ -770,7 +783,6 @@ export function newState(seed: number): State {
     sparks: [],
     nextSpark: 0,
     visible: true,
-    veins: {},
     freeCrates: 0,
     freeCrateIn: 0,
     clicks: 0,
@@ -785,23 +797,13 @@ export function newState(seed: number): State {
     designs: [],
     nextDesign: 1,
     factory: newFactory(),
-    parts: Num.ZERO,
     claimBlocks: {},
     codex: [],
     mega: { stage: 0, progress: {} },
     faudit: null,
-    inspire: {},
     meta: newMeta(),
     megaPatents: 0,
     granted: Num.ZERO,
     annex: 0,
   };
-}
-
-/** mulberry32 on the state's own seed (the sim's only randomness). */
-export function rand(s: State): number {
-  let t = (s.rng = (s.rng + 0x6d2b79f5) >>> 0);
-  t = Math.imul(t ^ (t >>> 15), t | 1);
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }

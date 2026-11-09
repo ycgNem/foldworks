@@ -4,7 +4,7 @@
 export const ITEM_IDS = [
   'ironOre', 'copperOre', 'ironIngot', 'copperIngot', 'slag', 'ironPlate', 'copperWire', 'gear', 'slagBrick', 'gizmo',
   // Act II (DESIGN.md §18), in the order of src/art/items2.png
-  'coal', 'sand', 'steel', 'glass', 'gravel', 'concrete', 'plastic', 'circuit', 'machineKit', 'motor', 'oil', 'drillBit',
+  'coal', 'sand', 'steel', 'glass', 'gravel', 'concrete', 'plastic', 'circuit', 'motor', 'oil', 'drillBit',
   // Act III (DESIGN.md §21), in the order of src/art/items3.png
   'solvent', 'sludge', 'rubber', 'battery', 'fertilizer', 'bearing', 'gearbox', 'produce', 'sensor', 'processor', 'servo',
   'sandwich', 'clockworkFrog', 'weatherBalloon', 'umbrella', 'robotArm', 'liftRotor', 'transmuterCoil', 'sandwichEngineer',
@@ -22,13 +22,11 @@ export interface ItemDef {
   name: string;
   /** coin the Dock pays for one */
   value: number;
-  /** the Dock refuses it (slag, kits, drill bits) */
+  /** the Dock refuses it (slag, drill bits) */
   refused?: boolean;
   /** a byproduct: waste a recipe makes on the side (slag, oil, sludge); the Scrap Transmuter pays
    * for it at a share of what made it (DESIGN.md §21) */
   waste?: boolean;
-  /** delivered to a Hopper it goes to the parts bank, not to research (Machine Kits) */
-  parts?: boolean;
   /** the item's colour family, for code-drawn icons and the flow overlay (palette names) */
   color: string;
   flavor: string;
@@ -54,7 +52,6 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   concrete: { id: 'concrete', name: 'Concrete', value: 32, color: 'hull2', flavor: 'Gravel, sand and patience. Mostly patience.', derivation: '§18 Items: 2 gravel + sand (5) -> 32; an S-grade Concrete module (0.42/s) earns 13 coin/s from slag the Dock scraps for nothing' },
   plastic: { id: 'plastic', name: 'Plastic', value: 24, color: 'violet', flavor: 'Coal tar, cooked until it forgets it was coal.', derivation: '§18 Items: 2 coal (4) -> 24 plus oil; an S-grade Plastic module of a full-speed refinery (0.31/s) earns 7.5 coin/s, over a Gizmo chain per module (7.3)' },
   circuit: { id: 'circuit', name: 'Circuit', value: 180, color: 'leaf', flavor: 'Wire that learned to think. Mostly about wire.', derivation: '§18 Items: 3 wire + plastic + glass (42) -> 180 (x4.3); a circuits chain (Circuits, Plastic and Glass modules, S grade, 0.25 circuits/s) earns 45 coin/s, 15 per module against a Gizmo chain 7.3' },
-  machineKit: { id: 'machineKit', name: 'Machine Kit', value: 0, refused: true, parts: true, color: 'brass1', flavor: 'A whole machine in a crate. Instructions in frog.', derivation: '§18 Machine Kits: parts for stamps, not for sale' },
   motor: { id: 'motor', name: 'Motor', value: 640, color: 'copper', flavor: 'Spins. Endlessly. Bramble watched one for an hour.', derivation: '§18 Items: steel + 4 wire + circuit (210) -> 640 (x3.0)' },
   oil: { id: 'oil', name: 'Oil', value: 3, waste: true, color: 'shadow', flavor: "The refinery's leftovers. The boiler's favourite snack.", derivation: '§18 Items: the refinery\'s byproduct, 3; boiler fuel' },
   drillBit: { id: 'drillBit', name: 'Drill Bit', value: 0, refused: true, color: 'gold', flavor: 'For a drill the size of a town. Do not ask Bramble where the town goes.', derivation: '§18 Megaproject: the Great Drill\'s part, not for sale' },

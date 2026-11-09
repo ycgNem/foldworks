@@ -1,6 +1,6 @@
 // The offline report (DESIGN.md §12, §20; Milestone 6), as a letter from Mayor Bramble
 // (docs/hud-180.md): he opens it in a speech bubble in his own voice, then the totals (the coin in
-// the display face, the Hopper, Machine Kits, the Megaproject, what sold), then the timeline as
+// the display face, the Hopper, the Megaproject, what sold), then the timeline as
 // rows (each line that stopped as one row: its first machine to block, the cause and how many
 // machines it stopped as chips, the fix to build as a chip, a jump-to button; on the District, the
 // World and Beyond the same for a module that stopped, and a row for each route short of carriers,
@@ -134,14 +134,13 @@ export function offlineReportCard(app: App, L: Layout) {
   if (pageFor !== rep) { page = 0; pageFor = rep; }
   // ---- the totals: the coin big, the rest as icon rows beside it
   coinIcon(ui, c.x, yy + 2);
-  const coin = `+${rep.coin.format()}`;
+  const coin = rep.coin.lt(0) ? rep.coin.format() : `+${rep.coin.format()}`;
   ui.big(coin, c.x + 20, yy, T.coin, { scale: 2 });
   const tw = 20 + bigWidth(coin) * 2 + 12;
   const rx = c.x + Math.max(tw, Math.floor(c.w * 0.42));
   const rw = c.x + c.w - rx;
   const right: string[] = [];
   if (!rep.hopper.isZero()) right.push(`{u:research} ${rep.hopper.format()} into the Hopper`);
-  if (!rep.parts.isZero()) right.push(`{i:machineKit} ${rep.parts.format()} Machine Kits`);
   const given = (Object.entries(rep.mega.given) as [ItemId, Num][]).filter(([, v]) => v.gt(0));
   if (given.length) right.push(`{u:mega} ${given.map(([k, v]) => `{i:${k}} +${v.format()}`).join(' ')}`);
   const sold = soldRow(rep);

@@ -2520,7 +2520,7 @@ Each was a measured stall; none moved a data number.
   Legacy preview is 21 against the model's ~35; the Patent preview over 30-40 h is 6.3-6.5 before
   run 5's reset and 0.1-1.8 after it.
 - **A number that may block honest play** (not changed; for the owner): coal claims. Nearly every
-  Act II-III design digs coal, the block's price grows by half its base a block (�18), and the
+  Act II-III design digs coal, the block's price grows by half its base a block (§18), and the
   District's growth takes every block. Rubber II, Processors II and Sensors II each waited on coal,
   not on layout. Either coal claims should grow more slowly, or a depth-2 fold should hold fewer
   claims than its parts.
@@ -3028,3 +3028,619 @@ stock, the Factory floor and the corner's machine states. **No other data or sim
   Coils line's rubber starvation in the measured runs (the Chute held 80 rubber) is not read yet.
 - **For the owner (no number changed)**: with the gate, the first Relocate's 40-45 h target is no
   longer early by construction; it now waits on the bot finishing the two projects.
+
+## Playability pass (2026-11-08): the core ending, Act III's end, the Drill's Bay in parts
+
+Agent "ending", in a worktree off `playability` (036479a). The review's findings 5 and 9 and its
+radical option 3 (DESIGN.md §16, §18, §21, §22).
+
+- **The Floating City complete is the story's ending** (radical option 3). The review estimated
+  under 1% of players reach Acts IV-V and no bot had; a game people finish beats a 100 h game nobody
+  finishes. The City is the act's spine (Megaproject #2) and the most visible thing the game builds.
+  Acts IV and V stay, unchanged, as the post-game the ending invites the player to.
+  *Pillar:* building first; nothing about the reset layers changes.
+- **The Spires want 150 rotors, 2,500 glass and 2,000 steel** (were 150 rotors, 300 sandwiches,
+  2,500 glass). The sandwiches were the act's deepest chain (Greenhouse, a sandwich corner line, a
+  nest, a District group) and no bot delivered one in five passes; a human hits the same wall (the
+  review). Rotors, glass and steel are what the act's spine already makes, so the City lands
+  inside a run that builds the District. The citizens stay in Sandwich Engineering (150 at the
+  Hopper) and Relocation's Engineers. No new cost curve; the stage's Patents (8) unchanged.
+- **Charting needs the City alone** (`megas: ['city']`; was the City and the Transmuter). The
+  Transmuter is **optional**: its rewards stand, it is built after the City (the bot's plan keeps
+  its coils line), and it no longer holds the World. The bot's full-District reset waits on the City
+  alone (`bot3.ts done()`).
+- **The finale** (`src/app/finale.ts`, `finalestate.ts`): opens 3 s after the City's last stage
+  stands, the first time in a session that sees it happen, in the first universe only (a Last
+  Fold's new universe builds the City again without the story ending again; a loaded save with the
+  City already standing does not replay it; nothing is written to the save, so determinism and
+  saves are untouched, no `SAVE_VERSION` bump). Four scenes, Skip moves one on: the City lifts off
+  the key art's island (the camera climbs after it into the night); the Swamp Gazette's special
+  beside Bramble cheering and the four customers' lines; the credits rolling the player's own
+  numbers and the town's cast; "The story isn't over": the World floor, with keys to keep building
+  or to the research page. Replay: a new Codex page in the ending group, *The Floating City*
+  (opened by the trophy), with "The City, again". The trophy that already counted the City
+  (`cityComplete`) is renamed "Lift-off"; its bonus is unchanged.
+- **The City's sprite**: one PixelLab generation (1 of the 12 allowed), palette forced to the key
+  art's 48 colours, cleaned by rule (`pixel-art/finale/build.py`); drawn at the key art's own whole
+  scale, rotor blades and puffs drawn by code.
+- **The Great Drill's stage 1 in three parts** (finding 9): the Scaffold, the Engine House and the
+  Cab stand at 15%, 35% and 50% of every item (data: `MEGA[0].parts`, `partsReached`). Each moves the
+  Bay's picture a phase, puts a drill-crew house in the Town's far row, prints in the Gazette and
+  toasts (`megaPart` event). They pay nothing (the stage's Patents are as before) and change no
+  number. Front-loaded on purpose: the fill's second half already has Act II's goals (Nested Folds,
+  the annex blocks and claims, Calibration). The Bay page shows the parts and the cheapest claim
+  block with a key to the Survey Office (claims as the fill's side goal; not merged into the Drill:
+  the critic's "claims into the Drill stages" is a cut for whoever owns claims).
+- **Touched outside my files** (minimal): `src/app/app.ts` (the finale's watch hook, its e2e debug
+  handle, the `megaPart` toast), `src/app/screens.ts` (the 'finale' page), `src/app/codexbook.ts`
+  (the replay key), `src/data/codex.ts` (the page), `src/data/trophies.ts` (the trophy's name),
+  `src/render/town.ts` (the drill crew's houses), `src/sim/systems/modules.ts` (`megaGive` emits the
+  part event), `e2e/screens.mjs` (the megaCity state's progress), `tests/pace-act2-helpers.ts` (the
+  parts counted as goals).
+
+- **Measured** (seed 1000, 40 h; DESIGN.md §16, §18, §21, §22): the City complete at **12:19
+  (pace-act3) / 12:40 (pace-act4)** in the first run that builds a District (was never by 40 h);
+  rules 1-2 over the District-to-City stretch **7.1 min** (were 40.5 / 30.5); later Act III
+  stretches 10.3-19.9 min (open, as before). Act II while the Bay fills: rule 1 **17.0-17.1 min**
+  (was 39.5-41.4), rule 2 unchanged (49.7-50.9: a part is a goal reached, not a decision); the stage
+  lands at 4:09-4:10 as before. The bot is a planner (its first fold is at 24 min against §16's 40),
+  so its 12:20-12:40 reads as the aimed 18-25 h for a first-timer; not measured with a human.
+- **The first Relocate's 40-45 h target is left standing and logged OPEN** (the bot: 17:40, Home to
+  Rime). With Act III ending at the ending, Acts IV-V are the post-game and their pace is the
+  player's choice after the credits; re-pacing them is a separate job (their floor bests, 2.5-4.4
+  against 7-10, are the bigger gap). Not changed here.
+
+**Flagged as derivative:** an end-of-story credits roll with the player's statistics is a common
+pattern (no specific game of the named list; Universal Paperclips ends on its own last number, not
+a roll). The drill's sub-stage build-up resembles construction phases in many tycoon games
+(Roblox tycoons above all); kept, because each part is a picture of the Drill the art already had.
+
+## Playability pass (2026-11-08): the high floors (District, World, Beyond)
+- **Auto-routing is how the floors work, not research.** Placing a group flies its routes (products
+  to the nearest module short of them, else Bay, Hopper for research, Dock, Hopper; inputs from the
+  nearest feeders with a quarter of the need to spare, two at most; skiffs to carry each rate).
+  *Why:* 137 of 165 routes at 15 h were hand-drawn (the critic's finding 7, radical option 5);
+  gating it behind research would keep the chore through the act's first hours. Idempotent (no
+  route flown twice, none lifted), so bot3/bot4 keep working: pace-act3 7/7 passed with it.
+- **The `hplace` command flies routes by default** (`auto: false` places bare); the Town Plan places
+  bare. Old logged placements are migrated to `auto: false` (**SAVE_VERSION 13**) so saves replay
+  exactly. *Why:* the bots and the player share one command; a replay must not change.
+- **A skiff's price climbs linearly with the paid fleet** (District 40,000 + 2,000 a skiff; World and
+  Beyond at half the slope); refunds at the last one's price. **New cost curve** (CLAUDE.md asks for
+  an entry): linear, not geometric, and counted on paid skiffs only so free Pocket Skiffs can't be
+  used to sell a cheap skiff dear. *Why:* coin was decorative (46M on hand, a skiff 4 s of income).
+  A 3-5 min skiff (the critic's figure) cannot hold for every skiff: a 230-skiff fleet would cost
+  5+ hours of income; it holds per far route instead.
+- **District lots 4M x n** (was 1M x n). *Why:* lots are bought when routes run out (14.5-16 h,
+  550-750K/min); at 1M they were 2-3 min of income. Measured: coin at 15 h 13.8M (was 33-46M).
+  World and Beyond lots unchanged (not measured in this pass).
+- **Only problem pips**, **roofs tinted by product tier** (palette ramps only, no new colours),
+  **icons on a lit pane**, **quiet routes** past 24 on a floor. *Why:* §17 failed at a glance at
+  15 h (QA findings 6 and 9). Pass-through pips for Overdrive's surplus and feeders at 80%+ hidden.
+- **Per minute everywhere on the high floors** (reports, cards, the strip's tags, goals' chips,
+  "Stuck?"). *Why:* the only floors that read /s (QA finding 6).
+- **The strip shows the floor's real limits** (routes, tiles, the next skiff's price) with a slip
+  saying what to do when one binds. *Why:* the real limits were hidden (the critic's finding 4).
+- Not changed: pace-act4 (World barges, Beyond couriers) was not re-run for the new barge and
+  courier slopes; they are set at half the District's slope and flagged in their derivations.
+
+Flagged as derivative: auto-routing on placement resembles the auto-connect of logistics
+games in general (Builderment's auto-belt suggestions are the nearest), but here it only proposes
+routes the player edits, priced in skiffs, inside Foldworks' own skiff model; noted, not dropped.
+
+## Playability pass (2026-11-08): the HUD, the camera and building
+
+From the playability review (visual QA 2-5 and 10-12, the playtest's problems 2, 5, 6, 7 and 10, the
+critic's finding 10). The 180's look and voice stay; this organises it.
+
+- **The camera.** A left drag on empty ground (off the floor, land for sale, paving with no building,
+  ore, Spark or rubble) pans while nothing is in hand; a tap there does on release what a click did
+  (open the wheel, buy the land, let go of a report), so a drag never buys land by accident. Middle
+  and right drags still pan anywhere. WASD and the arrows: a tap glides about a sixth of the view (two
+  tiles at least), a held key runs at about a screen a second, easing in, in screen terms at every
+  zoom (three taps had moved ~10 px). The mouse wheel always zooms about the cursor. `clampCam` no
+  longer pins a floor narrower than the view to its middle (that pin was why keys and drags did
+  nothing and the wheel's zoom "snapped"): such a floor slides freely as long as it stays wholly in
+  view. `fitCamera` frames the Workshop and the Factory above the speaker's bubble and the Gazette's
+  slip (measured from the drawn frame, re-fitted two frames after a load), keeping the whole view's
+  zoom only when the clear area would cost more than one step or drop below 2x.
+- **Rotation.** R turns clockwise, Shift+R back (a placed building: three quarter turns); Shift is
+  read as it was when R went down. The ghost carries a bold gold arrow (red where it cannot go) from
+  its middle out through its front face, on the Workshop and the Factory (`src/render/arrow.ts`); a
+  belt or trunk drag shows it on its last tile only.
+- **Right-click with something in hand drops it, even over a floor tag or a report**; the wheel opens
+  on a right tap only with nothing in hand (as before).
+- **The wheel.** The hovered item's name hangs in the display face on its own tag over its price;
+  the open petal's name sits across the wheel from its items, the hovered petal's on it. Each item
+  shows its number key on its shoulder. Shut, keys 1-9 always pick from the Build petal (2 is the
+  Miner whatever was opened last); open, from the petal on show.
+- **Declutter.** Photo moved to the Options page (H still works). "Stuck?" merged into the trouble
+  bell, the one place for trouble: the bell counts causes, not machines (rankStuck groups every
+  stopped machine under the cause it traces to), capped at "9+"; its tag lists the first three; a
+  click steps through them, G asks for the worst. The Committee's slip says "Reorganize +28" (a bare
+  "+28" read as nothing). The Gazette's slip shows for a first game's first five minutes, then the
+  paper folds to its icon (hover for the headline, click for the page); breaking news (an order, the
+  town) gets the slip for 7 s. Bookmarks show only pages with something live (a %, PICK, NEW); a
+  page opened is a save flag (`page:<id>`), and a save from before this, past its first hour, counts
+  its pages as seen. The Survey Office's dot is "not opened yet" only (an affordable claim was true
+  all game). The "D W F" dial became labelled floor buttons top-right, only the open floors, the one
+  you are on in gold, the Tab key beside the bottom one. Power tags show only below 100%. Floor tags
+  that would hang over land you build on move up past the floor's north edge (over the town); with
+  no room there they show only while the mouse is on their building.
+- **One moment at a time.** Trophies moved from the top centre into the slips column (top of it),
+  clear of the District's tool strip and the floor's tags. Trophies arriving together become one
+  ribbon ("28 trophies!" with the names): the catch-up for 10 s after a load or import or during
+  an offline run, any within a second of the last, and those the first sale earns, which wait
+  2.2 s behind its moment. The first sale is the floor's FIRST SALE! fountain alone (its slip is gone).
+- **Phones.** Auto UI scale is raised, where 480x270 UI px still fit, to at least 1.5 CSS px a UI px
+  (a phone on its side, 844x390 at 3 device px: 4x, 1.33 CSS px, was 1.0). A window under 480x270
+  CSS px (a phone held upright) shows a card: "Foldworks wants a bigger screen. Turn your phone
+  sideways, or play on a computer." The game carries on behind it.
+- **Stuck? ranking** (Workshop and Factory): causes rank first by how much of the current goal's
+  output they stop (the items the goal's line and chips name, and one recipe before them), then by
+  coin lost; a cause under 1% of income is left out (with no income yet, none is). At the 15 h
+  checkpoint the Workshop's answer went from "Press 6 starved, 620/min lost" (0.1% of 573K/min) to
+  "Nothing stuck on this floor", and the bell from 61 to none.
+- **Not done here**: lesson cards still arrive after the first sale's trophy (src/app/lessons.ts is the
+  fold agent's; it already waits for the trophy ribbon to pass); the District's and the World's own
+  tool strips and high-floor causes are untouched.
+
+**Flagged as derivative:** none new. Drag-to-pan, zoom-to-cursor and a facing arrow on a ghost are
+genre conventions of every builder; a labelled floor switcher is the old lift with words.
+
+## Playability pass (2026-11-08): the first fold, early
+
+The playtest folded for the first time at minute 73 (the planner at 21:45); the critic put 30-min
+retention at ~35% because the hook hid behind nine research nodes and a gear grind. Decisions:
+
+- **Folding is node 2** (40 iron plates, after Pressing; DESIGN.md §8). Survey East and Gearcutting
+  now need Folding, so the order is press, fold, then copper and gears. Measured: planner Folding
+  3:48, first fold 5:17 (was 23:19 / 24:35). The critic's proposal (node 2 at ~4-6 min) over the
+  playtester's (a guided fold of the Boardwalk line): the node-2 fold *is* the Boardwalk line (a
+  miner, a smelter, a press), and the guide (the Inspector's "Folding is ready", the 3×3 chip "a
+  Miner, a Smelter, a Press in a row") guides it without a scripted tutorial.
+- **The box is Act I's progression**: 3×3 at Folding, 5×5 at Gearcutting, 8×8 at Gizmo Theory
+  (`RULES.foldBoxFirst`, `foldBoxGears`, `foldBox()`). Each node opens a bigger line to fold rather
+  than a bigger number (§10 Box sizes). Pillar served: folding is the engine (pillar 1).
+- **Gizmo Theory opens what Folding opened**: the Gizmo Festival, chunk D and Act II's Coal Seams
+  (orders.ts, land.ts, research.ts: one `requires` each). Without it the Festival (which needs
+  Gizmos) and a 12,000-coin chunk would have been offered at minute 4.
+- **The first fold is a gain by itself**: the first fold ever places its module beside the Factory
+  Dock (no income gap: the playtest's income fell 180 → 66/min until the module was found and
+  placed), and the first stamp ever is free (`RULES.firstStampFree`). Chosen over "the folded
+  machines' price back": a refund on every fold would make fold-rebuild-fold a free stamp, and a
+  refund on the first fold only teaches nothing; the free stamp teaches stamping at the moment it
+  matters. Payback and the cap are in §10 The first fold: claims, not coin, bound it (5 iron copies
+  in chunk A, ~12% of the slice-end income at most).
+- **One staged moment**: the crease, the module's pop with its rate, one card with one button
+  ("Stamp a copy · free", which stamps, places the copy beside the first and shows the Factory
+  floor). The "Folded!" and "The Factory floor is open" toasts are skipped for the first fold.
+- **Stamp prices read linear**: "copies 250, then +125 each (half the bill)"; the free first one
+  shown as free. The rule (bill × (1 + 0.5 n)) is unchanged: it is linear; only the way it was
+  written ("×1 · ×1.5 · ×2") read as a curve. A plain click on a module icon with no spare copy no
+  longer stamps (`src/app/wheel.ts`, one line: the HUD agent's file); Shift+click does.
+- **The first research never zeroes income**: until Pressing is researched the Hopper pays like the
+  Dock (`RULES.firstNodePay`). Chosen over a starting splitter (it halved the first minute's income
+  and moved the Bellows past check 1's 40 s) and over "a second line first" (100 coin at minute 2).
+- **The Hopper is honest**: the frog says "Wrong snack! {node} wants plates, not ingots" when the
+  Hopper banks what the selected node does not take, and "{node} is hungry!" when its bar has not
+  moved for 10 s; the research page names the item going to the bank (`src/app/hopperwatch.ts`).
+- **The research page**: a click on a node always does the same (shows it and, if it can be
+  researched, selects it; it never un-selects: the page's button does); the page opens on the node
+  the frog's line names (the chip bug: it opened the first node in the tree); the ★ is gone ("items
+  owed" heads the list instead).
+- **Lesson cards wait 25 s apart**, one at a time. Trophy wording: "a Miner free: the next you build"
+  (the bonus applies to the next one; "the first Miner free" read as a refund that never came) and
+  "{coin} to start with, after a reset" (it said "at each run's start" before runs exist).
+- **Pace targets re-derived** (DESIGN.md §13): check 6 is Folding by 6:00 and the first fold by 8:00
+  (planner mean); check 9's floor phase is counted from Gizmo Theory; check 11 is measured at Gizmo
+  Theory and wants the Dock-only player a quarter of the planner's time behind (it was 5 min of a
+  27-min Folding; Act I's research is half as long now). The bots fold "Iron plates" (L2) after
+  Folding and "Copper wire" (C4, which feeds Gizmo Theory's wire into the Factory Hopper) before
+  Gizmo Theory; a source line graded under A is audited again.
+- **Open (logged, not hidden)**: Act I is ~10 min shorter, so Act II's Bay floor moved into rule 4's
+  2:00-2:30 window for seed 1000 (1.10x, logged as open with the reason, as seed 8919's was), and
+  seed 8919's longest wait before the Bay floor is 16.1 min (bound 15) on the Great Drill's research.
+  The lever is Act II's (the Drill's concrete), not Act I's.
+- **Flagged as derivative**: none new. The free first copy is a tutorial gift, not a recurring
+  "free item" mechanic.
+
+## Playability pass (2026-11-08): the returning run (reset layer 1)
+
+The review's findings 2 and 3: a Reorganize replayed the tutorial (the 15 h checkpoint dropped from
+573K/min to 90/min, Bramble asked for the Boardwalk again, every run spent 2.3-2.5 h back to Act
+III) and the Patent tree was bought out by ~17 h with nothing after it. Decisions, each with its
+reason:
+
+- **A Reorganize keeps what you learned** (`src/sim/reorganize.ts`). Every run after the first reset
+  of the save (`meta.runs >= 1`: a Reorganize, Relocate or Last Fold) knows every research node with
+  `act` undefined, 1 or 2 (`RULES.keptActs`), keyed off the node's `act`, never a list (the folding
+  agent is reordering Act I). Universe-wide, not per island: a new island's first run replaying
+  Act II's research is the same chore. The flags `factoryOpen`, `firstFold` and `sliceEnd` are kept,
+  so the Factory is open from the first tick and the first-fold and slice-end moments play once.
+  The Workshop and Factory floors still start empty: a new run is a new layout.
+- **The Drawer's designs come back built.** Each kept design with its audit card returns at a run's
+  start as a module design (its kept grade, rates, box and name) with **one free copy**
+  (`RULES.returnCopies`); later copies are stamped at bill x (1 + 0.5 n) as ever. Free once, not a
+  25% bill: the run starts with ~600 coin, so a bill makes the first minute's coin the gate for no
+  decision; the decision is which designs the Drawer keeps. An imported string or a Group Drawer
+  layout (no card) still unfolds and is audited. A Challenge run gets nothing back (it is a run
+  built from scratch under its rule, and "stand 8 modules" or "deliver 200 Gizmos" would be met by
+  the returns); research is still known there, as the old head starts gave it.
+- **Orders filled once are never offered again** (`meta.ordersFilled`, `ordersAt`;
+  `src/sim/systems/orders.ts`). Reputation was always kept, so a refill paid a reward twice. The
+  Town draws every order ever filled (`ordersEverFilled`), so it is the record of everything built.
+  Two exceptions: **the Committee's orders repeat** (`CustomerDef.repeats`): their reputation is the
+  Great Drill's gate, two a run by design (§19); measured, with them filled once the campaign's run
+  2 filed 0 Patents (stage 2 never opened) and could not reset. And a Challenge whose goal is an
+  order offers it again in its run. *Consequence for Act III*: Bramble, Unit 7 and Voltaire no
+  longer reach reputation 4-5 by refilling Act II orders each run; their rep 4-5 rewards (the Skiff
+  Club, Specimen Jars, half-power Chem Vats, High-Tension Lines) now come from their Act III orders.
+  That is where they belong, but it slows the District bot's skiffs until Picnic, Senses or Ballet
+  is filled: flagged for the Act III agent and the lead.
+- **The Patent tree's Act I-II head starts are re-derived** (`src/data/patents.ts`): Bellows, Old
+  Notebooks' research, Gear Patterns, the Gizmo Patent, Folding Remembered, the Grant, Overdrive by
+  Habit, Glass and Gravel Notes and the Circuit Patent bought nothing any more. The ids are kept
+  where code names them (the bots, Old Habits) with new effects; the rest are gone. The new
+  "returning run" head starts buy what a returning run still rebuilds by hand: Copper Deeds (start
+  owning B and C), Coal Rights (D and E), Steel Charter (F), Claims on File (the Survey Office's
+  blocks kept through a Reorganize), Spare Dies (a second free copy of every kept design). The
+  automation branch gains the Filing Cabinet (Drawer 12 -> 16) and the Floor Plan (the Factory
+  floor at a Reorganize is laid again, a tile every 2 s, trunks paid, module tiles filled from spare
+  copies: pillar 2, the returning run's chore becomes the Draughtsman's). 33 nodes, 65 Patents.
+  A v12 save is refunded every old head start at its old price (v13 migration).
+- **The Patent sink that scales: Dies on file.** In the Drawer, 1 Patent buys one more copy of one
+  kept design at every run's start, at most 4 a design (`RULES.dieCopyPrice`, `dieCopiesMax`): the
+  sink grows with the Drawer (8-20 slots, 32-80 Patents) and ends where a returning floor is whole.
+  Pillar 1: what comes back is a design you folded, and it still needs claims, room and trunks.
+  Forgetting a design returns its dies as Patents. Flat price, no curve.
+- **A reset that buys nothing is never invited.** When the tree is bought out and every die is on
+  file (`spendable(g).full`), the Reorganize card's Committee says "the tree is full. nothing to
+  buy. keep building.", the button reads "Sign anyway" and is no longer gold, and the Patent Office
+  says the same. (The Standing Committee still resets at the number its player set: pillar 4, the
+  player's standing choice.)
+- **The card says how fast the next run is**: "back to 15.9K/min in ~N min", the run's Act II floor
+  (`meta.factoryPeak`, its best 5-minute income before Zoning) and the minutes the last returning
+  run took to pass it (`meta.caughtUp`, kept in the run history), or `RULES.backInMinutes` (the
+  campaign's measure) before one has. A run whose District opened before its floor's peak was noted
+  (a save from before) says "your Act II floor" with no number rather than promise its 574K.
+- **The bills term is filed like the designs** (`meta.billsFiled`): only a rise over the best on file
+  pays (a Relocate or a Last Fold starts it again). Measured: a returning run rebuilds its floor in
+  minutes, so a 35-minute reset loop filed 1-4 bills Patents a run and out-filed the designed runs
+  (3.59 against 3.42 an hour). Filing it closes the loop the way the designs' record did.
+- **A returned design's spare copies hold no claim until placed**: they are dies in the inventory.
+  (Claims still cap what digs: placing past them is refused.)
+- **Tried and dropped: the campaign's player keeping the slice's chain designs.** Keeping the wire
+  and ingot lines left them standing unfolded next run (their designs came back, so the planner never
+  folded them) on tiles the Act II lab is laid over, and the Act II policy waited on them for the
+  whole run (keeping only the Gizmo works was not measured to the end). A bot artefact, recorded so the next pass does
+  not retry it. Seed 1000's run 2 is left open in the pace test (`BACK_IN_OPEN`, with the reason).
+- **The Town Archive (Legacy) is re-derived**, since every run after a reset knows Acts I-II: it
+  now knows Zoning and Chutes in every run of every world (the Zoning Charter's research, kept
+  through a Relocate). The Seed keeps the Archive (lastfold.ts), so a new universe knows them too.
+- Files outside this agent's list touched minimally: `src/sim/Game.ts` (the `die` command),
+  `src/sim/world.ts` (types), `src/sim/systems/stats.ts` (one call), `src/sim/drawer.ts`,
+  `src/render/town.ts`, `src/app/orders.ts`, `src/data/legacy.ts` (Archive and Purse text),
+  `src/data/rules.ts` (five rules), `src/engine/save.ts` (v13), `src/sim/bot.ts` (one line: the
+  planner skips orders filled before), `e2e/screens.mjs` (node ids), and the act4/act5/prestige
+  tests' expectations of a fresh run.
+
+**Flagged as derivative.** Dies on file (starting units bought with prestige currency, carried into
+each run) resembles "start with N of X" prestige upgrades in many idles (Antimatter Dimensions'
+start-with upgrades, Realm Grinder's). Kept because each copy is one specific design the player
+folded, placed by hand under claims and room, bounded at 4, and never a multiplier on production.
+Not done: unspent Patents boosting production (Cookie Clicker's heavenly chips, AdCap's angels).
+
+## Playability pass (2026-11-08): cuts, Machine Kits and machine modes
+
+Wave 2 of the playability pass, agent "cutsA". The critic's finding 6 (the complexity budget: about
+eleven currency-like things against PLAN.md's six) named both. The owner made the cuts in advance;
+this records how they were made and what took the place of the rewards that named them.
+
+**Machine Kits are cut.** Gone: the *Machine Kits* research node, the `machineKit` item, the
+`packKit` recipe, the kit cost on stamps of designs with an Act II building, the parts bank
+(`s.parts`) and the Hopper's kit credit, the kit chips on the fold card and the wheel, the offline
+report's kits line, the Gazette line, the kit pop and sound, and the kit icon (the `items2` atlas
+regenerated, 11 frames). *Why:* a second currency for a decision coin already makes. The critic
+counted 3,955 banked unused at 15 h, and a kit's goods (2 steel + 2 gears, 72 coin at the Dock)
+were 1-2% of the stamp they went with. **§10's stamp pacing still holds with coin alone**: the
+price is `bill × (1 + 0.5·n)`, the kit cost was never the binding one, so no coin price was
+re-derived. What limits stamping in Act II is claims and the annex (DESIGN.md §18 Stamps in coin).
+
+**Machine modes are cut, and so is Act III's Recycling node.** Gone: *Tuning* (Efficient,
+Overclocked, Precision), *Recycling* (the Recycling and Byproduct modes; its only content was the
+two modes, so it went too), each entity's `mode` and Precision's `bonus`, the `mode` command, the
+mode grid on the hover report, the mode pop, the mode sound, the bots' mode steps and the UI icon
+slot's name (slot 28 stays in the append-only atlas, unnamed, like 33). A machine runs at its
+kind's speed, draws its kind's kW, and a recipe's byproduct comes every `every` crafts. *Why:* a
+knob on each machine of a line that is folded away within the hour, so a fold's measured rate
+already absorbs it, and Factorio's modules by another name. Nothing replaces it (the brief: no
+other knob). The Sense and Logic Patent's head start names three nodes (Sensors, Processors,
+Hydroponics), about 35 min, was four.
+
+**No research required a cut node.** Nothing in `research.ts` listed `machineKits`, `tuning` or
+`recycling` in `requires`, so there was no parent to re-point to; the only reference was the
+Patent head start above. No trophy named a mode or a kit.
+
+**Three rewards re-pointed, each to a quantity that already exists** (no new concept):
+- *Hand-Made* (Challenge, Act II): "a design's first stamp takes no Machine Kits" is now **a
+  design's first stamp is free, for good** (`handMadeFree` in `systems/challenges.ts`, read by
+  `stampCost`). The same free copy the first fold ever gives (§10 The first fold), so the next
+  design is worth folding where another copy of the old one would do (pillar 1). A Challenge that
+  forbids stamping pays out in stamping.
+- *Unit 7 rep 3*: Precision's +10% yield is now **Sorting Crates**, a Buffer Crate holds 100, was
+  50 (`crateCap` in `transfer.ts`; RULES.unit7Crate). 100 is 50 s of a Mk2 smelter, enough to ride
+  out a module's round-robin or an order's wait: a rule a player plans around, not a multiplier.
+- *The Committee rep 4*: Pocketed Kits is now **Pocketed Claims**, a Survey Office block is 5
+  claims, was 4, every block bought before or after (`prules(g).claimsPerBlock`;
+  RULES.pocketedClaims). Claims are what binds stamping by Act III (106 of 107 held at 15 h).
+
+**Research `num` renumbered 1..59** in `RESEARCH_IDS` order (a data test pins it: no gap, no
+repeat). The research page's Act II columns were re-cut for two nodes fewer (Circuits and Concrete
+share column 4; Heavy Machines, Motors and Nested Folds column 5; the Great Drill alone in 6) and
+looked at in 1024×640 and 1280×720; Act III's page loses Recycling's slot.
+
+**Save v15 (migration `14:`).**
+- The cut nodes leave research `done`, `selected` and `progress`. **No refund**: research is paid
+  in items, minutes of the floor that paid them (400 steel + 300 gears, 200 circuits, 150 rubber +
+  60 gearboxes), and a refund would be a burst of goods for no decision.
+- Machine Kits leave every stock: the research bank, the Hopper, belts, machine buffers, crates,
+  module stocks, docks, the Factory's stores and the parts bank. A `packKit` assembler is left with
+  no recipe (idle), its buffer and progress cleared; a design whose only output was kits loses its
+  inputs too. `mode` and `bonus` leave every entity. A design's `normal` flag (no machine in a mode,
+  which a refold card needed) becomes `refolds`.
+- The command log drops `mode` commands, `packKit` recipe commands, research of a cut node and
+  routes that carry kits. The replay cannot be exact all the same: the snapshot is the truth, and
+  the commands after the last snapshot replay against the new rules (no mode speed, no kit cost),
+  as the v12 Heater migration did. A test loads a v14 save holding kits, modes and all three nodes.
+
+**Share strings (FWD1).** `RECIPES_BY_CODE` is append-only, so code 15 (`packKit`) stays as a
+retired `null`: a string made before the cut still decodes, its kit assembler left unset (tested),
+instead of being refused as damaged.
+
+**The Act III bot's kit line was also its riser.** Its column-15 belt carried other lines' output up
+to the Hopper; it stays as `RISER`, the kit assembler and its feeds gone.
+
+**Pacing, before and after** (the pace tests the cut touches, base `37fffce` against this change):
+- *pace-act2-run* (seeds 1000 / 8919): every milestone the same to the minute (S 0:20 / 0:20, steel
+  0:37 / 0:39, power 0:48 / 0:45, circuits 1:09 / 1:10, the Concrete fold 1:19 / 1:18, the Drill
+  works 2:09 / 2:00, stage 1 4:03 / 3:55; Patents at 2, 3, 4, 5 h 8, 12, 15, 15 / 9, 12, 16, 15;
+  rule 4 1.10 / 0.77), 14 passed in both. One number moved: rule 1 while the Bay fills on seed
+  1000, 20.4 min (ending 3:33) before, 22.8 (ending 2:27) after, because Tuning's research was one
+  of the goals reached there and nothing replaces it. Logged, not tested (an `it.todo`), as before.
+- *pace-reorganize*: the same run for run (Patents 15, 6, 0 / 16, 6, 0; hand-overs 0:20, 0:06,
+  0:04; loops 2.40 and 3.68 an hour); seed 1000's run 3 peaks at 18,155 a minute, was 17,748. 7 of
+  9 pass in both: rule 3's returning run on seed 8919 and the 1 h reset loop (3.68 an hour against
+  the designed 3.36) fail on the base commit too, so they are not this cut's and are left for the
+  lead (DESIGN.md §19 records 9 of 9 at a designed 3.26).
+- *pace-act3* (seed 1000, 40 h): the City complete at **13:10 in run 3, the first Act III run**,
+  was 19:03 in run 4 (the base failed that test: its run 3 reset a stage short at 14:36); 8 of 8
+  pass, was 7 of 8. Act III before the City 19.2 min at worst, was 19.3. Not traced; DESIGN.md §21
+  names the likeliest causes (the kit line's ingots, gears and steel; stamps no longer waiting on
+  kits; Recycling's rubber and gearboxes).
+- *pace-act4* (seed 1000, 40 h): the base passes 5 of 5 (the City 14:29, the first Relocate 35:25, open as
+  before at a 40-45 h target). The after run had not finished when this was committed (it ran under
+  memory pressure past 3 h): unverified.
+- *pace-offline* and *pace-hopper-vs-dock* (the offline report and the Hopper lost their kit
+  credit): identical before and after, 5 of 5 (offline / open idle 0.56 at e = 0.5 and 0.78 at
+  0.75; dock-only Gizmo Theory 4.1 min behind the planner).
+
+**The concept count** (DESIGN.md has no §16 count to update): one item, one stock the player
+tracked (the parts bank), three research nodes, five modes, one command and one hover-report
+section fewer. Nothing new: the three rewards reuse the stamp price, the crate's capacity and the
+claims per block.
+
+**Files touched outside this cut's own** (small, local): `src/engine/save.ts` (the migration; it
+also deletes the cut nodes' keys under `inspire`, which cutsB cuts whole in its own step), `Game.ts`
+(the `mode` command), `world.ts` (the `Mode` type, `mode`, `bonus`, `parts`, `normal` →
+`refolds`), bot2/bot3/bot4, `systems/challenges.ts` (`handMadeFree`), `data/challenges.ts`
+(Hand-Made's reward, Lean Power's derivation), `data/scenarios.ts` (two derivations named modes),
+`data/patents.ts` (the head start), `src/sim/drawer.ts` (the retired recipe code), DESIGN.md, PLAN.md
+and STYLE.md.
+
+**Flagged as derivative.**
+- Machine modes (Efficient, Overclocked, Precision, Recycling, Byproduct): Factorio's modules
+  (speed, efficiency, productivity) by another name. Removed, not replaced.
+- Sorting Crates (bigger buffers) and Pocketed Claims (more land a purchase) are generic upgrades
+  found in many factory and idle games; kept because each is a fixed rule (one number, once), not a
+  multiplier on production, and each replaces a reward that already existed.
+
+## Playability pass (2026-11-08): the second playtest's fixes
+
+A second first-time playtest of the merged build: income at 0 from minute 10 to 15, a goal naming
+a node that was not on screen for 15 minutes, the 15 h checkpoint's Factory standing still, a
+Reorganize card promising "~455 min", and the Festival given up because a two-input module could not
+be fed. Decisions (DESIGN.md §8, §11, §13, §16, §19, §21 carry the numbers):
+
+- **The Hopper pays the Dock price until the first fold** (was: until Pressing; `RULES.firstNodePay`,
+  docks.ts). Picking Folding sent the hand line's ingots into the Hopper as the wrong item, banked for
+  nothing. Chosen over "until Gizmo Theory", which would have made all of Act I's research free and
+  §13 check 11 (Hopper or Dock) meaningless. Measured: first fold 5:17 → 5:02, Gizmo Theory 13:27 →
+  12:22, the Dock-only player 4.1 → 5.1 min behind (check 11 wants 3.1+), slice end 21:35 → 20:36.
+- **Income 0 is said** (goals.ts `noIncome`): after 15 s at 0 while lines feed the Hopper, the frog
+  says where the coin goes and the fix. The Hopper's floor tag marks an item its node does not take
+  "→ bank", so a wrong item never reads as progress.
+- **A goal points at the nearest step on screen** (claims.ts `claimFix`, goals.ts `claimStep`): a
+  claim short names the Survey Office, a chunk with a deposit of that ore, Surveying when it can be
+  picked, or the node on the way. When the step cannot be taken now it rides as the goal's note
+  (quiet) rather than holding the bubble. The stamp refusal and the fold card use the same words.
+- **A research fill over 10 minutes says its time and the stamp that shortens it** (goals.ts
+  `LONG_FILL_MIN`, hopperwatch.ts `hopperRate`). The Coal Seams wall measured 11.0 and 12.5 min after
+  Gizmo Theory for the bots and ~40 min for the playtester at 15 gears/min; Coal Seams' cost is in
+  research.ts (cutsA's file this pass), so the wait became a decision (a gear copy to the Hopper)
+  instead of a cut.
+- **The Factory Chute never jams the floor** (modules.ts `dockTakes`): what its 20-a-item stock has
+  no room for goes on to the Factory Dock, which sells it or scraps slag, as the Bay does. The
+  checkpoint's stall was on main before this pass too (loaded under 1d0e84c: 9 of 9 blocked), so it is
+  a rule change, not a revert. Only items no Dock buys still back up, and the bell gives a full Chute
+  one cause, not one per module. Measured: 7 of 9 modules working after 2 minutes; the checkpoint's
+  income drop is the District's Overdrive wearing off, not the Factory.
+- **The Reorganize card's "back in" is honest** (reorganize.ts `nextRunPace`, `RULES.backInCap` 30): a
+  catch-up counts only against a record kept under the returning run's rules (`factoryPeak` on file),
+  and a measured number past twice the model is not shown. A slow run is the player's pace; a number
+  like 455 reads as a penalty for resetting. No save change: the fields already existed.
+- **Two-input modules: the rule stays, the words change.** Every input enters at the back on one
+  trunk, and trunks join side-on, so no part is needed; the screen said "one trunk feeds one module".
+  The report and the wheel card now say what the module needs at its back and how ("run each feed into
+  that trunk"); a starved module names the placed module whose front should run into it; a module
+  held back by a slower consumer reads **PACED** with per-minute numbers, not BLOCKED with a
+  per-second rate labelled per minute; a refused byproduct says "a trunk out of its side to the Factory
+  Dock carries slag off".
+- **A line's fix names the first short stage from the source** (tags.ts `lineRows`), so the Press's
+  report and the bell agree (+1 Smelter, not +1 Press).
+- **The audit's heap words are true** (audits.ts): the first audit said "a heap caps it at S" while
+  later boxes with a heap inside scored waste 0%. A heap inside the box is now counted and named ("N of
+  M slag piled in a heap inside the box. A module holds no heap: leave the heap outside, belt the slag
+  out to it"), and the S text says the heap is outside.
+- **Refusals keep their markup and are said where they happened** (hud.ts, app.ts `Refusal.at`): the
+  playtester read "no spare copy · k:SHIFTk:LMB stamps one" with its braces stripped, and a fold box's
+  refusal appeared far from the box.
+- **"a" or "an" by the word** (fmt.ts `aWord`): the Modules page read "Needs a iron claim"; the
+  helper is used wherever a name follows an article (claims, the bell, the rail, patents, trophies).
+- **Stamp prices say they are linear** ("250, then +50 each", "each copy adds half the bill"), not
+  "copy 250 = 100 × 2.5", which read as a multiplier.
+  The playtester's wire stamp "250 → 500" was two stamps (Shift held over two clicks), 250 → 375 →
+  500, the existing rule; nothing in the price changed.
+- **Belts and trunks show their facing and R** in their tag ("Belt → east", "R turns it"); it said only
+  "Belt · empty".
+- **Hints wait 0.4 s and sit above or below their row** (ui.ts `hintOn`, TipPlace `vertical`), never
+  over the next button. **Slips arrive one at a time** (1.6 s apart, at most 2 on screen) and banners
+  wait for the one before: three cards arrived at once at 6:30, and the Reputation banner sat on the
+  "Order filled" banner. The tooltips over the Reorganize card's "You keep" column and the fold card's
+  "Fold it!" button are what the hint placement fixes.
+- **The District Dock lights only its 6 busiest routes** when focused (render/district.ts
+  `FOCUS_SINK`), and its tag says how many land there: hovering it drew ~100 lines.
+- **The wheel opens on the goal's petal, else Build (Modules on the Factory).** It reopened on the
+  last section used, so a click where the Miner had been turned on the flow view. Chosen over fixed
+  icon positions: the petals' contents change with what is unlocked.
+- **Lessons a save has earned count as seen** (lessons.ts merges `pastLessons`): an imported save
+  brought the Factory floor's lesson card back.
+- **Zoom-out stops where the island fills the view** (app.ts `minZoom`). At 1280×720 that is 1×, so
+  it changes nothing there; on bigger screens the island no longer floats small in a void. Panning
+  was not re-pinned: the HUD pass removed pinning on purpose.
+- **Act II's rule 4 at 2 h stays open, re-measured**: active/idle 1.10 and 0.77 at this pass's base
+  (44e3b23), 1.05 and 0.92 after it (seeds 1000, 8919); both Bay floors are laid inside the window
+  (2:08, 2:06), the reason the test already logs. Its OPEN strings (1.10, 1.46) were written before
+  wave 1 merged and are left for the pass that re-measures Act II after the Machine Kit cut.
+- **Two Reorganize pace tests fail at this pass's base and after it, alike** (re-run on 44e3b23's
+  sources): seed 8919's run 2 never passes run 1's peak (14,046 against 14,642 after, 13,919 against
+  15,244 before; the pattern `BACK_IN_OPEN` logs for seed 1000), and the 1 h reset loop files 3.68
+  Patents an hour against the designed runs' 3.36 (the same 4,6,2,1,4,6,0 in both). Neither is this
+  pass's; both are for the Reorganize owner to re-derive.
+- **The bot's core ending (pace-act3) is fragile, and fails at the base too.** After this pass the
+  campaign's first Act III run (6:15-15:02) delivers the Spires' 2,000 steel and 150 rotors but no
+  glass: the Glassworks corner line is never folded, so Glass II never stands, and the City is not
+  complete in that run (the test fails). At 44e3b23 the same run ends the same way (the 15 h
+  checkpoint: City stage 1, steel and rotors in, no glass, run 4 begun). With this pass but the
+  Chute's overflow rule taken out, the City stands by 15 h. So a small change upstream flips it
+  either way; the Chute rule is kept (it is what un-jams a player's Factory) and bot3's corner plan
+  is left to its owner. Measured after this pass: District 8:19, City stage 1 9:38, 153 District
+  modules at 40 h, 0.61 ms a tick.
+- **A new game or an imported save ends a catch-up still running** (app.ts `adopt`): the catch-up
+  belongs to the game being left, and the new game refused every command while it ran (found by
+  `npm run screens`, whose overnight state follows the running-catch-up state).
+- Files outside this agent's list touched minimally: `src/app/reorganize.ts` (the card's one text
+  line), `src/sim/systems/modules.ts` (the Chute and `dockTakes` only, no kit parts),
+  `src/app/app.ts` (refusal position, toast queue, banner delay, zoom; not the Hopper-click
+  handlers), `src/app/hud.ts` (refusals, slips, banners, the belt tag; not the Spark tip),
+  `src/app/district.ts` (the Dock tag row), `src/app/drawer.ts` (one row's value shortened: "no
+  audit on file · unfold it, fold it once" ran over its label at every size once `npm run screens`
+  ran on a fresh dev server; the +1 copy button's tip keeps the full reason).
+- **Run `npm run screens` on a freshly started dev server.** After a source file is hot-updated, a
+  setup that imports a module by its bare path (`import('/src/app/drawer.ts')`) gets a second copy
+  of it, so what it sets never reaches the game: the Drawer showed no design and the overnight
+  forecast none, and both read "clean".
+
+**Flagged as derivative.** Nothing new. A hover delay before a tooltip and a queue for notification
+toasts are general UI conventions, not one shipped game's. The PACED status sits beside the existing
+pips; it reads like Factorio's "output full", but it names a consumer and a rate rather than a state
+of the machine.
+
+## Playability pass (2026-11-08): cuts, Inspiration, the Lucky Vein, the post-game
+
+Agent "cutsB", wave 2, off `playability`. The critic's finding 6 (about 60 concepts by 5 h, eleven
+currency-like things against PLAN.md's six) and its derivative list. The cuts were the owner's call,
+made in advance; each is gone from the sim, the data, the UI, the bots and the tests, with no flag
+left behind (DESIGN.md §6, §20, §21, §24).
+
+- **Inspiration is cut** (`src/sim/systems/inspire.ts`, `s.inspire`, `IDLE.inspire*`, the research
+  page's meter). A click on a Hopper, on any floor, opens the research page, as it did before Act II.
+  *Why:* a currency-like thing to track, a 357-click chore per node for its 30%, and a click that
+  bypassed the line instead of rewarding it. Rule 4 (§16) is unmoved by it: no bot ever clicked a
+  Hopper, so every active/idle reading was already without it, and it never paid coin.
+- **Its trophies go, and the Tinfoil skin with them.** Inspired (Overdrive cools 2 s sooner) and the
+  hidden They Know (the Tinfoil Hopper skin). Neither reward needed a home: the four other cooling
+  trophies still reach the 10 s cap (§24), and the skin was the joke about the clicking. Its art
+  (`src/art/skin_tinfoil_hopper.*`) and its build entry (`pixel-art/m11-skins/destinations.py`) are
+  removed. The shelf: 203 trophies, 17 hidden.
+- **The Hands Off Challenge's rule** reads "no hand-mining, no cranking, no Inspector, no Overdrive".
+- **The Lucky Vein is cut** (flagged by the critic as Cookie Clicker's golden cookie into Frenzy):
+  `RULES.veinMult`/`veinSeconds`, the vein boost on machines and Miners (`boost`, `veinBoost`), the
+  patches' glow (`veins`), its sprite (`spark_vein`, its art and both pixel-art scripts' exports),
+  the toast, the hover tip, the Gazette's alert and the edge arrow's word. `src/data/sparks.ts`
+  goes too: with one kind, its record held only an unused name and weight.
+- **A Spark is the Inspector**, re-derived from the factory: it walks up to the busiest line with two
+  machines at work and grades it (§10), and pays 60 s of its output × the grade to research, in kind.
+  The `Spark` type loses its `kind`. *The rate stays 3-6 min:* it was set for Sparks of either kind,
+  and every Spark is now one that grades a real line. Measured on the planner bot (four seeds, 3 h):
+  38-41 spawns before (17-22 veins), 39-41 after (all Inspectors); its coin at 3 h 1.46M against
+  1.49-1.64M. The Spark RNG draws less (one draw a spawn, was up to four), so every seeded run's
+  Sparks move: the pace tests were re-run (below).
+- **The Inspector's gift is halved, 60 s of the line's output to 30 s** (`RULES.inspectorSeconds`).
+  *Why:* it now comes twice as often (it was half the Sparks), and at 60 s the doubled research let
+  the Dock-only player reach Gizmo Theory only 2.7 min behind the planner (§13 check 11 wants a
+  quarter of the planner's time, 3.4 min; it was 4.1): research free of the Hopper made the Hopper
+  less of a choice. At 30 s research an hour of catching every one is where it was, and the gap is
+  4.7 min. Chosen over a slower rate (6-12 min): the visit is the active beat and the grade lesson,
+  and the Spark trophies' counts (1, 10, 100) keep their meaning.
+- **"Lucky!" is renamed "Spot Check"** ("catch the Inspector"); "Spark Chaser" is "Regular Visitor"
+  and "Spark Collector" "First-Name Terms". Their counts (1, 10, 100) stand: the rate did not change.
+  The id `lucky` is kept (saves hold `trophy:lucky`), as `cityComplete` kept its id as "Lift-off".
+  Player-facing text says "the Inspector" where it said "Sparks" (the shelf's bonus row, the
+  bonus text); the system keeps the name Sparks in code and in DESIGN.md.
+- **The post-game waits for the ending.** Challenges and the Scenario boards open with the core
+  ending, the Floating City complete (`postGame` in `src/sim/systems/challenges.ts`, read by the
+  sim's `challengeRefusal` and the app's `scenariosOpen`); `CHALLENGE_AFTER_RUNS` is gone.
+  Megaprojects survive every reset (the Last Fold included), so once open it stays open. *Why:*
+  fifteen Challenges and eight boards were offered at the first Reorganize (about 5 h), in the stretch
+  the critic counted 60 concepts; after the credits they are what the game has left to offer, beside
+  Acts IV-V. The finale's last scene says so ("Challenges and Scenarios are open · Options").
+- **The Challenge entry moved off the Reorganize card onto its own page** (the critic: picking a
+  Challenge on the reset card is Antimatter Dimensions' challenge entry at prestige). The Challenges
+  page is reached from Options (a key under "after the story", with the Scenarios, and a Challenges
+  tab beside Stats, Trophies, Options and Keys); "Take it next run" there takes it and opens the card
+  to sign. The card offers none: with one taken it shows a strip under the contract (the Challenge as
+  a key back to its page, "Ordinary run" to drop it, its rule, goal and reward), because pillar 4 says
+  the card states what the signature starts. The "Scenarios open" toast at the first reset is gone.
+- **A Challenge begun before the ending runs on** (never strand a run): `runChallenges` and its slip
+  never asked the gate; only taking a new one does. The slip still opens the page with Give up.
+- **Save v16** (migration `15:`, after cutsA's v15): drops `inspire`, the Inspiration counter, the
+  vein Spark, `veins` and every `boost`, the two trophies' flags and the Tinfoil skin (owned and
+  worn); keeps an Inspector on the map (without `kind`), what Inspiration delivered, and `challenge`.
+  A click logged on a dropped vein leaves the log (it would hand-mine the ore now). A save written by
+  the app (empty log) is exact; a log replayed past a Spark's spawn or holding a Hopper click is near,
+  not exact (the spawn draws less from the RNG; the click credits nothing), as the v12 Heater's was.
+  `tests/post-game.test.ts` loads a v14 save holding all of it.
+- **No bot or pace test takes a Challenge**; the tests that do set the City complete
+  (`tests/story-helpers.ts endStory`). The No Splitters test's route count reads 145 (120 + 20 + the
+  Lift-off trophy's 5 the City now brings with it).
+- **Measured** (the full pace suite, at the commit before and after, the same seeds; DESIGN.md §13,
+  §20): slice end 21:35 to 22:10, first fold 5:17 to 5:27, check 11's gap 4.1 to 4.7 min, the first
+  Reorganize 4:06-4:10 to 4:15-4:18 with 15 Patents, rule 1 before the Bay floor 11.0/16.3 to
+  11.5/11.4 min, rule 4 within 0.07 at every stage. The commit before failed 14 pace tests; after,
+  10, every one among those 14 (run 4's rule 4, the late runs' offline readings, rule 3 on seed
+  8919). The campaign's City completes at 10:52 and 11:31 (pace-act3, pace-act4; 19:03 and 14:29
+  at the commit before, where pace-act3's "in the first Act III run" failed): the Sparks' new
+  sequence moves the Act III bot's plan; not a claim about players.
+- Touched outside the obvious files (minimal): `src/app/finale.ts` (one invite line, the slip 14 px
+  taller), `src/app/screens.ts` (`backTabs` and the Options page), `src/app/tags.ts` (the Factory
+  Hopper's verb and `veinBoost`), `src/sim/systems/machines.ts` and `miners.ts` (the
+  boost), `src/sim/bot.ts`/`bot2.ts` (a Spark's key without its kind), `e2e/screens.mjs`
+  (`reorgChallenges` completes the City first; a new `optionsPost`), `docs/endgame.md` (the skin
+  table).
+
+**Flagged as derivative:** nothing new is added. Two flags are resolved by the cut: the Lucky Vein
+(Cookie Clicker's golden cookie into Frenzy) and the Challenge picked on the reset card (Antimatter
+Dimensions). A separate Challenges page is still the genre's shape (Antimatter Dimensions has a
+Challenges tab too); kept, because a run under one rule is the long tail's own goal (§24) and its
+rewards are rules, never a multiplier, and it now waits until the story is told.

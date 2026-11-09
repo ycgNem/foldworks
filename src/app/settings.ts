@@ -29,6 +29,8 @@ interface Settings {
   lessons?: boolean;
   /** the lessons each save has had, by the save's seed (the last few saves) */
   lessonsSeen?: Record<string, string[]>;
+  /** the last update whose "What's new" card this browser has seen (src/app/whatsnew.ts) */
+  patchSeen?: string;
 }
 
 // ---------------------------------------------------------------- Milestone 13: keys, UI scale, lessons
@@ -60,13 +62,23 @@ export function saveUiScale(v: number) {
 export const UI_MIN_W = 480;
 export const UI_MIN_H = 270;
 
-/** The HUD scale for a canvas w x h px: Auto is the largest whole scale with 480x300 UI px (as it
- * always was); a picked scale is used up to the largest that leaves 480x270 (the narrowest layout
- * the HUD is checked at), so a big scale never squeezes the screen past it. */
-export function uiScaleFor(w: number, h: number, pick: number = uiScaleSetting()): number {
+/** The HUD scale for a canvas w x h device px: Auto is the largest whole scale with 480x300 UI px
+ * (as it always was), raised where the screen allows to at least 1.5 CSS px a UI px (`dpr` device
+ * px a CSS px; the playability pass: on a phone one UI px was 0.67 CSS px, text 4-5 CSS px tall),
+ * never past the largest that leaves 480x270; a picked scale is used up to that largest too, so a
+ * big scale never squeezes the screen past it. */
+export function uiScaleFor(w: number, h: number, pick: number = uiScaleSetting(), dpr = 1): number {
   const auto = Math.max(1, Math.floor(Math.min(w / 480, h / 300)));
-  if (!pick) return auto;
-  return Math.max(1, Math.min(pick, maxUiScale(w, h)));
+  const max = maxUiScale(w, h);
+  if (!pick) return Math.max(auto, Math.min(max, Math.ceil(1.5 * dpr)));
+  return Math.max(1, Math.min(pick, max));
+}
+
+/** A window (in CSS px) that cannot give the HUD its narrowest layout, 480x270 UI px, at one CSS px
+ * a UI px or more: a phone held upright (390 CSS px wide). The game shows a card asking for a bigger
+ * screen there (src/app/hud.ts smallScreen) instead of text too small to read. */
+export function tooSmall(cssW: number, cssH: number): boolean {
+  return cssW < UI_MIN_W || cssH < UI_MIN_H;
 }
 
 /** The largest HUD scale a w x h canvas can take. */
@@ -134,6 +146,16 @@ export function calmSetting(): boolean {
 
 export function saveCalm(on: boolean) {
   write({ ...read(), calm: on });
+}
+
+/** The update whose "What's new" card was last seen here, or null. */
+export function patchSeen(): string | null {
+  const v = read().patchSeen;
+  return typeof v === 'string' ? v : null;
+}
+
+export function savePatchSeen(id: string) {
+  write({ ...read(), patchSeen: id });
 }
 
 function read(): Settings {

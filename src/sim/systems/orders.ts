@@ -1,9 +1,10 @@
 // Orders and reputation (DESIGN.md §7): the active special order completes when every item it
-// wants is delivered; it pays coin and reputation. Bramble's rep 2 hands out a free Buffer Crate a
+// wants is delivered; it pays coin and reputation. An order filled once is never offered again in a
+// later run (the playability pass, §19): reputation is kept, so its reward was paid for good. Bramble's rep 2 hands out a free Buffer Crate a
 // minute, up to 5 waiting.
 import type { Game } from '../Game';
 import { Num } from '../../engine/num';
-import { ORDER, ORDERS } from '../../data/orders';
+import { CUSTOMERS, ORDER, ORDERS } from '../../data/orders';
 import type { ItemId } from '../../data/items';
 import { RULES } from '../../data/rules';
 import { TICK_RATE } from '../../engine/time';
@@ -11,10 +12,27 @@ import { customerMet } from '../reorganize';
 import { lrules } from '../legacy';
 import { orderQueue } from '../transfer';
 import { runLedger } from './ledger';
+import { CHALLENGES, type ChallengeId } from '../../data/challenges';
 
-/** Special orders on offer right now (requirements met, not done). */
+/** Has this order been filled, in this run or any run before (the playability pass, DESIGN.md §19:
+ * an order filled once is never offered again, and its Town piece stays standing)? */
+export function orderFilled(g: Game, id: string): boolean {
+  return g.s.orders.done.includes(id) || (!!g.s.meta.ordersFilled?.includes(id) && !CUSTOMERS[ORDER[id]?.customer]?.repeats);
+}
+
+/** Every order ever filled, in the order they were filled (the Town stands on them): the runs
+ * before this one, then this run's. */
+export function ordersEverFilled(g: Game): string[] {
+  const before = g.s.meta.ordersFilled ?? [];
+  return [...before, ...g.s.orders.done.filter((id) => !before.includes(id))];
+}
+
+/** Special orders on offer right now (requirements met, never filled). A Challenge whose goal is an
+ * order offers it again in its run, filled before or not: the Challenge is a run built from scratch. */
 export function offeredOrders(g: Game) {
-  return ORDERS.filter((o) => !g.s.orders.done.includes(o.id) && o.requires.every((r) => g.done(r)) && customerMet(g, o.customer));
+  const goal = g.s.challenge ? CHALLENGES[g.s.challenge as ChallengeId]?.goal : undefined;
+  const again = goal?.k === 'order' ? goal.id : null;
+  return ORDERS.filter((o) => !g.s.orders.done.includes(o.id) && (o.id === again || !orderFilled(g, o.id)) && o.requires.every((r) => g.done(r)) && customerMet(g, o.customer));
 }
 
 export function orderFrac(g: Game, id: string): number {

@@ -17,12 +17,12 @@ import { type ItemId } from '../data/items';
 import { annexPrice } from '../sim/systems/annex';
 import { prules } from '../sim/patents';
 import { poleReach } from '../sim/systems/power';
-import { stampCost, stampRefusal, kitsFor } from '../sim/systems/modules';
+import { stampCost, stampRefusal } from '../sim/systems/modules';
 import { claimLoad, claimsHeld, claimsUsed } from '../sim/systems/claims';
 import { Num } from '../engine/num';
 import { perMin, plain } from '../engine/fmt';
 import { kindRate } from './rates'; // Milestone 13: rates on the wheel's item cards
-import { bigWidth, smallWidth, drawSmall, SMALL_H } from '../ui/font';
+import { bigWidth, smallWidth, drawSmall, drawBig, SMALL_H } from '../ui/font';
 import { richWidth, layoutRich, drawLayout } from '../ui/rich';
 import { art, buttonRaw } from '../ui/paper';
 import { T, onPaper } from '../ui/theme';
@@ -150,11 +150,13 @@ export function openWheel(app: App, x: number, y: number): void {
   W.rclick = false;
   W.mx = ui.mx;
   W.my = ui.my;
-  // the goal's petal fans first, else the last one open on this floor
+  // the goal's petal fans first, else the floor's home petal (Build, or Modules on the Factory): the
+  // second playtest's click where the Miner had been turned on the flow view, because the wheel had
+  // reopened on the Tools petal used last; a stable start keeps every icon where it was
   const ps = petals(app);
   const goalPetal = ps.find((p) => p.goal);
-  const last = app.floor === 'factory' ? W.lastF : W.lastW;
-  const want = goalPetal?.id ?? (ps.some((p) => p.id === last) ? last : ps[app.floor === 'factory' && !app.game.s.designs.length ? 0 : Math.min(1, ps.length - 1)].id);
+  const home = app.floor === 'factory' ? 'modules' : 'build';
+  const want = goalPetal?.id ?? (ps.some((p) => p.id === home) ? home : ps[0].id);
   setPetal(app, want, false);
   app.audio.sfx('open');
 }
@@ -264,8 +266,9 @@ export function wheelSlot(app: App, i: number): void {
     if (W.open) closeWheel(app);
     return;
   }
-  const hs = app.hud;
-  const id: PetalId = W.open && (W.petal === 'build' || W.petal === 'power' || W.petal === 'heavy') ? W.petal : hs.buildTab;
+  // open, the keys pick in the petal on show (its discs carry the numbers); shut, always the Build
+  // petal, so 2 is the Miner whatever was opened last (the playability pass: the keys moved about)
+  const id: PetalId = W.open && (W.petal === 'build' || W.petal === 'power' || W.petal === 'heavy') ? W.petal : 'build';
   const tab = STORE_TABS.find((q) => q.id === id) ?? STORE_TABS[0];
   const kind = tab.kinds[i];
   if (!kind) return;
@@ -546,7 +549,6 @@ function moduleItems(app: App): Item[] {
     const out1 = mainOutput(g, d.id);
     const cost = stampCost(g, d);
     const why = stampRefusal(g, d);
-    const kits = kitsFor(g, d);
     const letter = d.grade.letter;
     const draw = (x: number, y: number, k: 1 | 2) => {
       const ctx = app.ui.ctx;
@@ -560,9 +562,8 @@ function moduleItems(app: App): Item[] {
       }
     };
     const chips: Item['chips'] = [
-      { text: `stamp ${cost.format()}`, o: { role: g.s.coin.gte(cost) ? 'coin' : 'bad', icon: 'coin' } },
+      { text: cost.isZero() ? 'stamp free' : `stamp ${cost.format()}`, o: { role: g.s.coin.gte(cost) ? 'coin' : 'bad', icon: 'coin' } },
     ];
-    if (kits > 0) chips.push({ text: `${kits}`, o: { role: g.s.parts.gte(kits) ? 'ink' : 'bad', icon: 'kit' } });
     for (const [ore, n] of Object.entries(claimLoad(g, d)) as [ItemId, number][]) {
       if (!n) continue;
       const held = claimsHeld(g, ore), used = claimsUsed(g, ore);
@@ -579,11 +580,15 @@ function moduleItems(app: App): Item[] {
       rows: [
         `grade {big:${letter}} ×${d.grade.mult.toFixed(2)} · ${d.spare} spare`,
         ins ? `${ins} → ${outs} /min` : `a source → ${outs} /min`,
+        // what it needs and how (the second playtest): every input trunked into its back
+        ...(Object.keys(d.ins).length > 1 ? ['{soft:both in at its back, on one trunk: run each feed into it}'] : Object.keys(d.ins).length ? ['{soft:its input trunked into its back}'] : []),
         ...(why ? [`{bad:${why.replace(/[{}]/g, '')}}`] : []),
       ],
-      verbs: d.spare ? '{k:LMB} place  {k:SHIFT}{k:LMB} stamp' : '{k:SHIFT}{k:LMB} stamp',
+      verbs: d.spare ? '{k:LMB} place  {k:SHIFT}{k:LMB} stamp' : '{k:SHIFT}{k:LMB} stamp a copy',
       pick: (shift) => {
-        if (shift || d.spare < 1) { app.act({ k: 'stamp', id: d.id }); return false; }
+        // a plain click never spends (the playability review: it stamped at once with no spare)
+        if (shift) { app.act({ k: 'stamp', id: d.id }); return false; }
+        if (d.spare < 1) { app.refuse(`no spare copy · {k:SHIFT}{k:LMB} stamps one {coin:${stampCost(g, d).format()}}`); return false; }
         app.pickModule(d.id);
         return true;
       },
@@ -744,6 +749,40 @@ function priceTag(app: App, text: string, role: Item['priceRole'], cx: number, c
   app.ui.record('text', tx, ty, tw, th, text);
 }
 
+/** A hotkey's nub on a disc's shoulder: the Pip letter on a little dark key. */
+function keyNub(app: App, k: string, x: number, y: number) {
+  const ctx = app.ui.ctx;
+  const w = smallWidth(k) + 4, h = SMALL_H + 3;
+  ctx.fillStyle = C.ink; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = T.paperHi; ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+  ctx.fillStyle = T.paperLo; ctx.fillRect(x + 1, y + h - 2, w - 2, 1);
+  drawSmall(ctx, k, x + 2, y + 1, T.ink);
+}
+
+/** A name in the display face on a paper tag, hung radially out from (cx, cy) at angle a (`at`:
+ * centred on the point itself), with the price under it when there is one. */
+function nameTag(app: App, name: string, price: string | null, role: Item['priceRole'], cx: number, cy: number, a: number, at = false) {
+  const ui = app.ui;
+  const ctx = ui.ctx;
+  const nw = bigWidth(name);
+  const pw = price ? smallWidth(price) : 0;
+  const tw = Math.max(nw, pw) + 8, th = 13 + (price ? SMALL_H + 2 : 0);
+  const ux = Math.cos(a), uy = Math.sin(a);
+  const sup = Math.abs(ux) * tw / 2 + Math.abs(uy) * th / 2;
+  const d = at ? 0 : DISC / 2 + 3 + sup;
+  const tx = Math.round(Math.max(2, Math.min(ui.w - tw - 2, cx + ux * d - tw / 2)));
+  const ty = Math.round(Math.max(2, Math.min(ui.h - th - 2, cy + uy * d - th / 2)));
+  ctx.fillStyle = rgba(C.ink, 0.5); ctx.fillRect(tx + 1, ty + 1, tw, th);
+  ctx.fillStyle = C.ink; ctx.fillRect(tx, ty, tw, th);
+  ctx.fillStyle = T.paperHi; ctx.fillRect(tx + 1, ty + 1, tw - 2, th - 2);
+  // drawn raw: a hover label over its neighbours' price tags, not layout (the overlap audit)
+  drawBig(ctx, name, tx + Math.floor((tw - nw) / 2), ty + 2, T.ink);
+  if (price) {
+    const col = role === 'coin' ? T.coin : role === 'good' ? T.good : role === 'research' ? T.research : role === 'bad' ? T.bad : T.inkSoft;
+    drawSmall(ctx, price, tx + Math.floor((tw - pw) / 2), ty + 13, col);
+  }
+}
+
 /** The goal's pulse: a gold ring swelling off a disc and fading, twice a second. */
 function ripple(app: App, cx: number, cy: number) {
   const ctx = app.ui.ctx;
@@ -832,8 +871,17 @@ function draw(app: App, mx: number, my: number) {
     if (it.active) ring(app, x, y, 13, T.good, 1);
     if (it.goal) ripple(app, x, y);
     if (it.fresh && !it.goal) dot(ui, x + 7, y - 10, C.pipRed);
+    // its key on the disc's shoulder (the playability pass: the number keys were never shown)
+    if (fan > 0.6 && it.key && it.key.length === 1 && it.key !== 'I') keyNub(app, it.key, x - 12, y - 12);
     if (hov) hovered = { item: it, x, y };
   });
+  // the hovered item's name, big, on its own tag over its price tag (the playability pass: prices
+  // but no names; the info tag beside the wheel was too far from the eye)
+  if (hovered && fan > 0.6) {
+    const h = hovered as { item: Item; x: number; y: number };
+    const a = Math.atan2(h.y - cy, h.x - cx);
+    nameTag(app, h.item.locked ? '???' : h.item.name, h.item.price, h.item.locked ? 'soft' : h.item.priceRole, h.x, h.y, a);
+  }
 
   // ---- the petals
   ps.forEach((p, i) => {
@@ -849,6 +897,17 @@ function draw(app: App, mx: number, my: number) {
     if (p.goal && !isOpen) ripple(app, x, y);
     if ((p.fresh || (p.goal && !isOpen)) && Math.floor(ui.time * 3) % 2 === 0) dot(ui, x + 7, y - 10, p.goal ? C.gold : C.pipRed);
   });
+
+  // ---- the open petal's name across the wheel from its items (where no item ever fans), and the
+  // hovered petal's name on it (the playability pass: the petals had icons only)
+  if (e > 0.9) {
+    const oa = pa[pIdx] + Math.PI;
+    nameTag(app, open.name, null, 'soft', cx + Math.cos(oa) * (R_ITEM - 14), cy + Math.sin(oa) * (R_ITEM - 14), oa, true);
+    if (petalHov >= 0 && petalHov !== pIdx) {
+      const a = pa[petalHov];
+      nameTag(app, ps[petalHov].name, null, 'soft', cx + Math.cos(a) * R_PETAL, cy + Math.sin(a) * R_PETAL, a);
+    }
+  }
 
   // ---- the hub: the last building picked, in its well
   const hubKind = app.floor === 'factory' ? W.hubF : W.hubW;
@@ -920,7 +979,13 @@ function infoTag(app: App, it: Item, anchor: { x: number; y: number }) {
   const rows = it.rows.map((r) => layoutRich(r, INFO_W));
   const verbs = it.verbs ? layoutRich(it.verbs, INFO_W) : null;
   const lines = chipRows(it.chips);
-  const head = Math.max(34, 15 + lines.length * (CHIP_H + 2));
+  // the name: in the display face when it fits beside its key, else wrapped in the text face (the
+  // second playtest read "Iron ingot x3." and "Copper wire x." cut to the display face's room)
+  const kw = it.key ? keycapWidthOf(it.key) + 3 : 0;
+  const bigName = bigWidth(it.name) <= INFO_W - 36 - kw;
+  const nameL = bigName ? null : layoutRich(it.name.replace(/[{}]/g, ''), INFO_W - 36 - kw);
+  const nameH = nameL ? Math.max(14, nameL.h + 2) : 14;
+  const head = Math.max(34, nameH + 1 + lines.length * (CHIP_H + 2));
   let ch = head + 2;
   for (const r of rows) ch += r.h;
   if (verbs) ch += 3 + verbs.h;
@@ -947,15 +1012,13 @@ function infoTag(app: App, it: Item, anchor: { x: number; y: number }) {
     if (it.locked) padlock(app, r.x + 25, r.y + 25);
   }
   const tx = r.x + 36;
-  const tw = cw - 36;
-  // the name, shrunk to fit, the hotkey beside it
-  const kw = it.key ? keycapWidthOf(it.key) + 3 : 0;
-  let name = it.name;
-  while (name.length > 3 && bigWidth(name) > tw - kw) name = name.slice(0, -2) + '.';
-  ui.big(name, tx, r.y + 1, it.locked ? T.inkSoft : T.ink);
+  // the name, the hotkey beside it
+  const ink = it.locked ? T.inkSoft : T.ink;
+  if (bigName) ui.big(it.name, tx, r.y + 1, ink);
+  else drawLayout(ui, nameL!, tx, r.y + 2, ink);
   if (it.key) keycapK(ui, it.key, r.x + cw - kw + 3, r.y);
   // the price and the counts as chips under the name
-  let cy = r.y + 15;
+  let cy = r.y + nameH + 1;
   for (const line of lines) {
     let x = tx;
     for (const c of line) x += chip(ui, x, cy, c.text, c.o) + 2;

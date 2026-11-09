@@ -8,10 +8,10 @@ export interface Particle { x: number; y: number; vx: number; vy: number; life: 
 export interface Pop { x: number; y: number; text: string; color: string; life: number; max: number; value: number; key: string; icon: string | null; big: boolean }
 export interface Ring { x: number; y: number; life: number; max: number; color: string; r0: number; r1: number }
 /** something flying from the world (screen px) to a HUD target: a coin, or an icon (an item id,
- *  'kit' for a Machine Kit, 'module' for a folded line) */
+ *  'module' for a folded line) */
 export interface Flyer { x0: number; y0: number; x1: number; y1: number; t: number; dur: number; arc: number; icon?: string; big?: boolean }
 /** a line folding into one tile on the Workshop (world px), then flying to the Factory tab */
-export interface FoldAnim { x: number; y: number; w: number; h: number; img: HTMLCanvasElement | null; t: number; letter: string }
+export interface FoldAnim { x: number; y: number; w: number; h: number; img: HTMLCanvasElement | null; t: number; letter: string; item?: string; rate?: number }
 
 export class Fx {
   parts: Particle[] = [];

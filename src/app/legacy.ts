@@ -32,7 +32,7 @@ type NodeIcon = { item: string } | { ui: UIconName } | { sprite: string; f?: num
 
 /** One picture per node: what it hands the town, or the island it softens (its exotic). */
 const NODE_ICON: Record<LegacyId, NodeIcon> = {
-  patentPurse: { ui: 'coin' }, oldHabits: { ui: 'reset' }, secondNature: { ui: 'mode' }, townArchive: { ui: 'research' }, standingCharts: { ui: 'world' },
+  patentPurse: { ui: 'coin' }, oldHabits: { ui: 'reset' }, secondNature: { ui: 'patents' }, townArchive: { ui: 'research' }, standingCharts: { ui: 'world' },
   patentClerk: { ui: 'patents' }, standingCommittee: { ui: 'clock' }, regrader: { ui: 'fold' }, townPlan: { ui: 'district' }, contractRunners: { ui: 'orders' },
   skiffGuild: { sprite: 'skiff' }, longerDrawer: { ui: 'blueprint' }, groupDrawer: { ui: 'factory' },
   skyMoorings: { item: 'skyglass' }, heatShields: { item: 'cinderite' }, warmHands: { item: 'rimeCrystal' }, salvageCrews: { item: 'relic' },

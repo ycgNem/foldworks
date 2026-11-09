@@ -6,8 +6,10 @@
 import { C, rgba } from '../data/palette';
 import type { Game } from '../sim/Game';
 import { DX, DY, opposite, type Dir, type Ent, type Floor } from '../sim/world';
+import { faceArrow } from './arrow';
 import { drawFactory, type FactoryOverlay } from './factory';
 import { auditTicks } from '../sim/systems/audits';
+import { mainItem } from '../sim/systems/modules';
 import { poleReach } from '../sim/systems/power';
 import { CHUNKS } from '../data/land';
 import { BUILD, isMachine, isPower, type BuildKind } from '../data/machines';
@@ -35,6 +37,7 @@ import { drawPip, shapeOf, stateShape, type PipShape } from './pips';
 import { drawIsleGround, drawOverlaid, drawHeatReach, workshopLand } from './isleground';
 import { isSky, plantReach } from '../sim/systems/islands';
 import { SEED_ORES, seedSide } from '../sim/systems/seed';
+import { crateCap } from '../sim/transfer';
 
 /** The Seed's notches: each raw ore's colour (its icon's) */
 const SEED_INK: Record<string, string> = { ironOre: C.sky, copperOre: C.copper, coal: C.fog, sand: C.tan };
@@ -203,13 +206,17 @@ export class Renderer {
     const top = (TOWN_ROWS + 1) * TILE;
     const hp = this.hplat(this.floor);
     const bot = this.floor === 'factory' ? this.plat.below : hp ? hp.below : this.isle.below;
-    c.x = mw + pad * 2 <= halfW * 2 ? mw / 2 : Math.max(halfW - pad, Math.min(mw + pad - halfW, c.x));
-    // zoomed out far enough for the whole island (or platform) to show: frame all of it; else the
-    // player may pan on down past the cliff to the island's point
+    // between two bounds either way round: a floor wider than the view keeps the view on it; a
+    // floor narrower than the view stays wholly in it, free to slide (the playability pass: it was
+    // pinned to the middle, so keys and drags did nothing and the wheel's zoom snapped to the centre)
+    const keep = (v: number, a: number, b: number) => Math.max(Math.min(a, b), Math.min(Math.max(a, b), v));
+    c.x = keep(c.x, halfW - pad, mw + pad - halfW);
+    // zoomed out far enough for the whole island (or platform) to show: keep all of it in view;
+    // else the player may pan on down past the cliff to the island's point
     const B = this.floor === 'factory' ? this.plat.bounds() : hp ? hp.bounds() : this.isle.bounds();
     const low = Math.max(mh + bot, B.y1);
-    if (B.y1 > B.y0 && B.y1 - B.y0 <= halfH * 2) c.y = (B.y0 + B.y1) / 2;
-    else c.y = mh + top + bot <= halfH * 2 ? Math.max((mh + bot - top) / 2, Math.min(low - halfH, c.y)) : Math.max(halfH - top, Math.min(low - halfH, c.y));
+    if (B.y1 > B.y0 && B.y1 - B.y0 <= halfH * 2) c.y = keep(c.y, B.y1 - halfH, B.y0 + halfH);
+    else c.y = keep(c.y, halfH - top, low - halfH);
   }
 
   /** World pixel under a screen pixel. */
@@ -241,7 +248,6 @@ export class Renderer {
         this.sfx(e.type === 'megaDone' ? 'fanfare' : 'claim');
       }
       if (e.type === 'codex') this.sfx('codex');
-      if (e.type === 'parts') this.sfx('kit', 0.7);
       if (e.type === 'order' && e.id) {
         this.town.times[e.id] = e.tick;
         this.orderCascade(g, e.id);
@@ -388,14 +394,6 @@ export class Renderer {
           fx.ring(bx, by, C.glow, c + 8, 0.4, c - 4);
           break;
         }
-        case 'mode': {
-          const ent = g.entAt(e.x ?? 0, e.y ?? 0);
-          const c = ent && ent.w > 1 ? 16 : 8;
-          fx.ring(px + c, py + c, C.teal1, c + 8, 0.4, c - 2);
-          fx.text(px + c, py - 6, MODE_WORD[e.id ?? ''] ?? '', C.teal1, 1.2);
-          this.sfx('mode');
-          break;
-        }
         case 'codex': {
           // a gold fountain out of the Dock and a big number
           fx.fountain(px + 8, py, 44, [C.gold, C.hot, C.brass1, C.gold], 120, 2, 1.4);
@@ -404,12 +402,6 @@ export class Renderer {
           fx.kick(2);
           const s = this.toScreen((e.x ?? 0) + 0.5, e.y ?? 0);
           for (let i = 0; i < 8; i++) fx.fly(s.x + (i - 4) * 5, s.y, this.coinTarget.x, this.coinTarget.y);
-          break;
-        }
-        case 'parts': {
-          fx.pop(px + 8, py - 10, e.value ?? 1, 'kit', C.brass1, 'machineKit', '+', true);
-          fx.burst(px + 8, py + 4, 10, [C.brass1, C.brass0, C.hot], 45, 60);
-          fx.ring(px + 8, py + 8, C.brass1, 16, 0.4, 4);
           break;
         }
         case 'fold': {
@@ -424,7 +416,11 @@ export class Renderer {
             if (q.x + q.w / 2 === e.x && q.y + q.h / 2 === e.y && q.w * q.h === (e.d ?? q.w * q.h)) { snap = q; this.foldSnaps.delete(key); break; }
           const side = Math.max(1, Math.round(Math.sqrt(e.d ?? 4)));
           const box = snap ?? { x: Math.round((e.x ?? 0) - side / 2), y: Math.round((e.y ?? 0) - side / 2), w: side, h: side, img: null };
-          fx.folds.push({ x: box.x * TILE, y: box.y * TILE, w: box.w * TILE, h: box.h * TILE, img: snap?.img ?? null, t: 0, letter: e.id ?? '' });
+          // the module's product and rate pop with it (the playability review: a faint "S module!"
+          // was all the climax said)
+          const dsg = g.design(e.value ?? -1);
+          const main = dsg ? mainItem(dsg) : null;
+          fx.folds.push({ x: box.x * TILE, y: box.y * TILE, w: box.w * TILE, h: box.h * TILE, img: snap?.img ?? null, t: 0, letter: e.id ?? '', item: main ?? undefined, rate: main && dsg ? Math.round((dsg.outs[main] ?? 0) * 60) : undefined });
           // its sound is the app's (Audio.foldSound: the crease, the corners and the snap, timed to this)
           break;
         }
@@ -436,6 +432,8 @@ export class Renderer {
           this.sfx('place', 0.7, 1.3);
           break;
         }
+        // a group placed on a high floor flew its routes on its own (DESIGN.md §21 "Auto-routing")
+        case 'autoRoute': fx.text(px + 8, py - 10, e.value ? `+${e.value} ROUTE${e.value === 1 ? '' : 'S'}` : e.id === 'cap' ? 'ROUTE CAP' : 'SHORT OF COIN', e.value ? C.gold : C.lamp1, 1.8); break;
         case 'firstRoute': fx.text(px + 8, py - 14, e.floor === 'beyond' ? 'FIRST COURIER ROUTE!' : e.floor === 'world' ? 'FIRST BARGE ROUTE!' : 'FIRST SKIFF ROUTE!', C.gold, 2, true); fx.kick(3); this.sfx('fanfare', 0.5); break;
         case 'bayOpen': fx.ring(px, py, C.gold, 40, 0.9, 6); fx.burst(px, py, 30, [C.gold, C.iron2, C.hot], 70, 40, 1, 1); fx.kick(3); break;
         case 'megaGive': fx.pop(px, py - 20, e.value ?? 1, 'mega:' + e.id, C.gold, e.id ?? null); fx.burst(px, py, 4, [C.gold, C.iron2], 25, 40); break;
@@ -503,7 +501,6 @@ export class Renderer {
       else ctx.drawImage(this.ground.chunk(ch.id), ch.x * TILE, ch.y * TILE);
     }
     this.landLabels(g);
-    this.veins(g);
     drawIsleGround(ctx, g, this.time);
     drawOreFx(ctx, g, this.time, -ox / z, -oy / z, this.W / z, this.H / z);
 
@@ -572,24 +569,6 @@ export class Renderer {
       const ready = !ch.requires || g.done(ch.requires);
       const price = ch.cost.toLocaleString('en-US');
       this.labels.push({ x: s.x, y: s.y, max: x1 - x0, short: ready ? `${ICON.coin}${price}` : ICON.lock, text: ready ? `${ch.name}: ${price} coin` : `${ch.name}: research first`, color: ready ? (g.s.coin.gte(ch.cost) ? C.gold : C.bone) : C.fog, bg: C.ink, sale: { name: ch.name.replace(/\{[^}]*\}/g, '').trim(), price, ready, afford: g.s.coin.gte(ch.cost) } });
-    }
-  }
-
-  private veins(g: Game) {
-    const ctx = this.ctx;
-    for (const k of Object.keys(g.s.veins)) {
-      const p = g.patches[+k];
-      if (!p) continue;
-      const a = 0.25 + 0.15 * Math.sin(this.time * 6);
-      ctx.fillStyle = rgba(C.gold, a);
-      ctx.fillRect(p.x * TILE, p.y * TILE, p.w * TILE, p.h * TILE);
-      for (let i = 0; i < 4; i++) {
-        const t = (this.time * 1.7 + i * 0.37) % 1;
-        const x = p.x * TILE + ((i * 23 + Math.floor(this.time * 3) * 7) % (p.w * TILE));
-        const y = p.y * TILE + p.h * TILE * (1 - t);
-        ctx.fillStyle = C.bone;
-        ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
-      }
     }
   }
 
@@ -899,7 +878,7 @@ export class Renderer {
           ctx.fillStyle = rgba(C.bone, 0.35);
           ctx.fillRect(x + 2, y + 3, W - 4, Ht - 5);
         }
-        if (e.kind === 'crate' && e.store.length) this.fillBar(x, y, e.store.length / (BUILD.crate.capacity ?? 50));
+        if (e.kind === 'crate' && e.store.length) this.fillBar(x, y, e.store.length / crateCap(g));
         if ((e.kind === 'splitter' || e.kind === 'merger') && e.store.length) ctx.drawImage(itemIcon(e.store[0]), x + 4, y + 4);
         if (isMachine(e.kind)) {
           this.machineDetails(g, e);
@@ -1096,8 +1075,8 @@ export class Renderer {
 
   private sparks(g: Game) {
     for (const p of g.s.sparks) {
-      const s = sheet(p.kind === 'vein' ? 'spark_vein' : 'spark_inspector');
-      const bob = p.kind === 'inspector' ? Math.round(Math.sin(this.time * 4) * 1) : 0;
+      const s = sheet('spark_inspector');
+      const bob = Math.round(Math.sin(this.time * 4) * 1);
       // a pulsing gold ring makes it read as clickable, not decoration (§17)
       const a = 0.35 + 0.25 * Math.sin(this.time * 8);
       const ctx = this.ctx;
@@ -1220,7 +1199,8 @@ export class Renderer {
     const hs = ov.hover && !ov.build && !ov.drag ? g.entAt(ov.hover.x, ov.hover.y) : null;
     if (hs?.kind === 'seed' && hs.id !== ov.selected) this.seedLabels(hs);
     if (ov.drag) {
-      for (const d of ov.drag) this.ghost(g, 'belt', d.x, d.y, d.rot);
+      // a belt drag: the arrow on its last tile only (the belts' own chevrons show the rest)
+      ov.drag.forEach((d, i) => this.ghost(g, 'belt', d.x, d.y, d.rot, i === ov.drag!.length - 1));
       return;
     }
     const h = ov.hover;
@@ -1255,7 +1235,7 @@ export class Renderer {
 
   /** A building's ghost where it would go: its sprite (2x2 for Mk2) over a green or red tint of
    *  every tile it covers, and a marker on its front face. */
-  private ghost(g: Game, kind: BuildKind, x: number, y: number, rot: Dir) {
+  private ghost(g: Game, kind: BuildKind, x: number, y: number, rot: Dir, arrow = true) {
     const ctx = this.ctx;
     const why = g.canPlace(kind, x, y);
     const onBelt = kind === 'belt' && g.entAt(x, y)?.kind === 'belt';
@@ -1274,12 +1254,9 @@ export class Renderer {
         ctx.fillRect(xx * TILE, yy * TILE, TILE, TILE);
       }
     this.frame(x, y, d.w, d.h, ok ? C.pipGreen : C.pipRed);
-    // which way it faces: a 3x3 marker just past the middle of its front face
-    const cx = x * TILE + (d.w * TILE) / 2 + DX[rot] * ((d.w * TILE) / 2 + 1), cy = y * TILE + (d.h * TILE) / 2 + DY[rot] * ((d.h * TILE) / 2 + 1);
-    ctx.fillStyle = C.ink;
-    ctx.fillRect(cx - 2, cy - 2, 5, 5);
-    ctx.fillStyle = ok ? C.bone : C.pipRed;
-    ctx.fillRect(cx - 1, cy - 1, 3, 3);
+    // which way it faces: a bold arrow from its middle out through its front face (the
+    // playability pass: a 3x3 dot there left rotating to trial and error)
+    if (arrow) faceArrow(ctx, x * TILE + (d.w * TILE) / 2, y * TILE + (d.h * TILE) / 2, rot, ((rot % 2 ? d.h : d.w) * TILE) / 2, ok, this.time);
     if (why && !onBelt && kind !== 'belt') {
       const sp = this.toScreen(x + d.w / 2, y + d.h + 0.15);
       this.labels.push({ x: sp.x, y: sp.y + 14, text: why, color: C.pipRed, bg: C.ink });
@@ -1337,7 +1314,8 @@ export class Renderer {
         this.fx.burst(cx, cy, top ? 70 : 30, top ? [C.gold, C.hot, C.bone, C.gold] : [C.gold, C.brass1, C.hot, C.bone], top ? 110 : 70, 40, top ? 2 : 1, top ? 1.3 : 0.9);
         this.fx.ring(cx, cy, C.gold, top ? 44 : 26, top ? 0.9 : 0.6, 4);
         if (top) { this.fx.ring(cx, cy, C.hot, 60, 1.1, 10); this.fx.text(cx, cy - 18, 'S+ MODULE!', C.gold, 2, true); }
-        else if (f.letter) this.fx.text(cx, cy - 14, `${f.letter} module!`, C.gold, 1.4, true);
+        else if (f.letter) this.fx.text(cx, cy - 18, `${f.letter} module!`, C.gold, 2.4, true);
+        if (f.item && f.rate) this.fx.text(cx, cy + 14, `${f.rate}/min`, C.bone, 2.4, true, f.item);
         this.fx.kick(top ? 7 : 3);
         this.sfx('stampLand', 0.8);
       }
@@ -1649,8 +1627,6 @@ export class Renderer {
     return (ITEMS as Record<string, { value: number }>)[id]?.value ?? 0;
   }
 }
-
-const MODE_WORD: Record<string, string> = { normal: 'Normal', efficient: 'Efficient', overclock: 'Overclocked!', precision: 'Precision' };
 
 /** Land for sale (the 180): a paper sign tag on a stake with the chunk's name and a price chip
  *  (coin ink when you can pay, soft when not; a padlock while it waits on research), centred on

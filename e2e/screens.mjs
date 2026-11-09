@@ -24,14 +24,13 @@ export async function act2Setup(state) {
   g.s.land = ['A', 'B', 'C', 'D', 'E', 'F'];
   g.s.upgrades.push('bellows');
   const act1 = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding'];
-  const act2 = ['coalSeams', 'steelmaking', 'overdrive', 'steamPower', 'surveying', 'glassworks', 'crushing', 'concrete', 'refining', 'machineKits', 'circuits', 'heavyMachines', 'tuning', 'motors', 'nestedFolds', 'greatDrill'];
+  const act2 = ['coalSeams', 'steelmaking', 'overdrive', 'steamPower', 'surveying', 'glassworks', 'crushing', 'concrete', 'refining', 'circuits', 'heavyMachines', 'motors', 'nestedFolds', 'greatDrill'];
   g.s.research.done = [...act1, ...act2];
   g.s.flags.push('factoryOpen', 'factorySeen', 'sliceEnd', 'ordersSeen');
   g.s.orders.done = ['boardwalk', 'lampPosts', 'gizmoFestival', 'calibration'];
   g.s.orders.rep = { bramble: 3, unit7: 1, voltaire: 0 };
   g.s.orders.active = 'lensArray';
   g.s.orders.progress = { lensArray: { glass: N.of(212), circuit: N.of(18) }, streetlamps: { circuit: N.of(40) } };
-  g.s.parts = N.of(14);
   g.s.claimBlocks = { ironOre: 1 };
   g.s.codex = ['ironIngot', 'ironPlate', 'gear', 'gizmo', 'copperWire', 'coal', 'steel', 'glass'];
   const del = { ironOre: 900, ironIngot: 5200, copperIngot: 800, ironPlate: 12000, copperWire: 6400, gear: 2100, gizmo: 640, slagBrick: 300, coal: 1500, steel: 900, glass: 420, circuit: 22 };
@@ -129,7 +128,7 @@ export async function act2Setup(state) {
   }
   if (state === 'festival') a.panel = 'orders';
   if (state === 'research2') {
-    g.s.research.done = g.s.research.done.filter((r) => !['circuits', 'heavyMachines', 'tuning', 'motors', 'nestedFolds', 'greatDrill', 'machineKits'].includes(r));
+    g.s.research.done = g.s.research.done.filter((r) => !['circuits', 'heavyMachines', 'motors', 'nestedFolds', 'greatDrill'].includes(r));
     g.s.research.selected = 'circuits';
     g.s.research.progress = { circuits: { copperWire: N.of(310), glass: N.of(44) } };
     a.hud.treePage = 2;
@@ -342,7 +341,7 @@ export async function m5Setup(state) {
   m.runs = 1;
   m.patents = N.of(9);
   m.patentsEarned = N.of(15);
-  m.nodes = ['bellows', 'starterLine', 'notebooks', 'surveyCharter', 'shovelFrog', 'overdriveHabit'];
+  m.nodes = ['copperDeeds', 'coalRights', 'starterLine', 'surveyCharter', 'shovelFrog'];
   // the record on file: Gizmos as now (on file), wire below this run's (better), plates new
   m.patented = { gizmo: { value: 2.2, steps: 2, grade: 'A', tier: 0, run: 1 }, copperWire: { value: 1.6, steps: 2, grade: 'D', tier: 0, run: 1 }, steel: { value: 2.2, steps: 2, grade: 'A', tier: 0, run: 1 } };
   m.drawer = [
@@ -421,8 +420,8 @@ export async function districtSetup(state) {
   g.s.land = ['A', 'B', 'C', 'D', 'E', 'F'];
   g.s.upgrades.push('bellows');
   const act1 = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding'];
-  const act2 = ['coalSeams', 'steelmaking', 'overdrive', 'steamPower', 'surveying', 'glassworks', 'crushing', 'concrete', 'refining', 'machineKits', 'circuits', 'heavyMachines', 'tuning', 'motors', 'nestedFolds', 'greatDrill'];
-  const act3 = ['zoning', 'chutes', 'chemistry', 'bearings', 'vulcanizing', 'batteries', 'servos', 'sensors', 'processors', 'recycling', 'hydroponics', 'sandwiches', 'robotics', 'floatingCity', 'districtFolds'];
+  const act2 = ['coalSeams', 'steelmaking', 'overdrive', 'steamPower', 'surveying', 'glassworks', 'crushing', 'concrete', 'refining', 'circuits', 'heavyMachines', 'motors', 'nestedFolds', 'greatDrill'];
+  const act3 = ['zoning', 'chutes', 'chemistry', 'bearings', 'vulcanizing', 'batteries', 'servos', 'sensors', 'processors', 'hydroponics', 'sandwiches', 'robotics', 'floatingCity', 'districtFolds'];
   g.s.research.done = [...act1, ...act2, ...(state === 'districtOpen' ? ['zoning'] : act3)];
   g.s.research.selected = state === 'districtOpen' ? null : 'scrapTransmuter';
   g.s.mega = { stage: 3, progress: {} };
@@ -481,7 +480,7 @@ export async function districtSetup(state) {
   a.step(2); // Zoning done: the District opens; the Floating City's research brings the Bay
   a.step(20);
   const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
-  const put = (d, x, y) => act({ k: 'hplace', floor: 'district', design: d.id, x, y });
+  const put = (d, x, y) => act({ k: 'hplace', auto: false, floor: 'district', design: d.id, x, y });
   const fly = (fx, fy, tx, ty, item, skiffs = 1) => {
     act({ k: 'route', floor: 'district', fx, fy, tx, ty, item });
     const st = g.s.district;
@@ -630,7 +629,7 @@ export async function worldSetup(state) {
   // the Town Plan with a layout of both floors kept (its District tiles and its World tiles)
   if (state === 'legacyPlan') m.plans = [{ id: 1, name: 'Gearbox town', tiles: [{ x: 2, y: 2, item: 'gearbox', depth: 2 }, { x: 3, y: 2, item: 'robotArm', depth: 3, floor: 'world' }], routes: [{ fx: 2, fy: 2, tx: 3, ty: 2, item: 'gearbox', skiffs: 2, floor: 'world' }] }];
   m.standing = state === 'legacy' ? 24 : null;
-  m.nodes = ['bellows', 'starterLine', 'notebooks', 'copperDeeds', 'surveyCharter', 'quickAudit', 'moreAuditors', 'draughtsman', 'drawerSpace', 'dispatcher', 'zoningCharter', 'longSkiffs'];
+  m.nodes = ['copperDeeds', 'coalRights', 'starterLine', 'surveyCharter', 'quickAudit', 'moreAuditors', 'draughtsman', 'drawerSpace', 'dispatcher', 'zoningCharter', 'longSkiffs'];
   m.habits = ['quickAudit', 'draughtsman', 'dispatcher'];
   // the World's projects: the Lens Room (here) under way, the Beacon built on Cinder, the Keeper's
   // House half built on Rime (held there)
@@ -660,7 +659,7 @@ export async function worldSetup(state) {
   a.step(2); // Charting done: the World opens, the Lighthouse's research brings its Bay
   a.step(20);
   const act = (c) => { const r = a.act(c); if (!r.ok) throw new Error(JSON.stringify(c) + ' ' + r.why); };
-  const put = (d, x, y) => act({ k: 'hplace', floor: 'world', design: d.id, x, y });
+  const put = (d, x, y) => act({ k: 'hplace', auto: false, floor: 'world', design: d.id, x, y });
   const fly = (fx, fy, tx, ty, item, barges = 1) => {
     act({ k: 'route', floor: 'world', fx, fy, tx, ty, item });
     const st = g.s.world;
@@ -732,8 +731,8 @@ export const WORLD = ['world', 'worldRoute', 'worldPinned', 'worldHover', 'reloc
  * modules, its steel full: the red pip), act3chuteHover (its hover tag), research3 (Act III's tree
  * page waiting on the Great Drill's stage 3), research3open (the page open, a node under way),
  * megaCity (the Floating City, stage 1 built and stage 2 under way), megaTransmuter, orders3 and
- * codex3 (Act III's orders and tier 3 specimens), act3modes (a Chem Vat's pinned report with the six
- * modes). */
+ * codex3 (Act III's orders and tier 3 specimens), act3vat (a Chem Vat's pinned report: its byproduct,
+ * its power, no mode keys since modes were cut). */
 export async function act3Setup(state) {
   const a = window.__app;
   // the game's own instance of a module: after a hot update Vite serves it as path?t=..., and a
@@ -749,7 +748,7 @@ export async function act3Setup(state) {
   g.s.upgrades.push('bellows');
   const { RESEARCH_LIST } = await import('/src/data/research.ts');
   const early = RESEARCH_LIST.filter((d) => (d.act ?? 1) < 3).map((d) => d.id);
-  const act3 = ['zoning', 'chutes', 'chemistry', 'bearings', 'vulcanizing', 'batteries', 'processors', 'hydroponics', 'recycling'];
+  const act3 = ['zoning', 'chutes', 'chemistry', 'bearings', 'vulcanizing', 'batteries', 'processors', 'hydroponics'];
   g.s.research.done = [...early, ...act3];
   g.s.flags.push('factoryOpen', 'factorySeen', 'sliceEnd', 'ordersSeen');
   g.s.mega = { stage: 3, progress: {} };
@@ -811,7 +810,6 @@ export async function act3Setup(state) {
   feed();
   g.s.chute = { ...(g.s.chute ?? {}), motor: 7.4, steel: 20 };
   a.step(12);
-  if (state === 'act3modes') g.entAt(19, 1).mode = 'recycling';
   g.events.drain();
   // the setup's own firsts (the District opening, Codex entries) are not part of these screens
   a.hud.celebs = [];
@@ -825,7 +823,7 @@ export async function act3Setup(state) {
   a.fitCamera(true);
   a.lookAt(18, 5);
   if (state === 'act3mouth') a.selected = g.entAt(15, 7).id;
-  if (state === 'act3modes') a.selected = g.entAt(19, 1).id;
+  if (state === 'act3vat') a.selected = g.entAt(19, 1).id;
   if (state === 'act3hoverMouth') return { hover: [15, 9] };
   if (state === 'act3factory' || state === 'act3chuteHover') {
     g.s.chute.steel = 20; // full: the red pip
@@ -856,7 +854,7 @@ export async function act3Setup(state) {
   if (state === 'megaCity' || state === 'megaTransmuter') {
     g.s.research.done.push('servos', 'floatingCity', 'scrapTransmuter');
     g.s.megas = {
-      city: { stage: 1, progress: { liftRotor: N.of(86), sandwich: N.of(410), glass: N.of(2650) } },
+      city: { stage: 1, progress: { liftRotor: N.of(86), steel: N.of(1400), glass: N.of(2500) } },
       transmuter: { stage: 0, progress: { transmuterCoil: N.of(12), steel: N.of(5200) } },
     };
     (await mod('/src/app/act2screens.ts')).setMegaTab(state === 'megaCity' ? 'city' : 'transmuter');
@@ -877,14 +875,14 @@ export async function act3Setup(state) {
   return null;
 }
 
-export const ACT3 = ['act3ws', 'act3mouth', 'act3modes', 'act3hoverMouth', 'act3factory', 'act3chuteHover', 'act3wheel', 'act3wheelF', 'research3', 'research3open', 'megaCity', 'megaTransmuter', 'orders3', 'codex3'];
+export const ACT3 = ['act3ws', 'act3mouth', 'act3vat', 'act3hoverMouth', 'act3factory', 'act3chuteHover', 'act3wheel', 'act3wheelF', 'research3', 'research3open', 'megaCity', 'megaTransmuter', 'orders3', 'codex3'];
 
-/** Act III's pages after a Reorganize (on m5Setup's run-2 game): the card offering Challenges (Hands
- * Off picked), a Challenge under way (its slip under the Purse), the Scenarios page with a record,
- * and a Scenario board in play (its slip). */
+/** Act III's pages after a Reorganize (on m5Setup's run-2 game): the card with Hands Off taken for
+ * the next run (the City completed first: Challenges are the post-game), a Challenge under way (its
+ * slip under the Purse), the Scenarios page with a record, and a Scenario board in play (its slip). */
 // (the game's own module instance, as act3Setup's mod: inlined, each runs in the page on its own)
 export const ACT3_M5 = {
-  reorgChallenges: { base: 'reorg', post: async () => { const mod = async (p) => { for (const c of ['/src/app/hud.ts', '/src/app/screens.ts', '/src/app/app.ts']) { const m = (await (await fetch(c)).text()).match(new RegExp(`["'](${p.replace(/\./g, '\\.')}\\?[^"']*)["']`)); if (m) return import(m[1]); } return import(p); }; (await mod('/src/app/reorganize.ts')).pickNextRun('handsOff'); } },
+  reorgChallenges: { base: 'reorg', post: async () => { const mod = async (p) => { for (const c of ['/src/app/hud.ts', '/src/app/screens.ts', '/src/app/app.ts']) { const m = (await (await fetch(c)).text()).match(new RegExp(`["'](${p.replace(/\./g, '\\.')}\\?[^"']*)["']`)); if (m) return import(m[1]); } return import(p); }; const g = window.__app.game; const { MEGAS } = await mod('/src/data/megaprojects.ts'); g.s.megas = { ...g.s.megas, city: { stage: MEGAS.city.stages.length, progress: {} } }; (await mod('/src/app/reorganize.ts')).pickNextRun('handsOff'); } },
   challengeRun: { base: 'reorg', post: () => { const a = window.__app; a.game.s.challenge = 'noSplitters'; a.panel = null; } },
   scenarios: { base: 'reorg', post: () => { localStorage.setItem('foldworks_scenario_best', JSON.stringify({ tinyIsland: { score: 0.4166, grade: 'A', date: Date.UTC(2026, 9, 18), design: 'Gizmo works' } })); window.__app.panel = 'scenarios'; } },
   scenarioPlay: { base: 'scenarios', post: async () => { const a = window.__app; const mod = async (p) => { for (const c of ['/src/app/hud.ts', '/src/app/screens.ts', '/src/app/app.ts']) { const m = (await (await fetch(c)).text()).match(new RegExp(`["'](${p.replace(/\./g, '\\.')}\\?[^"']*)["']`)); if (m) return import(m[1]); } return import(p); }; (await mod('/src/app/scenarios.ts')).playScenario(a, 'tinyIsland', true); a.freeze(); a.toasts = []; a.panel = null; } },
@@ -1171,7 +1169,7 @@ export async function act5Setup(state) {
   g.s.nextDesign = nid;
   a.step(2);
   a.step(20);
-  const put = (f, d, x, y) => act({ k: 'hplace', floor: f, design: d.id, x, y });
+  const put = (f, d, x, y) => act({ k: 'hplace', auto: false, floor: f, design: d.id, x, y });
   const fly = (f, fx, fy, tx, ty, item, n = 1) => {
     act({ k: 'route', floor: f, fx, fy, tx, ty, item });
     const st = g.s[f];
@@ -1444,7 +1442,7 @@ export const STATES = {
     a.grant(2.4e6);
     g.s.land = ['A', 'B', 'C', 'D', 'E', 'F'];
     g.s.upgrades.push('bellows');
-    g.s.research.done = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding', 'coalSeams', 'steelmaking', 'overdrive', 'steamPower', 'glassworks', 'crushing', 'concrete', 'refining', 'machineKits'];
+    g.s.research.done = ['pressing', 'surveyEast', 'copperSmelting', 'wireDrawing', 'gearcutting', 'splitters', 'buffers', 'gizmoTheory', 'slagBricks', 'folding', 'coalSeams', 'steelmaking', 'overdrive', 'steamPower', 'glassworks', 'crushing', 'concrete', 'refining'];
     g.s.research.selected = 'circuits';
     g.s.research.progress = { circuits: { copperWire: g.s.coin.constructor.of(310), glass: g.s.coin.constructor.of(44) } };
     g.s.flags.push('factoryOpen', 'factorySeen', 'sliceEnd', 'ordersSeen');
@@ -1452,7 +1450,6 @@ export const STATES = {
     g.s.orders.rep = { bramble: 3, unit7: 1, voltaire: 1 };
     g.s.orders.active = 'lensArray';
     g.s.orders.progress = { lensArray: { glass: g.s.coin.constructor.of(212), circuit: g.s.coin.constructor.of(18) } };
-    g.s.parts = g.s.coin.constructor.of(14);
     g.s.income = Array(60).fill(140);
     a.renderer.ground = null;
     g.rebuild();
@@ -1514,6 +1511,8 @@ STATES.act2hover = { base: 'act2power', post: () => { const a = window.__app; a.
 STATES.lessonCard = { base: 'act2power', post: () => { const a = window.__app; a.selected = null; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.lessons.show(a, 'brownout'); } };
 STATES.lessonStart = { base: 'start', post: () => { const a = window.__app; a.selected = null; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.lessons.show(a, 'starved'); } };
 STATES.lessonDistrict = { base: 'district', post: () => { const a = window.__app; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.lessons.show(a, 'shortRoute'); } };
+// the playability pass (hud): trophies that arrive together are one ribbon in the slips column
+STATES.trophyBatch = { base: 'act2power', post: () => { const a = window.__app; a.toasts = []; a.trophyPops = [{ id: 'estate', t: 0.3, more: ['letThereBeLight', 'dispatcher'] }]; } };
 STATES.stuckAnswer = { base: 'act2power', post: () => { const a = window.__app; a.selected = null; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.whereStuck(); } };
 STATES.stuckFactory = { base: 'factory2', post: () => { const a = window.__app; a.toasts = []; a.onboarding.whereStuck(); } };
 // (every lot bought: the District's pinned report does not keep off the lot's Buy button, a District
@@ -1524,6 +1523,9 @@ STATES.keysMoved = { base: 'act2power', post: () => { const a = window.__app; a.
 STATES.keysMovedHud = { base: 'act2power', post: () => { const a = window.__app; a.selected = null; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.keys.capture(a, 'KeyR'); a.panel = 'keys'; a.onboarding.keys.press(a, 'KeyK'); a.panel = null; a.selected = a.game.entAt(21, 1).id; } };
 STATES.uiScaleMax = { base: 'act2power', post: () => { window.__app.onboarding.setUiScale(99); } };
 STATES.uiScaleOptions = { base: 'act2power', post: () => { const a = window.__app; a.onboarding.setUiScale(99); a.panel = 'options'; } };
+// the post-game (the playability pass): Options after the story's end, with the Challenges and
+// Scenarios keys and the Challenges tab
+STATES.optionsPost = { base: 'ledger', post: () => { const a = window.__app; a.toasts = []; a.panel = 'options'; } };
 STATES.uiScaleSmall = { base: 'act2power', post: () => { window.__app.onboarding.setUiScale(1); } };
 for (const s of ACT2) STATES[s] = s;
 for (const s of WORKSHOP) STATES[s] = { ws: s };

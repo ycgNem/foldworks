@@ -23,8 +23,15 @@
 // run history, lifetime statistics), the Night Shift bought with coin, and the kept fields that
 // already lived in the run's state and are read all over the game: the Megaproject (`mega`), the
 // Codex (`codex`), reputation (`orders.rep`), the trophies (`trophy:` flags) and the counters.
-// Everything else is lost: both floors, coin, items, land and the annex, research, module designs,
-// claims, orders filled, Sparks.
+// Everything else is lost: both floors, coin, items, land and the annex, research past Act II,
+// module designs folded this run, claims, Sparks.
+//
+// The returning run (the playability pass, DESIGN.md §19 "What a Reorganize keeps"): a Reorganize
+// keeps what you learned. Every run after the first reset knows Acts I-II's research, has the
+// Factory floor open, and gets every kept design in the Drawer back as a module design with a free
+// copy (more with Spare Dies and Dies on file), placeable from minute one. A customer order filled
+// once is never offered again (`meta.ordersFilled`), and its Town piece stays. The Workshop and
+// Factory floors still start empty: a new run is a new layout.
 import type { Game, ActResult } from './Game';
 import { OK, no } from './Game';
 import { Num } from '../engine/num';
@@ -39,7 +46,7 @@ import { MEGA, megaStage } from '../data/megaprojects';
 import { ANNEX, FACTORY, START_LAYOUT } from '../data/land';
 import { IDLE_UPGRADES } from '../data/idle';
 import { PATENTS, type PatentId } from '../data/patents';
-import { newState, type Filed, type ModuleDesign, type RunRecord, type State } from './world';
+import { newState, type Filed, type FloorPlanTile, type KeptDesign, type ModuleDesign, type RunRecord, type State } from './world';
 import { isSky, setupIsland } from './systems/islands';
 import { lrules } from './legacy';
 import { megaDone } from './systems/high';
@@ -56,9 +63,12 @@ import type { ChallengeId } from '../data/challenges';
 
 /** What a Reorganize keeps, in words (the confirm card lists it). */
 export const KEPT: { what: string; why: string }[] = [
+  { what: 'Research of Acts I-II', why: 'every node of the Workshop and the Factory, known from the first minute' },
+  { what: 'The Patent Drawer, built', why: 'every kept design comes back as a module with a free copy, placeable on the Factory floor from the first minute' },
+  { what: 'The Factory floor, open', why: 'no first fold to wait for' },
   { what: 'Patents and the Patent tree', why: 'what the reset is for' },
   { what: 'The Patent Office\'s record', why: 'every product\'s best design on file: a later run is paid only for beating it' },
-  { what: 'The Patent Drawer', why: 'your kept designs, ready to unfold whole onto their boxes' },
+  { what: 'The Town and orders filled', why: 'an order filled once is never asked for again, and its piece of the Town stays standing' },
   { what: 'The Great Drill and every Megaproject', why: 'Megaproject progress survives every reset' },
   { what: 'Reputation', why: 'every customer remembers you, and their rewards stay (the Committee\'s opens the Drill\'s stages)' },
   { what: 'The Night Shift', why: 'the offline crews you bought with coin keep working' },
@@ -68,12 +78,11 @@ export const KEPT: { what: string; why: string }[] = [
 
 /** What it loses. */
 export const LOST: string[] = [
-  'Every floor: every building, module, trunk and skiff route',
+  'Every floor: every building, module, trunk and skiff route (a new layout run)',
   'Coin and every item in the factory',
-  'Land (back to chunk A), the Factory annex and deposit claims',
-  'Research (head starts give some back)',
-  'Module designs (keep the best in the Patent Drawer to unfold them again)',
-  'Orders filled this run (they are offered again)',
+  'Land (back to chunk A), the Factory annex and deposit claims (Patents keep some)',
+  'Research past Act II',
+  'Designs not in the Patent Drawer (keep the best: they come back built)',
 ];
 
 // ------------------------------------------------------------------ chain steps and value
@@ -281,7 +290,10 @@ export function previewPatents(g: Game): Preview {
   const designs = lines.reduce((t, l) => t + l.patents, 0);
   const mega = s.megaPatents ?? 0;
   const billValue = billsStanding(g);
-  const bills = billsTerm(billValue);
+  // filed as the designs are (the playability pass): only a rise over the bills term on file pays,
+  // so a run that rebuilds the same factory in minutes is never paid for it again (measured: a
+  // 35-minute reset loop rebuilt the returning floor each run and out-filed the designed runs)
+  const bills = Math.max(0, billsTerm(billValue) - billsOnFile(g));
   const total = designs + mega + bills;
   const now = Math.floor(total + 1e-9);
   const goals: PatentGoal[] = [];
@@ -350,15 +362,27 @@ export function reorganizeRefusal(g: Game): string | null {
   return null;
 }
 
-/** Flags that outlive a run (trophies; the screens the player has opened once). */
-const KEEP_FLAG = (f: string) => f.startsWith('trophy:') || f === 'ordersSeen' || f === 'factorySeen';
+/** Flags that outlive a run (trophies; the screens the player has opened once; and the playability
+ * pass's returning run: the Factory floor stays open, and the first fold and the slice's end are
+ * celebrated once, not every run). */
+const KEEP_FLAG = (f: string) => f.startsWith('trophy:') || f === 'ordersSeen' || f === 'factorySeen' || f === 'factoryOpen' || f === 'firstFold' || f === 'sliceEnd';
 
 /** The Night Shift bought with coin (src/data/idle.ts) outlives a run (the lead's decision 6). */
 const KEEP_UPGRADE = new Set<string>(IDLE_UPGRADES.map((u) => u.id));
 
-/** File this run's best design of each product with the Patent Office (only a rise is kept). */
+/** The bills term on file in this world and universe (the playability pass, DESIGN.md §19): a
+ * Relocate or a Last Fold starts it again, as it does the designs' record. */
+export function billsOnFile(g: Game): number {
+  const m = g.s.meta, f = m.billsFiled;
+  return f && f.world === (m.relocations ?? 0) && f.universe === (m.lastFolds ?? 0) ? f.value : 0;
+}
+
+/** File this run's best design of each product with the Patent Office (only a rise is kept), and
+ * the bills term (the playability pass). */
 export function fileDesigns(g: Game) {
   const m = g.s.meta;
+  const b = billsTerm(billsStanding(g));
+  if (b > billsOnFile(g)) m.billsFiled = { value: b, world: m.relocations ?? 0, universe: m.lastFolds ?? 0 };
   m.patented ??= {};
   for (const v of bestThisRun(g).values()) {
     const on = m.patented[v.item];
@@ -382,7 +406,7 @@ export function reorganize(g: Game, challenge?: ChallengeId): ActResult {
   m.patentsEarned = m.patentsEarned.add(p);
   if (m.here) m.here.runs++;
   keepRoom(g);
-  startRun(g);
+  startRun(g, !!challenge);
   if (challenge) startChallenge(g, challenge);
   g.bump('reorganizes');
   g.emit({ type: 'reorganize', value: p, d: m.runs });
@@ -395,11 +419,17 @@ export function endRun(g: Game, rec: { patents: number; relocate?: RunRecord['re
   const s = g.s;
   const m = s.meta;
   noteBests(g);
-  m.history.push({ run: m.runs + 1, ticks: s.tick - m.runStart, patents: rec.patents, earned: s.earned, peakPerMin: m.peakPerMin, ...(rec.relocate ? { relocate: rec.relocate, legacy: rec.legacy } : {}), ...(rec.lastFold !== undefined ? { lastFold: rec.lastFold } : {}) });
+  m.history.push({ run: m.runs + 1, ticks: s.tick - m.runStart, patents: rec.patents, earned: s.earned, peakPerMin: m.peakPerMin, ...(m.factoryPeak ? { factoryPeak: m.factoryPeak } : {}), ...(m.caughtUp !== undefined ? { caughtUp: m.caughtUp } : {}), ...(rec.relocate ? { relocate: rec.relocate, legacy: rec.legacy } : {}), ...(rec.lastFold !== undefined ? { lastFold: rec.lastFold } : {}) });
   m.runs++;
   m.lifetime.earned = m.lifetime.earned.add(s.earned);
   for (const [it, n] of Object.entries(s.delivered) as [ItemId, Num][]) m.lifetime.delivered[it] = (m.lifetime.delivered[it] ?? Num.ZERO).add(n);
-  m.lifetime.folds += s.designs.length;
+  // (a design that came back from the Drawer was folded in an earlier run, and counted there)
+  m.lifetime.folds += s.designs.filter((d) => d.kept === undefined).length;
+  // the orders filled this run are never offered again (the playability pass), and the Town keeps
+  // standing on them
+  const filled = (m.ordersFilled ??= []);
+  for (const id of s.orders.done) if (!filled.includes(id)) filled.push(id);
+  m.ordersAt = { ...(m.ordersAt ?? {}), ...(s.orders.doneAt ?? {}) };
 }
 
 /** The Sky Anchor's stages (DESIGN.md §22): the room bought this run that is kept through a
@@ -410,11 +440,80 @@ function keepRoom(g: Game) {
   if (megaDone(g, 'anchor', 1)) k.annex = Math.max(k.annex ?? 0, s.annex ?? 0);
   if (megaDone(g, 'anchor', 2)) k.district = Math.max(k.district ?? 0, s.district?.lots ?? 0);
   if (megaDone(g, 'anchor', 3)) k.world = Math.max(k.world ?? 0, s.world?.lots ?? 0);
+  // Claims on File (a Patent, the playability pass): the most claims blocks of each ore so far
+  if (prules(g).claimsKept) {
+    const c = (s.meta.keptClaims ??= {});
+    for (const [ore, n] of Object.entries(s.claimBlocks) as [ItemId, number][]) c[ore] = Math.max(c[ore] ?? 0, n);
+  }
+  // the Floor Plan (a Patent): the Factory floor as it stands, each module tile by its product
+  if (prules(g).floorPlanEvery) s.meta.floorPlan = floorPlanOf(g);
+}
+
+/** The Factory floor as a Floor Plan: its trunks, and its depth-1 module tiles by product (a nested
+ * module's tile is left out: its design is folded again in each run). */
+export function floorPlanOf(g: Game): FloorPlanTile[] {
+  const out: FloorPlanTile[] = [];
+  for (const e of g.s.factory.ents) {
+    if (e.kind === 'trunk') out.push({ kind: 'trunk', x: e.x, y: e.y, rot: e.rot });
+    else if (e.kind === 'module') {
+      const d = g.design(e.design);
+      const item = d && (d.depth ?? 1) === 1 && !d.fparts ? mainItem(d) : null;
+      if (item) out.push({ kind: 'module', x: e.x, y: e.y, rot: e.rot, item });
+    }
+  }
+  return out;
+}
+
+/** Does this run remember Acts I-II (the playability pass, DESIGN.md §19)? Every run after the first
+ * reset of the save (a Reorganize, a Relocate or a Last Fold), outside a Scenario. */
+export const returning = (g: Game) => g.s.meta.runs >= 1 && !g.s.scenario;
+
+/** Copies a kept design comes back with at a run's start: one free (RULES.returnCopies), one more
+ * with Spare Dies, and the Dies on file bought for it. */
+export function returnCopies(g: Game, k: KeptDesign): number {
+  return RULES.returnCopies.value + prules(g).spareDies + Math.min(RULES.dieCopiesMax.value, g.s.meta.dies?.[k.id] ?? 0);
+}
+
+/** Can this kept design come back built (a Workshop line kept with its audit's card)? An imported
+ * string or a nested layout has no card: it unfolds and is audited as before. */
+export const returnsBuilt = (k: KeptDesign) => !k.nested && !!k.card && k.parts.length > 0 && k.card.grade.mult > 0;
+
+/** The returning run (DESIGN.md §19): every kept design with a card comes back as a module design,
+ * at its kept grade and rates, with its free copies in the inventory. Its box, parts and name are
+ * the kept design's, so Unfold, the refold check and a stamp all work as on a design folded now. */
+export function returnKept(g: Game) {
+  const s = g.s;
+  for (const k of s.meta.drawer) {
+    if (!returnsBuilt(k) || s.designs.some((d) => d.kept === k.id)) continue;
+    const card = k.card!;
+    const mult = card.grade.mult;
+    const sc = (t: Partial<Record<ItemId, number>>) => {
+      const o: Partial<Record<ItemId, number>> = {};
+      for (const [it, v] of Object.entries(t) as [ItemId, number][]) o[it] = v * mult;
+      return o;
+    };
+    let bill = 0;
+    for (const p of k.parts) if (isMachine(p.kind) || isPower(p.kind)) bill += BUILD[p.kind].cost;
+    s.designs.push({
+      id: s.nextDesign++,
+      name: k.name,
+      box: { x: k.x, y: k.y, w: k.w, h: k.h },
+      parts: k.parts.map((p) => ({ kind: p.kind, dx: p.dx, dy: p.dy, rot: p.rot, recipe: p.recipe })),
+      ins: sc(card.ins),
+      outs: sc(card.outs),
+      grade: { ...card.grade },
+      bill,
+      stamped: 0,
+      spare: returnCopies(g, k),
+      refolds: true,
+      kept: k.id,
+    });
+  }
 }
 
 /** Start a fresh run on the island the town is on: the kept state carried over, the start layout,
  * the island's ground, the head starts (Reorganize and Relocate both end here). */
-export function startRun(g: Game) {
+export function startRun(g: Game, challenge = false) {
   const fresh = carry(g.s);
   g.s = fresh;
   // the old run's grid and lookups go with it, before anything is placed on the new floor
@@ -429,6 +528,10 @@ export function startRun(g: Game) {
   fresh.nextSpark = g.sparkDelay();
   fresh.annex = Math.min(ANNEX.blocks, fresh.meta.keptRoom?.annex ?? 0);
   applyHeadStarts(g);
+  // the returning run (the playability pass): the Drawer's designs come back built (not in a
+  // Challenge: a Challenge is a run built from scratch under its rule, and its goal is met there)
+  if (returning(g) && !challenge) returnKept(g);
+  if (prules(g).claimsKept) for (const [ore, n] of Object.entries(fresh.meta.keptClaims ?? {}) as [ItemId, number][]) fresh.claimBlocks[ore] = Math.max(fresh.claimBlocks[ore] ?? 0, n);
   // the Trophy Shelf's coin trophies (DESIGN.md §24): a little coin at every run's start
   const tc = trules(g).startCoin;
   if (tc > 0) {
@@ -449,6 +552,8 @@ function carry(s: State): State {
   f.meta.runStart = s.tick;
   f.meta.peakPerMin = 0;
   f.meta.perMinRing = [];
+  f.meta.factoryPeak = 0;
+  delete f.meta.caughtUp;
   f.mega = s.mega;
   // Megaprojects #2 and on survive every reset as the Great Drill does (DESIGN.md §21)
   if (s.megas) f.megas = s.megas;
@@ -488,18 +593,74 @@ export function applyHeadStarts(g: Game, ids: readonly PatentId[] = g.s.meta.nod
   // the Legacy tree's head starts (DESIGN.md §22): the Town Archive knows Act I; Standing Charts knows
   // Charting in a world whose World floor has stood
   const lr = lrules(g);
-  if (lr.archive) for (const r of RESEARCH_IDS) if ((RESEARCH[r].act ?? 1) === 1) add(r);
+  // (the playability pass: every run after the first reset knows Acts I-II, so the Town Archive
+  // keeps the next act's door open instead: Zoning and Chutes, the Zoning Charter's research, known
+  // in every run of every world)
+  if (lr.archive) for (const r of ARCHIVE_RESEARCH) add(r);
   // the Seed (DESIGN.md §23, the prestige review): every run of a universe after the first knows
   // Acts I-II's research (the Town Archive's Act I and the Factory's sixteen nodes after it)
   if (seedKnows(g)) for (const r of RESEARCH_IDS) if ((RESEARCH[r].act ?? 1) <= RULES.seedActs.value) add(r);
+  // the returning run (the playability pass, DESIGN.md §19): every run after the first reset knows
+  // Acts I-II's research, keyed off each node's act (an island's own node is the island's)
+  if (returning(g)) for (const r of RESEARCH_IDS) if ((RESEARCH[r].act ?? 1) <= RULES.keptActs.value && !RESEARCH[r].world) add(r);
   if (lr.charts && s.meta.here?.opened) add('charting');
   // in the tree's order, so the research screen and the bots read them as researched in turn
   s.research.done = RESEARCH_IDS.filter((r) => research.has(r));
   g.layoutDirty = true;
 }
 
+/** The Town Archive's research (a Legacy node, DESIGN.md §22; re-derived in the playability pass). */
+export const ARCHIVE_RESEARCH: readonly ResearchId[] = ['zoning', 'chutes'];
+
 /** The Seed's head start holds: a universe after the first, outside a Scenario (DESIGN.md §23). */
 export const seedKnows = (g: Game) => (g.s.meta.lastFolds ?? 0) >= 1 && !g.s.scenario;
+
+/** The returning run's pace, once a minute with the 5-minute coin per minute (src/sim/systems/
+ * stats.ts): the run's best before the District opens (its Act II floor), and the seconds into the
+ * run it first passed the last run's (the Reorganize card's "back in", DESIGN.md §19). */
+export function noteRunPace(g: Game, avg: number) {
+  const m = g.s.meta;
+  if (!g.done('zoning') && avg > (m.factoryPeak ?? 0)) m.factoryPeak = avg;
+  const prev = lastFactoryPeak(g);
+  if (m.caughtUp === undefined && prev > 0 && avg >= prev) m.caughtUp = Math.round(runSeconds(g));
+}
+
+/** How fast the next run will be (the Reorganize card, DESIGN.md §19): the income it gets back to
+ * (this run's Act II floor: its best before the District opened, or its best if it never did), the
+ * minutes that took the last returning run (or RULES.backInMinutes, the campaign's measure, before
+ * one has), whether the District made more than that (it is rebuilt after), and the kept designs
+ * that come back built. */
+export function nextRunPace(g: Game): { perMin: number; minutes: number | null; measured: boolean; district: boolean; built: number } {
+  const m = g.s.meta;
+  // (a run whose District opened before its Act II peak was noted, a save from before, has no
+  // honest number: 0, and the card says "your Act II floor" without one)
+  const floor = m.factoryPeak && m.factoryPeak > 0 ? m.factoryPeak : g.done('zoning') ? 0 : m.peakPerMin;
+  // a catch-up is a returning run's only when the run before it was recorded under the returning
+  // run's rules (its record has an Act II floor peak): a run measured against an old record (a save
+  // from before the playability pass, its last run's overall peak) took hours and promised a
+  // "~455 min" penalty on the 15 h checkpoint's card (the second playtest)
+  const h = m.history;
+  const honest = (i: number) => i > 0 && h[i - 1].factoryPeak !== undefined;
+  let sec: number | undefined = h.length && h[h.length - 1].factoryPeak !== undefined ? m.caughtUp : undefined;
+  for (let i = h.length - 1; sec === undefined && i >= 0; i--) if (h[i].caughtUp !== undefined && honest(i)) sec = h[i].caughtUp;
+  const measured = sec !== undefined;
+  const min = measured ? Math.max(1, Math.round(sec! / 60)) : RULES.backInMinutes.value;
+  return {
+    perMin: floor,
+    // past the cap the card gives no number: a slow last run is the player's pace, not the reset's
+    minutes: min <= RULES.backInCap.value ? min : null,
+    measured,
+    district: g.done('zoning') && m.peakPerMin > floor * 1.05,
+    built: m.drawer.filter(returnsBuilt).length,
+  };
+}
+
+/** The last finished run's Act II floor peak (its best coin per minute before the District; a record
+ * from before the playability pass has only its overall peak). */
+export function lastFactoryPeak(g: Game): number {
+  const h = g.s.meta.history[g.s.meta.history.length - 1];
+  return h ? h.factoryPeak ?? h.peakPerMin : 0;
+}
 
 /** The run's length so far, in seconds. */
 export function runSeconds(g: Game): number {

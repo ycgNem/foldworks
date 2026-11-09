@@ -1,6 +1,6 @@
 // Scenarios (DESIGN.md §21 Scenarios, §24): puzzle boards played as a separate game in their own
-// save slot ("scenario:<id>", localStorage key foldworks_scenario_<id>), opened after the first
-// Reorganize. Eight boards (Milestone 11). The page lists them with each one's best score; the
+// save slot ("scenario:<id>", localStorage key foldworks_scenario_<id>), opened after the story's
+// end, the Floating City (the post-game: the playability pass). Eight boards (Milestone 11). The page lists them with each one's best score; the
 // board picked gets the right page: its pitch, its twist, and its efficiency board (the best score,
 // per tile, per kW and waste, each the best of its own: DESIGN.md §24). The bests are the sim's:
 // a board's game notes them in its meta, and "Back to your town" hands them to the town with the
@@ -16,6 +16,7 @@ import { Game } from '../sim/Game';
 import { savePayload, restore } from '../sim/snapshot';
 import { scenarioOf, scenarioBest, beltsLeft } from '../sim/scenario';
 import { mergeBoard } from '../sim/longtail';
+import { postGame } from '../sim/systems/challenges';
 import type { BoardRecord } from '../sim/world';
 import { banner } from './hud';
 import { migrate, store, SAVE_VERSION } from '../engine/save';
@@ -46,9 +47,10 @@ export function hasScenarioSave(id: ScenarioId): boolean {
   try { return !!store()?.getItem(slotKey(id)); } catch { return false; }
 }
 
-/** Scenarios open after the first Reorganize (DESIGN.md §21), and inside one, of course. */
+/** Scenarios open with the post-game, the Floating City complete (DESIGN.md §21), and inside one,
+ * of course. */
 export function scenariosOpen(app: App): boolean {
-  return !!app.game.s.scenario || app.game.s.meta.runs >= 1;
+  return !!app.game.s.scenario || postGame(app.game);
 }
 
 /** App.save() for a Scenario game: into the board's own slot, never the main one. */
@@ -84,22 +86,8 @@ function loadScenario(id: ScenarioId): Game | null {
 
 /** Put a game on the App the way newGame does (nothing of the last game stays open or pinned). */
 function adopt(app: App, g: Game) {
-  app.game = g;
-  app.screen = 'play';
-  app.mode = { k: 'idle' };
-  app.selected = null;
-  app.fselected = null;
-  app.panel = null;
-  app.toasts = [];
-  app.trophyPops = [];
-  app.renderer.ground = null;
-  app.hud = newHudState();
-  app.hud.coinShown = g.s.coin.toNumber();
+  app.adopt(g);
   app.hud.firstMiner = true;
-  app.offline = null;
-  app.gradeId = null;
-  app.setFloor('workshop', true);
-  app.fitCamera(true);
 }
 
 /** Play a board: the main game (or the board open now) is saved first; `fresh` starts it over. */

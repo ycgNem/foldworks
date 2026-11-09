@@ -22,14 +22,13 @@ export interface Grid {
   sat: number;
 }
 
-/** kW a machine draws while crafting, after its mode (0 for unpowered machines). */
+/** kW a machine draws while crafting (0 for unpowered machines). */
 export function drawKw(e: Ent, g?: Game): number {
   const kw = BUILD[e.kind].kw ?? 0;
   if (!kw) return 0;
-  const m = e.mode ?? 'normal';
   // Dame Voltaire's rep 4 (DESIGN.md §21): Act III's chemistry and greenhouses at half the draw
   const volt = g && g.s.orders.rep.voltaire >= 4 && (e.kind === 'chemVat' || e.kind === 'greenhouse') ? RULES.voltaireChemPower.value : 1;
-  return kw * volt * (m === 'efficient' ? RULES.modeEfficientPower.value : m === 'overclock' ? RULES.modeOverclockPower.value : 1);
+  return kw * volt;
 }
 
 /** How far a Pole reaches (Dame Voltaire's rep 3 adds a tile). */

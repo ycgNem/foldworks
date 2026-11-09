@@ -24,7 +24,7 @@ import { trules, craftSpeed, freeBuild, codexCompletion, codexPages, grantCosmet
 import { prules } from '../src/sim/patents';
 import { checkTrophies, trophyValue } from '../src/sim/systems/stats';
 import { maxRoutes, maxSkiffs, skiffStats, lotPrice, routeRefusal } from '../src/sim/systems/high';
-import { chuteCap, kitsFor, stampRefusal } from '../src/sim/systems/modules';
+import { chuteCap, stampCost, stampRefusal } from '../src/sim/systems/modules';
 import { repairPrice } from '../src/sim/systems/islands';
 import { buildPrice, compactFull, splusShare, strictGrade, challengeRefusal, challengeProgress, powerMult } from '../src/sim/systems/challenges';
 import { scenarioMiners, designScore } from '../src/sim/scenario';
@@ -32,6 +32,7 @@ import { newEnt, newFEnt, type BoardRecord, type ModuleDesign } from '../src/sim
 import { fingerprint, replay, savePayload, restore } from '../src/sim/snapshot';
 import { migrate, SAVE_VERSION } from '../src/engine/save';
 import { GRADES } from '../src/data/rules';
+import { endStory } from './story-helpers';
 
 function must(g: Game, c: Cmd) {
   const r = g.act(c);
@@ -81,11 +82,13 @@ function design(g: Game, over: Partial<ModuleDesign>): ModuleDesign {
   return d;
 }
 
-/** A game after one Reorganize, then this Challenge taken; then the sandbox opened. */
+/** A game after one Reorganize and the story's end (the post-game), then this Challenge taken;
+ * then the sandbox opened. */
 function take(id: ChallengeId, before?: (g: Game) => void) {
   const g = new Game(3);
   g.s.meta.runs = 1;
   g.s.megaPatents = 3;
+  endStory(g);
   before?.(g);
   must(g, { k: 'reorganize', challenge: id });
   expect(g.s.challenge).toBe(id);
@@ -218,10 +221,11 @@ describe('the Trophy Shelf (DESIGN.md §24)', () => {
     expect(prules(g).overdriveCool).toBe(cool0 - 2);
   });
 
-  it('Sparks stay longer with the Spark trophies', () => {
+  it('the Inspector stays longer with the Spark trophies', () => {
     const g = new Game(5);
     earn(g, 'lucky', 'sparkChaser');
-    // a working Miner on the iron, feeding the Hand Furnace, so a Lucky Vein can appear on it
+    // a working Miner on the iron feeding the Hand Furnace: a line of two at work, so the Inspector
+    // can walk up to it
     g.s.upgrades.push('bellows');
     g.s.coin = N(100);
     must(g, { k: 'place', kind: 'miner', x: 2, y: 3, rot: 0 });
@@ -323,7 +327,7 @@ describe('Challenges 6-15 (DESIGN.md §24)', () => {
 
   it('Acts III and IV\'s wait until that floor has stood in some run', () => {
     const g = new Game(1);
-    g.s.meta.runs = 1;
+    endStory(g);
     expect(challengeRefusal(g, 'headwinds')).toMatch(/District/);
     expect(challengeRefusal(g, 'roughSeas')).toMatch(/World/);
     g.s.counters.districtPlaced = 1;
@@ -354,7 +358,7 @@ describe('Challenges 6-15 (DESIGN.md §24)', () => {
     expect(buildPrice(g, 'smelter')).toBe(BUILD.smelter.cost);
   });
 
-  it('Hand-Made: no stamping; 8 modules standing on the Factory; then a design\'s first stamp takes no kits', () => {
+  it('Hand-Made: no stamping; 8 modules standing on the Factory; then a design\'s first stamp is free', () => {
     const g = take('handMade');
     const d = design(g, { bill: 20000, parts: [{ kind: 'kiln', dx: 0, dy: 0, rot: 0, recipe: null }] });
     expect(stampRefusal(g, d)).toMatch(/No stamping/);
@@ -363,9 +367,10 @@ describe('Challenges 6-15 (DESIGN.md §24)', () => {
     for (let x = 0; x < 8; x++) must(g, { k: 'fplace', design: d.id, x, y: 0, rot: 0 });
     expect(challengeProgress(g, 'handMade')).toEqual({ have: 8, want: 8 });
     winNow(g, 'handMade');
-    expect(kitsFor(g, d)).toBe(0);
+    g.s.counters.stamps = 1; // past the first stamp ever (free for everyone, §10)
+    expect(stampCost(g, d).toNumber()).toBe(0);
     d.stamped = 1;
-    expect(kitsFor(g, d)).toBeGreaterThan(0);
+    expect(stampCost(g, d).toNumber()).toBeGreaterThan(0);
   });
 
   it('The Strict Inspector: a letter lower; a fold at A; then S+ needs 70% used inside', () => {
@@ -418,8 +423,8 @@ describe('Challenges 6-15 (DESIGN.md §24)', () => {
     const g = take('shortHaul', (q) => { q.s.counters.districtPlaced = 1; });
     const d = design(g, { depth: 2, outs: { steel: 1 } });
     const DK = HIGH.district.dock;
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 0, y: DK.y });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: DK.x - 1, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 0, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: DK.x - 1, y: DK.y });
     expect(routeRefusal(g, 'district', 0, DK.y, DK.x, DK.y, 'steel')).toMatch(/5 tiles at most/);
     expect(routeRefusal(g, 'district', DK.x - 1, DK.y, DK.x, DK.y, 'steel')).toBeNull();
     const cap0 = maxSkiffs(g, 'district');

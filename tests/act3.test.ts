@@ -1,6 +1,6 @@
 // Act III (ROADMAP.md Milestone 7, DESIGN.md §21): the District and its skiff routes (throughput by
 // distance), the District's Dock, Hopper and Bay (Megaprojects #2 and #3), the Factory Chute and the
-// Chute Mouth, the Recycling and Byproduct modes, depth-3 folds on the District, the Scrap
+// Chute Mouth, byproducts at their recipe's cadence (the modes were cut: DECISIONS.md), depth-3 folds on the District, the Scrap
 // Transmuter, and what a Reorganize keeps.
 import { describe, expect, it } from 'vitest';
 import { Game, type Cmd } from '../src/sim/Game';
@@ -9,10 +9,10 @@ import { RESEARCH_IDS } from '../src/data/research';
 import { CHUNKS } from '../src/data/land';
 import { HIGH, skiffRate } from '../src/data/floors';
 import { TICK_RATE } from '../src/engine/time';
-import { routeCap, hentAt, highW, maxRoutes, routeWant, drillFactor } from '../src/sim/systems/high';
+import { routeCap, hentAt, highW, maxRoutes, routeWant, drillFactor, skiffPrice, skiffsPrice, autoRoute, skiffRateNow, routeDist } from '../src/sim/systems/high';
+import { migrate } from '../src/engine/save';
 import { saleValue } from '../src/sim/systems/docks';
 import { foldRefusal } from '../src/sim/systems/audits';
-import { byEvery } from '../src/sim/systems/machines';
 import { RECIPE } from '../src/data/recipes';
 import { claimsUsed } from '../src/sim/systems/claims';
 import type { ModuleDesign } from '../src/sim/world';
@@ -62,8 +62,8 @@ describe('the District (DESIGN.md §21)', () => {
     const g = sandbox();
     const d1 = design(g, { depth: 1, outs: { steel: 1 } });
     const d2 = design(g, { outs: { steel: 1 } });
-    expect(g.act({ k: 'hplace', floor: 'district', design: d1.id, x: 2, y: 2 }).why).toMatch(/depth-2/);
-    must(g, { k: 'hplace', floor: 'district', design: d2.id, x: 2, y: 2 });
+    expect(g.act({ k: 'hplace', auto: false, floor: 'district', design: d1.id, x: 2, y: 2 }).why).toMatch(/depth-2/);
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d2.id, x: 2, y: 2 });
     expect(d2.spare).toBe(3);
   });
 
@@ -71,8 +71,8 @@ describe('the District (DESIGN.md §21)', () => {
     const g = sandbox();
     const d = design(g, { outs: { steel: 10 } });
     // two copies: one beside the Dock, one across the floor
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: DK.x - 1, y: DK.y });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 0, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: DK.x - 1, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 0, y: DK.y });
     must(g, { k: 'route', floor: 'district', fx: DK.x - 1, fy: DK.y, tx: DK.x, ty: DK.y, item: 'steel' });
     must(g, { k: 'route', floor: 'district', fx: 0, fy: DK.y, tx: DK.x, ty: DK.y, item: 'steel' });
     const [near, far] = g.s.district!.routes;
@@ -93,25 +93,35 @@ describe('the District (DESIGN.md §21)', () => {
     expect(far.flow).toBeGreaterThan(0);
   });
 
-  it('skiffs are bought at a flat price and refunded when a route comes off', () => {
+  it('each skiff paid for costs a step more than the last (linear), and comes off at what the last cost', () => {
     const g = sandbox();
     const d = design(g, { outs: { steel: 1 } });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 3, y: 3 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 3, y: 3 });
     const c0 = g.s.coin;
+    const base = HIGH.district.skiffCost, step = base / HIGH.district.skiffStep;
+    expect(skiffPrice(g, 'district')).toBe(base);
     must(g, { k: 'route', floor: 'district', fx: 3, fy: 3, tx: DK.x, ty: DK.y, item: 'steel' });
     const r = g.s.district!.routes[0];
+    expect(skiffPrice(g, 'district')).toBe(base + step);
     must(g, { k: 'skiff', floor: 'district', id: r.id, n: 1 });
-    expect(c0.sub(g.s.coin).toNumber()).toBe(2 * HIGH.district.skiffCost);
+    expect(c0.sub(g.s.coin).toNumber()).toBe(2 * base + step);
+    // one off: the price of the last one back, so buying it again is even
+    const c1 = g.s.coin;
+    must(g, { k: 'skiff', floor: 'district', id: r.id, n: -1 });
+    expect(g.s.coin.sub(c1).toNumber()).toBe(base + step);
+    must(g, { k: 'skiff', floor: 'district', id: r.id, n: 1 });
+    expect(g.s.coin.eq(c1)).toBe(true);
     must(g, { k: 'unroute', floor: 'district', id: r.id });
     expect(g.s.coin.eq(c0)).toBe(true);
+    expect(skiffPrice(g, 'district')).toBe(base);
   });
 
   it('a route only goes where its item is taken', () => {
     const g = sandbox();
     const a = design(g, { outs: { steel: 1 } });
     const b = design(g, { ins: { glass: 1 }, outs: { circuit: 1 } });
-    must(g, { k: 'hplace', floor: 'district', design: a.id, x: 3, y: 3 });
-    must(g, { k: 'hplace', floor: 'district', design: b.id, x: 4, y: 3 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: a.id, x: 3, y: 3 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: b.id, x: 4, y: 3 });
     expect(g.act({ k: 'route', floor: 'district', fx: 3, fy: 3, tx: 4, ty: 3, item: 'steel' }).why).toMatch(/takes no steel/);
     expect(g.act({ k: 'route', floor: 'district', fx: 3, fy: 3, tx: 4, ty: 3, item: 'glass' }).why).toMatch(/makes no glass/);
   });
@@ -120,8 +130,8 @@ describe('the District (DESIGN.md §21)', () => {
     const g = sandbox();
     const src = design(g, { outs: { glass: 4 } });
     const use = design(g, { ins: { glass: 1 }, outs: { circuit: 0.5 } });
-    must(g, { k: 'hplace', floor: 'district', design: src.id, x: 8, y: 1 });
-    must(g, { k: 'hplace', floor: 'district', design: use.id, x: 9, y: 1 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: src.id, x: 8, y: 1 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: use.id, x: 9, y: 1 });
     must(g, { k: 'route', floor: 'district', fx: 8, fy: 1, tx: 9, ty: 1, item: 'glass' });
     must(g, { k: 'route', floor: 'district', fx: 9, fy: 1, tx: DK.x, ty: DK.y, item: 'circuit' });
     // a skiff carries one a trip: two of them bring the glass (1 a second) next door, and two the
@@ -139,7 +149,7 @@ describe('the District (DESIGN.md §21)', () => {
     g.s.research.done = g.s.research.done.filter((r) => r !== 'sandwichEngineering' && r !== 'districtFolds');
     must(g, { k: 'research', id: 'robotics' });
     const d = design(g, { outs: { servo: 2 } });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 9, y: 6 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 9, y: 6 });
     must(g, { k: 'route', floor: 'district', fx: 9, fy: 6, tx: HIGH.district.hopper.x, ty: HIGH.district.hopper.y, item: 'servo' });
     g.step(30 * TICK_RATE);
     expect(g.s.research.progress.robotics?.servo?.toNumber() ?? 0).toBeGreaterThan(10);
@@ -150,7 +160,7 @@ describe('the District (DESIGN.md §21)', () => {
     const line = design(g, { depth: 1, parts: [{ kind: 'miner', dx: 0, dy: 0, rot: 0, recipe: 'mineCopper' }], outs: { copperOre: 1 }, spare: 0 });
     const grp = design(g, { fparts: [{ kind: 'module', design: line.id, dx: 0, dy: 0, rot: 0 }], outs: { copperOre: 1 }, spare: 1 });
     expect(claimsUsed(g, 'copperOre')).toBe(1);
-    must(g, { k: 'hplace', floor: 'district', design: grp.id, x: 2, y: 2 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: grp.id, x: 2, y: 2 });
     expect(claimsUsed(g, 'copperOre')).toBe(1);
   });
 
@@ -158,8 +168,8 @@ describe('the District (DESIGN.md §21)', () => {
     const g = sandbox();
     const a = design(g, { outs: { glass: 4 } });
     const b = design(g, { ins: { glass: 1 }, outs: { circuit: 0.5 } });
-    must(g, { k: 'hplace', floor: 'district', design: a.id, x: 2, y: 2 });
-    must(g, { k: 'hplace', floor: 'district', design: b.id, x: 3, y: 2 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: a.id, x: 2, y: 2 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: b.id, x: 3, y: 2 });
     must(g, { k: 'route', floor: 'district', fx: 2, fy: 2, tx: 3, ty: 2, item: 'glass' });
     must(g, { k: 'hclick', floor: 'district', x: 2, y: 2 });
     expect(hentAt(g, 'district', 3, 2)!.od).toBeGreaterThan(0);
@@ -184,7 +194,7 @@ describe('the District Bay: the Floating City and the Scrap Transmuter (DESIGN.m
     expect(g.fh).toBe(8);
     g.s.megas = { city: { stage: 0, progress: { liftRotor: Num.of(119), concrete: Num.of(4000) } } };
     const d = design(g, { outs: { liftRotor: 2 } });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 2, y: 8 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 2, y: 8 });
     must(g, { k: 'route', floor: 'district', fx: 2, fy: 8, tx: bay.x, ty: bay.y, item: 'liftRotor' });
     g.step(10 * TICK_RATE);
     expect(g.s.megas!.city!.stage).toBe(1);
@@ -241,21 +251,24 @@ describe('the Chute (DESIGN.md §21)', () => {
   });
 });
 
-describe('Recycling and Byproduct modes (DESIGN.md §21)', () => {
-  it('halve or double the byproduct a recipe makes', () => {
-    const r = RECIPE.mixSolvent;
-    expect(byEvery({ mode: 'normal' }, r)).toBe(2);
-    expect(byEvery({ mode: 'recycling' }, r)).toBe(4);
-    expect(byEvery({ mode: 'byproduct' }, r)).toBe(1);
-    expect(byEvery({ mode: 'byproduct' }, RECIPE.smeltIron)).toBe(2);
-  });
-
-  it('need Recycling researched and a powered machine', () => {
+describe('Act III machines (DESIGN.md §21)', () => {
+  it('a byproduct comes every `every` crafts of its recipe, whatever the machine (no modes: the playability pass)', () => {
     const g = sandbox();
     must(g, { k: 'place', kind: 'chemVat', x: 10, y: 10, rot: 0 });
-    must(g, { k: 'mode', x: 10, y: 10, mode: 'recycling' });
-    g.s.research.done = g.s.research.done.filter((r) => r !== 'recycling');
-    expect(g.act({ k: 'mode', x: 10, y: 10, mode: 'byproduct' }).why).toMatch(/Recycling/);
+    must(g, { k: 'place', kind: 'generator', x: 10, y: 12, rot: 0 });
+    must(g, { k: 'place', kind: 'pole', x: 11, y: 11, rot: 0 });
+    const vat = g.entAt(10, 10)!, gen = g.entAt(10, 12)!;
+    vat.recipe = 'mixSolvent';
+    let sludge = 0;
+    for (let i = 0; i < 60 * TICK_RATE; i++) {
+      vat.inBuf.oil = 4; vat.inBuf.sand = 4; gen.inBuf.coal = 4;
+      vat.out = 0;
+      sludge += vat.by;
+      vat.by = 0;
+      g.tick();
+    }
+    expect(vat.crafts).toBeGreaterThan(4);
+    expect(sludge).toBe(Math.floor(vat.crafts / RECIPE.mixSolvent.byproduct!.every));
   });
 
   it('the Engineer is an Assembler Mk2 recipe only', () => {
@@ -272,8 +285,8 @@ describe('District folds (DESIGN.md §21)', () => {
     const g = sandbox();
     const src = design(g, { outs: { glass: 4 }, bill: 3000 });
     const use = design(g, { ins: { glass: 1 }, outs: { circuit: 0.5 }, bill: 5000 });
-    must(g, { k: 'hplace', floor: 'district', design: src.id, x: 2, y: 2 });
-    must(g, { k: 'hplace', floor: 'district', design: use.id, x: 3, y: 2 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: src.id, x: 2, y: 2 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: use.id, x: 3, y: 2 });
     must(g, { k: 'route', floor: 'district', fx: 2, fy: 2, tx: 3, ty: 2, item: 'glass' });
     must(g, { k: 'route', floor: 'district', fx: 3, fy: 2, tx: DK.x, ty: DK.y, item: 'circuit' });
     // one item a trip: two skiffs bring the glass next door, five the circuits across to the Dock
@@ -292,19 +305,19 @@ describe('District folds (DESIGN.md §21)', () => {
     expect(d.bill).toBe(8000);
     expect(d.hparts?.length).toBe(2);
     expect(d.hroutes?.length).toBe(1);
-    // the skiffs came back: the inner route's two and the five to the Dock
-    expect(g.s.coin.sub(coin).toNumber()).toBe(7 * HIGH.district.skiffCost);
+    // the skiffs came back: the inner route's two and the five to the Dock, at what the last seven cost
+    expect(g.s.coin.sub(coin).toNumber()).toBe(skiffsPrice(g, 'district', 7, 0));
     expect(hentAt(g, 'district', 2, 2)).toBeNull();
     // the District takes its own fold back: a group's routes packed into one tile's ports
     d.spare = 1;
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 5, y: 5 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 5, y: 5 });
   });
 
   it('refuses a pile of strangers', () => {
     const g = sandbox();
     const a = design(g, { outs: { glass: 1 } });
-    must(g, { k: 'hplace', floor: 'district', design: a.id, x: 2, y: 2 });
-    must(g, { k: 'hplace', floor: 'district', design: a.id, x: 3, y: 2 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: a.id, x: 2, y: 2 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: a.id, x: 3, y: 2 });
     expect(g.act({ k: 'haudit', floor: 'district', x: 2, y: 2, w: 2, h: 1 }).why).toMatch(/works together/);
   });
 });
@@ -313,7 +326,7 @@ describe('the waste chute and the route cap (DESIGN.md §21, the second gate)', 
   it('a District module\'s waste with no route goes to the Dock on its own', () => {
     const g = sandbox();
     const d = design(g, { outs: { steel: 0.2, slag: 0.5 } });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 3, y: 3 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 3, y: 3 });
     must(g, { k: 'route', floor: 'district', fx: 3, fy: 3, tx: DK.x, ty: DK.y, item: 'steel' });
     // eight tiles to the Dock at one a trip: three skiffs carry its 0.2 steel a second
     for (let i = 0; i < 2; i++) must(g, { k: 'skiff', floor: 'district', id: g.s.district!.routes[0].id, n: 1 });
@@ -332,13 +345,13 @@ describe('the waste chute and the route cap (DESIGN.md §21, the second gate)', 
   it('takes its own folds (depth 3) as well as depth-2 groups', () => {
     const g = sandbox();
     const d = design(g, { depth: 3, outs: { servo: 0.2 } });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 5, y: 5 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 5, y: 5 });
   });
 
   it('a route\'s want counts the Great Drill\'s boost', () => {
     const g = sandbox();
     const d = design(g, { outs: { servo: 0.2 } });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 5, y: 5 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 5, y: 5 });
     must(g, { k: 'route', floor: 'district', fx: 5, fy: 5, tx: DK.x, ty: DK.y, item: 'servo' });
     expect(routeWant(g, 'district', g.s.district!.routes[0])).toBeCloseTo(0.2 * drillFactor(g), 6);
     expect(drillFactor(g)).toBeGreaterThan(1);
@@ -365,7 +378,7 @@ describe('Act III away (DESIGN.md §12, §21)', () => {
   it('a District line pays while away, at the offline rate, and its Bay fills from its own tally', () => {
     const g = sandbox();
     const d = design(g, { outs: { steel: 2, liftRotor: 0.2 } });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: DK.x - 1, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: DK.x - 1, y: DK.y });
     must(g, { k: 'route', floor: 'district', fx: DK.x - 1, fy: DK.y, tx: DK.x, ty: DK.y, item: 'steel' });
     // the City's Bay, and a route of lift rotors to it
     g.step(TICK_RATE);
@@ -386,5 +399,123 @@ describe('Act III away (DESIGN.md §12, §21)', () => {
     expect(rep.mega.given.liftRotor?.toNumber() ?? 0).toBeGreaterThan(0);
     // nothing of the District's Bay was counted toward the Great Drill
     expect(g.s.mega.progress.liftRotor?.toNumber() ?? 0).toBe(drill0);
+  });
+});
+
+describe('auto-routing on placement (DESIGN.md §21, the playability pass)', () => {
+  const routes = (g: Game) => g.s.district!.routes;
+  const at = (g: Game, x: number, y: number) => hentAt(g, 'district', x, y)!;
+  const perSkiff = (g: Game, r: { from: number; to: number }) => {
+    const ents = g.s.district!.ents;
+    return skiffRateNow(g, 'district', routeDist(ents.find((e) => e.id === r.from)!, ents.find((e) => e.id === r.to)!));
+  };
+
+  it('a group placed sells its product at the Dock, with the skiffs that carry its rate, and says so', () => {
+    const g = sandbox();
+    g.events.drain();
+    const d = design(g, { outs: { bearing: 0.6, slag: 0.2 } });
+    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 3, y: 3 });
+    // its bearings to the Dock (its slag goes down the chute on its own: no route spent on it)
+    expect(routes(g).length).toBe(1);
+    const r = routes(g)[0];
+    expect(r.item).toBe('bearing');
+    expect(at(g, DK.x, DK.y).id).toBe(r.to);
+    // enough skiffs, and not one more than enough
+    expect(routeCap(g, 'district', r)).toBeGreaterThanOrEqual(routeWant(g, 'district', r) - 1e-9);
+    expect(routeCap(g, 'district', r) - perSkiff(g, r)).toBeLessThan(routeWant(g, 'district', r));
+    const ev = g.events.drain().find((e) => e.type === 'autoRoute');
+    expect(ev?.value).toBe(1);
+    expect(ev?.d).toBe(r.skiffs);
+    g.step(30 * TICK_RATE);
+    expect(at(g, 3, 3).state).toBe('work');
+  });
+
+  it('a consumer is fed by the nearest feeder whose product backs up, and its product goes to the nearest group short of it', () => {
+    const g = sandbox();
+    const steel = design(g, { outs: { steel: 0.4 } });
+    const gears = design(g, { ins: { steel: 0.3 }, outs: { bearing: 0.3 } });
+    const box = design(g, { ins: { bearing: 0.3 }, outs: { gearbox: 0.1 } });
+    // a feeder placed bare (its steel backs up), another selling at the Dock already
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: steel.id, x: 2, y: 2 });
+    must(g, { k: 'hplace', floor: 'district', design: steel.id, x: 8, y: 2 });
+    const sold = routes(g).filter((r) => r.from === at(g, 8, 2).id).length;
+    // the gearbox group first: nothing makes bearings yet, its gearboxes go to the Dock
+    must(g, { k: 'hplace', floor: 'district', design: box.id, x: 5, y: 6 });
+    // the bearings group: its steel from the bare feeder (not the one selling), its bearings to the
+    // gearbox group short of them, not to the Dock
+    must(g, { k: 'hplace', floor: 'district', design: gears.id, x: 3, y: 4 });
+    const id = at(g, 3, 4).id;
+    expect(routes(g).find((r) => r.to === id)?.from).toBe(at(g, 2, 2).id);
+    expect(routes(g).find((r) => r.from === id)?.to).toBe(at(g, 5, 6).id);
+    // the route that stood (the Dock's steel) was left alone
+    expect(routes(g).filter((r) => r.from === at(g, 8, 2).id).length).toBe(sold);
+    g.step(60 * TICK_RATE);
+    expect(at(g, 3, 4).state).toBe('work');
+    expect(at(g, 5, 6).state).toBe('work');
+  });
+
+  it('with no feeder to spare, one that only sells shares: its Dock route stays, the new group takes its half', () => {
+    const g = sandbox();
+    const a = design(g, { outs: { bearing: 0.8 } });
+    const b = design(g, { ins: { bearing: 0.3 }, outs: { gearbox: 0.1 } });
+    must(g, { k: 'hplace', floor: 'district', design: a.id, x: 3, y: 4 });
+    const sale = routes(g)[0];
+    expect(at(g, DK.x, DK.y).id).toBe(sale.to);
+    must(g, { k: 'hplace', floor: 'district', design: b.id, x: 4, y: 4 });
+    expect(routes(g)).toContain(sale);
+    expect(routes(g).some((r) => r.from === at(g, 3, 4).id && r.to === at(g, 4, 4).id)).toBe(true);
+    g.step(60 * TICK_RATE);
+    expect(at(g, 4, 4).state).toBe('work');
+  });
+
+  it('is idempotent: a route that stands is not flown twice, and none is lifted', () => {
+    const g = sandbox();
+    const a = design(g, { outs: { steel: 0.4 } });
+    const b = design(g, { ins: { steel: 0.3 }, outs: { bearing: 0.3 } });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: a.id, x: 2, y: 2 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: b.id, x: 3, y: 2 });
+    // the player (or a bot) flies one route by hand, then the placement's routes run
+    must(g, { k: 'route', floor: 'district', fx: 2, fy: 2, tx: 3, ty: 2, item: 'steel' });
+    const before = routes(g).map((r) => `${r.from}>${r.to}:${r.item}`);
+    expect(autoRoute(g, 'district', at(g, 3, 2)).routes).toBe(1); // only its bearings, to the Dock
+    expect(autoRoute(g, 'district', at(g, 3, 2)).routes).toBe(0);
+    const after = routes(g).map((r) => `${r.from}>${r.to}:${r.item}`);
+    expect(after.slice(0, before.length)).toEqual(before);
+    expect(after.length).toBe(before.length + 1);
+  });
+
+  it('a product over twice what its consumer takes also goes on to be sold', () => {
+    const g = sandbox();
+    const a = design(g, { outs: { bearing: 0.8 } });
+    const b = design(g, { ins: { bearing: 0.2 }, outs: { gearbox: 0.1 } });
+    must(g, { k: 'hplace', floor: 'district', design: b.id, x: 4, y: 4 });
+    must(g, { k: 'hplace', floor: 'district', design: a.id, x: 3, y: 4 });
+    const out = routes(g).filter((r) => r.from === at(g, 3, 4).id);
+    expect(out.map((r) => r.to)).toEqual([at(g, 4, 4).id, at(g, DK.x, DK.y).id]);
+    g.step(60 * TICK_RATE);
+    expect(at(g, 3, 4).state).toBe('work');
+    expect(at(g, 4, 4).state).toBe('work');
+  });
+
+  it('stops at the route cap and with the coin on hand, and says which', () => {
+    const g = sandbox();
+    const d = design(g, { outs: { bearing: 0.4 }, spare: 200 });
+    // the cap: the floor's routes all taken
+    for (let i = 0; i < maxRoutes(g, 'district'); i++) routes(g).push({ id: 9000 + i, from: -1, to: -2, item: 'steel', skiffs: 1, flow: 0, moved: 0 });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 3, y: 3 });
+    expect(autoRoute(g, 'district', at(g, 3, 3)).short).toBe('cap');
+    routes(g).length = 0;
+    // the coin: under one skiff
+    g.s.coin = N(skiffPrice(g, 'district') - 1);
+    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 4, y: 4 });
+    expect(routes(g).length).toBe(0);
+    expect(autoRoute(g, 'district', at(g, 4, 4)).short).toBe('coin');
+  });
+
+  it('a placement logged before auto-routing replays bare (save v12 to v13)', () => {
+    const d = migrate({ v: 12, saved: 0, seed: 1, snap: '{}', log: [{ t: 5, c: { k: 'hplace', floor: 'district', design: 1, x: 2, y: 2 } }, { t: 6, c: { k: 'route', floor: 'district' } }] });
+    const log = d.log as { c: { k: string; auto?: boolean } }[];
+    expect(log[0].c.auto).toBe(false);
+    expect(log[1].c.auto).toBeUndefined();
   });
 });

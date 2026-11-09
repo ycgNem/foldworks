@@ -81,7 +81,7 @@ function worldAtWork(g: Game) {
   return WORLD_ITEMS.map((item, i) => {
     const d = design(g, { outs: { [item]: 0.05 } });
     const [x, y] = WORLD_AT[i];
-    must(g, { k: 'hplace', floor: 'world', design: d.id, x, y });
+    must(g, { k: 'hplace', auto: false, floor: 'world', design: d.id, x, y });
     must(g, { k: 'route', floor: 'world', fx: x, fy: y, tx: dk.x, ty: dk.y, item });
     return d;
   });
@@ -113,7 +113,7 @@ function placeAtWork(g: Game, d: ModuleDesign, n: number): FEnt[] {
   for (let y = 0; y < H && out.length < n; y++)
     for (let x = 0; x < W && out.length < n; x++) {
       if (hentAt(g, 'world', x, y)) continue;
-      if (!g.act({ k: 'hplace', floor: 'world', design: d.id, x, y }).ok) continue;
+      if (!g.act({ k: 'hplace', auto: false, floor: 'world', design: d.id, x, y }).ok) continue;
       out.push(hentAt(g, 'world', x, y)!);
     }
   for (const e of out) e.ok = RULES.legacyRunSeconds.value + 1;
@@ -287,11 +287,14 @@ describe('the Seed carries Acts I-II\'s research into each new universe (§23)',
     expect(fresh.s.research.done).toEqual([]);
     const { g } = graded();
     must(g, { k: 'lastFold' });
-    const want = RESEARCH_IDS.filter((r) => (RESEARCH[r].act ?? 1) <= RULES.seedActs.value);
-    expect(want.length).toBe(26);
+    const acts = RESEARCH_IDS.filter((r) => (RESEARCH[r].act ?? 1) <= RULES.seedActs.value);
+    expect(acts.length).toBe(24); // 26 until Machine Kits and Tuning were cut (the playability pass)
+    // (and the Town Archive's Zoning and Chutes: the Seed keeps the Archive, re-derived in the
+    // playability pass since every run after a reset knows Acts I-II)
+    const want = RESEARCH_IDS.filter((r) => acts.includes(r) || r === 'zoning' || r === 'chutes');
     expect(g.s.research.done).toEqual(want);
     expect(g.s.research.done).toContain('greatDrill');
-    expect(g.s.research.done).not.toContain('zoning');
+    expect(g.s.research.done).not.toContain('chemistry');
     // and after a Reorganize in the new universe
     g.s.coin = N(1e6);
     design(g, { depth: 1, outs: { gear: 1 }, grade: { letter: 'S', score: 0.95, u: 1, w: 1, c: 1, mult: 2 } });

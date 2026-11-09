@@ -4,8 +4,45 @@
     {
       "name": "game",
       "runtimeExecutable": "C:/Users/jacks/tools/node-v22.20.0-win-x64/node.exe",
-      "runtimeArgs": ["node_modules/vite/bin/vite.js", "--port", "5210", "--host", "127.0.0.1", "--strictPort"],
+      "runtimeArgs": [
+        "node_modules/vite/bin/vite.js",
+        "--port",
+        "5210",
+        "--host",
+        "127.0.0.1",
+        "--strictPort"
+      ],
       "port": 5210
+    },
+    {
+      "name": "build",
+      "runtimeExecutable": "C:/Users/jacks/tools/node-v22.20.0-win-x64/node.exe",
+      "runtimeArgs": [
+        "node_modules/vite/bin/vite.js",
+        "preview",
+        "--port",
+        "4210",
+        "--host",
+        "127.0.0.1",
+        "--strictPort"
+      ],
+      "port": 4210
+    },
+    {
+      "name": "check",
+      "runtimeExecutable": "C:/Users/jacks/tools/node-v22.20.0-win-x64/node.exe",
+      "runtimeArgs": [
+        "node_modules/vite/bin/vite.js",
+        "preview",
+        "--outDir",
+        "dist-check",
+        "--port",
+        "4211",
+        "--host",
+        "127.0.0.1",
+        "--strictPort"
+      ],
+      "port": 4211
     }
   ]
 }

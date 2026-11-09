@@ -4,6 +4,7 @@
 // closing and reopening never loses more than 30 s. Also the background tab's pump.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game } from '../src/sim/Game';
+import { newEnt } from '../src/sim/world';
 import { N } from '../src/engine/num';
 import { savePayload, checkSave, fingerprint } from '../src/sim/snapshot';
 import { SAVE_VERSION, migrate, writeSaveSafe, loadSave, badSave, bakKey, badKey, parseSave, AutoSave, exportString, importString, unpackSave } from '../src/engine/save';
@@ -151,21 +152,91 @@ describe('versions', () => {
     const d = migrate({ v: 1, saved: 0, seed: 1, snap: JSON.stringify(st) });
     expect(d.v).toBe(SAVE_VERSION);
     const s2 = JSON.parse(d.snap as string);
-    expect(s2.inspire).toEqual({});
     expect(s2.audits).toEqual([]);
     expect(s2.factory.ents.length).toBe(2);
   });
 
-  it('a v4 save (Milestone 4) gains the Reorganize meta and Inspiration, and loads', () => {
+  it('a v4 save (Milestone 4) gains the Reorganize meta, and loads', () => {
+    const g = gameAt(300);
+    const p = savePayload(g, 0);
+    const d = migrate({ ...p, v: 4 });
+    expect(d.v).toBe(SAVE_VERSION);
+    const back = checkSave(d as never);
+    expect(back.s.meta.runs).toBe(0);
+    expect(back.s.tick).toBe(300);
+  });
+
+  it('a v14 save holding Machine Kits, machine modes and their research migrates to v15 and loads (the playability pass)', () => {
+    expect(SAVE_VERSION).toBeGreaterThanOrEqual(15);
     const g = gameAt(300);
     const p = savePayload(g, 0);
     const st = JSON.parse(p.snap);
-    delete st.inspire;
-    const d = migrate({ ...p, v: 4, snap: JSON.stringify(st) });
-    expect(d.v).toBe(SAVE_VERSION);
-    const back = checkSave(d as never);
-    expect(back.s.inspire).toEqual({});
-    expect(back.s.tick).toBe(300);
+    // as a v14 save had it: the three nodes known, picked and part-paid, kits banked and everywhere,
+    // a kiln overclocked, a Precision smelter mid-fraction, a kit assembler mid-craft
+    st.research.done.push('machineKits', 'tuning', 'recycling', 'coalSeams');
+    st.research.selected = 'tuning';
+    st.research.progress = { tuning: { circuit: 'N:50' }, recycling: { rubber: 'N:3' } };
+    st.research.bank = { ...st.research.bank, machineKit: 'N:4', gear: 'N:9' };
+    st.inspire = { tuning: { circuit: 'N:2' } };
+    st.parts = 'N:3955';
+    st.delivered = { ...st.delivered, machineKit: 'N:4000' };
+    st.chute = { machineKit: 3, steel: 5 };
+    st.ents.push({ ...newEnt(9001, 'kiln', 0, 0, 1, 1, 0), recipe: 'fireGlass', mode: 'overclock' });
+    st.ents.push({ ...newEnt(9002, 'smelter', 1, 0, 1, 1, 0), recipe: 'smeltIron', mode: 'precision', bonus: 0.5 });
+    st.ents.push({ ...newEnt(9003, 'assembler', 0, 1, 1, 1, 0), recipe: 'packKit', inBuf: { steel: 2, gear: 2 }, active: true, prog: 30, out: 1, outItem: 'machineKit' });
+    st.ents.push({ ...newEnt(9004, 'belt', 1, 1, 1, 1, 0), item: 'machineKit', p: 0.4 });
+    st.ents.push({ ...newEnt(9005, 'crate', 0, 6, 1, 1, 0), store: ['machineKit', 'ironPlate', 'machineKit'] });
+    const grade = { letter: 'A', score: 0.85, u: 1, w: 1, c: 1, mult: 1.1 };
+    st.designs = [
+      { id: 1, name: 'Kits', box: { x: 0, y: 0, w: 2, h: 1 }, parts: [{ kind: 'assembler', dx: 0, dy: 0, rot: 0, recipe: 'packKit' }], ins: { steel: 0.5, gear: 0.5 }, outs: { machineKit: 0.25 }, grade, bill: 200, stamped: 0, spare: 1, normal: true },
+      { id: 2, name: 'Fast glass', box: { x: 0, y: 0, w: 2, h: 1 }, parts: [{ kind: 'kiln', dx: 0, dy: 0, rot: 0, recipe: 'fireGlass' }], ins: { sand: 1 }, outs: { glass: 0.75 }, grade, bill: 3000, stamped: 0, spare: 1, normal: false },
+      { id: 3, name: 'Glass', box: { x: 0, y: 0, w: 2, h: 1 }, parts: [{ kind: 'kiln', dx: 0, dy: 0, rot: 0, recipe: 'fireGlass' }], ins: { sand: 1 }, outs: { glass: 0.5 }, grade, bill: 3000, stamped: 0, spare: 1, normal: true },
+    ];
+    st.nextDesign = 4;
+    st.factory.ents[0].inBuf = { machineKit: 1.5, steel: 2 };
+    st.meta.drawer = [{ id: 1, name: 'Kits', x: 0, y: 0, w: 2, h: 1, parts: [{ kind: 'assembler', dx: 0, dy: 0, rot: 0, recipe: 'packKit' }], product: 'machineKit', grade: 'A', rate: 0.25, run: 1, card: { grade, ins: { steel: 0.45 }, outs: { machineKit: 0.23 } } }];
+    st.meta.patented = { machineKit: { value: 2, steps: 2 } };
+    const keep = { t: g.s.tick, c: { k: 'place', kind: 'belt', x: 1, y: 2, rot: 0 } };
+    const log = [
+      { t: g.s.tick, c: { k: 'mode', x: 0, y: 0, mode: 'efficient' } },
+      { t: g.s.tick, c: { k: 'recipe', x: 0, y: 1, recipe: 'packKit' } },
+      { t: g.s.tick, c: { k: 'research', id: 'machineKits' } },
+      keep,
+    ];
+    const m = migrate({ ...p, v: 14, snap: JSON.stringify(st), log }) as unknown as { v: number; snap: string; log: unknown[] };
+    expect(m.v).toBe(SAVE_VERSION);
+    expect(m.log).toEqual([keep]);
+    // nothing in the state names a kit, a packKit recipe, a mode or a cut node any more
+    expect(m.snap).not.toMatch(/machineKit|packKit|"mode"|"bonus"|"normal"|tuning|recycling/);
+    const back = checkSave(m as never);
+    const s = back.s;
+    expect(s.research.done).toContain('coalSeams');
+    expect(s.research.selected).toBeNull();
+    expect(Object.keys(s.research.progress)).toEqual([]);
+    expect(s.research.bank.gear!.toNumber()).toBe(9);
+    expect('parts' in s).toBe(false);
+    expect(s.chute).toEqual({ steel: 5 });
+    const asm = s.ents.find((e) => e.id === 9003)!;
+    expect(asm.recipe).toBeNull();
+    expect(asm.inBuf).toEqual({});
+    expect(asm.active).toBe(false);
+    expect(asm.out).toBe(0);
+    expect(s.ents.find((e) => e.id === 9004)!.item).toBeNull();
+    expect(s.ents.find((e) => e.id === 9005)!.store).toEqual(['ironPlate']);
+    // the kit design takes and makes nothing; an overclocked fold keeps its rates but no refold card
+    expect(s.designs[0].outs).toEqual({});
+    expect(s.designs[0].ins).toEqual({});
+    expect(s.designs[0].parts[0].recipe).toBeNull();
+    expect(s.designs[1].refolds).toBeUndefined();
+    expect(s.designs[1].outs.glass).toBe(0.75);
+    expect(s.designs[2].refolds).toBe(true);
+    expect(s.factory.ents[0].inBuf).toEqual({ steel: 2 });
+    expect(s.meta.drawer[0].product).toBeNull();
+    expect(s.meta.drawer[0].card!.outs).toEqual({});
+    expect(s.meta.patented).toEqual({});
+    // it plays on, and the belt the log kept was placed
+    back.step(200);
+    expect(back.entAt(1, 2)?.kind).toBe('belt');
   });
 
   it('export strings carry the version and come back through the same checks', () => {

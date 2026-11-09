@@ -16,7 +16,7 @@ import { recipeKnown } from './transfer';
 import { RECIPE } from '../data/recipes';
 import { ITEMS, type ItemId } from '../data/items';
 import { RULES } from '../data/rules';
-import { DX, DY, MODES, newEnt, newState, opposite, type Box, type Dir, type Ent, type FEnt, type Mode, type ModuleDesign, type State } from './world';
+import { DX, DY, newEnt, newState, opposite, type Box, type Dir, type Ent, type FEnt, type ModuleDesign, type State } from './world';
 import { ANNEX, FACTORY, FACTORY_MAX_H, FACTORY_MAX_W } from '../data/land';
 import { runMiners } from './systems/miners';
 import { runBelts } from './systems/belts';
@@ -33,13 +33,12 @@ import type { Tally } from './offline';
 import { runAudits, startAudit, cancelAudit, auditLock, auditTransfer } from './systems/audits';
 import { runStats } from './systems/stats';
 import { setPause, buyIdleUpgrade, type PauseCmd } from './systems/pause';
-import { inspire } from './systems/inspire';
 import type { IdleUpgradeId } from '../data/idle';
 // Reorganize, layer 1 (DESIGN.md §19, Milestone 5)
 import type { PatentId } from '../data/patents';
 import { buyPatent } from './patents';
 import { reorganize, customerMet } from './reorganize';
-import { keepDesign, forgetKept, unfoldKept, importDesign, renameKept, queueKept } from './drawer';
+import { keepDesign, forgetKept, unfoldKept, importDesign, renameKept, queueKept, buyDie } from './drawer';
 import { runAutomation, autoStamp } from './systems/automation';
 import { buyAnnex } from './systems/annex';
 // Act III (DESIGN.md §21)
@@ -103,7 +102,6 @@ export type Cmd =
   | { k: 'fremove'; x: number; y: number }
   | { k: 'frotate'; x: number; y: number }
   // Act II (DESIGN.md §18)
-  | { k: 'mode'; x: number; y: number; mode: Mode }
   | { k: 'fclick'; x: number; y: number }
   | { k: 'claim'; item: ItemId }
   | { k: 'faudit'; x: number; y: number; w: number; h: number }
@@ -125,13 +123,16 @@ export type Cmd =
   | { k: 'importDesign'; code: string }
   | { k: 'renameKept'; id: number; name: string }
   | { k: 'queueKept'; id: number; at?: number }
+  // Dies on file (the playability pass, DESIGN.md §19): one more copy of a kept design at every run's start
+  | { k: 'die'; id: number }
   | { k: 'autoStamp'; id: number }
   // the Factory annex (DESIGN.md §19): one more block east of the floor
   | { k: 'annex' }
   // Act III (DESIGN.md §21): the Factory Chute; the high floors (the District, the World): modules,
-  // skiff routes, lots, Overdrive and Inspiration clicks, and their folds
+  // skiff routes, lots, Overdrive clicks, and their folds
   | { k: 'fchute'; x: number; y: number }
-  | { k: 'hplace'; floor: HighFloorId; design: number; x: number; y: number }
+  // auto: fly its routes on its own (DESIGN.md §21 "Auto-routing"); the default, false to place it bare
+  | { k: 'hplace'; floor: HighFloorId; design: number; x: number; y: number; auto?: boolean }
   | { k: 'hremove'; floor: HighFloorId; x: number; y: number }
   | { k: 'route'; floor: HighFloorId; fx: number; fy: number; tx: number; ty: number; item: ItemId }
   | { k: 'skiff'; floor: HighFloorId; id: number; n: 1 | -1 }
@@ -475,13 +476,7 @@ export class Game {
       case 'ftrunk': return fplace(this, 'trunk', c.x, c.y, c.rot);
       case 'fremove': return fremove(this, c.x, c.y);
       case 'frotate': return frotate(this, c.x, c.y);
-      case 'mode': return this.setMode(c.x, c.y, c.mode);
-      case 'fclick': {
-        // the Factory Hopper takes Inspiration clicks (DESIGN.md §15); a module takes Overdrive
-        const fe = this.fentAt(c.x, c.y);
-        if (fe?.kind === 'fhopper') return this.countClick() ? inspire(this, fe.x + 1, fe.y + 1, 'factory') : no('too fast');
-        return foverdrive(this, c.x, c.y);
-      }
+      case 'fclick': return foverdrive(this, c.x, c.y); // a module takes Overdrive (DESIGN.md §18)
       case 'claim': return buyClaims(this, c.item);
       case 'faudit': return startFAudit(this, { x: c.x, y: c.y, w: c.w, h: c.h });
       case 'fauditCancel': return cancelFAudit(this);
@@ -497,10 +492,11 @@ export class Game {
       case 'importDesign': return importDesign(this, c.code);
       case 'renameKept': return renameKept(this, c.id, c.name);
       case 'queueKept': return queueKept(this, c.id, c.at);
+      case 'die': return buyDie(this, c.id);
       case 'autoStamp': return autoStamp(this, c.id);
       case 'annex': return buyAnnex(this);
       case 'fchute': return fplace(this, 'chute', c.x, c.y, 0);
-      case 'hplace': return hplace(this, c.floor, c.design, c.x, c.y);
+      case 'hplace': return hplace(this, c.floor, c.design, c.x, c.y, c.auto !== false);
       case 'hremove': return hremove(this, c.floor, c.x, c.y);
       case 'route': return addRoute(this, c.floor, c.fx, c.fy, c.tx, c.ty, c.item);
       case 'skiff': return setSkiffs(this, c.floor, c.id, c.n);
@@ -526,20 +522,6 @@ export class Game {
       case 'boards': return takeBoards(this, c.boards);
       default: return no('unknown command');
     }
-  }
-
-  /** Set a powered machine's mode (DESIGN.md §18 Modes, research Tuning). */
-  private setMode(x: number, y: number, mode: Mode): ActResult {
-    if (!MODES.includes(mode)) return no('no such mode');
-    if ((mode === 'recycling' || mode === 'byproduct') ? !this.done('recycling') : !this.done('tuning')) return no(mode === 'recycling' || mode === 'byproduct' ? 'Research Recycling first' : 'Research Tuning first');
-    const e = this.entAt(x, y);
-    if (!e || !isMachine(e.kind) || !(BUILD[e.kind].kw ?? 0)) return no('Modes are for powered machines');
-    const lock = auditLock(this, x, y);
-    if (lock) return no(lock);
-    if ((e.mode ?? 'normal') === mode) return OK;
-    e.mode = mode;
-    this.emit({ type: 'mode', x: e.x, y: e.y, id: mode });
-    return OK;
   }
 
   /** Why a build here would be refused, or null if it can go. */
@@ -588,7 +570,8 @@ export class Game {
     const d = BUILD[kind];
     // a trophy's "the first n free" (DESIGN.md §24): the building is marked, and refunds nothing
     let trophyFree = false;
-    if (kind === 'crate' && this.s.freeCrates > 0) this.s.freeCrates--;
+    // a reputation's free crate is marked too, or removing it refunded 30 coin, once a minute forever
+    if (kind === 'crate' && this.s.freeCrates > 0) { this.s.freeCrates--; trophyFree = true; }
     else if (freeBuild(this, kind)) trophyFree = true;
     else this.s.coin = this.s.coin.sub(buildPrice(this, kind));
     const placed = this.addEnt(kind, x, y, rot);
@@ -675,12 +658,6 @@ export class Game {
       // an audited machine can't be overdriven: the boost would be folded in for good
       if (auditLock(this, e.x, e.y)) return no('Auditing: Overdrive would spoil the measurement');
       return overdrive(this, e);
-    }
-    // Inspiration (DESIGN.md §15, Act II on): a click on the Hopper credits the selected node
-    if (e && e.kind === 'hopper') {
-      const r = inspire(this, e.x + 1, e.y + 1);
-      if (r.ok) s.clicks++;
-      return r;
     }
     if (!e || e.kind === 'miner') {
       const ore = this.oreAt(x, y);
@@ -847,7 +824,8 @@ export class Game {
     for (const w of this.watchers) w(x, y, dir, item);
   }
 
-  /** Ticks until the next Spark: 3-6 min, uniform (DESIGN.md §6). */
+  /** Ticks until the next Spark: 3-6 min, uniform (DESIGN.md §6). mulberry32 on the state's own
+   * seed: the sim's only randomness. */
   sparkDelay(): number {
     const r = (this.s.rng = (this.s.rng + 0x6d2b79f5) >>> 0);
     let t = Math.imul(r ^ (r >>> 15), r | 1);

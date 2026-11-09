@@ -14,7 +14,6 @@ import { HIGH } from '../src/data/floors';
 import { CHALLENGES } from '../src/data/challenges';
 import { SCENARIOS } from '../src/data/scenarios';
 import { RULES, GRADES, SCORE_WEIGHTS } from '../src/data/rules';
-import { SPARKS } from '../src/data/sparks';
 import { TROPHIES, TROPHY_CAPS } from '../src/data/trophies';
 import { COSMETICS } from '../src/data/cosmetics';
 import { CODEX_PAGES } from '../src/data/codex';
@@ -47,7 +46,6 @@ function records(): [string, { derivation?: string } & Record<string, unknown>][
     ...Object.entries(RULES).map(([k, d]) => ['rule ' + k, d] as [string, any]),
     ...GRADES.map((d) => ['grade ' + d.letter, d] as [string, any]),
     ['score weights', SCORE_WEIGHTS as any],
-    ...Object.values(SPARKS).map((d) => ['spark ' + d.kind, d] as [string, any]),
     ...TROPHIES.map((d) => ['trophy ' + d.id, d] as [string, any]),
     ...CLAIM_PRICE.map((d) => ['claim price ' + d.item, d] as [string, any]),
     ...MEGA.map((d) => ['megaproject stage ' + d.stage, d] as [string, any]),
@@ -170,7 +168,7 @@ describe('cross-references', () => {
     const off = PATENT_LIST.reduce((t, d) => t + (d.effect.k === 'offline' ? d.effect.add : 0), RULES.offlineEff.value);
     expect(off).toBeCloseTo(0.65, 5);
     expect(off + IDLE_UPGRADES.reduce((t, u) => t + u.eff, 0)).toBeCloseTo(0.75, 5);
-    expect(PATENTS.bellows.cost).toBe(1);
+    expect(PATENTS.copperDeeds.cost).toBe(1);
   });
   it('the long tail points at real things: trophies, the Codex, cosmetics, Challenges, Scenarios (DESIGN.md §24)', () => {
     const builds = new Set<string>(Object.keys(BUILD));
@@ -217,6 +215,10 @@ describe('cross-references', () => {
       expect(items.has(d.product), d.id).toBe(true);
       expect(d.derivation).toMatch(/§2[14]/);
     }
+  });
+  it('the research nodes are numbered 1..N in order, with no gap (the playability pass cut Machine Kits, Tuning and Recycling)', () => {
+    expect(RESEARCH_IDS.map((id) => RESEARCH[id].num)).toEqual(RESEARCH_IDS.map((_, i) => i + 1));
+    for (const id of RESEARCH_IDS) expect(RESEARCH[id].id).toBe(id);
   });
   it('the research tree has no cycles and every node can be reached', () => {
     const done = new Set<string>();

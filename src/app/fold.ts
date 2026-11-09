@@ -21,8 +21,8 @@ import { mainOutput } from '../render/factory';
 import { auditTicks, projectAudit, entsIn, gradedAudit } from '../sim/systems/audits';
 import { BUILD } from '../data/machines';
 import { gradeFAudit } from '../sim/systems/nested';
-import { inBill, defaultName, stampCost, stampRefusal, unfoldRefusal, fname, feedsDock, productCopies, kitsFor, mainItem, sliceEndParts } from '../sim/systems/modules';
-import { claimsHeld, claimsUsed, oresOf, copiesOf } from '../sim/systems/claims';
+import { inBill, defaultName, stampCost, stampRefusal, unfoldRefusal, fname, feedsDock, productCopies, mainItem, sliceEndParts, stampFree, stampStep } from '../sim/systems/modules';
+import { claimsHeld, claimsUsed, oresOf, copiesOf, claimRefusal, claimShort } from '../sim/systems/claims';
 import type { AuditResult, AuditState, Box, FAuditState, ModuleDesign } from '../sim/world';
 import { frame, button, uiIcon, portrait, coinIcon, clipboard, chip, chipWidth, meter, tag, tagSize, bubble, ribbon, rule, twine, RIBBON_H, CHIP_H, T, type Role } from './chrome';
 import { perMin as perMinW, menuTemplate, cells, fmt, rays, slamScale } from './widgets';
@@ -520,7 +520,7 @@ export function gradeCard(app: App, L: Layout) {
     foldRows: [
       `{u:fold} ${parts.length} machines · ${res.boxTiles} tiles → 1 tile`,
       'belts refunded · the box empties',
-      `copies {coin:${fmt(bill)}} ×1 · ×1.5 · ×2 · …`,
+      copiesRow(app, bill),
     ],
     bill,
     cancelLabel: 'Keep the line',
@@ -561,12 +561,19 @@ export function fgradeCard(app: App, L: Layout) {
       `{u:fold} ${mods.length} modules · ${res.boxTiles} tiles → 1 tile`,
       `the group's rates ×${res.grade.mult.toFixed(2)} · S inside, S fold = ×1.56`,
       'trunks refunded · depth 2 folds no further',
-      `copies {coin:${fmt(bill)}} ×1 · ×1.5 · ×2 · …`,
+      copiesRow(app, bill),
     ],
     bill,
     cancelLabel: 'Keep the group',
     cancelTip: '{big:Keep the group}  audit off · the modules keep running',
   });
+}
+
+/** What copies cost, read as what it is: the bill, then half a bill more a copy (linear, DESIGN.md
+ * §10; the playability review read "250 → 375" as a geometric curve), the first ever free. */
+function copiesRow(app: App, bill: number): string {
+  const step = Math.round(bill * RULES.stampGrowth.value);
+  return stampFree(app.game) ? `copies: the first {good:free}, then {coin:${fmt(bill + step)}}, +${fmt(step)} each` : `copies {coin:${fmt(bill)}}, then +${fmt(step)} each (half the bill)`;
 }
 
 /** The coin price of the machines in a Workshop audit's box (its stamp bill once folded). */
@@ -639,8 +646,9 @@ export function adviceRow(text: string): AdviceRow {
   if ((m = /^(.+?) ran (\d+)% of the time\. Balance the ratio: (.+)$/.exec(s))) return { act: 'Balance the ratio', cause: `${m[1]} {warn:${m[2]}%} · ${m[3]}`, worth, to };
   if ((m = /^(.+?) ran (\d+)% \((.+?)\)\. (.+?): (.+)$/.exec(s))) return { act: m[4], cause: `${m[1]} {warn:${m[2]}%} ${why(m[3])} · ${m[5]}`, worth, to };
   if ((m = /^(\d+) of (\d+) (.+?) went nowhere(?: useful)?\. (.+)$/.exec(s))) return { act: m[4], cause: `${itemTok(m[3])} ${m[1]} of ${m[2]} {bad:went nowhere}`, worth, to };
+  if ((m = /^(\d+) of (\d+) (.+?) piled in a heap inside the box\. A module holds no heap: (.+)$/.exec(s))) return { act: m[4].charAt(0).toUpperCase() + m[4].slice(1), cause: `${itemTok(m[3])} ${m[1]} of ${m[2]} {bad:in a heap inside the box} · a module holds no heap`, worth, to };
   if ((m = /^(\d+) of (\d+) tiles are (machines|modules); (\d+) would be fully compact\. (.+)$/.exec(s))) return { act: m[5], cause: `${m[3]} on ${m[1]} of ${m[2]} tiles · ${m[4]} for full marks`, worth, to };
-  if ((m = /^One step to S\+: use the (.+?) inside the box/.exec(s))) return { act: `Use the ${m[1].split(' and ').map(itemTok).join(' and ')} inside the box`, cause: '{i:slagBrick} a press · {i:gravel} a crusher · a heap caps it at S', worth, to };
+  if ((m = /^One step to S\+: use the (.+?) inside the box/.exec(s))) return { act: `Use the ${m[1].split(' and ').map(itemTok).join(' and ')} inside the box`, cause: '{i:slagBrick} a press · {i:gravel} a crusher · a heap outside caps it at S', worth, to };
   if ((m = /^(Flawless|Nothing to fix): (.+)$/.exec(s))) return { act: `{good:${m[1]}}`, cause: m[2], worth, to };
   if ((m = /^Refolded at its kept grade \((.+?)\)/.exec(s))) {
     const n = /for (\d+) s \((\d+)% busy\)/.exec(s);
@@ -669,7 +677,8 @@ export function drawGrade(app: App, L: Layout, sp: GradeSpec) {
   const gr = res.grade;
   const top = gr.letter === 'S+';
   const O = L.overlay;
-  ui.fill(O.x, O.y, O.w, O.h, C.ink, 0.55);
+  // the dim covers the whole canvas (the playability review: it stopped 38 px short at the right)
+  ui.fill(0, 0, ui.w, ui.h, C.ink, 0.55);
   // the Inspector stands left of his clipboard when there is room for him
   const w = Math.min(430, O.w - 12), maxH = Math.min(320, O.h - 6);
   const standing = O.w - w >= 56;
@@ -677,7 +686,8 @@ export function drawGrade(app: App, L: Layout, sp: GradeSpec) {
   // advice rows, the verdict, the name. The stamp goes 2x and the causes show while they fit.
   const advice = res.advice.slice(0, 3).map(adviceRow);
   const need = (s: number, cause: boolean) => {
-    const advH = top ? 18 : advice.length ? 11 + advice.length * (cause && advice.some((a) => a.cause) ? 24 : 13) : 0;
+    // a row is two lines when its action wraps (the board is ~110 px wider than the action's room)
+    const advH = top ? 18 : advice.length ? 11 + advice.reduce((n, a) => n + (richWidth(a.act) > w - 110 || (cause && a.cause) ? 24 : 13), 0) : 0;
     return 19 + Math.max(48 * s + 33, 106) + 2 + 3 + advH + 3 + 26 + 16 + 32;
   };
   const fit = ([[2, true], [2, false], [1, true], [1, false]] as [number, boolean][]).find(([s, c]) => (s === 1 || w - 26 >= 380) && need(s, c) <= maxH) ?? [1, false];
@@ -841,20 +851,27 @@ export function drawGrade(app: App, L: Layout, sp: GradeSpec) {
     yy += 8;
     const withCause = fit[1] && advice.length * 24 <= vy - 3 - yy;
     for (const a of advice) {
-      const rowH = withCause && a.cause ? 24 : 13;
-      if (yy + 13 > vy - 3) break;
+      // the action wraps to a second line rather than losing its end (the playability review: the
+      // most important line read "...or the feeder moved.." with room below it)
+      let wx0 = R.x + R.w - 2;
+      if (a.to) wx0 -= bigWidth(a.to) + 3 + textWidth('→') + 3;
+      if (a.worth) wx0 -= chipWidth(a.worth) + 4;
+      const aw0 = wx0 - (R.x + 12);
+      const actH = richWidth(a.act) <= aw0 ? 13 : layoutRich(a.act, aw0).h + 3;
+      const rowH = actH + (withCause && a.cause ? 11 : 0);
+      if (yy + actH > vy - 3) break;
       // the worth: a chip, then the letter it reaches
       let wx = R.x + R.w - 2;
       if (a.to) { wx -= ui.big(a.to, wx, yy + 1, GRADE_INK[a.to] ?? T.ink, { align: 'right' }) + 3; wx -= ui.text('→', wx, yy + 2, T.inkSoft, { align: 'right' }) + 3; }
       if (a.worth) { const cw = chipWidth(a.worth); chip(ui, wx - cw, yy, a.worth, { role: 'good' }); wx -= cw + 4; }
       const aw = wx - (R.x + 12);
       ui.text(ICON.right, R.x + 2, yy + 2, T.ink);
-      ui.clip(R.x + 12, yy, aw, 13);
-      drawRich(ui, richWidth(a.act) <= aw ? a.act : ellipsize(a.act.replace(/\{[a-z]+:([^}]*)\}/g, '$1'), aw), R.x + 12, yy + 2);
+      ui.clip(R.x + 12, yy, aw, actH);
+      drawRich(ui, a.act, R.x + 12, yy + 2, aw);
       ui.unclip();
-      if (withCause && a.cause) {
-        ui.clip(R.x + 12, yy + 13, R.w - 14, 11);
-        drawRich(ui, a.cause, R.x + 12, yy + 13, Infinity, T.inkSoft);
+      if (withCause && a.cause && yy + rowH <= vy - 3) {
+        ui.clip(R.x + 12, yy + actH, R.w - 14, 11);
+        drawRich(ui, a.cause, R.x + 12, yy + actH, Infinity, T.inkSoft);
         ui.unclip();
       }
       ui.hint(R.x, yy, R.w, rowH, [{ text: a.act }, ...(a.cause ? [{ text: a.cause, color: T.inkSoft }] : []), ...(a.worth ? [{ text: `{good:${a.worth}}${a.to ? ` → {big:${a.to}}` : ''}` }] : [])], 240);
@@ -991,8 +1008,8 @@ function bigModule(app: App, d: ModuleDesign, x: number, y: number) {
 }
 
 /** A design as a folded paper card: a brass band across its top (the module's own), a turned
- * corner, the module and its red grade stamp on the left; its name, rates, copies, stamp price,
- * Machine Kits and claims on the right; Place, Stamp and Unfold along the foot. */
+ * corner, the module and its red grade stamp on the left; its name, rates, copies, stamp price
+ * and claims on the right; Place, Stamp and Unfold along the foot. */
 function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, h: number) {
   const ui = app.ui;
   const g = app.game;
@@ -1064,7 +1081,9 @@ function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, 
   const factor = 1 + RULES.stampGrowth.value * copies;
   const next = Num.of(Math.round(d.bill * (1 + RULES.stampGrowth.value * (copies + 1))));
   ui.small('COPY', tx, yy + 2, T.inkSoft);
-  const ps = `{coin:${cost.format()}} {soft:= ${fmt(d.bill)} ×${factor.toFixed(1)}}`;
+  // linear, and said so: "250, then +50 each" (the second playtest read "250 = 100 ×2.5" as a curve)
+  void factor;
+  const ps = cost.isZero() ? `{good:free} {soft:then ${fmt(d.bill)}, +${stampStep(d).format()} each}` : `{coin:${cost.format()}} {soft:then +${stampStep(d).format()} each}`;
   const pxo = smallWidth('COPY') + 5;
   ui.clip(tx + pxo, yy, tr - tx - pxo, LINE_H);
   drawRich(ui, ps, tx + pxo, yy);
@@ -1073,17 +1092,13 @@ function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, 
     { text: '{big:The stamp price}  per product' },
     { text: `bill {coin:${fmt(d.bill)}} × 1 + 0.5n · n = ${copies}` },
     { text: `n counts every copy of ${item ? `{i:${item}} ${itemName(item).toLowerCase()}` : 'this product'}, any design` },
-    { text: `next {coin:${next.format()}} · the 5th copy costs 3× the 1st` },
+    { text: `next {coin:${next.format()}} · each copy adds half the bill, {coin:${stampStep(d).format()}}` },
   ], 220);
   yy += LINE_H + 1;
-  // Machine Kits and claims, as chips
-  const kits = kitsFor(g, d);
+  // claims, as chips (a design with miners inside: a copy holds one of each ore)
   cx = tx;
-  const ks = kits ? `${kits}` : 'no kits';
-  const kw = chip(ui, cx, yy, ks, { role: kits ? (g.s.parts.gte(kits) ? 'ink' : 'bad') : 'soft', icon: 'kit' });
-  ui.hint(cx, yy, kw, CHIP_H, kits ? [{ text: `{big:Machine Kits}  ${kits} a copy` }, { text: `1 + ${fmt(d.bill)} ÷ ${fmt(RULES.kitDivisor.value)}, rounded down · you have ${g.s.parts.format()}` }] : [{ text: '{big:No kits}' }, { text: 'slice-era machines · copies cost coin alone' }], 200);
-  cx += kw + 3;
-  for (const ore of Object.keys(oresOf(g, d)) as ItemId[]) {
+  const ores = Object.keys(oresOf(g, d)) as ItemId[];
+  for (const ore of ores) {
     const held = claimsHeld(g, ore), used = claimsUsed(g, ore);
     const s = `${used}/${held}`;
     const w2 = chipWidth(s, { item: ore });
@@ -1092,12 +1107,15 @@ function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, 
     ui.hint(cx, yy, w2, CHIP_H, [{ text: `{big:${itemName(ore)} claims}` }, { text: `a copy holds one · ${used} of ${held} in use` }], 170);
     cx += w2 + 3;
   }
-  yy += CHIP_H + 1;
+  if (ores.length) yy += CHIP_H + 1;
   // why not, in red ink
   const whyNot = stampRefusal(g, d);
   if (whyNot) {
     ui.clip(x + 6, yy, w - 12, LINE_H);
-    ui.text(ellipsize(whyNot, w - 12), x + 6, yy, T.bad);
+    // a claim short in its short form (the ore's icon and the nearest fix); the rest as they are
+    const cs = whyNot === claimRefusal(g, d) ? claimShort(g, d) : null;
+    if (cs) drawRich(ui, `{bad:${cs}}`, x + 6, yy);
+    else ui.text(ellipsize(whyNot, w - 12), x + 6, yy, T.bad);
     ui.unclip();
     ui.hint(x + 6, yy, w - 12, LINE_H, [{ text: `{bad:${whyNot}}` }], 180);
   }
@@ -1108,8 +1126,9 @@ function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, 
   const pw1 = textWidth(pl) + 14, b3w = textWidth('Unfold') + 14;
   const pw2 = w - 12 - 6 - pw1 - b3w;
   if (button(ui, 'place:' + d.id, x + 6, by, pw1, 15, pl, { gold: d.spare > 0, disabled: d.spare < 1 || !g.flag('factoryOpen'), tip: [{ text: '{big:Place}' }, { text: 'a spare copy onto the {u:factory} Factory floor' }] })) app.pickModule(d.id);
-  const label = richWidth(`Stamp {coin:${cost.format()}}`) <= pw2 - 6 ? `Stamp {coin:${cost.format()}}` : `{coin:${cost.format()}}`;
-  if (button(ui, 'stamp:' + d.id, x + 9 + pw1, by, pw2, 15, label, { disabled: !!whyNot, tip: [{ text: `{big:Stamp a copy}  {coin:${cost.format()}}${kits ? ` + {u:kit} ${kits}` : ''}` }, { text: whyNot ? `{bad:${whyNot}}` : `copies so far ${copies} · next {coin:${next.format()}}` }] })) app.act({ k: 'stamp', id: d.id });
+  const free = cost.isZero();
+  const label = free ? 'Stamp · free' : richWidth(`Stamp {coin:${cost.format()}}`) <= pw2 - 6 ? `Stamp {coin:${cost.format()}}` : `{coin:${cost.format()}}`;
+  if (button(ui, 'stamp:' + d.id, x + 9 + pw1, by, pw2, 15, label, { disabled: !!whyNot, tip: [{ text: `{big:Stamp a copy}  {coin:${cost.format()}}` }, { text: whyNot ? `{bad:${whyNot}}` : `copies so far ${copies} · next {coin:${next.format()}} · +${stampStep(d).format()} each (linear)` }] })) app.act({ k: 'stamp', id: d.id });
   const uwhy = unfoldRefusal(g, d);
   if (button(ui, 'unfold:' + d.id, x + w - 6 - b3w, by, b3w, 15, 'Unfold', { disabled: !!uwhy, tip: [{ text: '{big:Unfold}' }, { text: uwhy ? `{bad:${uwhy}}` : `back onto the ${deep ? '{u:factory} Factory floor' : '{u:workshop} Workshop'} at ${d.box.x},${d.box.y}` }, ...(uwhy ? [] : [{ text: `${deep ? 'trunks' : 'belts'} bought again` }])] })) {
     if (app.act({ k: 'unfold', id: d.id }).ok) {
@@ -1120,8 +1139,8 @@ function designCard(app: App, d: ModuleDesign, x: number, y: number, w: number, 
   }
 }
 
-/** The ledger, the Modules book's right page: Machine Kits, products and their copies, claims, and
- * how far the Factory is from the slice's end, as ruled rows. */
+/** The ledger, the Modules book's right page: products and their copies, claims, and how far the
+ * Factory is from the slice's end, as ruled rows. */
 function ledger(app: App, D: Rect, foot = 0) {
   const ui = app.ui;
   const g = app.game;
@@ -1130,15 +1149,6 @@ function ledger(app: App, D: Rect, foot = 0) {
   ui.big('The ledger', x, yy, T.ink);
   yy += 13;
   rule(ui, x, yy, w, true);
-  yy += 3;
-  // the parts bank
-  uiIcon(ui, 'kit', x, yy, 1);
-  ui.text('Machine Kits', x + 11, yy, T.ink);
-  ui.big(g.s.parts.format(), x + w, yy - 1, g.s.parts.gt(0) ? T.coin : T.inkSoft, { align: 'right' });
-  yy += LINE_H;
-  drawRich(ui, g.done('machineKits') ? '{i:machineKit} → the Hopper banks them' : '{u:research} Machine Kits first', x + 11, yy, Infinity, T.inkSoft);
-  yy += LINE_H + 1;
-  rule(ui, x, yy, w);
   yy += 3;
   // products: copies so far and the next stamp's factor
   const prods = new Map<ItemId, number>();
@@ -1159,8 +1169,10 @@ function ledger(app: App, D: Rect, foot = 0) {
     ui.text(ITEMS[it].name, x + 11, yy, T.ink);
     ui.unclip();
     ui.text(String(n), x + w - 30, yy, T.ink, { align: 'right' });
-    ui.text(`×${(1 + RULES.stampGrowth.value * n).toFixed(1)}`, x + w, yy, T.coin, { align: 'right' });
-    ui.hint(x, yy, w, LINE_H, [{ text: `{big:${ITEMS[it].name}}  ${n} cop${n === 1 ? 'y' : 'ies'}` }, { text: `next stamp of any design making it · bill ×${(1 + RULES.stampGrowth.value * n).toFixed(1)}` }], 190);
+    // the next copy's price (of the design making it that the page lists first), not a factor
+    const pd = g.s.designs.find((q) => mainItem(q) === it)!;
+    ui.text(stampCost(g, pd).format(), x + w, yy, T.coin, { align: 'right' });
+    ui.hint(x, yy, w, LINE_H, [{ text: `{big:${ITEMS[it].name}}  ${n} cop${n === 1 ? 'y' : 'ies'}` }, { text: `next stamp {coin:${stampCost(g, pd).format()}} · then +${stampStep(pd).format()} each` }], 190);
     yy += LINE_H;
     rule(ui, x, yy - 1, w);
   }
@@ -1179,7 +1191,7 @@ function ledger(app: App, D: Rect, foot = 0) {
       yy += LINE_H;
     }
     if (g.done('coalSeams') && yy + 16 <= end - 26) {
-      if (button(ui, 'openSurvey', x, yy + 1, w, 15, '{u:survey} Survey Office', { tip: [{ text: '{big:Survey Office}' }, { text: 'claims, 4 at a time' }] })) app.panel = 'survey';
+      if (button(ui, 'openSurvey', x, yy + 1, w, 15, '{u:survey} Survey Office', { tip: [{ text: '{big:Survey Office}' }, { text: `claims, ${prules(g).claimsPerBlock} at a time` }] })) app.panel = 'survey';
       yy += 19;
     }
   }

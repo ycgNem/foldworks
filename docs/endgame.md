@@ -394,7 +394,7 @@ icon) plus `"skin"` and `"base"`.
 | `barge` (World carrier) | `barge` | `skin_stormproof_barge`, `skin_feather_barge` |
 | `courier` (Beyond carrier) | `courier` | `skin_mirrorBall_courier` |
 | `dock` (the Workshop's, a decoration) | `dock`, or `dock_lily` once Bramble's rep is 3 | `skin_mayoral_dock` (drawn over `dock_lily`: rep 5 implies the frog flag; sidecar `"drawnOver": "dock_lily"`), `skin_bunting_dock`, `skin_sunburst_dock`: each replaces **both** `dock` and `dock_lily` |
-| `hopper` (the Workshop's, a decoration) | `hopper` | `skin_specimen_hopper`, `skin_mortarboard_hopper`, `skin_tinfoil_hopper` |
+| `hopper` (the Workshop's, a decoration) | `hopper` | `skin_specimen_hopper`, `skin_mortarboard_hopper` |
 
 Not skinned (no slot asks for them): the Factory's `factory_dock`/`factory_hopper`, the high
 floors' docks and hoppers, trunks. The Ledger's `ribbon<n>` decorations have no sheet: draw the

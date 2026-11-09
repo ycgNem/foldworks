@@ -9,7 +9,7 @@ import { RESEARCH_IDS } from '../src/data/research';
 import { CHUNKS } from '../src/data/land';
 import { HIGH } from '../src/data/floors';
 import { ACTIONS, DEFAULT_BINDS, cleanBinds, rebind, keyAliases, defaultBinds, bindable, type Binds } from '../src/engine/input';
-import { loadBinds, saveBinds, uiScaleFor, maxUiScale, lessonsSeen, saveLessonsSeen } from '../src/app/settings';
+import { loadBinds, saveBinds, uiScaleFor, maxUiScale, tooSmall, lessonsSeen, saveLessonsSeen } from '../src/app/settings';
 import { findStuck } from '../src/app/stuck';
 import { pastLessons } from '../src/app/lessons';
 import { routeCap, routeWant } from '../src/sim/systems/high';
@@ -111,6 +111,16 @@ describe('the UI scale', () => {
     expect(uiScaleFor(1024, 640, 6)).toBe(2);
     expect(uiScaleFor(1024, 640, 1)).toBe(1);
   });
+
+  it('on a phone Auto gives at least 1.5 CSS px a UI px where 480x270 still fits; upright is too small', () => {
+    // a phone on its side, 844x390 CSS at 3 device px: 4 (1.33 CSS px), not 3 (1.0)
+    expect(uiScaleFor(2532, 1170, 0, 3)).toBe(4);
+    // a desktop at 1 device px is as it was
+    expect(uiScaleFor(1280, 720, 0, 1)).toBe(2);
+    expect(tooSmall(390, 844)).toBe(true);
+    expect(tooSmall(844, 390)).toBe(false);
+    expect(tooSmall(1280, 720)).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------- the stuck-finder
@@ -189,8 +199,8 @@ describe('"where am I stuck?" (findStuck)', () => {
     };
     g.s.designs.push(d);
     const DK = HIGH.district.dock;
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: DK.x - 1, y: DK.y });
-    must(g, { k: 'hplace', floor: 'district', design: d.id, x: 0, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: DK.x - 1, y: DK.y });
+    must(g, { k: 'hplace', auto: false, floor: 'district', design: d.id, x: 0, y: DK.y });
     must(g, { k: 'route', floor: 'district', fx: DK.x - 1, fy: DK.y, tx: DK.x, ty: DK.y, item: 'steel' });
     must(g, { k: 'route', floor: 'district', fx: 0, fy: DK.y, tx: DK.x, ty: DK.y, item: 'steel' });
     g.step(20 * 10);

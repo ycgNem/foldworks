@@ -101,7 +101,7 @@ const size = await page.evaluate(async () => {
     for (const d of ds) d.spare = 999;
     for (let y = 0; y < H.h; y++) for (let x = 0; x < H.w + H.lotCols * H.lots; x++) {
       const d = ds[(x + y) % ds.length];
-      if (!a.act({ k: 'hplace', floor: f, design: d.id, x, y }).ok) continue;
+      if (!a.act({ k: 'hplace', auto: false, floor: f, design: d.id, x, y }).ok) continue;
       const to = y < H.h / 2 ? H.dock : H.hopper;
       a.act({ k: 'route', floor: f, fx: x, fy: y, tx: to.x, ty: to.y, item: Object.keys(d.outs)[0] });
     }

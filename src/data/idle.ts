@@ -1,6 +1,6 @@
 // Idle and offline (Milestone 6, DESIGN.md §12 and §20): the offline model's segments and jam
-// rule, the overnight forecast, Inspiration clicking, the Night Shift upgrades (a coin sink that
-// raises offline efficiency a little), the background tab's cadence and the save cadence. Every
+// rule, the overnight forecast, the Night Shift upgrades (a coin sink that raises offline
+// efficiency a little), the background tab's cadence and the save cadence. Every
 // number with its derivation. Plain numbers: rates, shares, timers and prices, never stocks.
 import type { ResearchId } from './research';
 
@@ -44,9 +44,6 @@ export const IDLE = {
   /** an offline run or a forecast in the app: ms of it per animation frame, checked every chunk of ticks */
   jobMsPerFrame: r(20, '§20 Background tab: 20 ms of an offline run a frame keeps the page drawing at 30+ fps; the compute budget (replayBudgetMs) holds an 8 h run\'s live ticks to about 5 s of work, so its report shows in about 5-8 s with a progress bar, never a frozen page (it was 24-38 s at 15-40 h before the budget)'),
   jobChunkTicks: r(100, '§20 Background tab: the clock is read every 100 ticks (about 5 ms), so a frame overruns its 20 ms by at most that'),
-  // ---- Inspiration (§15)
-  inspireShare: r(0.001, '§15 Inspiration: 1 click = 0.1% of the selected node\'s remaining cost'),
-  inspireCap: r(0.3, '§15 Inspiration: capped at 30% of each node (clicking helps but never replaces the line)'),
   // ---- the background tab (§20)
   hiddenPumpMs: r(1000, '§20 Background tab: browsers run a hidden tab\'s timers at most once a second, so the sim catches up in 1 s chunks of 20 ticks'),
   hiddenBudgetMs: r(40, '§20 Background tab: a pump may always spend 40 ms on ticks (4% of a core at 1 pump a second)'),

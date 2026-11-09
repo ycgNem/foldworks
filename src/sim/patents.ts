@@ -19,6 +19,7 @@ import { krules } from './kernels';
 import { trules } from './longtail';
 import { TROPHY_CAPS } from '../data/trophies';
 import { scenarioOf } from './scenario';
+import { diesOpen } from './drawer';
 
 export interface PatentRules {
   foldMax: number;
@@ -42,10 +43,17 @@ export interface PatentRules {
   draughtsmanEvery: number;
   /** the Patent Drawer's slots */
   drawerSlots: number;
+  /** the returning run (the playability pass, DESIGN.md §19): free copies of each kept design at a
+   * run's start beyond RULES.returnCopies (Spare Dies); the Survey Office's claims kept through a
+   * Reorganize (Claims on File); seconds between two tiles the Floor Plan lays (0: none) */
+  spareDies: number;
+  claimsKept: boolean;
+  floorPlanEvery: number;
   offline: number;
   /** the Committee's rewards (reputation, kept across runs) */
   nightCrew: boolean;
-  kitsOff: number;
+  /** claims in a Survey Office block (Pocketed Claims, rep 4: 5, was 4) */
+  claimsPerBlock: number;
   /** Act III (DESIGN.md §21): skiff speed added, the District's fold box, the Dispatcher's seconds */
   skiffSpeed: number;
   highFoldMax: number;
@@ -80,9 +88,12 @@ export function prules(g: Game): PatentRules {
     stampPressEvery: 0,
     draughtsmanEvery: 0,
     drawerSlots: RULES.drawerSlots.value,
+    spareDies: 0,
+    claimsKept: false,
+    floorPlanEvery: 0,
     offline: RULES.offlineEff.value,
     nightCrew: rep >= 2,
-    kitsOff: rep >= 4 ? RULES.pocketedKits.value : 0,
+    claimsPerBlock: rep >= 4 ? RULES.pocketedClaims.value : RULES.claimsPerBlock.value,
     skiffSpeed: 0,
     highFoldMax: 0,
     dispatcherEvery: 0,
@@ -104,6 +115,9 @@ export function prules(g: Game): PatentRules {
       case 'stampPress': r.stampPressEvery = r.stampPressEvery ? Math.min(r.stampPressEvery, e.every) : e.every; break;
       case 'draughtsman': r.draughtsmanEvery = r.draughtsmanEvery ? Math.min(r.draughtsmanEvery, e.every) : e.every; break;
       case 'drawer': r.drawerSlots += e.add; break;
+      case 'spareDies': r.spareDies += e.add; break;
+      case 'claimsKept': r.claimsKept = true; break;
+      case 'floorPlan': r.floorPlanEvery = r.floorPlanEvery ? Math.min(r.floorPlanEvery, e.every) : e.every; break;
       case 'offline': r.offline += e.add; break;
       case 'skiffSpeed': r.skiffSpeed += e.add; break;
       case 'highFoldMax': r.highFoldMax = Math.max(r.highFoldMax, e.value); break;
@@ -172,6 +186,21 @@ export function buyPatent(g: Game, id: PatentId): ActResult {
 /** Nodes the player could buy now (prerequisites owned), affordable or not, in tree order. */
 export function openPatents(g: Game): PatentId[] {
   return PATENT_IDS.filter((id) => !hasPatent(g, id) && PATENTS[id].requires.every((q) => hasPatent(g, q)));
+}
+
+/** What Patents could buy now with `extra` more on hand (the Reorganize card's honesty, DESIGN.md §19,
+ * the playability pass: the card never invites a reset that buys nothing): the open nodes they would
+ * afford (one refused for another reason, the offline ceiling, is not counted), the Dies on file left
+ * to buy, and whether the tree and the dies are bought out. */
+export function spendable(g: Game, extra = 0): { nodes: PatentId[]; dies: number; full: boolean } {
+  const have = g.s.meta.patents.toNumber() + extra;
+  const open = openPatents(g).filter((id) => {
+    const why = patentRefusal(g, id);
+    return !why || why.startsWith('Costs');
+  });
+  const dies = diesOpen(g);
+  const nodes = open.filter((id) => PATENTS[id].cost <= have + 1e-9);
+  return { nodes, dies: have >= RULES.dieCopyPrice.value ? dies : 0, full: !open.length && !dies };
 }
 
 export { Num };

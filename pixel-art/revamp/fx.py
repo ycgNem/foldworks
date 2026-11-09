@@ -13,7 +13,6 @@ Overlays keep the read: nothing bright in a module's icon well (x, y 3..12) or i
     module_glow       16x16 x4   8 fps   a working module: four small lanterns on its brass band breathe
     module_od         16x16 x4   8 fps   a module at 3x: the band glows copper-hot, heads marching
     fold_corner        8x8  x4           the fold box's brass corner brackets (TL, TR, BL, BR)
-    spark_vein        16x16 x4   8 fps   a Spark: a ink-outlined star of lantern light and two motes
     spark_inspector   16x16 x2   2 fps   the Inspector Spark: a frog inspector with a clipboard and
                                          a lantern that flickers
 """
@@ -245,16 +244,6 @@ def fold_corner():
 
 
 # ---------------------------------------------------------------- Sparks
-def spark_vein(f):
-    img = new(16, 16)
-    big = [3, 2, 3, 4][f]
-    star(img, 7, 8, big, L3, L2, outline=True)
-    motes = [((3, 3), (12, 12)), ((4, 2), (12, 11)), ((5, 3), (11, 12)), ((4, 4), (12, 13))][f]
-    for (x, y) in motes:
-        star(img, x, y, 1, L3, L1, outline=True)
-    return img
-
-
 INSPECTOR = [
     "................",
     "......kkkk......",
@@ -294,7 +283,6 @@ def build():
     export("module_glow", [module_glow(f) for f in range(4)], 8)
     export("module_od", [module_od(f) for f in range(4)], 8)
     export("fold_corner", fold_corner(), 0)
-    export("spark_vein", [spark_vein(f) for f in range(4)], 8)
     export("spark_inspector", [spark_inspector(f) for f in range(2)], 2)
 
 

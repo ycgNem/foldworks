@@ -8,7 +8,7 @@ import { C, rgba } from '../data/palette';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { CHUNKS, FACTORY, PATCHES, WORKSHOP } from '../data/land';
 import { RULES } from '../data/rules';
-import { MEGA, megaStage, MEGAS, MEGA_IDS, type MegaId } from '../data/megaprojects';
+import { MEGA, megaStage, MEGAS, MEGA_IDS, partsReached, type MegaId } from '../data/megaprojects';
 import { megaStageOf } from '../sim/systems/high';
 import { RECIPE } from '../data/recipes';
 import { RESEARCH } from '../data/research';
@@ -17,6 +17,7 @@ import { itemIcon, sheet, hasArt, frameNamed } from '../render/sprites';
 import { bayFrame, megaFrac, mainOutput } from '../render/factory';
 import { claimsHeld, claimsUsed, claimPrice, copiesOf, oresOf } from '../sim/systems/claims';
 import { megaOpen } from '../sim/systems/modules';
+import { prules } from '../sim/patents';
 import { Num } from '../engine/num';
 import { button, meter, chip, chipWidth, rule, pencil, slip, stamp, ribbon, pushpin, portrait, T, type Role } from './chrome';
 import { menuTemplate, fmt, perMin, slamScale, rays, cells, type MenuTab } from './widgets';
@@ -38,7 +39,7 @@ function titleChip(app: App, r: Rect, title: string, free: number, text: string,
 
 // ------------------------------------------------------------------ the Codex
 
-/** Items the Codex can log: the ones the Dock pays for (slag, kits and drill bits never sell). */
+/** Items the Codex can log: the ones the Dock pays for (slag and drill bits never sell). */
 export const CODEX_ITEMS = ITEM_IDS.filter((id) => ITEMS[id].value > 0);
 
 /** Unit 7's line on its Codex (ALL CAPS, clipped, counting). */
@@ -250,7 +251,7 @@ function deed(app: App, ore: ItemId, x: number, y: number, w: number, h: number)
   void csW;
   cells(app, left, c.y + 13, midR - left, 6, used, held, freeN >= 0 ? T.goodFill : T.badFill);
   // where the claims come from, as a sum
-  const pd = RULES.claimsPerDeposit.value, pb = RULES.claimsPerBlock.value;
+  const pd = RULES.claimsPerDeposit.value, pb = prules(g).claimsPerBlock;
   const long = `{soft:${RULES.claimsBase.value} start} + ${deps} {soft:deposit${deps === 1 ? '' : 's'}} ×${pd} + ${blocks} {soft:block${blocks === 1 ? '' : 's'}} ×${pb}`;
   const sum = richWidth(long) <= midR - left ? long : `{soft:${RULES.claimsBase.value}} + ${deps} {u:survey}×${pd} + ${blocks} {u:claim}×${pb}`;
   ui.clip(left, c.y + 21, midR - left, 11);
@@ -447,7 +448,10 @@ function bayPage(app: App, page: Rect) {
   if (big) {
     const st = sheet('mega_stage1');
     const flip = Math.floor(ui.time * (st.fps || 4)) % 2;
-    const fi = g.s.mega.stage >= 1 ? 8 + flip : 2 * Math.min(3, Math.floor(megaFrac(g) * 4)) + flip;
+    // the picture's four phases are the stage's parts (the Scaffold, the Engine House, the Cab)
+    const st1 = megaStage(g.s.mega.stage);
+    const ph = st1?.parts ? partsReached(st1, g.s.mega.progress) : Math.floor(megaFrac(g) * 4);
+    const fi = g.s.mega.stage >= 1 ? 8 + flip : 2 * Math.min(3, ph) + flip;
     ctx.drawImage(st.frames[fi], ax, ay, P, P);
   } else ctx.drawImage(sheet('mega_bay').frames[bayFrame(g, ui.time)], ax, ay, P, P);
   ui.unclip();
@@ -536,8 +540,45 @@ function wants(app: App, stage: NonNullable<ReturnType<typeof megaStage>>, page:
   ui.big(`${Math.floor(tf * 100)}%`, x + w, y, T.coin, { align: 'right', scale: 2 });
   y += 23;
   meter(ui, x, y, w, 10, tf, { role: 'coin' });
-  for (const q of [0.25, 0.5, 0.75]) ui.fill(x + Math.round(w * q), y + 1, 1, 8, tf >= q ? T.brassLo : rgba(T.ink, 0.35));
+  const parts = stage.parts ?? [];
+  const reached = partsReached(stage, g.s.mega.progress);
+  for (const q of parts.length ? parts.map((p) => p.at) : [0.25, 0.5, 0.75]) ui.fill(x + Math.round(w * q), y + 1, 1, 8, tf >= q ? T.brassLo : rgba(T.ink, 0.35));
   y += 14;
+  // its parts, a goal each (the playability pass: a 40-minute fill with no goal was the 2 h quit
+  // point): a chip each, the next one's share and what it puts up in the Town
+  if (parts.length && y + 30 <= end) {
+    // (a chip each: the part's first word, Scaffold, Engine, Cab, then the Drill itself)
+    const names = [...parts.map((p) => p.name.replace(/^the /, '').split(' ')[0]), 'Drill'];
+    const cw = Math.floor((w - 3 * (names.length - 1)) / names.length);
+    names.forEach((nm, i) => {
+      const done = i < reached, cur = i === reached;
+      const lab0 = done ? `${ICON.check} ${nm}` : nm;
+      const lab = chipWidth(lab0) <= cw ? lab0 : chipWidth(`${i + 1}`) <= cw ? (done ? `${ICON.check} ${i + 1}` : `${i + 1}`) : `${i + 1}`;
+      chip(ui, x + i * (cw + 3) + Math.floor((cw - chipWidth(lab)) / 2), y, lab, { role: done ? 'good' : cur ? 'coin' : 'soft', solid: done || cur });
+      const pt = parts[i];
+      ui.hint(x + i * (cw + 3), y, cw, CHIP_H, pt ? [{ text: `{big:${pt.name}}` }, { text: `${Math.round(pt.at * 100)}% of each · {u:build} ${pt.piece}` }] : [{ text: '{big:the Great Drill}' }, { text: stage.reward }], 190);
+    });
+    y += CHIP_H + 3;
+    const nx = parts[reached];
+    if (nx) {
+      // how far the slowest item is from the part's share
+      let lag = 1;
+      for (const [k, n] of Object.entries(stage.wants) as [ItemId, number][]) lag = Math.min(lag, (g.s.mega.progress[k]?.toNumber() ?? 0) / Math.ceil(n * nx.at));
+      y += Math.max(12, drawRich(ui, `{soft:next} ${nx.name} {research:${Math.floor(Math.min(1, lag) * 100)}%} · {u:build} {soft:${nx.piece}}`, x, y, w, T.ink) + 2);
+    }
+  }
+  // while it fills: the Survey Office's next claim, the other thing worth coin in Act II
+  if (g.done('surveying') && y + 12 <= end) {
+    const ores = (['ironOre', 'copperOre', 'coal', 'sand'] as ItemId[]).map((o) => ({ o, p: claimPrice(g, o) })).filter((q) => q.p) as { o: ItemId; p: Num }[];
+    const cheap = ores.sort((a, b) => a.p.cmp(b.p))[0];
+    if (cheap) {
+      const can = g.s.coin.gte(cheap.p);
+      const sw2 = 46;
+      drawRich(ui, `{soft:meanwhile} {u:claim} {i:${cheap.o}} {soft:claims} ${can ? `{good:${cheap.p.format()}}` : `{coin:${cheap.p.format()}}`}`, x, y + 1, w - sw2 - 4, T.ink);
+      if (button(ui, 'bayToSurvey', x + w - sw2, y - 2, sw2, 13, 'Survey', { tip: [{ text: '{u:survey} the Survey Office' }, { text: `{u:claim} ${prules(g).claimsPerBlock} more claims a block · more copies of the modules that mine` }] })) { app.panel = 'survey'; app.audio.sfx('open'); }
+      y += 14;
+    }
+  }
   if (y + 12 <= end) {
     const s = slowest === 0 ? `{good:${ICON.check} everything in} · {soft:the drill wakes}` : isFinite(slowest) ? `{u:clock} {soft:done in about} ${eta(slowest)}` : `{chip:warn:NOT ALL ARRIVING}  {soft:trunk the missing in}`;
     drawRich(ui, s, x, y, w, T.ink);

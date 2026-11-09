@@ -157,7 +157,7 @@ function lateGame(): Game {
     for (let y = 0; y < H.h && n < 200; y++)
       for (let x = 0; x < H.w + H.lotCols * H.lots && n < 200; x++) {
         const d = ds[(x + y) % 2];
-        if (!g.act({ k: 'hplace', floor: f, design: d.id, x, y }).ok) continue;
+        if (!g.act({ k: 'hplace', auto: false, floor: f, design: d.id, x, y }).ok) continue;
         n++;
         const to = y < H.h / 2 ? H.dock : H.hopper;
         g.act({ k: 'route', floor: f, fx: x, fy: y, tx: to.x, ty: to.y, item: Object.keys(d.outs)[0] as never });

@@ -5,6 +5,7 @@
 // a rustle; news about your factory gets a red EXTRA! corner. A click opens the Gazette's page: the
 // recent headlines as a front page. Presentation only. This replaces the crawl.
 import type { Game } from '../sim/Game';
+import { TICK_RATE } from '../engine/time';
 import { C } from '../data/palette';
 import { HEADLINES } from '../data/gazette';
 import { RESEARCH } from '../data/research';
@@ -31,11 +32,18 @@ export interface Headline { text: string; extra: boolean; tick: number }
 
 /** Seconds a headline stays on the front before the paper turns. */
 const TURN_S = 15;
+/** How long a first game shows the headline's slip (game ticks: five minutes), and how long breaking
+ *  news gets it after that (seconds). */
+const EARLY_TICKS = 5 * 60 * TICK_RATE;
+const HOT_S = 7;
 
 export class Gazette {
   text = '';
   /** the headline on the front is news about the player's factory */
   extra = false;
+  /** the headline on the front is breaking news (an order filled, the town grown): it gets the slip
+   *  for a few seconds even once the paper has folded to its icon */
+  hot = false;
   /** kept for old callers (the crawl's scroll offset) */
   x = 0;
   /** the front page's printed headlines, newest last */
@@ -72,6 +80,7 @@ export class Gazette {
       }
     }
     this.extra = extra;
+    this.hot = !!b;
     this.log.push({ text: this.text, extra, tick: g.s.tick });
     if (this.log.length > 12) this.log.shift();
     return extra;
@@ -90,7 +99,7 @@ export class Gazette {
     if (s.orders.active) news.push(`CIVIC: ${ORDER[s.orders.active].name} is ${Math.round(orderFrac(g, s.orders.active) * 100)}% done. Townsfrogs gather to watch.`);
     const forSale = CHUNKS.find((c) => !s.land.includes(c.id) && !isSky(g, c.id) && (!c.requires || g.done(c.requires)));
     if (forSale) news.push(`REAL ESTATE: ${forSale.name.replace(/\{[^}]*\}/g, '').trim()} still for sale, ${forSale.cost.toLocaleString('en-US')} coin. "A steal," says the seller, a heron.`);
-    if (s.sparks.length) news.push(s.sparks[0].kind === 'inspector' ? 'ALERT: an Inspector is in the Workshop! Click them before they wander off.' : 'ALERT: a Lucky Vein glitters on an ore patch! Click it!');
+    if (s.sparks.length) news.push('ALERT: an Inspector is in the Workshop! Click them before they wander off.');
     if (s.codex.length) news.push(`COLLECTING: Unit 7's Codex now holds ${s.codex.length} entries. "MORE," it says.`);
     if (s.mega.stage === 0 && s.factory.ents.some((e) => e.kind === 'fbay')) {
       const bits = Math.floor(s.mega.progress.drillBit?.toNumber() ?? 0);
@@ -136,7 +145,12 @@ export function newspaper(app: App, L: Layout, left: number) {
   // a clipboard placed over the slip's spot wins: the headline waits (it is news, not a cause)
   const slipSpot = { x: R.x + 4 - Math.min(room, L.wide ? 250 : 210), y: R.y - 12, w: Math.min(room, L.wide ? 250 : 210), h: 36 };
   const underClip = app.hud.clipRects.some((c) => c.x < slipSpot.x + slipSpot.w && slipSpot.x < c.x + c.w && c.y < slipSpot.y + slipSpot.h && slipSpot.y < c.y + c.h);
-  if (room > 70 && !underClip) {
+  // the slip shows for a first game's first minutes, then the paper folds to its icon (hover it for
+  // the headline, click it for the front page); breaking news still gets the slip for a few
+  // seconds (the playability pass: the slip sat over the floor's bottom-right rows all game)
+  const early = g.s.meta.runs === 0 && g.s.tick < EARLY_TICKS;
+  const showSlip = early || (gz.hot && t < HOT_S);
+  if (room > 70 && !underClip && showSlip) {
     const sw = Math.min(room, L.wide ? 250 : 210);
     const { kick, rest } = split(gz.text);
     const inner = sw - 14 - 4;

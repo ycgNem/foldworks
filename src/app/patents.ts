@@ -20,8 +20,8 @@ import { RULES } from '../data/rules';
 import { IDLE } from '../data/idle';
 import { ICON, smallWidth, bigWidth, SMALL_H } from '../ui/font';
 import { itemIcon, sheet, hasArt, spriteName } from '../render/sprites';
-import { amount, pct } from '../engine/fmt';
-import { hasPatent, patentRefusal, prules } from '../sim/patents';
+import { amount, pct, aWord } from '../engine/fmt';
+import { hasPatent, patentRefusal, prules, spendable } from '../sim/patents';
 import { offlineEfficiency } from '../sim/offline';
 import { previewPatents } from '../sim/reorganize';
 import { button, uiIcon, chip, chipWidth, rule, stamp, UICON, type UIconName } from './chrome';
@@ -32,8 +32,8 @@ import type { App } from './app';
 import type { Rect } from '../ui/ui';
 import { bookArea, heading, disc, tick, pencilCircle, speak, ROW_H } from './ledger';
 import { committeeFallback } from './reorganize';
-import { CHALLENGES, CHALLENGE_IDS, CHALLENGE_AFTER_RUNS } from '../data/challenges';
-import { won } from '../sim/systems/challenges';
+import { CHALLENGES, CHALLENGE_IDS } from '../data/challenges';
+import { won, postGame } from '../sim/systems/challenges';
 import { relocateClose } from './moves';
 
 /** A node's picture: an item icon, a UI icon, or a building's sprite (frame f). */
@@ -41,18 +41,16 @@ type NodeIcon = { item: string } | { ui: UIconName } | { sprite: string; f?: num
 
 /** One distinct picture per node (the critic: the flame was used twice). */
 const NODE_ICON: Partial<Record<string, NodeIcon>> = {
-  // head starts: what the run starts with
-  bellows: { sprite: 'furnace' }, starterLine: { sprite: 'miner' }, notebooks: { ui: 'codex' }, copperDeeds: { item: 'copperIngot' },
-  gearPatterns: { item: 'gear' }, gizmoPatent: { item: 'gizmo' }, foldingPatent: { ui: 'fold' }, grant: { ui: 'coin' },
-  overdriveHabit: { ui: 'overdrive' }, coalRights: { item: 'coal' }, steelCharter: { item: 'steel' }, glassNotes: { item: 'glass' },
-  circuitPatent: { item: 'circuit' },
+  // head starts: what a returning run still rebuilds (the playability pass, DESIGN.md §19)
+  copperDeeds: { item: 'copperOre' }, coalRights: { item: 'coal' }, steelCharter: { item: 'ironOre' }, overdriveHabit: { ui: 'survey' },
+  starterLine: { ui: 'kit' },
   // rules
   surveyCharter: { ui: 'claim' }, widerBox: { sprite: 'module' }, quickAudit: { ui: 'clock' }, moreAuditors: { ui: 'stats' },
   // the Milestone 5-6 review round (the reset layer): Fresh Dies replaces Deep Heaps, Cool Hands, Stamping Dies
   sideIntake: { ui: 'flow' }, nestedBoxes: { ui: 'factory' }, freshDies: { ui: 'heavy' },
   // automation
   shovelFrog: { item: 'slag' }, labAssistant: { ui: 'research' }, orderClerk: { ui: 'orders' }, stampPress: { sprite: 'press' },
-  draughtsman: { ui: 'build' }, drawerSpace: { ui: 'blueprint' },
+  draughtsman: { ui: 'build' }, drawerSpace: { ui: 'blueprint' }, filingCabinet: { ui: 'codex' }, notebooks: { ui: 'workshop' },
   // offline
   nightShift: { ui: 'overnight' }, nightWatch: { ui: 'lock' }, lightsOn: { ui: 'power' },
   // Act III (DESIGN.md §21 Patents)
@@ -71,10 +69,9 @@ const EFFECT_ICON: Record<string, NodeIcon> = {
 
 /** Short labels under the nodes. A list is tried in order, the first that fits its room wins. */
 const SHORT: Partial<Record<string, string | string[]>> = {
-  bellows: 'Bellows', starterLine: 'Miner', notebooks: 'Notes', copperDeeds: 'Copper', gearPatterns: 'Gears', gizmoPatent: 'Gizmo',
-  foldingPatent: ['Folding', 'Fold'], grant: 'Grant', overdriveHabit: ['Overdrive', 'Drive'], coalRights: 'Coal', steelCharter: 'Steel', glassNotes: 'Glass',
-  circuitPatent: ['Circuit', 'Chip'],
-  surveyCharter: 'Claims', widerBox: 'Wider', quickAudit: 'Quick', moreAuditors: ['Auditors', 'Audit'], sideIntake: ['Intake', 'Side'],
+  copperDeeds: ['Copper', 'B+C'], coalRights: 'Coal', steelCharter: ['Steel', 'F'], overdriveHabit: ['Claims', 'Pegs'], starterLine: ['Spares', 'Dies'],
+  filingCabinet: ['Cabinet', 'Files'], notebooks: ['Plan', 'Floor'],
+  surveyCharter: ['Survey', 'Half'], widerBox: 'Wider', quickAudit: 'Quick', moreAuditors: ['Auditors', 'Audit'], sideIntake: ['Intake', 'Side'],
   nestedBoxes: ['Nesting', 'Nest'], freshDies: 'Dies',
   shovelFrog: ['Shovel', 'Dig'], labAssistant: 'Lab', orderClerk: 'Clerk', stampPress: 'Press', draughtsman: ['Drafter', 'Draft'], drawerSpace: ['Drawer', 'Slots'],
   nightShift: 'Shift', nightWatch: 'Watch', lightsOn: 'Lights',
@@ -100,7 +97,7 @@ const branchRole = (b: string): Role => BRANCH_ROLE[b] ?? 'ink';
 const branchName = (b: string) => (BRANCH_NAMES as Record<string, string>)[b] ?? b;
 
 /** the node pinned by a click (the hovered one wins while the mouse is on a node) */
-const st = { pinned: 'bellows' as PatentId };
+const st = { pinned: 'copperDeeds' as PatentId };
 
 /** a node's disc */
 const N = 20;
@@ -139,13 +136,13 @@ export function patentsScreen(app: App, r0: Rect) {
     bx -= rw + 3;
     if (button(ui, 'toRelocate', bx, body.y - 1, rw, 15, '{u:relocate} Relocate', { tip: [{ text: '{u:relocate} {big:Relocate}' }, { text: 'a new island · Legacy banked · Patents and the tree reset' }] })) app.panel = 'relocate';
   }
-  // Act III (DESIGN.md §21): the Challenges won, once Challenges are offered; its tip lists all five
+  // Act III (DESIGN.md §21): the Challenges won, once Challenges are open (the post-game); its tip lists all
   const nWon = CHALLENGE_IDS.filter((id) => won(g, id)).length;
-  const challengeTip = [{ text: '{big:Challenges}' }, ...CHALLENGE_IDS.map((id) => ({ text: won(g, id) ? `{good:${ICON.check} ${CHALLENGES[id].name}} ${CHALLENGES[id].reward}` : `{soft:${CHALLENGES[id].name} · ${CHALLENGES[id].goalText}}` })), { text: g.s.challenge ? `{reset:under way} ${CHALLENGES[g.s.challenge as keyof typeof CHALLENGES]?.name ?? ''}` : '{soft:taken on the Reorganize card}' }];
+  const challengeTip = [{ text: '{big:Challenges}' }, ...CHALLENGE_IDS.map((id) => ({ text: won(g, id) ? `{good:${ICON.check} ${CHALLENGES[id].name}} ${CHALLENGES[id].reward}` : `{soft:${CHALLENGES[id].name} · ${CHALLENGES[id].goalText}}` })), { text: g.s.challenge ? `{reset:under way} ${CHALLENGES[g.s.challenge as keyof typeof CHALLENGES]?.name ?? ''}` : '{soft:taken on the Challenges page (Options) · it starts at a Reorganize}' }];
   const runChips: { text: string; role: Role; tip: string | { text: string }[] }[] = [
     { text: `${m.runs} ${m.runs === 1 ? 'reset' : 'resets'}`, role: 'soft' as Role, tip: '{u:reset} Reorganizes so far' },
     { text: `+${pv.now} this run`, role: 'reset' as Role, tip: `{u:reset} a Reorganize now banks {reset:+${pv.now}}` },
-    ...(m.runs >= CHALLENGE_AFTER_RUNS ? [{ text: `${nWon}/${CHALLENGE_IDS.length} challenges`, role: (nWon ? 'good' : 'soft') as Role, tip: challengeTip }] : []),
+    ...(postGame(g) ? [{ text: `${nWon}/${CHALLENGE_IDS.length} challenges`, role: (nWon ? 'good' : 'soft') as Role, tip: challengeTip }] : []),
   ];
   let cx = body.x + bankW + 8;
   for (const c of runChips) {
@@ -352,7 +349,7 @@ export function effectInfo(app: App, p: PatentDef): { does: string[]; now: strin
       if (land.length) {
         const names = land.map((l) => CHUNKS.find((c) => c.id === l)?.name ?? `chunk ${l}`);
         const worth = land.reduce((s, l) => s + (CHUNKS.find((c) => c.id === l)?.cost ?? 0), 0);
-        does.push(`{u:claim} land from the start · ${names.join(' · ')}${worth ? ` · {coin:${amount(worth)}} of land` : ''}`);
+        does.push(`{u:survey} land from the start · ${names.join(' · ')}${worth ? ` · {coin:${amount(worth)}} of land` : ''}`);
         land.forEach((l, i) => { if (!g.s.land.includes(l)) add.push(names[i]); });
       }
       const coin = num('coin');
@@ -360,8 +357,8 @@ export function effectInfo(app: App, p: PatentDef): { does: string[]; now: strin
       const place = list('place') as { kind: string; x: number; y: number }[];
       for (const q of place) {
         const name = BUILD[q.kind as keyof typeof BUILD]?.name ?? q.kind;
-        does.push(`{u:build} a ${name} at ${q.x},${q.y} from the start`);
-        if (!g.entAt(q.x, q.y)) add.push(`a ${name}`);
+        does.push(`{u:build} ${aWord(name)} at ${q.x},${q.y} from the start`);
+        if (!g.entAt(q.x, q.y)) add.push(aWord(name));
       }
       const now = own ? '{good:yours} · every run starts with it' : add.length ? `+ ${add.join(' · ')} now` : '{soft:you have it all already · pays from the next run}';
       return { does: does.length ? does : [p.text], now };
@@ -404,6 +401,16 @@ export function effectInfo(app: App, p: PatentDef): { does: string[]; now: strin
       const v = num('every');
       return { does: [`{u:blueprint} unfolds the Drawer's queue in order · one every ${v} s at most · as land, research and coin allow`], now: own ? OWNED_NOW : 'queue kept designs in the Drawer · it starts at once' };
     }
+    // the returning run (the playability pass, DESIGN.md §19)
+    case 'spareDies': {
+      const v = num('add'), cur = RULES.returnCopies.value + (ruleNow(app, 'spareDies') ?? 0);
+      const kept = g.s.meta.drawer.length;
+      return { does: [`{u:blueprint} every kept design comes back with {good:${v}} more free ${v === 1 ? 'copy' : 'copies'} at a run's start`, `{soft:${kept} kept now · ${cur} each}`], now: own ? OWNED_NOW : '{soft:pays from the next run}' };
+    }
+    case 'claimsKept':
+      return { does: ['{u:claim} the claims blocks bought at the Survey Office stay through a Reorganize · the most of each ore'], now: own ? OWNED_NOW : '{soft:pays from the next run}' };
+    case 'floorPlan':
+      return { does: [`{u:factory} at a Reorganize the Factory floor is drawn up · each run lays it again, a tile every ${num('every')} s`, '{soft:trunks paid · modules from spare copies · never stamps}'], now: own ? OWNED_NOW : '{soft:draws up the floor at your next Reorganize}' };
     case 'drawer': {
       const v = num('add'), cur = ruleNow(app, 'drawerSlots');
       return { does: [`{u:blueprint} the Patent Drawer keeps ${v} more designs`], now: change(cur, (cur ?? 0) + v, (x) => `${x} slots`, up) };
@@ -429,6 +436,10 @@ function committeeLine(app: App): string {
   const now = previewPatents(g).now;
   const canBuy = PATENT_LIST.some((p) => !hasPatent(g, p.id) && !patentRefusal(g, p.id));
   if (canBuy) return '"spend them." "we won\'t tell." "much."';
+  // the playability pass: say plainly when there is nothing left to buy
+  const sp = spendable(g);
+  if (sp.full) return '"the tree is full." "nothing to buy." "keep building."';
+  if (sp.dies > 0) return '"dies on file." "in the Drawer." "a Patent a copy."';
   if (now > 0) return `"psst." "this run files" {chip:reset:+${now}}`;
   if (m.patents.gt(0)) return '"save them." "the good ones cost more."';
   return '"psst." "we know a guy." "he files patents."';

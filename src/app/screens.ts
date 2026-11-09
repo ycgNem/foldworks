@@ -7,17 +7,17 @@
 // Also the page kit the Act II pages share (speaker, caption, discs, pencil lines and circles).
 import { C, rgba } from '../data/palette';
 import { RESEARCH, RESEARCH_LIST, type ResearchId } from '../data/research';
+import { nextGoal } from './goals';
+import { hopperBanking } from './hopperwatch';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { TROPHIES, type TrophyDef } from '../data/trophies';
 import { BUILD_BAR } from '../data/machines';
-import { IDLE } from '../data/idle';
 import { ICON, textWidth, smallWidth, bigWidth, ellipsize, hasSmallGlyph, LINE_H } from '../ui/font';
 import { keyLabel } from '../engine/input';
 import { itemIcon, sheet, hasArt } from '../render/sprites';
 import { available, researchFrac } from '../sim/systems/research';
 import { worldOf } from '../sim/systems/islands';
 import { WORLDS, type WorldId } from '../data/worlds';
-import { inspireUnlocked, inspiredFrac } from '../sim/systems/inspire';
 import { megaComplete } from '../sim/systems/research';
 import { hasKernel } from '../sim/kernels';
 import { KERNELS } from '../data/kernels';
@@ -51,8 +51,9 @@ import { scenariosScreen, scenariosOpen } from './scenarios';
 // Milestone 11 (DESIGN.md §24): the Trophy Shelf in groups, its Bonuses and the Wardrobe
 import { shelfPage } from './shelf';
 import { codexBook } from './codexbook';
-import { challengesPage } from './challenges';
+import { challengesPage, openChallenges, challengesOpen } from './challenges';
 import { endingPage } from './ending';
+import { finalePage } from './finale';
 
 export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options' | 'modules' | 'grade' | 'offline' | 'sliceEnd'
   // Act II (Milestone 4): the Factory floor's grade card, the Codex, the Survey Office, the Megaproject
@@ -71,7 +72,13 @@ export type ScreenName = 'research' | 'orders' | 'stats' | 'trophies' | 'options
   // (src/app/lastfold.ts, kernels.ts, endless.ts)
   | 'lastfold' | 'kernels' | 'ledger'
   // Milestone 11 (DESIGN.md §24): the Challenges page, Unit 7's ending (src/app/challenges.ts, ending.ts)
-  | 'challenges' | 'ending';
+  | 'challenges' | 'ending'
+  // the playability pass: the core ending, the Floating City lifting off (src/app/finale.ts)
+  | 'finale'
+  // the playability review: another tab took the save over (src/app/othertab.ts)
+  | 'otherTab'
+  // the playability update's patch notes in the game (src/app/whatsnew.ts)
+  | 'whatsnew';
 
 /** Screens added from other files (Milestones 5 and 6): drawn in the overlay rect like the rest. */
 // (a `var` without an initializer: hoisted, so a page may register while this module is still loading,
@@ -115,6 +122,7 @@ export function drawScreen(app: App, L: Layout) {
     case 'scenarios': return scenariosScreen(app, r);
     case 'challenges': return challengesPage(app, r); // Milestone 11
     case 'ending': return endingPage(app); // Milestone 11: Unit 7's ending
+    case 'finale': return finalePage(app); // the playability pass: the core ending
   }
 }
 
@@ -307,12 +315,14 @@ export function flowRow(ui: UI, parts: string[], x: number, y: number, w: number
 /** The tabs of the notebook's back pages: Stats, Trophies, Options and Keys. */
 export function backTabs(app: App): MenuTab[] {
   const help = app.input.binds.help?.[0];
-  const all: { id: 'stats' | 'trophies' | 'options' | 'keys'; label: string; icon?: IconName; tip: string }[] = [
+  const all: { id: 'stats' | 'trophies' | 'options' | 'keys' | 'challenges'; label: string; icon?: IconName; tip: string }[] = [
     { id: 'stats', label: 'Stats', icon: 'stats', tip: '{u:stats} the books' },
     { id: 'trophies', label: 'Trophies', icon: 'trophies', tip: '{u:trophies} the shelf' },
     { id: 'options', label: 'Options', icon: 'options', tip: '{u:options} sound · numbers · saves' },
     { id: 'keys', label: 'Keys', tip: help ? `{k:=${keyLabel(help)}} every key` : 'every key' },
   ];
+  // the post-game (the playability pass): the Challenges' own page, once the story has ended
+  if (challengesOpen(app)) all.push({ id: 'challenges', label: 'Challenges', icon: 'star', tip: '{u:star} a run under one rule · a reward for good' });
   return all.map((t) => ({ id: 'nav:' + t.id, label: t.label, icon: t.icon, tip: t.tip, active: app.panel === t.id, onClick: () => { if (app.panel !== t.id) { app.panel = t.id; app.audio.sfx('open'); } } }));
 }
 
@@ -327,27 +337,28 @@ export function titleChip(app: App, r: Rect, title: string, free: number, text: 
 
 /** where each node sits: column, row, and 1 when its label goes under it (so neighbours' labels never meet) */
 const TREE: Record<ResearchId, [number, number, number?]> = {
-  pressing: [0, 1.5],
-  surveyEast: [1, 0], gearcutting: [1, 2], slagBricks: [1, 3.2],
-  copperSmelting: [2, 0, 1], splitters: [2.4, 2.2, 1], buffers: [2, 3.2, 1],
-  wireDrawing: [3, 0.4],
-  gizmoTheory: [4, 1.4],
-  folding: [5, 1.4, 1],
-  // Act II's page (columns 0-6)
+  // Act I (the playability pass: Folding is node 2, everything after it hangs off it)
+  pressing: [0, 1.4], slagBricks: [0.6, 3.2, 1],
+  folding: [1, 1.4, 1],
+  surveyEast: [2, 0.2], copperSmelting: [3, 0, 1], wireDrawing: [4, 0.5],
+  gearcutting: [2, 2.2], splitters: [3.2, 2.9, 1], buffers: [2.1, 3.3, 1],
+  gizmoTheory: [5, 1.4, 1],
+  // Act II's page (columns 0-6; the playability pass took Machine Kits and Tuning off it, so the
+  // last columns spread down the page)
   coalSeams: [0, 1.6],
   steelmaking: [1, 1.0], surveying: [1, 2.6, 1],
   overdrive: [2, 0], steamPower: [2, 1.4], crushing: [2, 2.8, 1],
-  glassworks: [3, 0.5], refining: [3, 1.6, 1], machineKits: [3, 2.9, 1],
+  glassworks: [3, 0.5], refining: [3, 1.6, 1],
   circuits: [4, 1.0], concrete: [4, 2.6, 1],
-  heavyMachines: [5, 0.2], motors: [5, 1.3, 1], nestedFolds: [5, 2.6],
-  tuning: [6, 0.2, 1], greatDrill: [6, 1.9],
+  heavyMachines: [5, 0.2], motors: [5, 1.4, 1], nestedFolds: [5, 3.0, 1],
+  greatDrill: [6, 2.6, 1],
   // Act III's page (columns 0-6, each node a column after what it needs, rows ordered so the
   // pencil lines cross as little as they can)
   zoning: [0, 1.6],
   chutes: [1, 1.6, 1],
   chemistry: [2, 0.8], bearings: [2, 2.6, 1],
   vulcanizing: [3, 0], processors: [3, 0.8, 1], batteries: [3, 1.6, 1], hydroponics: [3, 2.4, 1], servos: [3, 3.2, 1],
-  sensors: [4, 0], recycling: [4, 0.8, 1], sandwiches: [4, 2.4, 1], floatingCity: [4, 3.2, 1],
+  sensors: [4, 0], sandwiches: [4, 2.4, 1], floatingCity: [4, 3.2, 1],
   robotics: [5, 0.8, 1], scrapTransmuter: [5, 2.4, 1],
   districtFolds: [6, 0.2, 1], sandwichEngineering: [6, 1.8, 1],
   // Act IV's page (DESIGN.md §22): Charting and what it opens down the left (the World floor, the
@@ -375,10 +386,10 @@ const NODE_ICON: Record<ResearchId, ItemId | UIconName> = {
   pressing: 'ironPlate', surveyEast: 'workshop', copperSmelting: 'copperIngot', wireDrawing: 'copperWire', gearcutting: 'gear',
   splitters: 'flow', buffers: 'orders', gizmoTheory: 'gizmo', slagBricks: 'slagBrick', folding: 'fold',
   coalSeams: 'coal', steelmaking: 'steel', overdrive: 'overdrive', steamPower: 'power', surveying: 'survey', glassworks: 'glass',
-  crushing: 'gravel', concrete: 'concrete', refining: 'plastic', machineKits: 'machineKit', circuits: 'circuit',
-  heavyMachines: 'heavy', tuning: 'mode', motors: 'motor', nestedFolds: 'fold', greatDrill: 'mega',
+  crushing: 'gravel', concrete: 'concrete', refining: 'plastic', circuits: 'circuit',
+  heavyMachines: 'heavy', motors: 'motor', nestedFolds: 'fold', greatDrill: 'mega',
   zoning: 'district', chutes: 'chute', chemistry: 'solvent', bearings: 'bearing', vulcanizing: 'rubber', batteries: 'battery',
-  servos: 'servo', sensors: 'sensor', processors: 'processor', recycling: 'mode', hydroponics: 'produce', sandwiches: 'sandwich',
+  servos: 'servo', sensors: 'sensor', processors: 'processor', hydroponics: 'produce', sandwiches: 'sandwich',
   robotics: 'robotArm', floatingCity: 'mega', scrapTransmuter: 'mega', sandwichEngineering: 'sandwichEngineer', districtFolds: 'fold',
   // Act IV (placeholders until the art director draws the islands' icons)
   charting: 'world', thermals: 'power', skyglassCutting: 'skyglassLens', horizonOptics: 'horizonLens',
@@ -419,7 +430,7 @@ const NODE_R = 13;
 /** Act III's, Act IV's or Act V's page is open (HudState.treePage holds the first two pages'
  *  choice); `drawn` the UI clock at the tree's last frame (a gap is a fresh opening); `pinned` a page
  *  set from outside. */
-const tree = { three: false, four: false, five: false, drawn: -1, pinned: false };
+const tree = { three: false, four: false, five: false, drawn: -1, pinned: false, focus: null as ResearchId | null };
 /** Open the research tree at a page (the e2e states; a goal that names Act III's research). */
 export function setTreePage(app: App, n: 1 | 2 | 3 | 4 | 5) {
   tree.three = n === 3;
@@ -452,8 +463,17 @@ function freshTreePage(app: App, act2: boolean, act3: boolean, act4: boolean) {
   const fresh = Math.abs(ui.time - ui.dt - tree.drawn) > 1e-6 && tree.drawn !== ui.time;
   tree.drawn = ui.time;
   if (!fresh) return;
+  // the page opens on the node the frog's line names (the playability review: its chips opened
+  // whatever node came first)
+  const gl = nextGoal(app.game, app.floor);
+  tree.focus = gl?.node ?? null;
   if (tree.pinned) { tree.pinned = false; return; }
   const g = app.game;
+  if (tree.focus && (RESEARCH[tree.focus].act ?? 1) <= 2) {
+    tree.three = tree.four = tree.five = false;
+    app.hud.treePage = (RESEARCH[tree.focus].act ?? 1) as 1 | 2;
+    return;
+  }
   tree.five = act5Shown(g) && (g.done('lastFold') || available(g, 'lastFold'));
   tree.four = !tree.five && act4 && act4UnderWay(g);
   const three = !tree.five && !tree.four && act3 && ((g.s.mega.stage ?? 0) >= 3 || RESEARCH_LIST.some((d) => d.act === 3 && g.done(d.id)));
@@ -467,7 +487,9 @@ function researchTree(app: App, r: Rect) {
   // the pages: the Workshop's tree, Act II's once Folding is done, Act III's once the Great Drill
   // is researched (DESIGN.md §21: every Act III node waits for the Drill's stage 3, and the page
   // says so while it does)
-  const act2 = g.done('folding');
+  // (Gizmo Theory, the last of Act I's research the slice needs, opens Coal Seams since Folding
+  // became node 2)
+  const act2 = g.done('gizmoTheory');
   const act3 = act2 && (g.done('greatDrill') || RESEARCH_LIST.some((d) => d.act === 3 && g.done(d.id)));
   const act4 = act2 && act4Shown(g, act3);
   const act5 = act4 && act5Shown(g);
@@ -628,9 +650,14 @@ function researchTree(app: App, r: Rect) {
       ui.text(l, lx, spot.ly + k * 10, lcol);
     });
     if (isSel) pencil(ui, spot.lx, spot.ly + spot.lh, spot.lw, T.bad);
-    if (hov && ui.clicked && (can || isSel)) {
+    // a click always does the same (the playability review: it sometimes selected, sometimes only
+    // previewed, and a second click un-selected): the right page holds the node, and a node that
+    // can be researched is selected; clearing is the page's button
+    if (hov && ui.clicked) {
       ui.eat();
-      app.act({ k: 'research', id: isSel ? null : d.id });
+      tree.focus = d.id;
+      if (can && !isSel) app.act({ k: 'research', id: d.id });
+      else ui.sfx('click');
     }
   }
   // the key to the marks, along the page's foot
@@ -647,7 +674,8 @@ function researchTree(app: App, r: Rect) {
     ui.text('locked', kx + 13, ky + 1, T.inkSoft);
   }
   // the right page: the hovered (or selected) node
-  const show = hovered ?? sel ?? nodes.find((d) => available(g, d.id))?.id ?? nodes.find((d) => !g.done(d.id))?.id ?? null;
+  const focus = tree.focus && nodes.some((d) => d.id === tree.focus) ? tree.focus : null;
+  const show = hovered ?? focus ?? sel ?? nodes.find((d) => available(g, d.id))?.id ?? nodes.find((d) => !g.done(d.id))?.id ?? null;
   nodePage(app, detail!, show, page >= 3 && (g.s.mega.stage ?? 0) < 3 && !!show && (RESEARCH[show].drill ?? 0) > (g.s.mega.stage ?? 0));
 }
 
@@ -696,7 +724,7 @@ function kernelGate(app: App, at: { x: number; y: number }) {
 }
 
 /** The right page of the tree: a node's name, state and progress, what it unlocks, what it costs
- * in items delivered to the Hopper, Inspiration, what it needs and leads to, the select button,
+ * in items delivered to the Hopper, what it needs and leads to, the select button,
  * the nodes ready now, the lab at work and the bank. */
 function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = false) {
   const ui = app.ui;
@@ -771,22 +799,13 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
         ui.hint(x, y, w, 10, [{ text: `{i:${item}} {big:${ITEMS[item].name}}` }, { text: `${fmt(have)} of ${fmt(n)} {soft:delivered to the Hopper}` }, ...(done ? [] : [{ text: itemEta(app, item, n - have) }])], 170);
         y += 11;
       }
+      // what the Hopper banks instead (the playability review: ingots went in for a plate node, the
+      // bar sat at 0, and only a corner of the page said "banked")
+      const astray = sel ? hopperBanking(g) : null;
+      if (astray && y + 10 <= end) y += drawRich(ui, `{i:${astray.item}} {bad:${ICON.cross} going to the bank} {soft:it wants} ${(Object.keys(d.cost) as ItemId[]).map((k) => `{i:${k}}`).join(' ')}`, x, y, w, T.ink) + 1;
       // Milestone 13: how long the rest takes at what arrives now (src/app/rates.ts)
       const eta = researchEta(app, show);
       if (eta && y + 10 <= end) y += drawRich(ui, `{u:clock} {soft:${eta} at what is delivered now}`, x, y, w, T.inkSoft) + 1;
-    }
-    // Inspiration: clicks on the Hopper give the selected node a share, up to its cap
-    if (!done && inspireUnlocked(g) && y + 12 <= end) {
-      const cap = IDLE.inspireCap.value;
-      const inf = inspiredFrac(g, show);
-      const lead = '{k:LMB} {soft:Hopper}';
-      const lw = richWidth(lead);
-      drawRich(ui, lead, x, y, Infinity, T.ink);
-      const s = `${Math.round(inf * 100)}/${Math.round(cap * 100)}%`;
-      meter(ui, x + lw + 4, y + 2, w - lw - 4 - textWidth(s) - 6, 6, inf / cap, { role: 'coin', glint: false });
-      ui.text(s, x + w, y, T.coin, { align: 'right' });
-      ui.hint(x, y, w, 10, [{ text: '{big:Inspiration}' }, { text: `{k:LMB} the Hopper · the selected node · up to ${Math.round(cap * 100)}% of each item` }], 190);
-      y += 12;
     }
     // what it needs first (an Act III node also the Great Drill's stage 3, DESIGN.md §21)
     const drillShort = (d.drill ?? 0) > (g.s.mega.stage ?? 0);
@@ -830,9 +849,11 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
       }
       y += 3;
     }
-    // ready now: every node that can be picked, the closest to done marked with a star
+    // ready now: every node that can be picked, closest to done first, with the items it still
+    // owes (the ★ that marked the closest moved about and was never learnt: the playability review)
     const ready = RESEARCH_LIST.filter((q) => !g.done(q.id) && available(g, q.id) && q.id !== show).sort((p, q) => owed(p.id) - owed(q.id));
     if (ready.length && y + 22 <= end) {
+      ui.small('ITEMS OWED', x + w - 1, y + 1, T.inkSoft, { align: 'right' });
       y += caption(ui, 'ready now', x, y, T.research);
       ready.forEach((q, i) => {
         if (y + 12 > end) return;
@@ -841,7 +862,7 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
         ui.region(x, y - 1, w, 12, 'button');
         ui.mark('ready:' + q.id, x, y - 1, w, 12);
         nodeIcon(ui, q.id, x + 1, y, true);
-        const n = best ? `${ICON.star} ${fmt(owed(q.id))}` : fmt(owed(q.id));
+        const n = fmt(owed(q.id));
         const nw = textWidth(n);
         ui.clip(x + 12, y, w - 16 - nw, 10);
         ui.text(q.name, x + 12, y, T.ink);
@@ -850,8 +871,8 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
         // the closest one is underlined in pencil; the hovered one too
         if (best || hv) pencil(ui, x + 12, y + 9, Math.min(w - 16 - nw, textWidth(q.name)), best ? T.coin : T.inkSoft);
         if (hv) {
-          ui.tip([{ text: `{big:${q.name}}` }, ...unlockRows(q.id).map((s) => ({ text: s })), { text: `${fmt(owed(q.id))} {soft:items still owed}${best ? `  {coinc:${ICON.star} closest}` : ''}` }, { text: '{k:LMB} research it' }], 190);
-          if (ui.clicked) { ui.eat(); ui.sfx('click'); app.act({ k: 'research', id: q.id }); }
+          ui.tip([{ text: `{big:${q.name}}` }, ...unlockRows(q.id).map((s) => ({ text: s })), { text: `${fmt(owed(q.id))} {soft:items still owed}${best ? '  {coinc:the closest}' : ''}` }, { text: '{k:LMB} research it' }], 190);
+          if (ui.clicked) { ui.eat(); ui.sfx('click'); tree.focus = q.id; app.act({ k: 'research', id: q.id }); }
         }
         y += 12;
       });
@@ -1083,13 +1104,7 @@ function optionsScreen(app: App, r: Rect) {
   y += 6;
   const help = app.input.binds.help?.[0];
   if (button(ui, 'openKeys', x, y, Math.min(w, 140), 17, `Keys${help ? `  {k:=${keyLabel(help)}}` : ''}`, { tip: '{k:LMB} the drawn keyboard' })) { app.panel = 'keys'; app.audio.sfx('open'); }
-  // Act III: the Scenario boards, other games beside the town (after the first Reorganize)
-  if (scenariosOpen(app) && y + 21 + 26 <= body.y + body.h) {
-    y += 21;
-    y += caption(ui, 'other games', x, y) + 2;
-    if (button(ui, 'openScenarios', x, y, Math.min(w, 140), 17, '{u:trophies} Scenarios', { tip: [{ text: '{big:Scenarios}' }, { text: 'puzzle boards · a personal best each' }, { text: '{soft:your town waits while you play}' }] })) { app.panel = 'scenarios'; app.audio.sfx('open'); }
-  }
-  // the right page: saves, the overnight forecast, the title
+  // the right page: saves, the overnight forecast, the post-game, the title
   const dp = detail!;
   const dx = dp.x + 4, dw = dp.w - 8;
   let dy = dp.y + 4;
@@ -1108,6 +1123,15 @@ function optionsScreen(app: App, r: Rect) {
   btn('overnight', '{u:overnight} Safe for overnight', [{ text: '{big:Safe for overnight}' }, { text: '{u:clock} look ahead · which lines jam · stop them' }], () => { app.panel = 'overnight'; });
   const bad = app.damagedSave();
   if (bad) btn('copyBad', 'Copy the damaged save', [{ text: '{bad:a save that would not load}' }, { text: '{k:LMB} copy it · send it in' }], () => { void navigator.clipboard?.writeText(bad); });
+  // the post-game (the playability pass): the Challenges' page and the Scenario boards, other games
+  // beside the town, once the story has ended (the Floating City complete)
+  const ch = challengesOpen(app), sc = scenariosOpen(app);
+  if (ch || sc) {
+    dy += 4;
+    dy += caption(ui, 'after the story', dx, dy) + 2;
+    if (ch) btn('openChallenges', '{u:star} Challenges', [{ text: '{big:Challenges}' }, { text: 'a run under one rule · a small reward for good' }, { text: '{soft:taken here · it starts at your next Reorganize}' }], () => openChallenges(app, null));
+    if (sc) btn('openScenarios', '{u:trophies} Scenarios', [{ text: '{big:Scenarios}' }, { text: 'puzzle boards · a personal best each' }, { text: '{soft:your town waits while you play}' }], () => { app.panel = 'scenarios'; app.audio.sfx('open'); });
+  }
   dy += 4;
   btn('title', 'Back to the title', '{u:clock} saves first', () => { app.save(); app.toTitle(); });
 }

@@ -20,6 +20,10 @@ export interface CustomerDef {
   /** met after the first Reorganize (with `meets` done in that run), or in any run once the Great
    * Drill is researched there or its stage 1 stands (the Committee, DESIGN.md §19) */
   afterReset?: boolean;
+  /** its orders are offered again in every run, filled before or not (the Committee: its reputation
+   * is the Great Drill's gate, two orders a run, DESIGN.md §19); every other customer's order is
+   * filled once for good (the playability pass) */
+  repeats?: boolean;
   derivation: string;
 }
 
@@ -55,7 +59,7 @@ export const CUSTOMERS: Record<CustomerId, CustomerDef> = {
     rewards: [
       { rep: 1, text: '{u:codex} the Codex · a first delivery of each item pays {coinc:30×}' },
       { rep: 2, text: 'Recycled Glass · 3 {i:gravel} → {i:glass} in the Kiln' },
-      { rep: 3, text: '{u:mode} Precision yields {good:+35%}, was +25%' },
+      { rep: 3, text: 'Sorting Crates · Buffer Crates hold {good:100}, was 50' },
       { rep: 4, text: 'Specimen Jars · the Chute holds {good:60} of each item, was 20' },
       { rep: 5, text: '{u:codex} Field Notes · on every island its exotic and tier 4 firsts pay the Codex\'s {coinc:30×} again' },
     ],
@@ -86,6 +90,7 @@ export const CUSTOMERS: Record<CustomerId, CustomerDef> = {
     title: 'Three raccoons in a trench coat',
     meets: 'folding',
     afterReset: true,
+    repeats: true,
     thanks: [
       '"we accept." "on behalf of all of us." "which is one of us. hello."',
       '"the coat thanks you." "the coat is very full now." "burp."',
@@ -95,7 +100,7 @@ export const CUSTOMERS: Record<CustomerId, CustomerDef> = {
       { rep: 1, text: 'Coat Pockets · modules hold 6 s of each input and output, was 2' },
       { rep: 2, text: 'the Night Crew · {u:overnight} away, each Slag Heap loses 1 {i:slag} per 10 s' },
       { rep: 3, text: '{u:mega} the Great Drill\'s stage 2 opens' },
-      { rep: 4, text: 'Pocketed Kits · a stamp needs 1 {i:machineKit} fewer' },
+      { rep: 4, text: 'Pocketed Claims · {u:claim} a Survey Office block is {good:5} claims, was 4' },
       { rep: 5, text: '{u:mega} the Great Drill\'s stage 3 opens' },
       { rep: 6, text: 'Pocket Skiffs · a route\'s first skiff costs nothing' },
       { rep: 7, text: 'Rubble Rousers · on the Old Works a tile of rubble cleared clears the rubble touching it' },
@@ -162,7 +167,7 @@ export const ORDERS: OrderDef[] = [
   { id: 'stormTeacup', customer: 'voltaire', name: 'Storm in a Teacup', pitch: 'I want lightning at tea. Small lightning. Polite lightning.', wants: { stormCell: 60 }, pays: 190000, rep: 1, requires: ['stormCells'], derivation: '§22 Orders: 60 storm cells (90,000) -> 190,000: 2.1x; Rime\'s' },
   { id: 'ashCoat', customer: 'committee', name: 'The Ash Coat', pitch: '"armour." "for the coat." "cinder alloy, the warm kind."', wants: { cinderAlloy: 500 }, pays: 95000, rep: 1, requires: ['cinderSmelting'], derivation: '§22 Orders: 500 cinder alloy (45,000) -> 95,000: 2.1x; Cinder Isle\'s' },
   { id: 'skyMarbles', customer: 'committee', name: 'Sky Marbles', pitch: '"marbles." "made of sky." "we will lose them. that is the point."', wants: { skyglass: 2000, skyglassLens: 100 }, pays: 32000, rep: 1, requires: ['skyglassCutting'], derivation: '§22 Orders: 2,000 skyglass and 100 lenses (15,000) -> 32,000: 2.1x; Pebble Isle\'s' },
-  { id: 'gizmoFestival', customer: 'bramble', name: 'The Gizmo Festival', pitch: 'A festival of Gizmos! Crates of them, from your Factory floor!', wants: { gizmo: 400 }, pays: 64000, rep: 1, requires: ['folding'], at: 'factory', derivation: '§7 400 Gizmos (32,000) -> 64,000 + 1 rep: 2x; §11 only the Factory Dock counts, so the slice ends with a Gizmo module fed by gear and wire modules running at rate (the Milestone 3 gate review)' },
+  { id: 'gizmoFestival', customer: 'bramble', name: 'The Gizmo Festival', pitch: 'A festival of Gizmos! Crates of them, from your Factory floor!', wants: { gizmo: 400 }, pays: 64000, rep: 1, requires: ['gizmoTheory'], at: 'factory', derivation: '§7 400 Gizmos (32,000) -> 64,000 + 1 rep: 2x; offered with Gizmo Theory (Folding is node 2 now, §8); §11 only the Factory Dock counts, so the slice ends with a Gizmo module fed by gear and wire modules running at rate (the Milestone 3 gate review)' },
 ];
 
 export const ORDER: Record<string, OrderDef> = Object.fromEntries(ORDERS.map((o) => [o.id, o]));

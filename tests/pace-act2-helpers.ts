@@ -8,6 +8,7 @@ import { playAct2, type Act2Bot } from '../src/sim/bot2';
 import { TICK_RATE } from '../src/engine/time';
 import { restore, takeSnapshot } from '../src/sim/snapshot';
 import { previewPatents } from '../src/sim/reorganize';
+import { megaStage, partsReached } from '../src/data/megaprojects';
 
 /** Seeds for the Act II runs (Spark timing is the only random part). Two keep the file inside
  * its ~60 s budget; the spread between them is logged. */
@@ -42,6 +43,8 @@ export interface Act2Record {
   snap: { snap: string; snapTick: number } | null;
   /** the game state at each of STAGES (hours), for the idle and offline pace tests */
   stages: Record<number, { snap: string; snapTick: number }>;
+  /** play time (s) each part of the Great Drill's stage 1 stood (its sub-goals, DESIGN.md §18) */
+  parts: number[];
   overdrives: number;
   clicksPerSecMax: number;
   bot: Act2Bot;
@@ -59,7 +62,12 @@ export function act2Run(seed: number): Act2Record {
   const patentsByMin: number[] = [];
   let snap: Act2Record['snap'] = null;
   const stages: Act2Record['stages'] = {};
+  const parts: number[] = [];
   const run = playAct2(g, planner, HOURS * 3600, {}, undefined, (gg) => {
+    if (gg.s.tick % TICK_RATE === 0 && gg.s.mega.stage === 0) {
+      const n = partsReached(megaStage(0), gg.s.mega.progress);
+      while (parts.length < n) parts.push(gg.s.tick / TICK_RATE);
+    }
     if (gg.s.tick % (60 * TICK_RATE) === 0) {
       earnedByMin.push(gg.s.earned.toNumber());
       patentsByMin.push(previewPatents(gg).now);
@@ -76,12 +84,16 @@ export function act2Run(seed: number): Act2Record {
     while (clicks[i] - clicks[j] >= TICK_RATE) j++;
     maxRate = Math.max(maxRate, i - j + 1);
   }
+  // the Drill's parts are goals the player reaches (rule 1), merged in by time
+  const all = [...pd.map((t, i) => ({ t, w: pw[i] })), ...run.bot.log.decisions.map((t, i) => ({ t, w: run.bot.log.what[i] })), ...parts.map((t, i) => ({ t, w: `stage:drillPart${i + 1}` }))]
+    .map((q, i) => ({ ...q, i })).sort((a, b) => a.t - b.t || a.i - b.i);
   const rec: Act2Record = {
     seed,
     handover: run.handover,
     at: { ...planner.log.at, ...run.bot.log.at },
-    decisions: [...pd, ...run.bot.log.decisions],
-    what: [...pw, ...run.bot.log.what],
+    decisions: all.map((q) => q.t),
+    what: all.map((q) => q.w),
+    parts,
     earnedByMin,
     patentsByMin,
     snap,

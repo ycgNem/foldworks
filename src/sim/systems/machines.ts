@@ -3,10 +3,10 @@
 // N crafts), starts the next one if its inputs are there and there is room for what it will
 // make, and hands its output out of its front and its byproduct out of a side. A full output is
 // blocked, an empty input is starved; the hover report reads `state` and `why`.
-// Act II (DESIGN.md §18): a machine's speed is its kind's (Mk2: 3x) times its mode, Overdrive and
-// the power its grid can give; a powered machine with none is starved with why = 'power'.
+// Act II (DESIGN.md §18): a machine's speed is its kind's (Mk2: 4x) times Overdrive and the power
+// its grid can give; a powered machine with none is starved with why = 'power'.
 import type { Game, ActResult } from '../Game';
-import { DX, DY, ccw, cw, faceTiles, opposite, type Dir, type Ent, type Mode } from '../world';
+import { DX, DY, ccw, cw, faceTiles, opposite, type Dir, type Ent } from '../world';
 import { RECIPE, type RecipeDef } from '../../data/recipes';
 import { BUILD, isMachine } from '../../data/machines';
 import { lineOf } from '../analysis';
@@ -22,36 +22,6 @@ import { craftSpeed } from '../longtail';
 
 const OK: ActResult = { ok: true };
 
-/** The speed a mode gives (1 in normal mode). */
-export function modeSpeed(m: Ent): number {
-  switch (m.mode ?? 'normal') {
-    case 'efficient': return RULES.modeEfficientSpeed.value;
-    case 'overclock': return RULES.modeOverclockSpeed.value;
-    case 'precision': return RULES.modePrecisionSpeed.value;
-    case 'recycling': return RULES.modeRecyclingSpeed.value;
-    case 'byproduct': return RULES.modeByproductSpeed.value;
-    default: return 1;
-  }
-}
-
-/** Crafts per byproduct for this machine's recipe in its mode (DESIGN.md §21 Modes): Recycling
- * makes half the waste, Byproduct twice it (never more than one a craft). */
-export function byEvery(m: { mode?: Mode }, r: RecipeDef): number {
-  const every = r.byproduct?.every ?? 0;
-  if (!every) return 0;
-  if (m.mode === 'recycling') return every * 2;
-  if (m.mode === 'byproduct') return Math.max(1, Math.round(every / 2));
-  return every;
-}
-
-/** A Lucky Vein's boost (DESIGN.md §6) for this machine now: 1 when none, or while it is being
- * audited (a boost would be folded in for good). */
-export function veinBoost(g: Game, m: Ent): number {
-  if (!(m.boost ?? 0)) return 1;
-  if (isAudited(g, m.id)) return 1;
-  return RULES.veinMult.value;
-}
-
 /** Overdrive's multiplier for this machine or Miner now: 1 when it is not overdriven, or while it
  * is being audited. Only starting Overdrive on an audited line was refused before, and with Quick
  * Audits the 5 s warm-up is shorter than Overdrive's 10 s, so an overdriven line folded 3x into its
@@ -62,19 +32,18 @@ export function odBoost(g: Game, m: Ent): number {
   return RULES.overdriveMult.value;
 }
 
-/** Crafting speed this tick, before power: kind x mode x Overdrive (never while audited). */
+/** Crafting speed this tick, before power: kind x Overdrive (never while audited). */
 export function baseSpeed(g: Game, m: Ent): number {
-  return (BUILD[m.kind].speed ?? 1) * modeSpeed(m) * odBoost(g, m);
+  return (BUILD[m.kind].speed ?? 1) * odBoost(g, m);
 }
 
-/** Count down Overdrive, then its cooling, and a Lucky Vein's boost (both systems that run
- * machines call it). Cool Hands (a Patent, §19) shortens the cooling. */
+/** Count down Overdrive, then its cooling (both systems that run machines call it). Cool Hands (a
+ * Patent, §19) shortens the cooling. */
 export function overdriveTick(m: Ent, coolSec: number = RULES.overdriveCool.value) {
   if (m.od) {
     m.od--;
     if (!m.od) m.cool = Math.round(coolSec * TICK_RATE);
   } else if (m.cool) m.cool--;
-  if (m.boost) m.boost--;
 }
 
 export function runMachines(g: Game) {
@@ -101,7 +70,7 @@ export function runMachines(g: Game) {
         const pf = powerFactor(g, m);
         // Rime (DESIGN.md §22): a cold powered machine runs at half speed
         // the Trophy Shelf's delivery trophies and Clean Hands speed one product's craft (§24)
-        const sp = baseSpeed(g, m) * veinBoost(g, m) * pf * coldFactor(m) * craftSpeed(g, r.outputs[0].item);
+        const sp = baseSpeed(g, m) * pf * coldFactor(m) * craftSpeed(g, r.outputs[0].item);
         if (sp > 0) {
           m.prog += sp;
           progressed = true;
@@ -140,7 +109,7 @@ export function runMachines(g: Game) {
       }
     } else {
       const missing = r.inputs.find((s) => (m.inBuf[s.item] ?? 0) < s.n);
-      const byDue = r.byproduct && (m.crafts + 1) % byEvery(m, r) === 0;
+      const byDue = r.byproduct && (m.crafts + 1) % r.byproduct.every === 0;
       if (byDue && m.by >= cap) {
         m.state = 'blocked';
         m.why = r.byproduct!.item;
@@ -187,7 +156,7 @@ function start(m: Ent, r: RecipeDef, cap: number) {
   for (const s of r.inputs) if ((m.inBuf[s.item] ?? 0) < s.n) return;
   const o = r.outputs[0];
   if (m.out > 0 && (m.outItem !== o.item || m.out + o.n > cap)) return;
-  const byDue = r.byproduct && (m.crafts + 1) % byEvery(m, r) === 0;
+  const byDue = r.byproduct && (m.crafts + 1) % r.byproduct.every === 0;
   if (byDue && m.by >= cap) return;
   for (const s of r.inputs) m.inBuf[s.item] -= s.n;
   m.active = true;
@@ -198,18 +167,8 @@ function finish(g: Game, m: Ent, r: RecipeDef) {
   const o = r.outputs[0];
   m.out += o.n;
   m.outItem = o.item;
-  // Precision: +25% of the main output (Unit 7's rep 3: +35%), whole items as the fraction fills
-  if (m.mode === 'precision') {
-    const y = RULES.modePrecisionYield.value + (g.s.orders.rep.unit7 >= 3 ? RULES.unit7Precision.value : 0);
-    m.bonus = (m.bonus ?? 0) + y * o.n;
-    if (m.bonus >= 1 - 1e-9) {
-      const extra = Math.floor(m.bonus + 1e-9);
-      m.out += extra;
-      m.bonus -= extra;
-    }
-  }
   m.crafts++;
-  if (r.byproduct && m.crafts % byEvery(m, r) === 0) {
+  if (r.byproduct && m.crafts % r.byproduct.every === 0) {
     m.by++;
     m.byItem = r.byproduct.item;
   }
