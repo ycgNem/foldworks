@@ -1,7 +1,7 @@
 // Sparks (DESIGN.md §6): one every 3-6 minutes, visible for 20 s, paused while the tab is hidden.
 // A Spark is the Inspector (the playability pass cut the Lucky Vein, Cookie Clicker's golden cookie
 // into Frenzy): they walk up to the busiest line (click: they grade it with §10's formula and hand
-// over 60 s of its measured output x the grade multiplier, in kind, to research; paid in items, not
+// over 30 s of its measured output x the grade multiplier, in kind, to research; paid in items, not
 // coin, so it is not a bank-percentage windfall: DECISIONS.md). Missing one costs nothing.
 import type { Game, ActResult } from '../Game';
 import { Num } from '../../engine/num';
@@ -67,7 +67,7 @@ export function catchSpark(g: Game, p: Spark): ActResult {
   g.bump('sparks');
   const line = p.line.map((id) => g.byId.get(id)).filter((e) => !!e) as NonNullable<ReturnType<typeof g.byId.get>>[];
   const gr = gradeLine(g, line);
-  // 60 s of each final product the line makes, at its measured pace, x the grade
+  // 30 s of each final product the line makes, at its measured pace, x the grade
   const items: Partial<Record<ItemId, number>> = {};
   for (const m of gr.machines) {
     if (!endsAtSink(g, m)) continue;

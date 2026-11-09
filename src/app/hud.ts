@@ -570,7 +570,7 @@ function hoverReport(app: App) {
   const e = g.entAt(h.x, h.y);
   const spark = g.s.sparks.find((p) => p.x === h.x && p.y === h.y);
   if (spark) {
-    ui.tip([{ text: '{big:Inspector}' }, { text: '{k:LMB} grades this line' }, { text: '{u:research} a minute of its output × the grade' }], 190, at);
+    ui.tip([{ text: '{big:Inspector}' }, { text: '{k:LMB} grades this line' }, { text: '{u:research} half a minute of its output × the grade' }], 190, at);
     return;
   }
   if (!e) {

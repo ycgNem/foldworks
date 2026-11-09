@@ -693,7 +693,7 @@ export class App {
         }
         case 'spark': a.sfx('spark'); break;
         case 'sparkGet': a.sfx('sparkGet'); break;
-        case 'inspected': this.toast(`Graded ${e.id}`, `score ${(e.d ?? 0).toFixed(2)} · ${Num.of(e.value ?? 0).format()} items, a minute of the line, to {research:research}`, C.gold); break;
+        case 'inspected': this.toast(`Graded ${e.id}`, `score ${(e.d ?? 0).toFixed(2)} · ${Num.of(e.value ?? 0).format()} items, half a minute of the line, to {research:research}`, C.gold); break;
         case 'firstSlagJam': a.sfx('jam'); if (this.game.s.meta.runs === 0) this.toast('Choked on slag!', '{k:LMB} shovel · or a {i:slag} Heap beside it', C.pipRed); break;
         // the first sale is one moment: the coins fountain out of the Dock with FIRST SALE! on the
         // floor (src/render/renderer.ts); its trophies wait until it has passed, and no slip

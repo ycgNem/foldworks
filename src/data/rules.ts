@@ -25,7 +25,7 @@ export const RULES = {
   sparkMax: r(360, '§6 Sparks: one every 3-6 min (uniform)'),
   sparkLife: r(20, '§6 Sparks: visible for 20 s'),
   /** Inspector: pays this many seconds of the line\'s measured output value x the grade multiplier */
-  inspectorSeconds: r(60, '§6 Inspector: 60 s of that line\'s measured output value'),
+  inspectorSeconds: r(30, '§6 Inspector: 30 s of that line\'s measured output (60 s while half the Sparks were Lucky Veins; every Spark is the Inspector since the playability pass, so half a minute keeps the research an hour of catching them where it was: §13 check 11, the Hopper stays the research)'),
   /** fold box limit, warm-up and window (seconds) */
   foldMax: r(8, '§10 Box sizes: the Fold box is at most 8x8 in the slice, from Gizmo Theory (a whole Gizmo line with both its feeds)'),
   /** the box grows with Act I's research (§10 Box sizes): 3x3 at Folding, 5x5 at Gearcutting */

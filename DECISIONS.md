@@ -3359,10 +3359,15 @@ left behind (DESIGN.md §6, §20, §21, §24).
   The `Spark` type loses its `kind`. *The rate stays 3-6 min:* it was set for Sparks of either kind,
   and every Spark is now one that grades a real line. Measured on the planner bot (four seeds, 3 h):
   38-41 spawns before (17-22 veins), 39-41 after (all Inspectors); its coin at 3 h 1.46M against
-  1.49-1.64M. The Inspector's research gift doubles (it was half the Sparks); a player catching every
-  one gets about a fifth of one line's output a minute to research, far under Inspiration's 30% of
-  every node. The Spark RNG draws less (one draw a spawn, was up to four), so every seeded run's
+  1.49-1.64M. The Spark RNG draws less (one draw a spawn, was up to four), so every seeded run's
   Sparks move: the pace tests were re-run (below).
+- **The Inspector's gift is halved, 60 s of the line's output to 30 s** (`RULES.inspectorSeconds`).
+  *Why:* it now comes twice as often (it was half the Sparks), and at 60 s the doubled research let
+  the Dock-only player reach Gizmo Theory only 2.7 min behind the planner (§13 check 11 wants a
+  quarter of the planner's time, 3.4 min; it was 4.1): research free of the Hopper made the Hopper
+  less of a choice. At 30 s research an hour of catching every one is where it was, and the gap is
+  4.7 min. Chosen over a slower rate (6-12 min): the visit is the active beat and the grade lesson,
+  and the Spark trophies' counts (1, 10, 100) keep their meaning.
 - **"Lucky!" is renamed "Spot Check"** ("catch the Inspector"); "Spark Chaser" is "Regular Visitor"
   and "Spark Collector" "First-Name Terms". Their counts (1, 10, 100) stand: the rate did not change.
   The id `lucky` is kept (saves hold `trophy:lucky`), as `cityComplete` kept its id as "Lift-off".
@@ -3394,6 +3399,14 @@ left behind (DESIGN.md §6, §20, §21, §24).
 - **No bot or pace test takes a Challenge**; the tests that do set the City complete
   (`tests/story-helpers.ts endStory`). The No Splitters test's route count reads 145 (120 + 20 + the
   Lift-off trophy's 5 the City now brings with it).
+- **Measured** (the full pace suite, at the commit before and after, the same seeds; DESIGN.md §13,
+  §20): slice end 21:35 to 22:10, first fold 5:17 to 5:27, check 11's gap 4.1 to 4.7 min, the first
+  Reorganize 4:06-4:10 to 4:15-4:18 with 15 Patents, rule 1 before the Bay floor 11.0/16.3 to
+  11.5/11.4 min, rule 4 within 0.07 at every stage. The commit before failed 14 pace tests; after,
+  10, every one among those 14 (run 4's rule 4, the late runs' offline readings, rule 3 on seed
+  8919). The campaign's City completes at 10:52 and 11:31 (pace-act3, pace-act4; 19:03 and 14:29
+  at the commit before, where pace-act3's "in the first Act III run" failed): the Sparks' new
+  sequence moves the Act III bot's plan; not a claim about players.
 - Touched outside the obvious files (minimal): `src/app/finale.ts` (one invite line, the slip 14 px
   taller), `src/app/screens.ts` (`backTabs` and the Options page), `src/app/tags.ts` (the Factory
   Hopper's verb and `veinBoost`), `src/sim/systems/machines.ts` and `miners.ts` (the

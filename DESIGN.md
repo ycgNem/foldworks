@@ -113,8 +113,8 @@ The player switches floors with Tab or the floor tabs. Both floors run all the t
 - **Sparks**: the **Inspector**, the one kind. One every 3–6 min (uniform), visible for 20 s, on
   the Workshop floor. They walk up to a line (the busiest connected group of machines, two at
   least at work; on a free owned tile beside it). Click and they grade it with §10's audit
-  formula and hand **60 s of that line's measured output × the grade multiplier to research, as
-  items** (the selected node first, then the bank). This rewards a good line, not a lucky click,
+  formula and hand **30 s of that line's measured output × the grade multiplier to research, as
+  items** (the selected node first, then the bank; it was 60 s while half the Sparks were veins). This rewards a good line, not a lucky click,
   and it teaches the grade the fold will give. *Paid in kind, not coin (Milestone 1–2 review): a
   coin windfall sized by current output is the shape of Cookie Clicker's golden cookie.*
   - Missing one costs nothing. Sparks pause while the tab is hidden (no offline Sparks). While no
@@ -125,10 +125,14 @@ The player switches floors with Tab or the floor tabs. Both floors run all the t
     Spark is now one that grades a real line. Measured on the planner bot (seeds 1000, 8919, 16838,
     24757, its first 3 h): 38–41 spawns before, 17–22 of them veins, and 39–41 after, all
     Inspectors (12–15 an hour either way); its coin at 3 h 1.46M against 1.49–1.64M with the vein
-    (2–11% less: the vein's ×3 minutes). The Inspector comes twice as often as it did, so its research gift doubles: about a
-    fifth of one line's output a minute for a player who catches every one (60 s × grade in 4.5
-    min), against the 30% of every node Inspiration gave (§20). The trophies that count Sparks
-    (1, 10 and 100) keep their counts; the first, "Lucky!", is renamed **Spot Check**.
+    (2–11% less: the vein's ×3 minutes).
+  - *The gift is halved to 30 s* because the Inspector now comes twice as often: research an hour
+    of catching every one stays where it was (about a ninth of one line's output, 30 s × grade in
+    4.5 min). At 60 s the Dock-only player, who feeds the Hopper only when stuck, reached Gizmo
+    Theory 2.7 min behind the planner (16:19 against 13:40; §13 check 11 wants a quarter of the
+    planner's time, 3.4 min; it was 4.1 before the cut): free research made the Hopper less of a
+    choice. At 30 s it is 4.7 min behind (18:21 against 13:40). The trophies that count Sparks (1,
+    10 and 100) keep their counts; the first, "Lucky!", is renamed **Spot Check**.
 
 ## 7. The Dock, orders and Mayor Bramble
 
@@ -486,6 +490,18 @@ each); check 10: greedy's longest stretch 162 s (134-211, p90 200); checks 7 and
 Patents at 4 h 15-16. Income: the planner's ~200 coin/min at 5 min becomes ~675 at 7 min (two plate
 modules, 375/min, and L2 built again) and ~825 at 10 min, against ~300-450 before; the coin it cannot
 spend at 9-13 min waits on research items (copper, gears), which the plate modules do not make.
+
+**Re-measured after the cuts** (the playability pass, wave 2: the Lucky Vein and Inspiration gone,
+the Inspector the one Spark at 30 s; the full pace suite against the commit before, same seeds):
+first fold 5:27 (was 5:17; every seed now 5:27), Folding 3:46 (3:48), Gizmo Theory 13:40 (13:27),
+**slice end 22:10** (21:35), greedy 22:09 (21:38), Dock-only 28:14 (27:41): the vein's ×3 minutes
+were a little early coin. Check 11: Dock-only Gizmo Theory 18:21, **4.7 min behind** (was 4.1; 2.7
+with the Inspector at 60 s, which is why it is 30 s, §6). Act II: the first Reorganize 4:18 and
+4:15 with 15 Patents (4:10 and 4:06, 15 and 16); stage 1 4:04-4:07 (3:55-4:03); rule 1 before the
+Bay floor 11.5 and 11.4 min (11.0 and 16.3: seed 8919's open 16.1-min wait is gone). Rule 4 (§20)
+moved by at most 0.07 at every stage but two that were already outside the band's floor or are its
+open readings. The failures the commit before already had stand (§20's run 4 and late-run offline
+readings, rule 3's seed 8919); none is new.
 
 **Measured** (round 4, 2026-10-20, `tests/pace-*.test.ts`, 50 seeds unless noted, mean (range)):
 Bellows 0:21; first Miner 0:47; Pressing 1:47 (Dock-only 3:13); chunk B 9:20 (7:38–10:28); first
@@ -1416,9 +1432,12 @@ and on every machine, and a forecast is still the morning's report.
   A click on a Hopper on any floor now opens the research page, as it always did before Act II.
 - **Rule 4 (active over idle) is unchanged by it**: no bot ever clicked a Hopper, so every reading
   in the table below was already without Inspiration, and coin was never what it paid. Active
-  play keeps building, Overdrive and the Inspector (§6); the readings that sit at the band's
-  floor (1.48-1.50, Overdrive's own duty cycle) are as they were, re-measured after the Lucky
-  Vein's cut below.
+  play keeps building, Overdrive and the Inspector (§6). Re-measured after the Lucky Vein's cut as
+  well (both seeds, every stage): every reading within 0.07 of the commit before (seed 1000's run
+  2 at 3 h 1.51 to 1.50, run 1 at 2 h 1.10 to 1.17, run 3 at 1 h 1.52 to 2.06, its idle lower),
+  the band's floor readings (1.50-1.51, Overdrive's own duty cycle) where they were. Run 4's
+  stages read 1.00 on both seeds, as they did at the commit before (1.00-1.13): a failure the cut
+  did not make (the returning run's run 4, the playability pass's first wave).
 - Its trophies (Inspired: Overdrive cools 2 s sooner; They Know, hidden: the Tinfoil Hopper skin)
   go with it, the skin and its art too: nothing else needed either (the other four cooling
   trophies still reach its 10 s cap, §24; the skin was the joke about the clicking). Save v15
