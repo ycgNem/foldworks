@@ -3644,3 +3644,80 @@ left behind (DESIGN.md §6, §20, §21, §24).
 Dimensions). A separate Challenges page is still the genre's shape (Antimatter Dimensions has a
 Challenges tab too); kept, because a run under one rule is the long tail's own goal (§24) and its
 rewards are rules, never a multiplier, and it now waits until the story is told.
+
+## Playability pass (2026-11-08): the balance pass
+
+The full pace suite on the merged playability build (aee5455) failed 12 of 101 tests in 7 files.
+Each was traced to its cause and fixed from the model or the bot, not by moving a bound; one is
+left open by a minute. Numbers and derivations: DESIGN.md §12, §16, §19, §20, §21.
+
+- **Offline: a heap can go down while away** (`src/sim/offline.ts`). The extrapolation moved heaps
+  only up, so a heap emptying (out of its front into a press or belt, faster than the Committee's
+  Night Crew alone) never changed the rates, and run 1 at 3-5 h, the first stages to have the Night
+  Crew since Folding became node 2, paid 0.95 of open idle even at e = 1 (0.489-0.498 at 0.5,
+  0.706-0.744 at 0.75, under both floors). Now draining heaps drain while extrapolated, and the
+  first such heap to empty ends a segment (heaps fed alike go together). A heap only the crew drains
+  goes down without a segment: a segment each paid run 4's 12 h factory 23-31 windows in full
+  (check 12 over its e + 0.05). Why a segment and not a formula: §12's rule is that a thing that
+  changes the rates ends a segment, and this is one; offline still never pays more than open idle.
+- **The returning run's plan** (`PLAN2_RETURN`, `src/sim/bot2.ts`; `src/sim/campaign.ts`). The Act II
+  plan was written for run 1, where Nested Folds comes at 3:28, so a returning run laid the Bay floor
+  at 20 minutes and nested the annex chain an hour later. Run 2 never reached run 1's peak (rule 3,
+  both seeds), and the 2 h reset loop tied the designed run (3.34 an hour each). A returning run now
+  nests before the Bay floor: run 2 passes run 1's peak at 21 min, the designed runs bank 3.59 an
+  hour and the best loop 2.39. **No Patent formula changed.** The loops' gain was never a formula:
+  the Patents are finite pools filed once, so a loop wins only by reaching them sooner, and it tied
+  only because the designed run's second run was slow. A Committee reputation gate in play time
+  rather than runs was considered and not built: nothing measured needs it now, and it would have
+  been a new rule for one test.
+- **Rule 3 stays open by one minute** (`BACK_IN_OPEN`, both seeds, which play the same run 2): the
+  campaign's planner rebuilds Act I for the run's first 6 minutes before the Act II bot places the
+  kept designs' free copies. The bound (20 min) is the design's and is not moved.
+- **The Draughtsman's queue is emptied at every run's start** (`campaign.ts`), not only in Act III
+  campaigns. The idle tests' run 4 started with run 3's queue, a kept design unfolded over the
+  planner's lines, the planner never handed over and run 4 earned 1.1K a minute for 5 h: rule 4's
+  1.00-1.06 there was a stuck bot, not a returning run with nothing to do, so **rule 4 is not
+  re-derived for returning runs**. Run 4 now reads 1.52-1.56.
+- **Run 4 is measured at 2-5 h, playing 5.5 h** (`tests/pace-idle-run4-*.test.ts`,
+  `pace-idle-helpers.ts`). The bound "the last stage stands past 12 h" protects idle and offline
+  measured past 12 h of play (Milestone 6's exit); the quicker returning run starts run 4 at 7.6 h,
+  so the stages moved an hour later (12.55-12.58 h). The 1 h stage was the Bay floor rebuild, open at
+  every measure.
+- **Bot3 lays the Floating City's Glassworks right after Rubber** (`src/sim/bot3.ts`), before
+  Processors, Sensors and Robotics, which the City does not want. On the merged build run 3's
+  Sensors line never folded, the plan waited an hour on Robotics and ended without glass, and the
+  City waited for run 4 (18:05; the polish slice's "Glassworks never folded" finding, the same fault).
+- **The Spires want x12: 1,800 rotors, 30,000 glass, 24,000 steel** (`src/data/megaprojects.ts`).
+  With the glass fixed the bot finished the City at 10:00. Mapped through §16's own target-and-measure
+  pairs (1.19x at the first Reorganize, 1.45x at the District at 7:34, 1.45-1.78 player hours per bot
+  hour after it) that is about 14.5-15.3 h for a player against the 18-25 h aim. x4 gave 11:05 (the
+  District grows while the Bay fills, so rates rise); x12 gives **13:04, still in run 3, about 19-21 h
+  for a player**: the aim's lower half, on purpose (the review's retention curve). It is the City's
+  last stage only: the Platform, the Transmuter and every other number stand.
+- **pace-act3's District window restated from 8-16 h to 7-16 h of bot time**: a measurement, not
+  §16's rule (11 h for a player). The returning run exists to shorten the replay of Acts I-II; the
+  District now opens at 7:34 (was 8:17-10:01), about 10-11.7 h for a player.
+- Not changed, on purpose: rule 4's 1.5 floor, Overdrive's duty cycle, the Patent formula, the
+  Committee's gate, `RULES.backInMinutes`.
+
+**Flagged as derivative:** nothing new is added (two bot plan orders, one offline segment rule, one
+want scaled).
+
+## Playability pass (2026-11-08): the last screens audit
+
+The full audit (`npm run screens`, 507 shots at three window sizes) on the merged build found four
+shots with overlaps. Two came from this update's labelled floor buttons, which are wider than the
+old dial:
+- **The high floors' tool strip has a level 4** (`src/app/district.ts` stripLevel). At 1024x640 the
+  World in Act V has four labelled tools (Route, Remove, Fold, Last Fold). Level 3 (bare limits, no
+  price) no longer fitted, and the counters ran under the Workshop and Factory buttons. Level 4
+  takes the routes and tiles counts off the strip and puts them in the Route key's tag; a limit that
+  binds still shows its slip under the strip. The tools keep their labels (the owner's rule: core
+  actions get a labelled button). Level 4 is chosen only when level 3 cannot show one group and the
+  page key, since the groups page anyway; so every other floor and size looks as before.
+  Considered: two rows. Rejected: slips under a taller strip ran into the Reorganize card at 1024.
+- **A slip under the strip keeps left of the floor column's Tab key** (`slipsOf`). The District's
+  long "in hand" slip covered it at 1024x640.
+- Left as it was: at 1920x1080, a pinned courier-route card on Beyond sits over the bottom edge of
+  the lot's price (`placeWide` trades a little overlap for nearness). It predates this update; the
+  price's top half still shows, and closing the card (Esc) shows all of it.

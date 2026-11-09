@@ -631,9 +631,9 @@ If any answer is no, change the model here before building more.
 | 45 min | slice end: the Gizmo Festival filled at the Factory Dock (measured: 20:36, planner; §13 check 9 ≤ 45 min) |
 | 3 h | Act II: power, steel, glass, circuits |
 | 5 h | first Reorganize (12–20 Patents) |
-| 11 h | District floor (Act III; measured 10:01, the second gate moved it from 15 h: the Great Drill stands at about 9.5 h) |
+| 11 h | District floor (Act III; measured 10:01, the second gate moved it from 15 h: the Great Drill stands at about 9.5 h; 7:34 in the balance pass, the returning runs replaying Acts I-II fast, about 10-11.7 h for a player, §21) |
 | 25 h | the first Act III megaproject stage (the Floating City's Platform; measured 11:05) |
-| 18-25 h | **the core ending**: the Floating City complete (§21; the planner bot 12:19-12:40, in the first run that builds a District) |
+| 18-25 h | **the core ending**: the Floating City complete (§21; the campaign bot 13:04, about 19-21 h for a player, in the first run that builds a District, with the Spires x12 in the balance pass: it was 10:00, about 14.5-15.3 h) |
 | 40 h | first Relocate (the post-game from here on; the bot 17:40, §22 Pacing) |
 | 60 h | four biome worlds visited |
 | 80 h | the Last Fold available |
@@ -1117,6 +1117,39 @@ and run 3 missed it on both seeds at 1:22.
 - Rule 6 (never resetting) and the idle tests of runs 2 and 3 (`pace-idle-run2-1000`,
   `pace-idle-run3-8919`) still pass.
 
+**Re-measured in the balance pass** (every playability slice merged, 2026-11-08; DECISIONS.md "the
+balance pass"). On the merged build both seeds' run 2 never got back to run 1's peak (13.9K against
+14.6-14.8K) and the 2 h loop tied the designed run (3.34 an hour each); the 1 h loop's 3.68 of the
+wave-1 measure had already gone (2.07: cutsA moved the core runs). The cause of both was one thing:
+**the Act II plan was written for run 1**. Its Bay floor comes at 20 minutes of a returning run, and the
+annex nest (Gizmo works II) that made run 1's peak an hour after it, because in run 1 Nested Folds is
+researched at 3:28. A returning run knows Nested Folds from its first tick. Now the returning run's
+plan (`PLAN2_RETURN`, `src/sim/bot2.ts`) nests the annex chain, with a copy in the second block,
+before it lays the Bay floor. Seeds 1000 and 8919 read the same (run 2 has no Sparks that matter):
+
+| | before (merged build) | now |
+|---|---|---|
+| Run 2: income at 5, 10, 15, 20, 25 min | 1.2K, 10.9K, 13.5K, 12.6K, 4.2K | 1.2K, 10.9K, 13.5K, 14.4K, 16.6K |
+| Run 2 passes run 1's peak (14.6K, 14.8K) | never (peak 13.9K) | **0:21** (open, below) |
+| Run 3 passes run 2's peak | 0:10 | 0:19 |
+| Run 2's length, Patents; run 3's | 2:05, 6; 4:00 (cap), 0 (card 8) | 1:39, 6; 4:00, 0 (card 8) |
+| Designed runs 1 + 2, Patents an hour | 15 + 6 in 6:17, 3.34 | 15 + 6 in 5:51, **3.59** |
+| Loops: slice end, 1 h, 2 h, burn at 35 min | 2.39, 2.07, **3.34**, 2.23 | 2.05, 1.88, 2.39, 2.05 |
+
+- **Why a loop no longer ties.** The designed run's Patents are finite pools (each product's best
+  design once, each Drill stage once, the bills' rise once), so a loop can only win by reaching them
+  sooner. The Drill's stages are gated by the Committee's reputation, two orders a run, and so the
+  2 h loop, resetting at the designed run's own cadence, reached the same pools at the same hours.
+  What separates them now is the designed run's second run reaching its stage in 1:39 rather than
+  2:05; the loops' returning runs use the same plan, but a loop resets before its run's stage
+  stands and pays the floor's rounding each time. No formula changed: the gate (rep from orders a
+  run) is what the Drill's stages are paced by (§19 the Committee), and the Patents are the rise
+  over the record, as before.
+- **Rule 3 is open by one minute** on both seeds (`BACK_IN_OPEN`): 14.4K a minute at 20 min of run
+  2, 21 min to pass 14.6-14.8K. The campaign's planner rebuilds Act I for the run's first 6 minutes
+  (income 1.2K at 5 min) before the Act II bot places the kept designs' free copies, which a player
+  does from minute one; the returning run itself is not the limit. Run 3 passes run 2's at 19 min.
+
 ### The Patent tree before the playability pass (`src/data/patents.ts`, 29 nodes, 40 Patents in all; history)
 
 Flat prices with prerequisites, never a growing price; no "+X% everything" node. A price is about
@@ -1414,6 +1447,25 @@ derivation here.
   it would otherwise be paid on as if its line ran on. Their fill rates are measured in the window
   like a heap's; the segment ends when one fills, it is set full, and the live minutes after let
   its line back up (a jam row if a machine stops).
+- **Segments end at a heap emptying too** (the balance pass, 2026-11-08). The Committee's Night Crew
+  (rep 2, §19) takes a slag off every heap each 10 s while away, and a heap also empties out of its
+  front into a press or a belt, so a heap can go *down* while nobody plays. The extrapolation only
+  ever moved heaps up, so a draining heap stood still at its count through every extrapolated hour,
+  and what its line does once the heap is empty (a slag belt running dry stops blocking the belt it
+  merges into; a smelter beside it takes its next slag there) was never measured. *Found* at run 1's
+  3-5 h stages, the first to have the Night Crew since Folding became node 2 brought the Committee
+  forward: the live hour after a heap emptied (seed 8919, 3 h, at minute 49) earned 5% more, and the
+  offline run at e = 1 paid **0.951** of open idle, so 8 h away paid 0.489-0.498 at 0.5 and
+  0.706-0.744 at 0.75, under both floors. Now a heap going down drains at its measured rate while
+  extrapolated, and the first heap that also empties out of its front (drains faster than the Night
+  Crew's slag a 10 s, times 1.2 for a 60 s window's rounding) to reach 0 ends the segment; every
+  other draining heap within one measuring window of empty goes with it, so a row of heaps fed alike
+  is one segment. No timeline row, since nothing stopped. A heap the crew alone drains goes down
+  without a segment: reaching 0 stops nothing, and a segment for each one paid run 4's 5 h factory
+  23-31 re-measured windows in full (check 12 at 0.553 and 0.57 at e = 0.5, over its e + 0.05).
+  Measured after, run 1 at 1-5 h on both seeds: 8 h at 0.5 pays 0.52-0.56 of open idle (the rest
+  0.50-0.53), at 0.75 0.76-0.78 (0.75-0.77), in 2-11 segments; seed 8919 at 3 h, e = 1 pays 0.99
+  (was 0.951).
 - **The run is spread over frames** (20 ms a frame, the clock read every 100 ticks), with a
   progress bar, never a frozen page. Measured in Chrome on the Act II bot's 2 h factory (179
   Workshop buildings, 48 Factory pieces): an 8 h offline run takes **3.0–3.6 s** while the page
@@ -1643,6 +1695,26 @@ both unless the seed is named. Measured in the final round:
 - **Open idle after the Bay floor** is 3,600–11,700 coin/min with the annex (runs 1–4 from 3 h).
   The Night Shift's prices are derived from the stages where it is offered (above). The payback
   test re-measures them, and it still passes.
+
+**Re-measured in the balance pass** (every playability slice merged, 2026-11-08). The merged build
+failed 10 of these readings; now every one passes:
+- **Run 1 at 3-5 h, offline under its floors** (0.489-0.498 of open idle at 0.5, 0.706-0.744 at
+  0.75): the extrapolation never let a heap go down (§12, "Segments end at a heap emptying too").
+  Now 0.54-0.57 at 0.5 and 0.77-0.79 at 0.75 at every run-1 stage, the rest after the replay at
+  0.52-0.55 and 0.76-0.78.
+- **Run 4's rule 4 at 1.00-1.06** was not the returning run having nothing to do: run 4 did
+  nothing at all. Run 3 buys the Draughtsman, its queue of kept designs is kept through the reset,
+  and the campaign emptied the queue at a run's start only when it played Act III; the idle tests'
+  campaign does not, so in run 4 a kept design unfolded over the planner's lines, the planner never
+  handed over, and run 4 earned 1.1K a minute for 5 h (idle the same). The campaign empties it every
+  run now: run 4 reads **1.52-1.56** at 2-5 h, both seeds, at 17-18K a minute.
+- **Run 4's last stage past 12 h.** The bound keeps idle and offline measured past 12 h of play
+  (Milestone 6's exit, every stage to 15 h). The returning plan (§19) made runs 2 and 3 about 25 min
+  shorter each, so run 4 starts at 7.55-7.58 h (was 8.03) and its 4 h stage stood at 11.6 h. Run 4
+  now plays 5.5 h and is measured at 2-5 h (its 1 h stage, the Bay floor rebuild, was open at every
+  measure and is the same moment as runs 2 and 3's 1 h): the last stage stands at 12.55-12.58 h.
+- Runs 2 and 3: run 2's stages read 1.50-1.51 at 1-3 h (Overdrive's 1.5x: the plan is through by
+  then, the returning run being quicker), run 3's as before.
 
 ## 21. Act III: the District (Milestone 7, 15-40 h)
 
@@ -2111,7 +2183,44 @@ base (44e3b23) ends run 3 the same way; the same build without the Chute's overf
 - **The ending is early for the bot, on target for a player.** The planner knows the plan and
   plays every minute; it reached the first fold at 24 min against §16's 40 and Folding's research in
   about half a first-timer's time (the review), so 12:20-12:40 for the bot reads as about 18-25 h
-  for a competent first-timer, the aim. Not measured with a human.
+  for a competent first-timer, the aim. Not measured with a human. *Restated in the balance pass,
+  below:* the bot's clock is not a fixed multiple of a player's.
+
+**Re-measured in the balance pass** (every playability slice merged, 2026-11-08; DECISIONS.md "the
+balance pass"). On the merged build the City did not stand in run 3: its Spires had their steel and
+rotors by 10:03 and no glass, because the Glassworks corner line came after Robotics in the plan and
+run 3's Sensors line never folded, so the plan waited an hour on Robotics and ended (pace-act3: the
+City at 18:05 in run 4, the test failed). Bot3 now lays the Glassworks right after Rubber (its Glass
+II group nests a Rubber copy), before Processors and Sensors, which the City does not want. Then the
+City stood at **10:00**, 1.1 h after its Platform (8:52).
+
+*How the bot's clock maps to a player's.* §16's targets are a competent player's; where a target and
+a bot measure both exist past the slice, the bot is ahead by 1.19x at the first Reorganize (5 h
+against 4:12) and 1.45x at the District (11 h against 7:34 on this build: the returning runs replay
+Acts I-II fast, as they are meant to). Between those two targets a bot hour is about 1.78 player
+hours (6 against 3.37); after the District this pass reads it as 1.45-1.78. The first hour is no
+guide (the bot builds 2-2.4x a player's speed there: the first fold at 5:02 against 12 min), and it
+is a small part of a 20 h clock. So the City at 10:00 read as **11 + (1.45 to 1.78) x 2.43, about
+14.5-15.3 h for a player**: early against the 18-25 h aim, and the District-to-City stretch, 7-14 h
+for a player by the aim, was 3.5-4.3.
+
+*The fix, from the model.* The Spires are the act's main chains at the District Bay (rotors, glass,
+steel); a player's last stage should be a few hours of the floor the act built, not one. **The
+Spires want x12: 1,800 rotors, 30,000 glass, 24,000 steel** (were 150, 2,500, 2,000). x4 was tried
+first: the City at 11:05 (about 16-17 h for a player), because the District keeps growing while the
+Bay fills (41 modules at 9 h, 87 at 11 h), so the rates rise and a want does not scale the time in
+proportion. At x12 (seed 1000, the Act III campaign): the Platform 8:52, the steel in by 11:00, the
+rotors by 10:30, the glass (three Glass II copies and the District's growth: 2,500 an hour at 9:30,
+12,000 at 13:00) by **13:04**, still in run 3 (5:51-13:29), the first Act III run (pace-act3, the
+full suite: the District 7:34, the Platform 8:51, the City 13:04). That reads as about **19-21 h for
+a player**, in the aim's lower half, which this pass keeps on purpose: the review's retention curve
+says earlier is better. The District's window in pace-act3 is a bot measurement, restated from
+8-16 h to 7-16 h (7:34 is about 10-11.7 h for a player, §16's 11 h). The glass is
+the last 2 h alone, a goal on the screen ("the Spires: glass") with the District growing beside it.
+Not measured with a human.
+The Act IV campaign (pace-act4, the same build): the City 13:36, Charting and the World 13:36, the
+first Relocate (Home to Rime) at 14:49; on the merged build before this pass the City never stood
+there and Charting never came. Act IV is now reached in a measured run (§22's targets, post-game).
 
 Lessons:
 - **The waste chute and 1 a trip halve the routes and make distance cost.** With waste going to

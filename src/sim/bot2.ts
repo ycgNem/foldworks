@@ -456,6 +456,27 @@ export const PLAN2: Step[] = [
   { k: 'mark', name: 'end' },
 ];
 
+/** The returning run's plan (the balance pass, DESIGN.md §19 rule 3): a run after a Reorganize knows
+ * Nested Folds from its first minute, so the annex chain is nested into Gizmo works II, with a copy
+ * in the annex's second block, before the Bay floor is laid: run 1's peak income was that nest and
+ * the Drill's stage done, and PLAN2 (written for run 1, where Nested Folds came at 3:28) laid the Bay
+ * floor at 20 minutes and nested an hour later, so run 2 never got back to run 1's peak on either
+ * seed (13.5K a minute at 15 min against 14.6-14.8K). The Bay floor and everything after it as in
+ * PLAN2 (its own nest step then reads done). */
+export const PLAN2_RETURN: Step[] = (() => {
+  const bay = PLAN2.findIndex((s) => s.k === 'fplan' && s.name === 'bay');
+  const pre: Step[] = [
+    { k: 'need', r: 'nestedFolds' },
+    { k: 'annex', n: 1 },
+    { k: 'fplan', name: 'annex1pre', items: [...ANNEX1, ...LANE], opt: true, keep: true },
+    { k: 'ffold', box: { x: 12, y: 0, w: 2, h: 3 }, name: 'Gizmo works II' },
+    { k: 'fplan', name: 'annexIIpre', items: [...LANE, ...ANNEX_II], opt: true, keep: true },
+    { k: 'annex', n: 2, spare: 2, for: ['Gizmo works II'], opt: true },
+    { k: 'fmod', id: 'gizII2', design: 'Gizmo works II', to: { k: 'dock' }, annex: true, opt: true },
+  ];
+  return [...PLAN2.slice(0, bay), ...pre, ...PLAN2.slice(bay)];
+})();
+
 /** Has the machine at (x, y) done nothing for the last `sec` seconds? */
 export function idle(g: Game, x: number, y: number, sec: number): boolean {
   const m = g.entAt(x, y);

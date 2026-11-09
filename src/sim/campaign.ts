@@ -6,7 +6,7 @@
 // at the same hand and click pace, and it reads only what the screen shows (the preview included).
 import type { Game } from './Game';
 import { Bot } from './bot';
-import { ANNEX1, Act2Bot, LANE, PLAN2, type Step as Step2 } from './bot2';
+import { ANNEX1, Act2Bot, LANE, PLAN2, PLAN2_RETURN, type Step as Step2 } from './bot2';
 import { Act3Bot } from './bot3';
 import { TICK_RATE } from '../engine/time';
 import { previewPatents, reorganizeRefusal, runSeconds } from './reorganize';
@@ -174,7 +174,11 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
     // can, and a lab design over the Act I chains (Circuits at (12,2)) would break the slice's
     // copper line first (seen in the 40 h campaign's fifth run). The player empties the queue at
     // the start of a run; the Act II bot queues what its plan folds again when it takes over.
-    if (o.act3) for (const id of [...g.s.meta.queue]) g.act({ k: 'queueKept', id });
+    // (Every campaign, the balance pass: it was done only with `act3`, so the idle tests' campaign,
+    // whose run 3 buys the Draughtsman, started run 4 with the queue, a kept design unfolded over
+    // the planner's lines, the planner never handed over, and run 4 earned 1.1K a minute for 5 h:
+    // rule 4's 1.00-1.06 at 1-4 h of run 4 was that, not the returning run.)
+    for (const id of [...g.s.meta.queue]) g.act({ k: 'queueKept', id });
     const list = logs.some((l) => l.act3 >= 0) ? [...PATENT_PRIORITY, ...PATENT_PRIORITY_3] : PATENT_PRIORITY;
     for (;;) {
       const next = list.find((id) => !hasPatent(g, id) && !patentRefusal(g, id));
@@ -208,7 +212,8 @@ export function playCampaign(g: Game, o: CampaignOpts): RunLog[] {
           // the Great Drill's deep seams (stage 3, kept through every reset) are claims in chunk D
           const deep: Step2[] = g.s.mega.stage >= 3 ? [{ k: 'land', id: 'D' }] : [];
           const extra = [...deep, ...(hasPatent(g, 'surveyCharter') ? EXTRA_CHAINS : [])];
-          bot = new Act2Bot(g, {}, [...extra, ...PLAN2]);
+          // a returning run knows Nested Folds: its plan nests the annex chain before the Bay floor
+          bot = new Act2Bot(g, {}, [...extra, ...(g.s.meta.runs >= 1 && g.done('nestedFolds') ? PLAN2_RETURN : PLAN2)]);
           handover = runSeconds(g);
         }
       } else if (act4) act4.update();

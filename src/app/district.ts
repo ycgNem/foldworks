@@ -49,7 +49,7 @@ import { KERNEL_GRADE } from '../data/kernels';
 import { sheet, itemIcon, hasArt } from '../render/sprites';
 import { mainOutput } from '../render/factory';
 import { routeAtWorld, routeEnds, routeShort, routeItems, districtMegaFrac, carrier, drawModuleTile, FOCUS_SINK } from '../render/district';
-import { liftWingW } from './topbar';
+import { liftWingW, floorsRect } from './topbar';
 import { button, tag, tagSize, rule, meter, chip, chipWidth, clipboard, twine, uiIcon, dot, type UIconName } from './chrome';
 import { bigSafe, worldRect, place, zones } from './tags';
 import { drawGrade } from './fold';
@@ -524,11 +524,14 @@ function stripRect(app: App, L: Layout): Rect {
 
 /** How tight the strip is this frame: 0 every word; 1 without the GROUPS caption and with the short
  *  "none spare"; 2 the limits as bare numbers and the skiff's price as a coin figure; 3 without the
- *  price (Act V's World at 1024 has four labelled tools). The tools keep their labels. */
+ *  price; 4 without the limits, which move to the Route key's tag (Act V's World at 1024 has four
+ *  labelled tools, and the labelled floor buttons took the room level 3 had; a limit that binds still
+ *  has its slip). The tools keep their labels. Level 4 only when level 3 cannot show one group and
+ *  the page key: the groups page. */
 const STRIP = { level: 0 };
 function stripLevel(app: App, room: number): number {
   for (let l = 0; l < 3; l++) if (stripNatural(app, l) <= room) return l;
-  return 3;
+  return stripNatural(app, 3, 2) <= room ? 3 : 4;
 }
 
 /** How long the slip saying what a placement flew stays up (UI seconds). */
@@ -550,10 +553,15 @@ function slipsOf(app: App, L: Layout): { s: string; r: Rect }[] {
   const lim = limits(app.game);
   if (lim.bind) out.push(bindText(lim));
   const R = stripRect(app, L);
+  // a slip beside the floor buttons keeps left of their Tab key (topbar.ts lift: the key hangs left
+  // of the bottom button; a long "in hand" slip covered it at 1024x640)
+  const F = floorsRect(app, L);
+  const right = F.x - richWidth('{k:Tab}') - 6;
   let y = R.y + R.h + 3;
   return out.map((s) => {
     const w = richWidth(s) + 12;
     const r = { x: Math.round(R.x + R.w / 2 - w / 2), y, w, h: 14 };
+    if (F.w && y < F.y + F.h && r.x + r.w > right) r.x = Math.max(4, right - w);
     y += 17;
     return { s, r };
   });
@@ -616,7 +624,7 @@ function tools(app: App): Tool[] {
   const g = app.game;
   const mk = (id: string, label: string, ic: UIconName, on: boolean, tip: TipLine[], go: () => void): Tool => ({ id, label, icon: ic, on, tip, go, w: 26 + richWidth(label) });
   const out = [
-    mk('dRoute', 'Route', 'flow', app.mode.k === 'route', [{ text: '{big:Route}' }, { text: '{k:LMB} a module, then where it goes' }, { text: `a ${word()} {coin:${coinK(skiffCost())}} · refunded when lifted` }], () => app.setMode(app.mode.k === 'route' ? { k: 'idle' } : { k: 'route' })),
+    mk('dRoute', 'Route', 'flow', app.mode.k === 'route', [{ text: '{big:Route}' }, { text: '{k:LMB} a module, then where it goes' }, { text: `a ${word()} {coin:${coinK(skiffCost())}} · refunded when lifted` }, ...(STRIP.level >= 4 ? [{ text: limitsLine(g) }] : [])], () => app.setMode(app.mode.k === 'route' ? { k: 'idle' } : { k: 'route' })),
     mk('dRemove', 'Remove', 'remove', app.mode.k === 'remove', [{ text: '{big:Remove}' }, { text: '{k:LMB} a module back to the inventory' }, { text: `its routes go with it · ${word()}s refunded` }], () => app.setMode(app.mode.k === 'remove' ? { k: 'idle' } : { k: 'remove' })),
   ];
   // the World folds a group up to Beyond once The Last Fold is researched and Beyond stands
@@ -657,6 +665,7 @@ const SLOT = 21;
 function limitParts(app: App, level = 0): { s: string; frac: number; warn: boolean; tip: TipLine[] }[] {
   const g = app.game;
   const l = limits(g);
+  if (level >= 4) return [];
   const bare = level >= 2;
   const w1 = word();
   const out = [
@@ -669,17 +678,24 @@ function limitParts(app: App, level = 0): { s: string; frac: number; warn: boole
     tip: [{ text: `{big:The next ${w1}}` }, { text: `{coin:${coinK(skiffCost())}} · each one flying makes the next dearer` }, { text: `refunded when lifted · a group beside what it feeds needs fewer` }] });
   return out;
 }
+/** The limits in one line, for the Route key's tag when the strip has no room for them (level 4). */
+function limitsLine(g: App['game']): string {
+  const l = limits(g);
+  return `routes ${l.routes}/${l.maxR} · tiles ${l.mods}/${l.maxT}`;
+}
 const limitsWidth = (app: App, level: number) => limitParts(app, level).reduce((n, p) => n + richWidth(p.s) + 8, 0);
 
 /** The strip's words when no group is in hand: what goes up here and where it comes from. */
 const NONE = (level = 0) => (level >= 1 ? '{soft:none spare}' : ID === 'beyond' ? '{soft:no spare World folds}' : ID === 'world' ? '{soft:no spare District folds}' : '{soft:no spare groups}');
 const groupsCap = () => (ID === 'district' ? 'GROUPS' : 'MODULES');
 
-function stripNatural(app: App, level = 0): number {
+/** The strip's width at a level with every group in hand shown, or with at most `maxSlots` of them
+ *  (one group and the page key: the least the strip pages down to). */
+function stripNatural(app: App, level = 0, maxSlots = Infinity): number {
   const ts = tools(app);
   const tw = ts.reduce((s, t) => s + t.w + 3, 0);
   const gs = groups(app);
-  const slots = gs.length ? 6 + (level >= 1 ? 0 : smallWidth(groupsCap()) + 4) + gs.length * (SLOT + 2) : 6 + richWidth(NONE(level));
+  const slots = gs.length ? 6 + (level >= 1 ? 0 : smallWidth(groupsCap()) + 4) + Math.min(gs.length, maxSlots) * (SLOT + 2) : 6 + richWidth(NONE(level));
   return 12 + tw + 4 + limitsWidth(app, level) + 2 + slots;
 }
 

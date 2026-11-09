@@ -50,9 +50,16 @@ describe(`Act III pacing to 40 h (seed ${SEED})`, () => {
     expect(stage).toBeDefined();
   }, T);
 
-  it('opens the District inside its window (§16: about 15 h; measured 10-16 h)', () => {
+  // §16's target is 11 h for a player (the second gate moved it from 15 h). The bot's window is a
+  // measurement, not the rule: the balance pass (2026-11-08) restated its floor from 8 h to 7 h. The
+  // returning run (the playability pass) exists to shorten the replay of Acts I-II, and its plan now
+  // nests before the Bay floor, so run 2 is 1:39 (was 2:05-3:02) and the District opens at 7:34 (was
+  // 8:17-10:01). At the bot's speed in the returning runs (it places every module from its plan
+  // instantly; a player takes about 1.5-2x as long there) that is about 10-11.7 h for a player
+  // (DESIGN.md §21 Pacing, the balance pass).
+  it('opens the District inside its window (§16: about 11 h for a player; the bot 7-16 h)', () => {
     const r = act3Campaign(SEED);
-    expect(r.districtAt!).toBeGreaterThan(8 * H);
+    expect(r.districtAt!).toBeGreaterThan(7 * H);
     expect(r.districtAt!).toBeLessThan(16 * H);
   }, T);
 
