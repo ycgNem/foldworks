@@ -3555,3 +3555,92 @@ be fed. Decisions (DESIGN.md §8, §11, §13, §16, §19, §21 carry the numbers
 toasts are general UI conventions, not one shipped game's. The PACED status sits beside the existing
 pips; it reads like Factorio's "output full", but it names a consumer and a rate rather than a state
 of the machine.
+
+## Playability pass (2026-11-08): cuts, Inspiration, the Lucky Vein, the post-game
+
+Agent "cutsB", wave 2, off `playability`. The critic's finding 6 (about 60 concepts by 5 h, eleven
+currency-like things against PLAN.md's six) and its derivative list. The cuts were the owner's call,
+made in advance; each is gone from the sim, the data, the UI, the bots and the tests, with no flag
+left behind (DESIGN.md §6, §20, §21, §24).
+
+- **Inspiration is cut** (`src/sim/systems/inspire.ts`, `s.inspire`, `IDLE.inspire*`, the research
+  page's meter). A click on a Hopper, on any floor, opens the research page, as it did before Act II.
+  *Why:* a currency-like thing to track, a 357-click chore per node for its 30%, and a click that
+  bypassed the line instead of rewarding it. Rule 4 (§16) is unmoved by it: no bot ever clicked a
+  Hopper, so every active/idle reading was already without it, and it never paid coin.
+- **Its trophies go, and the Tinfoil skin with them.** Inspired (Overdrive cools 2 s sooner) and the
+  hidden They Know (the Tinfoil Hopper skin). Neither reward needed a home: the four other cooling
+  trophies still reach the 10 s cap (§24), and the skin was the joke about the clicking. Its art
+  (`src/art/skin_tinfoil_hopper.*`) and its build entry (`pixel-art/m11-skins/destinations.py`) are
+  removed. The shelf: 203 trophies, 17 hidden.
+- **The Hands Off Challenge's rule** reads "no hand-mining, no cranking, no Inspector, no Overdrive".
+- **The Lucky Vein is cut** (flagged by the critic as Cookie Clicker's golden cookie into Frenzy):
+  `RULES.veinMult`/`veinSeconds`, the vein boost on machines and Miners (`boost`, `veinBoost`), the
+  patches' glow (`veins`), its sprite (`spark_vein`, its art and both pixel-art scripts' exports),
+  the toast, the hover tip, the Gazette's alert and the edge arrow's word. `src/data/sparks.ts`
+  goes too: with one kind, its record held only an unused name and weight.
+- **A Spark is the Inspector**, re-derived from the factory: it walks up to the busiest line with two
+  machines at work and grades it (§10), and pays 60 s of its output × the grade to research, in kind.
+  The `Spark` type loses its `kind`. *The rate stays 3-6 min:* it was set for Sparks of either kind,
+  and every Spark is now one that grades a real line. Measured on the planner bot (four seeds, 3 h):
+  38-41 spawns before (17-22 veins), 39-41 after (all Inspectors); its coin at 3 h 1.46M against
+  1.49-1.64M. The Spark RNG draws less (one draw a spawn, was up to four), so every seeded run's
+  Sparks move: the pace tests were re-run (below).
+- **The Inspector's gift is halved, 60 s of the line's output to 30 s** (`RULES.inspectorSeconds`).
+  *Why:* it now comes twice as often (it was half the Sparks), and at 60 s the doubled research let
+  the Dock-only player reach Gizmo Theory only 2.7 min behind the planner (§13 check 11 wants a
+  quarter of the planner's time, 3.4 min; it was 4.1): research free of the Hopper made the Hopper
+  less of a choice. At 30 s research an hour of catching every one is where it was, and the gap is
+  4.7 min. Chosen over a slower rate (6-12 min): the visit is the active beat and the grade lesson,
+  and the Spark trophies' counts (1, 10, 100) keep their meaning.
+- **"Lucky!" is renamed "Spot Check"** ("catch the Inspector"); "Spark Chaser" is "Regular Visitor"
+  and "Spark Collector" "First-Name Terms". Their counts (1, 10, 100) stand: the rate did not change.
+  The id `lucky` is kept (saves hold `trophy:lucky`), as `cityComplete` kept its id as "Lift-off".
+  Player-facing text says "the Inspector" where it said "Sparks" (the shelf's bonus row, the
+  bonus text); the system keeps the name Sparks in code and in DESIGN.md.
+- **The post-game waits for the ending.** Challenges and the Scenario boards open with the core
+  ending, the Floating City complete (`postGame` in `src/sim/systems/challenges.ts`, read by the
+  sim's `challengeRefusal` and the app's `scenariosOpen`); `CHALLENGE_AFTER_RUNS` is gone.
+  Megaprojects survive every reset (the Last Fold included), so once open it stays open. *Why:*
+  fifteen Challenges and eight boards were offered at the first Reorganize (about 5 h), in the stretch
+  the critic counted 60 concepts; after the credits they are what the game has left to offer, beside
+  Acts IV-V. The finale's last scene says so ("Challenges and Scenarios are open · Options").
+- **The Challenge entry moved off the Reorganize card onto its own page** (the critic: picking a
+  Challenge on the reset card is Antimatter Dimensions' challenge entry at prestige). The Challenges
+  page is reached from Options (a key under "after the story", with the Scenarios, and a Challenges
+  tab beside Stats, Trophies, Options and Keys); "Take it next run" there takes it and opens the card
+  to sign. The card offers none: with one taken it shows a strip under the contract (the Challenge as
+  a key back to its page, "Ordinary run" to drop it, its rule, goal and reward), because pillar 4 says
+  the card states what the signature starts. The "Scenarios open" toast at the first reset is gone.
+- **A Challenge begun before the ending runs on** (never strand a run): `runChallenges` and its slip
+  never asked the gate; only taking a new one does. The slip still opens the page with Give up.
+- **Save v16** (migration `15:`, after cutsA's v15): drops `inspire`, the Inspiration counter, the
+  vein Spark, `veins` and every `boost`, the two trophies' flags and the Tinfoil skin (owned and
+  worn); keeps an Inspector on the map (without `kind`), what Inspiration delivered, and `challenge`.
+  A click logged on a dropped vein leaves the log (it would hand-mine the ore now). A save written by
+  the app (empty log) is exact; a log replayed past a Spark's spawn or holding a Hopper click is near,
+  not exact (the spawn draws less from the RNG; the click credits nothing), as the v12 Heater's was.
+  `tests/post-game.test.ts` loads a v14 save holding all of it.
+- **No bot or pace test takes a Challenge**; the tests that do set the City complete
+  (`tests/story-helpers.ts endStory`). The No Splitters test's route count reads 145 (120 + 20 + the
+  Lift-off trophy's 5 the City now brings with it).
+- **Measured** (the full pace suite, at the commit before and after, the same seeds; DESIGN.md §13,
+  §20): slice end 21:35 to 22:10, first fold 5:17 to 5:27, check 11's gap 4.1 to 4.7 min, the first
+  Reorganize 4:06-4:10 to 4:15-4:18 with 15 Patents, rule 1 before the Bay floor 11.0/16.3 to
+  11.5/11.4 min, rule 4 within 0.07 at every stage. The commit before failed 14 pace tests; after,
+  10, every one among those 14 (run 4's rule 4, the late runs' offline readings, rule 3 on seed
+  8919). The campaign's City completes at 10:52 and 11:31 (pace-act3, pace-act4; 19:03 and 14:29
+  at the commit before, where pace-act3's "in the first Act III run" failed): the Sparks' new
+  sequence moves the Act III bot's plan; not a claim about players.
+- Touched outside the obvious files (minimal): `src/app/finale.ts` (one invite line, the slip 14 px
+  taller), `src/app/screens.ts` (`backTabs` and the Options page), `src/app/tags.ts` (the Factory
+  Hopper's verb and `veinBoost`), `src/sim/systems/machines.ts` and `miners.ts` (the
+  boost), `src/sim/bot.ts`/`bot2.ts` (a Spark's key without its kind), `e2e/screens.mjs`
+  (`reorgChallenges` completes the City first; a new `optionsPost`), `docs/endgame.md` (the skin
+  table).
+
+**Flagged as derivative:** nothing new is added. Two flags are resolved by the cut: the Lucky Vein
+(Cookie Clicker's golden cookie into Frenzy) and the Challenge picked on the reset card (Antimatter
+Dimensions). A separate Challenges page is still the genre's shape (Antimatter Dimensions has a
+Challenges tab too); kept, because a run under one rule is the long tail's own goal (§24) and its
+rewards are rules, never a multiplier, and it now waits until the story is told.

@@ -699,8 +699,8 @@ export class App {
           break;
         }
         case 'spark': a.sfx('spark'); break;
-        case 'sparkGet': a.sfx('sparkGet'); if (e.id === 'vein') this.toast('Lucky Vein!', 'this patch · Miners ×3 · 60 s', C.gold); break;
-        case 'inspected': this.toast(`Graded ${e.id}`, `score ${(e.d ?? 0).toFixed(2)} · ${Num.of(e.value ?? 0).format()} items, a minute of the line, to {research:research}`, C.gold); break;
+        case 'sparkGet': a.sfx('sparkGet'); break;
+        case 'inspected': this.toast(`Graded ${e.id}`, `score ${(e.d ?? 0).toFixed(2)} · ${Num.of(e.value ?? 0).format()} items, half a minute of the line, to {research:research}`, C.gold); break;
         case 'firstSlagJam': a.sfx('jam'); if (this.game.s.meta.runs === 0) this.toast('Choked on slag!', '{k:LMB} shovel · or a {i:slag} Heap beside it', C.pipRed); break;
         // the first sale is one moment: the coins fountain out of the Dock with FIRST SALE! on the
         // floor (src/render/renderer.ts); its trophies wait until it has passed, and no slip
@@ -1527,7 +1527,7 @@ export class App {
     if (this.mode.k === 'remove') { this.act({ k: 'fremove', x: t.x, y: t.y }); return; }
     const e = g.fentAt(t.x, t.y);
     if (e?.kind === 'fdock') this.togglePanel('orders');
-    else if (e?.kind === 'fhopper') { if (!g.act({ k: 'fclick', x: t.x, y: t.y }).ok) this.togglePanel('research'); } // Inspiration (§20)
+    else if (e?.kind === 'fhopper') this.togglePanel('research');
     else if (e?.kind === 'fbay') this.togglePanel('mega');
     else if (e?.kind === 'module' && g.done('overdrive') && g.act({ k: 'fclick', x: t.x, y: t.y }).ok) return;
     else this.fselected = e && this.fselected !== e.id ? e.id : null;

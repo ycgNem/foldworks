@@ -32,6 +32,7 @@ import { newEnt, newFEnt, type BoardRecord, type ModuleDesign } from '../src/sim
 import { fingerprint, replay, savePayload, restore } from '../src/sim/snapshot';
 import { migrate, SAVE_VERSION } from '../src/engine/save';
 import { GRADES } from '../src/data/rules';
+import { endStory } from './story-helpers';
 
 function must(g: Game, c: Cmd) {
   const r = g.act(c);
@@ -81,11 +82,13 @@ function design(g: Game, over: Partial<ModuleDesign>): ModuleDesign {
   return d;
 }
 
-/** A game after one Reorganize, then this Challenge taken; then the sandbox opened. */
+/** A game after one Reorganize and the story's end (the post-game), then this Challenge taken;
+ * then the sandbox opened. */
 function take(id: ChallengeId, before?: (g: Game) => void) {
   const g = new Game(3);
   g.s.meta.runs = 1;
   g.s.megaPatents = 3;
+  endStory(g);
   before?.(g);
   must(g, { k: 'reorganize', challenge: id });
   expect(g.s.challenge).toBe(id);
@@ -218,10 +221,11 @@ describe('the Trophy Shelf (DESIGN.md §24)', () => {
     expect(prules(g).overdriveCool).toBe(cool0 - 2);
   });
 
-  it('Sparks stay longer with the Spark trophies', () => {
+  it('the Inspector stays longer with the Spark trophies', () => {
     const g = new Game(5);
     earn(g, 'lucky', 'sparkChaser');
-    // a working Miner on the iron, feeding the Hand Furnace, so a Lucky Vein can appear on it
+    // a working Miner on the iron feeding the Hand Furnace: a line of two at work, so the Inspector
+    // can walk up to it
     g.s.upgrades.push('bellows');
     g.s.coin = N(100);
     must(g, { k: 'place', kind: 'miner', x: 2, y: 3, rot: 0 });
@@ -323,7 +327,7 @@ describe('Challenges 6-15 (DESIGN.md §24)', () => {
 
   it('Acts III and IV\'s wait until that floor has stood in some run', () => {
     const g = new Game(1);
-    g.s.meta.runs = 1;
+    endStory(g);
     expect(challengeRefusal(g, 'headwinds')).toMatch(/District/);
     expect(challengeRefusal(g, 'roughSeas')).toMatch(/World/);
     g.s.counters.districtPlaced = 1;

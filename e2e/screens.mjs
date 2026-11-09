@@ -877,12 +877,12 @@ export async function act3Setup(state) {
 
 export const ACT3 = ['act3ws', 'act3mouth', 'act3vat', 'act3hoverMouth', 'act3factory', 'act3chuteHover', 'act3wheel', 'act3wheelF', 'research3', 'research3open', 'megaCity', 'megaTransmuter', 'orders3', 'codex3'];
 
-/** Act III's pages after a Reorganize (on m5Setup's run-2 game): the card offering Challenges (Hands
- * Off picked), a Challenge under way (its slip under the Purse), the Scenarios page with a record,
- * and a Scenario board in play (its slip). */
+/** Act III's pages after a Reorganize (on m5Setup's run-2 game): the card with Hands Off taken for
+ * the next run (the City completed first: Challenges are the post-game), a Challenge under way (its
+ * slip under the Purse), the Scenarios page with a record, and a Scenario board in play (its slip). */
 // (the game's own module instance, as act3Setup's mod: inlined, each runs in the page on its own)
 export const ACT3_M5 = {
-  reorgChallenges: { base: 'reorg', post: async () => { const mod = async (p) => { for (const c of ['/src/app/hud.ts', '/src/app/screens.ts', '/src/app/app.ts']) { const m = (await (await fetch(c)).text()).match(new RegExp(`["'](${p.replace(/\./g, '\\.')}\\?[^"']*)["']`)); if (m) return import(m[1]); } return import(p); }; (await mod('/src/app/reorganize.ts')).pickNextRun('handsOff'); } },
+  reorgChallenges: { base: 'reorg', post: async () => { const mod = async (p) => { for (const c of ['/src/app/hud.ts', '/src/app/screens.ts', '/src/app/app.ts']) { const m = (await (await fetch(c)).text()).match(new RegExp(`["'](${p.replace(/\./g, '\\.')}\\?[^"']*)["']`)); if (m) return import(m[1]); } return import(p); }; const g = window.__app.game; const { MEGAS } = await mod('/src/data/megaprojects.ts'); g.s.megas = { ...g.s.megas, city: { stage: MEGAS.city.stages.length, progress: {} } }; (await mod('/src/app/reorganize.ts')).pickNextRun('handsOff'); } },
   challengeRun: { base: 'reorg', post: () => { const a = window.__app; a.game.s.challenge = 'noSplitters'; a.panel = null; } },
   scenarios: { base: 'reorg', post: () => { localStorage.setItem('foldworks_scenario_best', JSON.stringify({ tinyIsland: { score: 0.4166, grade: 'A', date: Date.UTC(2026, 9, 18), design: 'Gizmo works' } })); window.__app.panel = 'scenarios'; } },
   scenarioPlay: { base: 'scenarios', post: async () => { const a = window.__app; const mod = async (p) => { for (const c of ['/src/app/hud.ts', '/src/app/screens.ts', '/src/app/app.ts']) { const m = (await (await fetch(c)).text()).match(new RegExp(`["'](${p.replace(/\./g, '\\.')}\\?[^"']*)["']`)); if (m) return import(m[1]); } return import(p); }; (await mod('/src/app/scenarios.ts')).playScenario(a, 'tinyIsland', true); a.freeze(); a.toasts = []; a.panel = null; } },
@@ -1523,6 +1523,9 @@ STATES.keysMoved = { base: 'act2power', post: () => { const a = window.__app; a.
 STATES.keysMovedHud = { base: 'act2power', post: () => { const a = window.__app; a.selected = null; a.toasts = []; a.trophyPops = []; a.hud.celebs = []; a.onboarding.keys.capture(a, 'KeyR'); a.panel = 'keys'; a.onboarding.keys.press(a, 'KeyK'); a.panel = null; a.selected = a.game.entAt(21, 1).id; } };
 STATES.uiScaleMax = { base: 'act2power', post: () => { window.__app.onboarding.setUiScale(99); } };
 STATES.uiScaleOptions = { base: 'act2power', post: () => { const a = window.__app; a.onboarding.setUiScale(99); a.panel = 'options'; } };
+// the post-game (the playability pass): Options after the story's end, with the Challenges and
+// Scenarios keys and the Challenges tab
+STATES.optionsPost = { base: 'ledger', post: () => { const a = window.__app; a.toasts = []; a.panel = 'options'; } };
 STATES.uiScaleSmall = { base: 'act2power', post: () => { window.__app.onboarding.setUiScale(1); } };
 for (const s of ACT2) STATES[s] = s;
 for (const s of WORKSHOP) STATES[s] = { ws: s };

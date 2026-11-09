@@ -372,7 +372,7 @@ export function edgeArrows(app: App) {
   app.ui.audit = false;
   try {
     for (const p of problems(app).list.slice(0, 6)) if (p.floor === app.floor) edgeArrow(app, p.x, p.y, p.bad ? T.floorBad : T.floorWarn, null);
-    if (app.floor === 'workshop') for (const p of g.s.sparks) edgeArrow(app, p.x + 0.5, p.y + 0.5, T.floorCoin, p.kind === 'vein' ? 'vein!' : 'inspector!');
+    if (app.floor === 'workshop') for (const p of g.s.sparks) edgeArrow(app, p.x + 0.5, p.y + 0.5, T.floorCoin, 'inspector!');
   } finally {
     app.ui.audit = prev;
   }

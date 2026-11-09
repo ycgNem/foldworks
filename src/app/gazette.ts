@@ -99,7 +99,7 @@ export class Gazette {
     if (s.orders.active) news.push(`CIVIC: ${ORDER[s.orders.active].name} is ${Math.round(orderFrac(g, s.orders.active) * 100)}% done. Townsfrogs gather to watch.`);
     const forSale = CHUNKS.find((c) => !s.land.includes(c.id) && !isSky(g, c.id) && (!c.requires || g.done(c.requires)));
     if (forSale) news.push(`REAL ESTATE: ${forSale.name.replace(/\{[^}]*\}/g, '').trim()} still for sale, ${forSale.cost.toLocaleString('en-US')} coin. "A steal," says the seller, a heron.`);
-    if (s.sparks.length) news.push(s.sparks[0].kind === 'inspector' ? 'ALERT: an Inspector is in the Workshop! Click them before they wander off.' : 'ALERT: a Lucky Vein glitters on an ore patch! Click it!');
+    if (s.sparks.length) news.push('ALERT: an Inspector is in the Workshop! Click them before they wander off.');
     if (s.codex.length) news.push(`COLLECTING: Unit 7's Codex now holds ${s.codex.length} entries. "MORE," it says.`);
     if (s.mega.stage === 0 && s.factory.ents.some((e) => e.kind === 'fbay')) {
       const bits = Math.floor(s.mega.progress.drillBit?.toNumber() ?? 0);

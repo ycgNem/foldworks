@@ -12,14 +12,12 @@ import { hopperBanking } from './hopperwatch';
 import { ITEMS, ITEM_IDS, type ItemId } from '../data/items';
 import { TROPHIES, type TrophyDef } from '../data/trophies';
 import { BUILD_BAR } from '../data/machines';
-import { IDLE } from '../data/idle';
 import { ICON, textWidth, smallWidth, bigWidth, ellipsize, hasSmallGlyph, LINE_H } from '../ui/font';
 import { keyLabel } from '../engine/input';
 import { itemIcon, sheet, hasArt } from '../render/sprites';
 import { available, researchFrac } from '../sim/systems/research';
 import { worldOf } from '../sim/systems/islands';
 import { WORLDS, type WorldId } from '../data/worlds';
-import { inspireUnlocked, inspiredFrac } from '../sim/systems/inspire';
 import { megaComplete } from '../sim/systems/research';
 import { hasKernel } from '../sim/kernels';
 import { KERNELS } from '../data/kernels';
@@ -53,7 +51,7 @@ import { scenariosScreen, scenariosOpen } from './scenarios';
 // Milestone 11 (DESIGN.md §24): the Trophy Shelf in groups, its Bonuses and the Wardrobe
 import { shelfPage } from './shelf';
 import { codexBook } from './codexbook';
-import { challengesPage } from './challenges';
+import { challengesPage, openChallenges, challengesOpen } from './challenges';
 import { endingPage } from './ending';
 import { finalePage } from './finale';
 
@@ -317,12 +315,14 @@ export function flowRow(ui: UI, parts: string[], x: number, y: number, w: number
 /** The tabs of the notebook's back pages: Stats, Trophies, Options and Keys. */
 export function backTabs(app: App): MenuTab[] {
   const help = app.input.binds.help?.[0];
-  const all: { id: 'stats' | 'trophies' | 'options' | 'keys'; label: string; icon?: IconName; tip: string }[] = [
+  const all: { id: 'stats' | 'trophies' | 'options' | 'keys' | 'challenges'; label: string; icon?: IconName; tip: string }[] = [
     { id: 'stats', label: 'Stats', icon: 'stats', tip: '{u:stats} the books' },
     { id: 'trophies', label: 'Trophies', icon: 'trophies', tip: '{u:trophies} the shelf' },
     { id: 'options', label: 'Options', icon: 'options', tip: '{u:options} sound · numbers · saves' },
     { id: 'keys', label: 'Keys', tip: help ? `{k:=${keyLabel(help)}} every key` : 'every key' },
   ];
+  // the post-game (the playability pass): the Challenges' own page, once the story has ended
+  if (challengesOpen(app)) all.push({ id: 'challenges', label: 'Challenges', icon: 'star', tip: '{u:star} a run under one rule · a reward for good' });
   return all.map((t) => ({ id: 'nav:' + t.id, label: t.label, icon: t.icon, tip: t.tip, active: app.panel === t.id, onClick: () => { if (app.panel !== t.id) { app.panel = t.id; app.audio.sfx('open'); } } }));
 }
 
@@ -724,7 +724,7 @@ function kernelGate(app: App, at: { x: number; y: number }) {
 }
 
 /** The right page of the tree: a node's name, state and progress, what it unlocks, what it costs
- * in items delivered to the Hopper, Inspiration, what it needs and leads to, the select button,
+ * in items delivered to the Hopper, what it needs and leads to, the select button,
  * the nodes ready now, the lab at work and the bank. */
 function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = false) {
   const ui = app.ui;
@@ -806,19 +806,6 @@ function nodePage(app: App, page: Rect, show: ResearchId | null, drillGate = fal
       // Milestone 13: how long the rest takes at what arrives now (src/app/rates.ts)
       const eta = researchEta(app, show);
       if (eta && y + 10 <= end) y += drawRich(ui, `{u:clock} {soft:${eta} at what is delivered now}`, x, y, w, T.inkSoft) + 1;
-    }
-    // Inspiration: clicks on the Hopper give the selected node a share, up to its cap
-    if (!done && inspireUnlocked(g) && y + 12 <= end) {
-      const cap = IDLE.inspireCap.value;
-      const inf = inspiredFrac(g, show);
-      const lead = '{k:LMB} {soft:Hopper}';
-      const lw = richWidth(lead);
-      drawRich(ui, lead, x, y, Infinity, T.ink);
-      const s = `${Math.round(inf * 100)}/${Math.round(cap * 100)}%`;
-      meter(ui, x + lw + 4, y + 2, w - lw - 4 - textWidth(s) - 6, 6, inf / cap, { role: 'coin', glint: false });
-      ui.text(s, x + w, y, T.coin, { align: 'right' });
-      ui.hint(x, y, w, 10, [{ text: '{big:Inspiration}' }, { text: `{k:LMB} the Hopper · the selected node · up to ${Math.round(cap * 100)}% of each item` }], 190);
-      y += 12;
     }
     // what it needs first (an Act III node also the Great Drill's stage 3, DESIGN.md §21)
     const drillShort = (d.drill ?? 0) > (g.s.mega.stage ?? 0);
@@ -1117,13 +1104,7 @@ function optionsScreen(app: App, r: Rect) {
   y += 6;
   const help = app.input.binds.help?.[0];
   if (button(ui, 'openKeys', x, y, Math.min(w, 140), 17, `Keys${help ? `  {k:=${keyLabel(help)}}` : ''}`, { tip: '{k:LMB} the drawn keyboard' })) { app.panel = 'keys'; app.audio.sfx('open'); }
-  // Act III: the Scenario boards, other games beside the town (after the first Reorganize)
-  if (scenariosOpen(app) && y + 21 + 26 <= body.y + body.h) {
-    y += 21;
-    y += caption(ui, 'other games', x, y) + 2;
-    if (button(ui, 'openScenarios', x, y, Math.min(w, 140), 17, '{u:trophies} Scenarios', { tip: [{ text: '{big:Scenarios}' }, { text: 'puzzle boards · a personal best each' }, { text: '{soft:your town waits while you play}' }] })) { app.panel = 'scenarios'; app.audio.sfx('open'); }
-  }
-  // the right page: saves, the overnight forecast, the title
+  // the right page: saves, the overnight forecast, the post-game, the title
   const dp = detail!;
   const dx = dp.x + 4, dw = dp.w - 8;
   let dy = dp.y + 4;
@@ -1142,6 +1123,15 @@ function optionsScreen(app: App, r: Rect) {
   btn('overnight', '{u:overnight} Safe for overnight', [{ text: '{big:Safe for overnight}' }, { text: '{u:clock} look ahead · which lines jam · stop them' }], () => { app.panel = 'overnight'; });
   const bad = app.damagedSave();
   if (bad) btn('copyBad', 'Copy the damaged save', [{ text: '{bad:a save that would not load}' }, { text: '{k:LMB} copy it · send it in' }], () => { void navigator.clipboard?.writeText(bad); });
+  // the post-game (the playability pass): the Challenges' page and the Scenario boards, other games
+  // beside the town, once the story has ended (the Floating City complete)
+  const ch = challengesOpen(app), sc = scenariosOpen(app);
+  if (ch || sc) {
+    dy += 4;
+    dy += caption(ui, 'after the story', dx, dy) + 2;
+    if (ch) btn('openChallenges', '{u:star} Challenges', [{ text: '{big:Challenges}' }, { text: 'a run under one rule · a small reward for good' }, { text: '{soft:taken here · it starts at your next Reorganize}' }], () => openChallenges(app, null));
+    if (sc) btn('openScenarios', '{u:trophies} Scenarios', [{ text: '{big:Scenarios}' }, { text: 'puzzle boards · a personal best each' }, { text: '{soft:your town waits while you play}' }], () => { app.panel = 'scenarios'; app.audio.sfx('open'); });
+  }
   dy += 4;
   btn('title', 'Back to the title', '{u:clock} saves first', () => { app.save(); app.toTitle(); });
 }

@@ -214,19 +214,12 @@ describe('Mk2 and Overdrive (DESIGN.md §18 Machines)', () => {
     expect(m.crafts - c0).toBeLessThanOrEqual(5);
   });
 
-  it('an audited machine cannot be overdriven, and audited miners ignore Lucky Veins', () => {
+  it('an audited machine cannot be overdriven', () => {
     const g = sandbox();
     must(g, { k: 'place', kind: 'miner', x: 2, y: 11, rot: 0 });
     must(g, { k: 'place', kind: 'smelter', x: 3, y: 11, rot: 0 });
     must(g, { k: 'audit', x: 2, y: 11, w: 2, h: 1 });
     expect(g.act({ k: 'click', x: 3, y: 11 }).why).toMatch(/Auditing/);
-    const miner = at(g, 2, 11);
-    g.s.veins[String(g.patchOf[11 * g.W + 2])] = 60 * TICK_RATE;
-    miner.boost = 60 * TICK_RATE;
-    miner.out = 0;
-    const c0 = miner.crafts;
-    for (let i = 0; i < 20 * TICK_RATE; i++) { miner.out = 0; g.tick(); }
-    expect(miner.crafts - c0).toBeLessThanOrEqual(10); // 1x, not 3x
   });
 });
 
@@ -239,29 +232,6 @@ function design(g: Game, over: Partial<ModuleDesign>): ModuleDesign {
   g.s.designs.push(d);
   return d;
 }
-
-describe('the Lucky Vein (DESIGN.md §6)', () => {
-  it('runs every machine of the line its patch feeds at 3x for 60 s, not just the miners', () => {
-    const g = sandbox();
-    must(g, { k: 'place', kind: 'miner', x: 2, y: 11, rot: 0 });
-    must(g, { k: 'place', kind: 'smelter', x: 3, y: 11, rot: 0 });
-    must(g, { k: 'place', kind: 'heap', x: 3, y: 12, rot: 1 });
-    must(g, { k: 'place', kind: 'press', x: 4, y: 11, rot: 0 });
-    must(g, { k: 'place', kind: 'crate', x: 5, y: 11, rot: 0 });
-    g.step(10 * TICK_RATE);
-    at(g, 5, 11).store = [];
-    g.s.sparks.push({ kind: 'vein', x: 2, y: 11, life: 400 });
-    g.s.clickWindow = -100;
-    must(g, { k: 'click', x: 2, y: 11 });
-    const sm = at(g, 3, 11), pr = at(g, 4, 11);
-    expect(sm.boost).toBe(RULES.veinSeconds.value * TICK_RATE);
-    expect(pr.boost).toBe(RULES.veinSeconds.value * TICK_RATE);
-    const c0 = sm.crafts;
-    g.step(20 * TICK_RATE);
-    // a 2.0 s smelt at 3x: about 30 in 20 s (fed by the 3x miner beside it)
-    expect(sm.crafts - c0).toBeGreaterThanOrEqual(26);
-  });
-});
 
 describe('claims and stamps (DESIGN.md §18)', () => {
   it('a design with miners inside holds a claim per copy; more are bought 4 at a time at x(1 + 0.5 b)', () => {

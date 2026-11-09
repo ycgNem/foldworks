@@ -62,7 +62,7 @@ function scrubKits(v: unknown): unknown {
 }
 
 /** Bump when the payload's shape changes, and add the migration from the old version. */
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
 const PREFIX = 'foldworks_save_';
 export const MAX_SLOTS = 3;
 
@@ -328,6 +328,44 @@ export const MIGRATIONS: Record<number, Migration> = {
       delete e.bonus;
     }
     return { ...d, snap: JSON.stringify(st), log, v: 15 };
+  },
+  // v16 (the playability pass, cuts: DESIGN.md §6, §20 "Inspiration, cut"): Inspiration and the
+  // Lucky Vein are gone. What Inspiration credited a node was counted as items delivered, so it
+  // stays (the node is as far along as it was); its per-node record (`inspire`) and click counter
+  // go. A Lucky Vein on the map, the patches' glow (`veins`) and every machine's vein boost
+  // (`boost`) go; an Inspector on the map stays, without the kind it no longer needs. The two
+  // Inspiration trophies and the Tinfoil skin go (their flags, the skin owned and worn). A
+  // Challenge under way stays under way, even before the core ending (`challenge` untouched: never
+  // strand a run). The log: a click logged on a dropped vein leaves it (it would hand-mine the ore
+  // under it now). It is exact for a save written by the app (its log is empty); a log replayed
+  // past a Spark's spawn or with a Hopper click in it is not (the spawn draws less from the
+  // random state now, and the click credits nothing), as the v12 Heater's refund was not.
+  15: (d) => {
+    if (typeof d.snap !== 'string') return { ...d, v: 16 };
+    const st = JSON.parse(d.snap);
+    delete st.inspire;
+    delete st.veins;
+    if (st.counters) delete st.counters.inspiration;
+    if (Array.isArray(st.ents)) for (const e of st.ents) delete e.boost;
+    const veins: { x: number; y: number }[] = [];
+    if (Array.isArray(st.sparks)) {
+      for (const p of st.sparks) if (p?.kind === 'vein') veins.push({ x: p.x, y: p.y });
+      st.sparks = st.sparks.filter((p: { kind?: string }) => p?.kind !== 'vein').map(({ kind: _, ...p }: { kind?: string }) => p);
+    }
+    if (Array.isArray(st.flags)) st.flags = st.flags.filter((f: string) => f !== 'trophy:inspired' && f !== 'trophy:theyKnow');
+    const m = (st.meta ??= {});
+    if (Array.isArray(m.cosmetics)) m.cosmetics = m.cosmetics.filter((c: string) => c !== 'tinfoil');
+    if (m.skins) for (const [slot, id] of Object.entries(m.skins)) if (id === 'tinfoil') delete m.skins[slot];
+    let log = d.log;
+    if (Array.isArray(log) && veins.length) {
+      log = log.filter((l: { c?: { k?: string; x?: number; y?: number } }) => {
+        const i = l?.c?.k === 'click' ? veins.findIndex((v) => v.x === l.c!.x && v.y === l.c!.y) : -1;
+        if (i < 0) return true;
+        veins.splice(i, 1);
+        return false;
+      });
+    }
+    return { ...d, snap: JSON.stringify(st), log, v: 16 };
   },
 };
 

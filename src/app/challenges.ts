@@ -1,18 +1,21 @@
 // The Challenges page (DESIGN.md §21, §24; Milestone 11's screens): all fifteen, by act, each with
 // its state (won, under way, open for the next run, or shut with what it needs), its rule, its goal,
-// its reward and how far the run under way has got. Opened from the Reorganize card's "next run"
-// strip (where "Take it next run" picks one and goes back to the contract) and from the Challenge
-// slip under the Purse (the one under way, with its Give up). Ink on paper, the page kit.
+// its reward and how far the run under way has got. The post-game's own page (the playability pass:
+// picking on the reset card was Antimatter Dimensions' challenge entry): opened once the story has
+// ended from Options (a key and a tab at the back of the book), where "Take it next run" takes one
+// and goes to the Reorganize card to sign; from that card's "next run" strip; and from the Challenge
+// slip under the Purse (the one under way, with its Give up, even one begun before the ending).
+// Ink on paper, the page kit.
 import { C, rgba } from '../data/palette';
-import { CHALLENGES, CHALLENGE_IDS, CHALLENGE_AFTER_RUNS, type ChallengeId } from '../data/challenges';
+import { CHALLENGES, CHALLENGE_IDS, type ChallengeId } from '../data/challenges';
 import { cosmeticDef, COSMETICS } from '../data/cosmetics';
-import { won, challengeRefusal, challengeProgress } from '../sim/systems/challenges';
+import { won, challengeRefusal, challengeProgress, postGame } from '../sim/systems/challenges';
 import { ICON, bigWidth, ellipsize, smallWidth, textWidth } from '../ui/font';
 import { drawRich, richHeight, richWidth } from '../ui/rich';
 import { T } from '../ui/theme';
 import { button, meter, rule } from './chrome';
 import { menuTemplate } from './widgets';
-import { caption, speaker } from './screens';
+import { caption, speaker, backTabs } from './screens';
 import { pickNextRun, nextRunPick } from './reorganize';
 import type { App } from './app';
 import type { Rect } from '../ui/ui';
@@ -52,6 +55,9 @@ export function challengeState(app: App, id: ChallengeId): ChallengeState {
 
 const st = { sel: null as ChallengeId | null, from: null as 'reorganize' | null, armedUntil: -1 };
 
+/** The page is open to choose from: the story has ended (the Floating City), and not on a board. */
+export const challengesOpen = (app: App) => postGame(app.game) && !app.game.s.scenario;
+
 /** Open the page on one Challenge (from: the page to go back to). */
 export function openChallenges(app: App, sel: ChallengeId | null, from: 'reorganize' | null = null) {
   st.sel = sel;
@@ -72,7 +78,7 @@ export function challengesPage(app: App, r: Rect) {
   const ui = app.ui;
   const g = app.game;
   const side = Math.min(206, Math.floor(r.w * 0.4));
-  const { body, detail } = menuTemplate(app, r, { title: 'Challenges', accent: C.violet, icon: 'star', detail: side });
+  const { body, detail } = menuTemplate(app, r, { title: 'Challenges', accent: C.violet, icon: 'star', tabs: backTabs(app), detail: side });
   const nWon = CHALLENGE_IDS.filter((id) => won(g, id)).length;
   if (!st.sel || !CHALLENGES[st.sel]) st.sel = (g.s.challenge as ChallengeId | null) ?? nextRunPick() ?? CHALLENGE_IDS.find((id) => challengeState(app, id) === 'open') ?? CHALLENGE_IDS[0];
   // ---- the list, by act
@@ -189,7 +195,7 @@ function sidePage(app: App, dp: Rect) {
     app.panel = 'reorganize';
     app.audio.sfx('open');
   }
-  const back = st.from === 'reorganize' || g.s.meta.runs >= CHALLENGE_AFTER_RUNS;
+  const back = st.from === 'reorganize' || challengesOpen(app);
   if (back && button(ui, 'challengeBack', x, fy + 18, w, 16, 'The contract', { icon: 'reset', tip: '{u:reset} back to the Reorganize card' })) { app.panel = 'reorganize'; app.audio.sfx('open'); }
   void speaker;
 }

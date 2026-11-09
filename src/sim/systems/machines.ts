@@ -22,14 +22,6 @@ import { craftSpeed } from '../longtail';
 
 const OK: ActResult = { ok: true };
 
-/** A Lucky Vein's boost (DESIGN.md §6) for this machine now: 1 when none, or while it is being
- * audited (a boost would be folded in for good). */
-export function veinBoost(g: Game, m: Ent): number {
-  if (!(m.boost ?? 0)) return 1;
-  if (isAudited(g, m.id)) return 1;
-  return RULES.veinMult.value;
-}
-
 /** Overdrive's multiplier for this machine or Miner now: 1 when it is not overdriven, or while it
  * is being audited. Only starting Overdrive on an audited line was refused before, and with Quick
  * Audits the 5 s warm-up is shorter than Overdrive's 10 s, so an overdriven line folded 3x into its
@@ -45,14 +37,13 @@ export function baseSpeed(g: Game, m: Ent): number {
   return (BUILD[m.kind].speed ?? 1) * odBoost(g, m);
 }
 
-/** Count down Overdrive, then its cooling, and a Lucky Vein's boost (both systems that run
- * machines call it). Cool Hands (a Patent, §19) shortens the cooling. */
+/** Count down Overdrive, then its cooling (both systems that run machines call it). Cool Hands (a
+ * Patent, §19) shortens the cooling. */
 export function overdriveTick(m: Ent, coolSec: number = RULES.overdriveCool.value) {
   if (m.od) {
     m.od--;
     if (!m.od) m.cool = Math.round(coolSec * TICK_RATE);
   } else if (m.cool) m.cool--;
-  if (m.boost) m.boost--;
 }
 
 export function runMachines(g: Game) {
@@ -79,7 +70,7 @@ export function runMachines(g: Game) {
         const pf = powerFactor(g, m);
         // Rime (DESIGN.md §22): a cold powered machine runs at half speed
         // the Trophy Shelf's delivery trophies and Clean Hands speed one product's craft (§24)
-        const sp = baseSpeed(g, m) * veinBoost(g, m) * pf * coldFactor(m) * craftSpeed(g, r.outputs[0].item);
+        const sp = baseSpeed(g, m) * pf * coldFactor(m) * craftSpeed(g, r.outputs[0].item);
         if (sp > 0) {
           m.prog += sp;
           progressed = true;

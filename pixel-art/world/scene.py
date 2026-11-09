@@ -103,7 +103,6 @@ def workshop(t=0):
         img.alpha_composite(icon("items", ITEM1.index(it)), (tx * T + 4, ty * T + 4))
     put("dock", 11, 1, 0, t // 4)
     put("hopper", 10, 8, 0, t // 4)
-    put("spark_vein", 1, 6, 0, t // 2)
     put("spark_inspector", 13, 5, 0, t // 4)
     for name, tx, ty, r, p_, w in machines:
         pip(img, tx * T + 12, ty * T, p_)

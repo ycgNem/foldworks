@@ -9,8 +9,8 @@ from this folder rebuilds every `src/art/skin_<id>_<base>` sheet and its sidecar
     modules.py       triad, pocketSquare, whittled, goldLeaf, blueprint, origami, postmark,
                      ghostly: one sheet per floor (module, dist_module, world_module, beyond_module)
     carriers.py      kite, tug, paperCrane (skiff); stormproof, feather (barge); mirrorBall (courier)
-    destinations.py  the decorations: mayoral, bunting, sunburst (dock); specimen, mortarboard,
-                     tinfoil (hopper)
+    destinations.py  the decorations: mayoral, bunting, sunburst (dock); specimen, mortarboard
+                     (hopper)
 
 Every pixel is the base sheet's, recoloured by a rule, or placed by these scripts; no PixelLab, no
 SpriteCook. Palette B extended (69 art colours), none added; m11.skin refuses an off-palette or

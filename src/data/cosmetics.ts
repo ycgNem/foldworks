@@ -73,7 +73,6 @@ export const COSMETICS: CosmeticDef[] = [
   S('postmark', 'Postmark', ['module'], { k: 'trophy', id: 'stampCollector' }, 'Every copy franked with the date it was stamped.'),
   S('drillbit', 'Drill Bit', ['miner'], { k: 'trophy', id: 'greatDrill' }, 'A Miner with a little Great Drill on its hat.'),
   S('apron', 'Apron', ['assemblerMk2'], { k: 'trophy', id: 'lunchIsServed' }, 'A chef\'s apron, a little mustard on it.'),
-  S('tinfoil', 'Tinfoil', ['hopper'], { k: 'trophy', id: 'theyKnow' }, 'For a Hopper that has heard things.', true),
   S('ghostly', 'Ghostly', ['module'], { k: 'trophy', id: 'unit6' }, 'Pale, quiet modules. They were here before you.'),
   S('mirrorBall', 'Mirror Ball', ['courier'], { k: 'trophy', id: 'beyondBusy' }, 'Couriers that throw little lights across Beyond.'),
   S('sunburst', 'Sunburst', ['dock'], { k: 'trophy', id: 'smallSun' }, 'A Dock with a very small sun on its sign.', true),

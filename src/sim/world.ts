@@ -7,7 +7,6 @@ import { FACTORY } from '../data/land';
 import type { ResearchId } from '../data/research';
 import type { ItemId } from '../data/items';
 import type { CustomerId } from '../data/orders';
-import type { SparkKind } from '../data/sparks';
 import type { BuildKind } from '../data/machines';
 import type { PatentId } from '../data/patents';
 import { HIGH, type HighFloorId } from '../data/floors';
@@ -92,8 +91,6 @@ export interface Ent {
   /** Overdrive: ticks left at 3x, then ticks left cooling */
   od?: number;
   cool?: number;
-  /** a Lucky Vein's boost on every machine of its line: ticks left (DESIGN.md §6) */
-  boost?: number;
   // ---- Milestone 6 (DESIGN.md §20); absent on older saves
   /** stopped by the player (the 'pause' command): takes nothing, makes nothing, draws no power;
    * splitters route around it as around any full machine */
@@ -325,15 +322,15 @@ export interface HAuditState extends FAuditState {
   last?: boolean;
 }
 
+/** The Inspector (DESIGN.md §6), the one kind of Spark. */
 export interface Spark {
-  kind: SparkKind;
   /** tile it sits on */
   x: number;
   y: number;
   /** ticks left visible */
   life: number;
-  /** the line (entity ids) an Inspector is looking at */
-  line?: number[];
+  /** the line (entity ids) they are looking at */
+  line: number[];
 }
 
 export interface ResearchState {
@@ -634,8 +631,6 @@ export interface State {
   nextSpark: number;
   /** Sparks are paused while the tab is hidden (DESIGN.md §6) */
   visible: boolean;
-  /** Lucky Veins: patch index -> ticks left */
-  veins: Record<string, number>;
   /** free Buffer Crates waiting (Bramble rep 2) and ticks to the next */
   freeCrates: number;
   freeCrateIn: number;
@@ -669,8 +664,6 @@ export interface State {
   /** the Factory-floor fold audit (nested folds), like `audit` on the Workshop */
   faudit: FAuditState | null;
   // ---- Milestone 6 (DESIGN.md §20)
-  /** Inspiration credited to each research node, by item (capped at 30% of each item's cost) */
-  inspire: Partial<Record<ResearchId, Partial<Record<ItemId, Num>>>>;
   // ---- Reorganize (DESIGN.md §19)
   /** what survives a Reorganize */
   meta: MetaState;
@@ -790,7 +783,6 @@ export function newState(seed: number): State {
     sparks: [],
     nextSpark: 0,
     visible: true,
-    veins: {},
     freeCrates: 0,
     freeCrateIn: 0,
     clicks: 0,
@@ -809,18 +801,9 @@ export function newState(seed: number): State {
     codex: [],
     mega: { stage: 0, progress: {} },
     faudit: null,
-    inspire: {},
     meta: newMeta(),
     megaPatents: 0,
     granted: Num.ZERO,
     annex: 0,
   };
-}
-
-/** mulberry32 on the state's own seed (the sim's only randomness). */
-export function rand(s: State): number {
-  let t = (s.rng = (s.rng + 0x6d2b79f5) >>> 0);
-  t = Math.imul(t ^ (t >>> 15), t | 1);
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }

@@ -368,7 +368,7 @@ function bonusesPage(app: App, page: Rect) {
   rows.push(['{u:district} skiffs a route', `+${r.skiffs}`, r.skiffs / TROPHY_CAPS.skiffs, `CAP +${TROPHY_CAPS.skiffs}`]);
   rows.push(['{u:district} routes a floor', `+${r.routes}`, r.routes / TROPHY_CAPS.routes, `CAP +${TROPHY_CAPS.routes}`]);
   rows.push(['{u:blueprint} Drawer slots', `+${r.drawer}`, r.drawer / TROPHY_CAPS.drawer, `CAP +${TROPHY_CAPS.drawer}`]);
-  rows.push(['{u:star} Sparks stay', `+${r.sparkLife} s`, r.sparkLife / TROPHY_CAPS.sparkLife, `CAP +${TROPHY_CAPS.sparkLife} S`]);
+  rows.push(['{u:star} the Inspector stays', `+${r.sparkLife} s`, r.sparkLife / TROPHY_CAPS.sparkLife, `CAP +${TROPHY_CAPS.sparkLife} S`]);
   rows.push(['{i:slag} Slag Heaps hold', `+${r.heap}`, r.heap / TROPHY_CAPS.heap, `CAP +${TROPHY_CAPS.heap}`]);
   rows.push(['{u:overdrive} Overdrive cools', `${r.cool} s sooner`, r.cool / TROPHY_CAPS.cool, `CAP ${TROPHY_CAPS.cool} S`]);
   rows.push(['{u:relocate} ruins repair', `${Math.round(r.repair * 100)}% off`, r.repair / TROPHY_CAPS.repair, `CAP ${Math.round(TROPHY_CAPS.repair * 100)}%`]);

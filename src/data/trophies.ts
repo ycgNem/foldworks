@@ -64,7 +64,7 @@ export type TrophyBonus =
   | { k: 'routes'; add: number }
   /** the Patent Drawer holds this many more designs */
   | { k: 'drawer'; add: number }
-  /** Sparks stay this many seconds longer */
+  /** the Inspector (the one kind of Spark) stays this many seconds longer */
   | { k: 'sparkLife'; add: number }
   /** Slag Heaps hold this many more */
   | { k: 'heap'; add: number }
@@ -155,10 +155,11 @@ export const TROPHIES: TrophyDef[] = [
   X('busyFloor', 'Busy Floor', 'run 10 machines', null, { k: 'machines' }, 10, free('smelter'), `${SL}: ten machines; one Smelter free (60, §4)`),
   X('factoryFloor', 'Proper Factory', 'run 25 machines', null, { k: 'machines' }, 25, free('splitter'), `${SL}: 25 machines; one Splitter free`),
   X('beltUp', 'Belt Up', 'lay 50 belt tiles', null, { k: 'built', kind: 'belt' }, 50, free('belt', 10), `${SL}: 50 belts; 10 belt tiles free`),
-  X('lucky', 'Lucky!', '{k:LMB} catch a Spark', null, { k: 'counter', name: 'sparks' }, 1, { k: 'sparkLife', add: 2 }, `${SL}: the first Spark; Sparks stay 2 s longer (20, §6)`),
-  X('sparkChaser', 'Spark Chaser', '{k:LMB} catch 10 Sparks', null, { k: 'counter', name: 'sparks' }, 10, { k: 'sparkLife', add: 3 }, `${SL}: ten Sparks; Sparks stay 3 s longer`),
-  X('goldStar', 'Gold Star', 'an S from the Inspector', null, { k: 'counter', name: 'inspectS' }, 1, { k: 'sparkLife', add: 2 }, `${SL}: the Inspector's S; Sparks stay 2 s longer`),
-  X('tireless', 'Tireless', '{k:LMB} ×1,000', null, { k: 'counter', name: 'clicks' }, 1000, { k: 'sparkLife', add: 2 }, `${SL}: 1,000 clicks; Sparks stay 2 s longer (20, §6)`),
+  // 'lucky' was "Lucky!" while a Spark could be the Lucky Vein (cut in the playability pass); the id stays for the saves
+  X('lucky', 'Spot Check', '{k:LMB} catch the Inspector', null, { k: 'counter', name: 'sparks' }, 1, { k: 'sparkLife', add: 2 }, `${SL}: the first Inspector caught; they stay 2 s longer (20, §6)`),
+  X('sparkChaser', 'Regular Visitor', '{k:LMB} catch the Inspector ×10', null, { k: 'counter', name: 'sparks' }, 10, { k: 'sparkLife', add: 3 }, `${SL}: ten Inspectors; they stay 3 s longer`),
+  X('goldStar', 'Gold Star', 'an S from the Inspector', null, { k: 'counter', name: 'inspectS' }, 1, { k: 'sparkLife', add: 2 }, `${SL}: the Inspector's S; they stay 2 s longer`),
+  X('tireless', 'Tireless', '{k:LMB} ×1,000', null, { k: 'counter', name: 'clicks' }, 1000, { k: 'sparkLife', add: 2 }, `${SL}: 1,000 clicks; the Inspector stays 2 s longer (20, §6)`),
   // ================================================================== Act II (§18)
   X('manOfSteel', 'Forged in the Clouds', 'deliver 1 {i:steel}', 'steel', { k: 'delivered', item: 'steel' }, 1, free('smelter'), '§18 Items: steel, the first new product of the act; §24: one Smelter free'),
   X('letThereBeLight', 'Let There Be Light', 'light a {power:power} grid', 'coal', { k: 'counter', name: 'gridsLit' }, 1, free('pole', 2), '§18 Power: the first grid with power flowing; §24: two Poles free (150 each)'),
@@ -324,7 +325,7 @@ export const TROPHIES: TrophyDef[] = [
   X('allBoards', 'Puzzle Box', '{u:trophies} a best on all 8 boards', null, { k: 'meta', name: 'boards' }, 8, free('assemblerMk2'), '§24 The efficiency boards: every board\'s best; one Assembler Mk2 free (20,000, the dearest machine: §18)'),
   X('dressedUp', 'Dressed Up', 'own 5 skins', null, { k: 'meta', name: 'cosmetics' }, 5, coin(200), '§24 Cosmetics; 200 coin a run'),
   X('wardrobe', 'Wardrobe', 'own 20 skins', null, { k: 'meta', name: 'cosmetics' }, 20, coin(1000), '§24 Cosmetics; 1,000 coin a run'),
-  X('dressRehearsal', 'Dress Rehearsal', 'wear a skin', null, { k: 'counter', name: 'skinsWorn' }, 1, { k: 'sparkLife', add: 2 }, '§24 Cosmetics: the skin picker; Sparks stay 2 s longer (they like the look)'),
+  X('dressRehearsal', 'Dress Rehearsal', 'wear a skin', null, { k: 'counter', name: 'skinsWorn' }, 1, { k: 'sparkLife', add: 2 }, '§24 Cosmetics: the skin picker; the Inspector stays 2 s longer (they like the look)'),
   X('shelf50', 'Shelf Life', '{u:trophies} 50 trophies', null, { k: 'trophies' }, 50, coin(1000), '§24 The Trophy Shelf: a quarter of it, an Act II-III count; 1,000 coin a run'),
   X('shelf100', 'Mantelpiece', '{u:trophies} 100 trophies', null, { k: 'trophies' }, 100, coin(2000), '§24 The Trophy Shelf; 2,000 coin a run'),
   X('reputable', 'Reputable', 'every customer at reputation 3', null, { k: 'repMin' }, 3, coin(500), '§21 Orders: the four customers\' rep 3, the Committee last to meet (§19); §24: 500 coin a run'),
@@ -332,9 +333,8 @@ export const TROPHIES: TrophyDef[] = [
   X('voltaireFriend', 'Darling', 'Dame Voltaire reputation 5', null, { k: 'rep', who: 'voltaire' }, 5, free('pole', 4), '§18 Customers: Voltaire\'s High-Tension Lines; §24: four Poles free'),
   X('millionaire', 'Millionaire', 'earn {coin:1,000,000} in all', null, { k: 'lifetimeEarned' }, 1e6, coin(500), '§24 Trophy bonuses: a million coin over every run (§16: Act II); 500 coin a run'),
   X('billionaire', 'Billionaire', 'earn {coin:1,000,000,000} in all', null, { k: 'lifetimeEarned' }, 1e9, coin(5000), '§24 Trophy bonuses: a billion over every run (§16: Act III); 5,000 coin a run'),
-  X('inspired', 'Inspired', '{research:research} 1,000 Inspiration clicks', null, { k: 'counter', name: 'inspiration' }, 1000, { k: 'cool', sub: 2 }, '§20 Inspiration; §24: Overdrive cools 2 s sooner'),
   X('floorIt', 'Floor It', '{u:overdrive} Overdrive ×10,000', null, { k: 'counter', name: 'overdrives' }, 10000, { k: 'cool', sub: 3 }, '§18 Overdrive, past the first runs (the campaign bot overdrives about 1,000 a run); §24: Overdrive cools 3 s sooner'),
-  X('sparkCollector', 'Spark Collector', '{k:LMB} catch 100 Sparks', null, { k: 'counter', name: 'sparks' }, 100, { k: 'sparkLife', add: 3 }, '§6 Sparks, about 8 h of play; §24: Sparks stay 3 s longer'),
+  X('sparkCollector', 'First-Name Terms', '{k:LMB} catch the Inspector ×100', null, { k: 'counter', name: 'sparks' }, 100, { k: 'sparkLife', add: 3 }, '§6 Sparks: the Inspector, about 8 h of play; §24: they stay 3 s longer'),
 
   // ================================================================== hidden (§24): "???" until earned
   X('repetitiveStrain', 'Repetitive Strain', '{k:LMB} ×100,000', null, { k: 'counter', name: 'clicks' }, 100000, { k: 'cool', sub: 3 }, '§24 Hidden trophies: a hundred thousand clicks (§1\'s 12 a second for 2.3 h straight); Overdrive cools 3 s sooner', true),
@@ -345,7 +345,6 @@ export const TROPHIES: TrophyDef[] = [
   X('rubberStamp', 'Rubber Stamp', '{u:reset} the Standing Committee Reorganizes for you', null, { k: 'counter', name: 'standingReorganizes' }, 1, { k: 'lot', off: 0.05 }, '§24 Hidden trophies: the Standing Committee (§22, a Legacy node); World and Beyond lots 5% cheaper', true),
   X('participation', 'Participation Award', '{u:fold} fold a line graded D', null, { k: 'counter', name: 'grade:D' }, 1, free('belt', 10), '§24 Hidden trophies: a D still folds (§10); 10 belt tiles free', true),
   X('teaBreak', 'Tea Break', 'stop machines ×100', null, { k: 'counter', name: 'pauses' }, 100, coin(100), '§24 Hidden trophies: the stop button (§20); 100 coin a run (the Spark trophies cut to six, 14 s against the cap of 10)', true),
-  X('theyKnow', 'They Know', '{research:research} 10,000 Inspiration clicks', null, { k: 'counter', name: 'inspiration' }, 10000, skin('tinfoil'), '§24 Hidden trophies: Inspiration (§20); a Hopper decoration', true),
   X('unit6', 'Unit 6', 'repair 100 ruins', 'relicGear', { k: 'counter', name: 'repairs' }, 100, skin('ghostly'), '§24 Hidden trophies: the Old Works (§22), Unit 7\'s Codex page; a module skin', true),
   X('smallSun', 'Pocket Sunrise', 'deliver 1 {i:verySmallSun}', 'verySmallSun', { k: 'lifetime', item: 'verySmallSun' }, 1, skin('sunburst'), '§24 Hidden trophies: a tier 5 first (§23); a Dock decoration', true),
   X('recursion', 'Recursion', 'deliver 1 {i:foldedUniverse}', 'foldedUniverse', { k: 'lifetime', item: 'foldedUniverse' }, 1, speed('foldedUniverse'), '§24 Hidden trophies: the Folded Universe Replica (§23); Replicas +5%', true),
@@ -381,7 +380,7 @@ export function bonusText(b: TrophyBonus): string {
     case 'skiffs': return `{u:district} {good:+${b.add}} skiff a route`;
     case 'routes': return `{u:district} {good:+${b.add}} routes a floor`;
     case 'drawer': return `{u:blueprint} Drawer {good:+${b.add}}`;
-    case 'sparkLife': return `Sparks stay {good:+${b.add} s}`;
+    case 'sparkLife': return `the Inspector stays {good:+${b.add} s}`;
     case 'heap': return `Slag Heaps hold {good:+${b.add}}`;
     // (said before any reset exists: "at each run's start" meant nothing yet)
     case 'startCoin': return `{coin:${b.add.toLocaleString('en-US')}} to start with, after a reset`;

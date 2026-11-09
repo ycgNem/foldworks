@@ -32,8 +32,8 @@ import type { App } from './app';
 import type { Rect } from '../ui/ui';
 import { bookArea, heading, disc, tick, pencilCircle, speak, ROW_H } from './ledger';
 import { committeeFallback } from './reorganize';
-import { CHALLENGES, CHALLENGE_IDS, CHALLENGE_AFTER_RUNS } from '../data/challenges';
-import { won } from '../sim/systems/challenges';
+import { CHALLENGES, CHALLENGE_IDS } from '../data/challenges';
+import { won, postGame } from '../sim/systems/challenges';
 import { relocateClose } from './moves';
 
 /** A node's picture: an item icon, a UI icon, or a building's sprite (frame f). */
@@ -136,13 +136,13 @@ export function patentsScreen(app: App, r0: Rect) {
     bx -= rw + 3;
     if (button(ui, 'toRelocate', bx, body.y - 1, rw, 15, '{u:relocate} Relocate', { tip: [{ text: '{u:relocate} {big:Relocate}' }, { text: 'a new island · Legacy banked · Patents and the tree reset' }] })) app.panel = 'relocate';
   }
-  // Act III (DESIGN.md §21): the Challenges won, once Challenges are offered; its tip lists all five
+  // Act III (DESIGN.md §21): the Challenges won, once Challenges are open (the post-game); its tip lists all
   const nWon = CHALLENGE_IDS.filter((id) => won(g, id)).length;
-  const challengeTip = [{ text: '{big:Challenges}' }, ...CHALLENGE_IDS.map((id) => ({ text: won(g, id) ? `{good:${ICON.check} ${CHALLENGES[id].name}} ${CHALLENGES[id].reward}` : `{soft:${CHALLENGES[id].name} · ${CHALLENGES[id].goalText}}` })), { text: g.s.challenge ? `{reset:under way} ${CHALLENGES[g.s.challenge as keyof typeof CHALLENGES]?.name ?? ''}` : '{soft:taken on the Reorganize card}' }];
+  const challengeTip = [{ text: '{big:Challenges}' }, ...CHALLENGE_IDS.map((id) => ({ text: won(g, id) ? `{good:${ICON.check} ${CHALLENGES[id].name}} ${CHALLENGES[id].reward}` : `{soft:${CHALLENGES[id].name} · ${CHALLENGES[id].goalText}}` })), { text: g.s.challenge ? `{reset:under way} ${CHALLENGES[g.s.challenge as keyof typeof CHALLENGES]?.name ?? ''}` : '{soft:taken on the Challenges page (Options) · it starts at a Reorganize}' }];
   const runChips: { text: string; role: Role; tip: string | { text: string }[] }[] = [
     { text: `${m.runs} ${m.runs === 1 ? 'reset' : 'resets'}`, role: 'soft' as Role, tip: '{u:reset} Reorganizes so far' },
     { text: `+${pv.now} this run`, role: 'reset' as Role, tip: `{u:reset} a Reorganize now banks {reset:+${pv.now}}` },
-    ...(m.runs >= CHALLENGE_AFTER_RUNS ? [{ text: `${nWon}/${CHALLENGE_IDS.length} challenges`, role: (nWon ? 'good' : 'soft') as Role, tip: challengeTip }] : []),
+    ...(postGame(g) ? [{ text: `${nWon}/${CHALLENGE_IDS.length} challenges`, role: (nWon ? 'good' : 'soft') as Role, tip: challengeTip }] : []),
   ];
   let cx = body.x + bankW + 8;
   for (const c of runChips) {
